@@ -6,7 +6,7 @@ import { SCHEMA } from './compat/schema-map';
 
 // Adaptador: PGlite expone .query(sql, params) igual que pg.Pool
 const pg = await PGlite.create();
-const sql = fs.readFileSync('/home/claude/schema.sql', 'utf8')
+const sql = fs.readFileSync(new URL('./schema.sql', import.meta.url), 'utf8')
   .replace(/create extension if not exists pg_trgm;.*/g, '')
   .replace(/create index on recruitment_rows using gin \(participant_name gin_trgm_ops\);/, '');
 await pg.exec(sql);
