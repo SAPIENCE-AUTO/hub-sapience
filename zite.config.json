@@ -1,0 +1,90 @@
+{
+  "accessMode": "external",
+  "userSync": {
+    "enabled": true,
+    "integrationId": "operations-hub",
+    "usersTableId": "te6Fapo3s3Z",
+    "usersEmailFieldId": "faME8jrmjzR",
+    "usersFirstNameFieldId": "fxjWzgaE6EE",
+    "usersLastNameFieldId": "fvkxGVaSMMt"
+  },
+  "integrations": {
+    "operations-hub": {
+      "type": "databases",
+      "connectionId": null,
+      "base": "OperationsHub"
+    },
+    "outlook-sesin-sapience": {
+      "type": "outlook",
+      "connectionId": "svc_412995"
+    },
+    "microsoft-teams": {
+      "type": "microsoftTeams",
+      "connectionId": "svc_426239"
+    },
+    "openai": {
+      "type": "openai",
+      "connectionId": "svc_427532"
+    }
+  },
+  "envVars": {
+    "ZITE_FILLOUT_API_KEY": {
+      "description": "API key de Fillout para listar formularios y registrar webhooks"
+    },
+    "ZITE_N8N_ODC_WEBHOOK_URL": {
+      "description": "URL del webhook de n8n para generar PDFs y enviar emails de Órdenes de Compra"
+    },
+    "ZITE_N8N_CALENDAR_WEBHOOK_URL": {
+      "description": "URL del webhook de n8n para generar Excel de calendarios y subirlo a SharePoint"
+    },
+    "ZITE_N8N_TIMELINE_WEBHOOK_URL": {
+      "description": "URL del webhook de n8n para crear/actualizar timelines en Excel"
+    },
+    "ZITE_N8N_TEAMS_WEBHOOK_URL": {
+      "description": "URL del webhook de n8n para crear canales en Microsoft Teams"
+    },
+    "ZITE_N8N_OUTLOOK_WEBHOOK_URL": {
+      "description": "URL del webhook de n8n para crear, actualizar y cancelar eventos de calendario en Outlook"
+    },
+    "ZITE_OUTLOOK_SEND_AS_EMAIL": {
+      "description": "Email address to send purchase orders from (Send As)"
+    },
+    "ZITE_ABLY_API_KEY": {
+      "description": "API key root de Ably para publicar eventos realtime desde los endpoints del chat"
+    },
+    "ZITE_GOOGLE_MAPS_API_KEY": {
+      "description": "API Key de Google Maps para mostrar Street View en el popover de direcciones"
+    }
+  },
+  "seoSettings": {
+    "title": "Hub Sapience",
+    "faviconUrl": "https://images.fillout.com/orgid-631922/flowpublicid-qcnywdt1sa/widgetid-default/oVUcBVECwSKeiBWrps2Sdy/favicon-sapience.png",
+    "description": "",
+    "thumbnailUrl": ""
+  },
+  "pwaSettings": {
+    "icons": {
+      "icon192Url": "https://images.fillout.com/orgid-631922/flowpublicid-qcnywdt1sa/pwa/0b25759e73920f0e/icon-192.png",
+      "icon512Url": "https://images.fillout.com/orgid-631922/flowpublicid-qcnywdt1sa/pwa/0b25759e73920f0e/icon-512.png",
+      "favicon32Url": "https://images.fillout.com/orgid-631922/flowpublicid-qcnywdt1sa/pwa/0b25759e73920f0e/favicon-32.png",
+      "appleTouchIconUrl": "https://images.fillout.com/orgid-631922/flowpublicid-qcnywdt1sa/pwa/0b25759e73920f0e/apple-touch-icon.png"
+    },
+    "title": "Hub Sapience",
+    "enabled": true,
+    "appIconUrl": "https://images.fillout.com/orgid-631922/flowpublicid-qcnywdt1sa/pwa/0b25759e73920f0e/source-86b37ef9b599543768179d9653eeb2b9"
+  },
+  "authentication": {
+    "signup": "disabled",
+    "authenticationMethods": {
+      "sso": false,
+      "magicLink": true,
+      "googleSignIn": true
+    },
+    "emailBrandKitId": "bk_o73xXdvnPs",
+    "authPage": {
+      "messages": {
+        "signInTitle": "Confirma tu acceso"
+      }
+    }
+  }
+}

@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: hsl(var(--border)) transparent; }
+  .scrollbar-thin::-webkit-scrollbar { height: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 2px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }
+}
+
+@layer base {
+  :root {
+    /* ── Sidebar (dark navy) ──────────────────────────── */
+    --sidebar-background: 215 40% 12%;
+    --sidebar-foreground: 210 25% 75%;
+    --sidebar-primary: 215 45% 28%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 35% 18%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 215 30% 20%;
+    --sidebar-ring: 215 45% 28%;
+
+    /* ── Shadows ──────────────────────────────────────── */
+    --shadow-x: 0px;
+    --shadow-y: 1px;
+    --shadow-blur: 4px;
+    --shadow-spread: 0px;
+    --shadow-opacity: 0.08;
+    --shadow-color: #000000;
+    --shadow-2xs: var(--shadow-x) var(--shadow-y) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+    --shadow-xs: var(--shadow-x) var(--shadow-y) var(--shadow-blur) var(--shadow-spread) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+    --shadow-sm: var(--shadow-x) var(--shadow-y) calc(var(--shadow-blur) * 1.5) var(--shadow-spread) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+    --shadow-md: calc(var(--shadow-x) * 2) calc(var(--shadow-y) * 2) calc(var(--shadow-blur) * 3) calc(var(--shadow-spread) - 1px) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+    --shadow-lg: calc(var(--shadow-x) * 4) calc(var(--shadow-y) * 4) calc(var(--shadow-blur) * 5) calc(var(--shadow-spread) - 3px) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+    --shadow-xl: calc(var(--shadow-x) * 6) calc(var(--shadow-y) * 6) calc(var(--shadow-blur) * 7) calc(var(--shadow-spread) - 5px) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 100%), transparent);
+    --shadow-2xl: calc(var(--shadow-x) * 8) calc(var(--shadow-y) * 8) calc(max(0px, var(--shadow-blur) * 9 - 8px)) calc(var(--shadow-spread) - 12px) color-mix(in srgb, var(--shadow-color) calc(var(--shadow-opacity) * 250%), transparent);
+    --shadow: var(--shadow-md);
+
+    /* ── App theme (light content area) ──────────────── */
+    --background: 0 0% 99%;
+    --foreground: 220 25% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 14%;
+
+    --primary: 215 45% 28%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 45 90% 55%;
+    --secondary-foreground: 215 40% 12%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 15% 50%;
+
+    --accent: 215 30% 94%;
+    --accent-foreground: 215 45% 22%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 90%;
+    --input: 220 15% 90%;
+    --ring: 215 45% 28%;
+
+    --radius: 0.625rem;
+
+    /* ── Charts ───────────────────────────────────────── */
+    --chart-1: 180 70% 40%;
+    --chart-2: 200 80% 50%;
+    --chart-3: 38 92% 55%;
+    --chart-4: 271 81% 60%;
+    --chart-5: 12 76% 58%;
+
+    --group-red-1:    4 85% 65%;
+    --group-red-2:    4 85% 55%;
+    --group-red-3:    4 82% 45%;
+    --group-red-4:    4 78% 37%;
+    --group-red-5:    4 72% 28%;
+
+    --group-orange-1: 25 90% 65%;
+    --group-orange-2: 25 88% 55%;
+    --group-orange-3: 25 85% 45%;
+    --group-orange-4: 25 82% 37%;
+    --group-orange-5: 25 78% 28%;
+
+    --group-yellow-1: 47 95% 62%;
+    --group-yellow-2: 47 92% 52%;
+    --group-yellow-3: 47 88% 43%;
+    --group-yellow-4: 47 84% 35%;
+    --group-yellow-5: 47 78% 27%;
+
+    --group-green-1:  142 52% 60%;
+    --group-green-2:  142 56% 50%;
+    --group-green-3:  142 58% 40%;
+    --group-green-4:  142 56% 32%;
+    --group-green-5:  142 52% 24%;
+
+    --group-blue-1:   215 82% 68%;
+    --group-blue-2:   215 80% 58%;
+    --group-blue-3:   215 78% 48%;
+    --group-blue-4:   215 76% 38%;
+    --group-blue-5:   215 72% 29%;
+
+    --group-purple-1: 265 68% 68%;
+    --group-purple-2: 265 70% 58%;
+    --group-purple-3: 265 68% 48%;
+    --group-purple-4: 265 65% 38%;
+    --group-purple-5: 265 62% 29%;
+
+    /* ── Filter Popover (dark navy) ──────────────────── */
+    --filter-popover-bg: 220 50% 15%;
+    --filter-popover-fg: 210 40% 95%;
+    --filter-popover-border: 220 40% 25%;
+    --filter-popover-muted: 215 30% 70%;
+
+    /* ── Typography ───────────────────────────────────── */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground font-sans; }
+}
+
+/* Drag-and-drop row highlight — applied via DOM classList, zero React re-renders */
+.drop-target-highlight > td {
+  background-color: hsl(var(--primary) / 0.05) !important;
+}
