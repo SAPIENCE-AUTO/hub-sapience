@@ -10,7 +10,15 @@ const sql = fs.readFileSync(new URL('./schema.sql', import.meta.url), 'utf8')
   .replace(/create extension if not exists pg_trgm;.*/g, '')
   .replace(/create index on recruitment_rows using gin \(participant_name gin_trgm_ops\);/, '');
 await pg.exec(sql);
-const pool: any = { query: (s: string, p?: unknown[]) => pg.query(s, p as any), connect: async () => ({ query: (s: string) => pg.query(s), release: () => {} }) };
+// El cliente de la transacción debe reenviar los parámetros igual que el pool.
+// Antes los descartaba, y eso ocultaba si create() usaba de verdad el cliente.
+const pool: any = {
+  query: (sql: string, params?: unknown[]) => pg.query(sql, params as any),
+  connect: async () => ({
+    query: (sql: string, params?: unknown[]) => pg.query(sql, params as any),
+    release: () => {},
+  }),
+};
 
 const Users = createModel(pool, 'Users');
 const Projects = createModel(pool, 'Projects');

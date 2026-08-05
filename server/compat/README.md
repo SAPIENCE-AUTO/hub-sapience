@@ -77,3 +77,39 @@ siguió esperándola. No regenerar uno sin el otro.
 - `context.user` viene del shim de autenticación; conectar con Supabase Auth.
 - El endpoint `analyzeRecruitmentStatus` usa `stream`; ese parámetro está declarado pero no implementado.
 - `sorts` no lo usa el código actual, pero está soportado.
+
+## Bug corregido: transacciones y agotamiento del pool
+
+**Síntoma:** una carga masiva se colgaba en silencio, sin error ni timeout
+(se quedó pegada en `Purchase Orders: 2000/2611` durante 21 minutos).
+
+**Causa:** `bulkCreate` tomaba un cliente dedicado y abría `BEGIN` en él, pero
+`create()` usaba `pool.query()` — otra conexión. Consecuencias:
+
+1. La transacción no daba atomicidad: los inserts ocurrían fuera de ella.
+2. El cliente quedaba retenido con una transacción abierta todo el bucle.
+3. Con varios `bulkCreate` traslapados, las 10 conexiones del pool quedaban
+   retenidas esperando conexiones libres para sus propios inserts. Abrazo mortal.
+
+**Arreglo:** todos los métodos aceptan un `Executor` opcional (el pool por
+defecto, o un cliente concreto). `bulkCreate` pasa su cliente hacia abajo, así que
+el lote entero viaja por la misma conexión y la transacción es real.
+
+```ts
+for (const r of records) out.push(await this.create({ record: r }, client));
+//                                                              ^^^^^^ esto faltaba
+```
+
+**Y timeouts en `db.ts`**, porque el bloqueo silencioso fue peor que el bug:
+
+| Opción | Para qué |
+|---|---|
+| `connectionTimeoutMillis` | No esperar por siempre una conexión del pool |
+| `statement_timeout` | Matar consultas colgadas (súbelo en cargas masivas) |
+| `idle_in_transaction_session_timeout` | Cortar `BEGIN` huérfanos — la causa raíz |
+
+Configurables con `PG_STATEMENT_TIMEOUT` y `PG_IDLE_TX_TIMEOUT`.
+
+**Lección para el port:** cualquier endpoint que agrupe varias escrituras debe pasar
+el mismo cliente a todas. Si ves un `pool.connect()` con un `BEGIN`, verifica que todo
+lo de dentro reciba ese cliente.

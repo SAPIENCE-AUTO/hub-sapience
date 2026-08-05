@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Deals } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Deals } from '../../server/compat';
 
 const DealOut = z.object({
   id: z.string(),

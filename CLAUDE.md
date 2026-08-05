@@ -231,7 +231,78 @@ Se ejecutan desde `MigrationRunnerPage.tsx`. Decidir si se archivan; si se conse
 
 ---
 
-## 8. Archivos de referencia
+---
+
+## 8. ⭐ La causa raíz de la lentitud (leer antes de optimizar nada)
+
+Derivado del historial completo de desarrollo en Zite (7,474 mensajes, mayo–agosto)
+y del volumen real de datos.
+
+### El hecho central
+
+`Cell Values` tiene **~2.8 millones de filas**: una fila por celda de tablero.
+Es un modelo entidad-atributo-valor.
+
+Las columnas base de un tablero (`participantName`, `email`, `phone`) son **columnas
+reales** de su tabla → se leen en una consulta y aparecen al instante.
+
+Las columnas dinámicas viven en `Cell Values` → hay que traer filas, columnas y celdas
+por separado, y **armar el cruce en JavaScript en el navegador**.
+
+Eso es exactamente lo que Monday.com no hace: ellos resuelven el pivote en la base.
+
+### Los síntomas que produce, todos con la misma causa
+
+| Síntoma reportado | Mecanismo |
+|---|---|
+| Las primeras columnas cargan al instante, el resto tarda | columnas reales vs `Cell Values` |
+| Escribir en una celda: el texto se borra y reaparece | guardado optimista peleando con el refetch |
+| 7–10 s para que otro usuario vea una fila nueva | `silentReload()` recarga de más tras el evento realtime |
+| Cambiar de vista congela la tabla | los filtros dependen de `rowsWithGroup`, que materializa **todos** los valores dinámicos antes de filtrar |
+| Grupos y colores llegan después de las filas | `useDynamicColumns` hace fetch aparte de columnas y celdas |
+
+### Lo que ya se intentó (no repetir)
+
+Siete capas de caché en el cliente: `cellCache`, `cellMapCache`, `rowsCache`, `colCache`,
+prefetch de tableros vecinos, skip-stagger y `silentReload`.
+
+Funcionaron a medias y **cada una trajo sus propios bugs** — la carrera entre `rows` y
+`groupDynCols` que desacomodaba los grupos salió de ahí.
+
+No fue mal diseño: con la base de Zite (sin joins ni agregaciones) el pivote *tenía* que
+ocurrir en el navegador. Las cachés eran la única defensa posible.
+
+### Lo que el port arregla y lo que no
+
+**No lo arregla por sí solo.** La capa de compatibilidad replica el comportamiento de Zite
+a propósito: sigue trayendo celdas por separado y cruzando en el cliente. Mejora por los
+índices, pero el problema de fondo permanece.
+
+**Lo que sí lo arregla**, y solo es posible en Postgres:
+
+1. **Cruzar del lado del servidor.** Reescribir `getCellValues`, `getRecruitmentRows`,
+   `getBoardColumns` y `saveCellValue` para devolver las filas **con sus celdas ya
+   pivoteadas** en una consulta (join + agregación `jsonb`). Entonces se pueden borrar
+   la mayoría de las siete cachés.
+2. **Filtrar y agrupar en SQL** en lugar de materializar todo en el cliente.
+3. **Considerar migrar `Cell Values` a una columna `jsonb`** en la fila. Colapsa 2.8 M de
+   filas a decenas de miles. Es cambio de esquema, no port directo — evaluar después.
+
+**Orden correcto:** portar con paridad → verificar → *luego* estos cuatro endpoints.
+Hacerlo durante el port convierte cada archivo en una decisión de rediseño.
+
+### Nota de capacidad
+
+2.8 M de filas en `cell_values` rondan 500–800 MB con índices. **El plan gratis de
+Supabase (500 MB) no alcanza**: se necesita Pro desde la carga de datos reales.
+
+Para cargar esa tabla usar `COPY FROM STDIN` (pg-copy-streams), no inserts: la diferencia
+es de horas a minutos. El `bulkCreate` de la capa de compatibilidad inserta fila por fila
+y no sirve para este volumen.
+
+---
+
+## 9. Archivos de referencia
 
 - `ARBOL-REAL.md` — los 370 archivos, agrupados por carpeta.
 - `ESQUEMA-BD.md` — las 41 tablas con todos sus campos, tipos y opciones de select.

@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { SCHEMA, type TableDef, type FieldDef } from './schema-map';
 import { buildWhere } from './filters';
 
@@ -24,6 +24,14 @@ export interface FindAllArgs {
 
 export interface FindAllResult<T> { records: T[] }
 
+/**
+ * Quien ejecuta la consulta: el pool, o un cliente concreto cuando estamos
+ * dentro de una transacción. Es la pieza que faltaba: sin esto, `bulkCreate`
+ * abría BEGIN en un cliente y hacía los inserts por otras conexiones del pool
+ * — la transacción no servía de nada y el pool se agotaba en abrazo mortal.
+ */
+export type Executor = Pick<Pool | PoolClient, 'query'>;
+
 /** Tope de seguridad: Zite no paginaba y hay 190 findAll sin filtro. */
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 10_000;
@@ -48,13 +56,13 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
   }
 
   /** Hidrata los linkMany como arreglos de IDs, en una sola consulta por campo. */
-  async function hydrateMany(rows: any[], fields?: string[]): Promise<void> {
+  async function hydrateMany(rows: any[], fields?: string[], exec: Executor = pool): Promise<void> {
     if (!rows.length) return;
     const targets = manyFields.filter(([p]) => !fields?.length || fields.includes(p));
     if (!targets.length) return;
     const ids = rows.map((r) => r.id);
     for (const [prop, f] of targets) {
-      const { rows: links } = await pool.query(
+      const { rows: links } = await exec.query(
         `select "${f.selfCol}" as self, "${f.otherCol}" as other from "${f.join}" where "${f.selfCol}" = any($1)`,
         [ids],
       );
@@ -105,11 +113,11 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
     return { cols, vals, many };
   }
 
-  async function syncMany(id: string, many: [FieldDef, string[]][]): Promise<void> {
+  async function syncMany(id: string, many: [FieldDef, string[]][], exec: Executor = pool): Promise<void> {
     for (const [f, ids] of many) {
-      await pool.query(`delete from "${f.join}" where "${f.selfCol}" = $1`, [id]);
+      await exec.query(`delete from "${f.join}" where "${f.selfCol}" = $1`, [id]);
       if (!ids.length) continue;
-      await pool.query(
+      await exec.query(
         `insert into "${f.join}" ("${f.selfCol}", "${f.otherCol}") select $1, x from unnest($2::uuid[]) x on conflict do nothing`,
         [id, ids],
       );
@@ -120,7 +128,7 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
     modelName: String(modelName),
     table: def.table,
 
-    async findAll(args: FindAllArgs = {}): Promise<FindAllResult<T>> {
+    async findAll(args: FindAllArgs = {}, exec: Executor = pool): Promise<FindAllResult<T>> {
       const { sql: sel } = selectList(args.fields);
       const where = buildWhere(def, args.filters as any, 1);
       const limit = Math.min(args.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
@@ -136,9 +144,9 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
       }
       sql += ` limit ${limit}`;
       if (args.offset) sql += ` offset ${Math.max(0, args.offset)}`;
-      const { rows } = await pool.query(sql, where.params);
+      const { rows } = await exec.query(sql, where.params);
       wrapLinks(rows);
-      await hydrateMany(rows, args.fields);
+      await hydrateMany(rows, args.fields, exec);
       return { records: rows as T[] };
     },
 
@@ -146,37 +154,38 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
      * Zite acepta dos formas: `findOne({ id })` con filtros planos, y
      * `findOne({ filters: {...} })`. Las 117 llamadas usan ambas.
      */
-    async findOne(args: Record<string, any> = {}): Promise<T | null> {
+    async findOne(args: Record<string, any> = {}, exec: Executor = pool): Promise<T | null> {
       const { fields, filters, ...flat } = args;
       const merged = { ...(filters ?? {}), ...flat };
-      const res = await this.findAll({ filters: merged, fields, limit: 1 });
+      const res = await this.findAll({ filters: merged, fields, limit: 1 }, exec);
       return res.records[0] ?? null;
     },
 
-    async create({ record }: { record: Record<string, any> }): Promise<T> {
+    async create({ record }: { record: Record<string, any> }, exec: Executor = pool): Promise<T> {
       const { cols, vals, many } = unwrapRecord(record);
       const ph = cols.map((_, i) => `$${i + 1}`).join(', ');
       const quoted = cols.map((c) => `"${c}"`).join(', ');
       const sql = cols.length
         ? `insert into "${def.table}" (${quoted}) values (${ph}) returning id`
         : `insert into "${def.table}" default values returning id`;
-      const { rows } = await pool.query(sql, vals);
+      const { rows } = await exec.query(sql, vals);
       const id = rows[0].id;
-      if (many.length) await syncMany(id, many);
-      return (await this.findOne({ id })) as T;
+      if (many.length) await syncMany(id, many, exec);
+      return (await this.findOne({ id }, exec)) as T;
     },
 
     async bulkCreate({ records }: { records: Record<string, any>[] }): Promise<FindAllResult<T>> {
       if (!records.length) return { records: [] };
       const out: T[] = [];
-      // Se hace en una transacción para que un lote sea todo o nada.
+      // Todo el lote va por el MISMO cliente: es lo que hace que la transacción
+      // sea real y que el pool no se agote esperándose a sí mismo.
       const client = await pool.connect();
       try {
         await client.query('begin');
-        for (const r of records) out.push(await this.create({ record: r }));
+        for (const r of records) out.push(await this.create({ record: r }, client));
         await client.query('commit');
       } catch (e) {
-        await client.query('rollback');
+        try { await client.query('rollback'); } catch { /* la conexión ya murió */ }
         throw e;
       } finally {
         client.release();
@@ -184,24 +193,24 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
       return { records: out };
     },
 
-    async update({ id, record }: { id: string; record: Record<string, any> }): Promise<T | null> {
+    async update({ id, record }: { id: string; record: Record<string, any> }, exec: Executor = pool): Promise<T | null> {
       const { cols, vals, many } = unwrapRecord(record);
       if (cols.length) {
         const sets = cols.map((c, i) => `"${c}" = $${i + 2}`).join(', ');
-        await pool.query(`update "${def.table}" set ${sets} where id = $1`, [id, ...vals]);
+        await exec.query(`update "${def.table}" set ${sets} where id = $1`, [id, ...vals]);
       }
-      if (many.length) await syncMany(id, many);
-      return this.findOne({ id });
+      if (many.length) await syncMany(id, many, exec);
+      return this.findOne({ id }, exec);
     },
 
-    async delete({ id }: { id: string }): Promise<{ id: string }> {
-      await pool.query(`delete from "${def.table}" where id = $1`, [id]);
+    async delete({ id }: { id: string }, exec: Executor = pool): Promise<{ id: string }> {
+      await exec.query(`delete from "${def.table}" where id = $1`, [id]);
       return { id };
     },
 
-    async count(args: { filters?: Record<string, unknown> } = {}): Promise<number> {
+    async count(args: { filters?: Record<string, unknown> } = {}, exec: Executor = pool): Promise<number> {
       const where = buildWhere(def, args.filters as any, 1);
-      const { rows } = await pool.query(`select count(*)::int as n from "${def.table}" t ${where.sql}`, where.params);
+      const { rows } = await exec.query(`select count(*)::int as n from "${def.table}" t ${where.sql}`, where.params);
       return rows[0].n;
     },
   };
