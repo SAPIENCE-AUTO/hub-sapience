@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Tasks, CellValues, BoardColumns } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Tasks, CellValues, BoardColumns } from '../../server/compat';
 import { resolveWriteBoardId, smartWriteCellValue } from '../serverUtils/smartWrite';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

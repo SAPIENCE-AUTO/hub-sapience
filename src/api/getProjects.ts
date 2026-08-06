@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Projects, Tasks, CalendarEvents } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects, Tasks, CalendarEvents } from '../../server/compat';
 
 const linkedField = z.union([z.string(), z.array(z.string())]).optional();
 

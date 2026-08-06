@@ -1,4 +1,13 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
+import { DATE_OID, TIMESTAMPTZ_OID, parseDate, parseTimestamptz } from './datetimeParsers';
+
+/**
+ * Ver datetimeParsers.ts: sin esto, `pg` devuelve `Date` de JS para date/timestamptz
+ * en vez del string que espera el código portado — tronaba con
+ * "t.startDate?.split is not a function" en el primer endpoint que tocaba una fecha.
+ */
+types.setTypeParser(DATE_OID, parseDate);
+types.setTypeParser(TIMESTAMPTZ_OID, parseTimestamptz);
 
 /**
  * Un solo pool para todo el proceso.

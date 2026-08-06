@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Tasks, BoardColumns, CellValues, Boards, Projects } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Tasks, BoardColumns, CellValues, Boards, Projects } from '../../server/compat';
 
 const taskSchema = z.object({
   id: z.string(),

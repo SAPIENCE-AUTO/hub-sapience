@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, TaskComments } from 'zite-integrations-backend-sdk';
+import { createEndpoint, TaskComments } from '../../server/compat';
 
 export default createEndpoint({
   description: 'Get chat comments/mentions for a specific task',

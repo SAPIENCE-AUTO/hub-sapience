@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Projects, Boards, Tasks, CalendarEvents, RecruitmentRows, CellValues } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects, Boards, Tasks, CalendarEvents, RecruitmentRows, CellValues } from '../../server/compat';
 import { ensureCalendarDefaultColumns } from '../serverUtils/calendarDefaults';
 import { ensureTimelineDefaultColumns } from '../serverUtils/timelineDefaults';
 

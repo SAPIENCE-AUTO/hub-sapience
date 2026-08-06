@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Projects, Deals, Cotizaciones, CotizacionLineItems, PurchaseOrders } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects, Deals, Cotizaciones, CotizacionLineItems, PurchaseOrders } from '../../server/compat';
 
 const RUBROS = ['Reclutamiento e incentivos', 'Moderación', 'Management', 'Logística y operación', 'Back office'] as const;
 

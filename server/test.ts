@@ -3,9 +3,12 @@ import fs from 'node:fs';
 import { createModel } from './compat/model';
 import { buildWhere } from './compat/filters';
 import { SCHEMA } from './compat/schema-map';
+import { DATE_OID, TIMESTAMPTZ_OID, parseDate, parseTimestamptz } from './compat/datetimeParsers';
 
-// Adaptador: PGlite expone .query(sql, params) igual que pg.Pool
-const pg = await PGlite.create();
+// Mismos parsers que db.ts (ver datetimeParsers.ts), aplicados al mecanismo de
+// PGlite en vez de pg.types.setTypeParser: si esto falta, PGlite devuelve `Date`
+// de JS igual que `pg` sin el fix, y las pruebas de abajo lo detectan.
+const pg = await PGlite.create({ parsers: { [DATE_OID]: parseDate, [TIMESTAMPTZ_OID]: parseTimestamptz } });
 const sql = fs.readFileSync(new URL('./schema.sql', import.meta.url), 'utf8')
   .replace(/create extension if not exists pg_trgm;.*/g, '')
   .replace(/create index on recruitment_rows using gin \(participant_name gin_trgm_ops\);/, '');
@@ -92,6 +95,15 @@ check('bulkCreate inserta el lote', bulk.records.length === 2);
 check('count con filtro', (await CotizacionLineItems.count({ filters: { cotizacion: { contains: cot.id } } })) === 4);
 await CotizacionLineItems.delete({ id: bulk.records[0].id });
 check('delete', (await CotizacionLineItems.count({})) === 3);
+
+console.log('\n── date/datetime salen como string, no Date de JS (regresión del bug de setTypeParser) ──');
+const conFechas = await Projects.create({ record: { projectCode: 'PJT-FECHAS', startDate: '2024-01-15' } });
+check('date sale como string', typeof conFechas.startDate === 'string', `typeof=${typeof conFechas.startDate} valor=${JSON.stringify(conFechas.startDate)}`);
+check('date con formato "YYYY-MM-DD"', /^\d{4}-\d{2}-\d{2}$/.test(conFechas.startDate as any), String(conFechas.startDate));
+check('datetime (updatedAt) sale como string', typeof conFechas.updatedAt === 'string', `typeof=${typeof conFechas.updatedAt} valor=${JSON.stringify(conFechas.updatedAt)}`);
+check('datetime con formato ISO 8601 y Z', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(conFechas.updatedAt as any), String(conFechas.updatedAt));
+const releida = await Projects.findOne({ id: conFechas.id });
+check('sigue siendo string al releer con findOne (no solo en el create)', typeof releida?.startDate === 'string', `typeof=${typeof releida?.startDate}`);
 
 console.log('\n── protecciones nuevas que Zite no tenía ──');
 const err = await Users.findAll({ filters: { campoQueNoExiste: 1 } }).catch((e: Error) => e);
