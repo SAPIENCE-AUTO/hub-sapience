@@ -1,12 +1,48 @@
 """Genera schema.sql y schema-map.ts de UNA sola fuente para que no se desalineen."""
 import json, re, pathlib
 
-EXPORT = '/mnt/user-data/uploads/_Gestor_de_Proyectos_de_Investigacio_n__19_abr__2_.json'
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+EXPORT = ROOT / 'export-zite-schema.json'
 d = json.load(open(EXPORT))
 db = list(d['databases'].values())[0]['metadata']
 tables, byid = db['tables'], {t['id']: t for t in db['tables']}
 fid = {f['id']: (t, f) for t in tables for f in t['fields']}
 RESERVED = {'user','order','group','default','check','references','table','column','end','all','limit','offset','role'}
+
+# ── Decisiones tomadas sobre datos reales de Postgres, no derivables de este
+# export: algunas listas de single_select que Zite fue acumulando solo no son
+# enumeraciones de negocio, y dos sí les faltaban valores reales. Ver el
+# historial de la migración para el detalle de cómo se encontraron.
+CHECK_SKIP = {
+    ('recruitment_rows', 'status'): [
+        "status: sin CHECK a propósito. Zite lo registró como single_select con 92",
+        "opciones, pero es texto casi libre que los reclutadores escriben en operación",
+        "(typos, variantes, siglas de proyecto sueltas como '14', '56', 'QRO') — no es",
+        "una enumeración real, es un log de lo que se ha escrito. No falló al cargar",
+        "porque los valores existentes ya calzaban, pero el primer status nuevo que",
+        "escriba un reclutador habría rebotado en producción sin explicación aparente.",
+    ],
+    ('board_columns', 'column_type'): [
+        "column_type: sin CHECK a propósito. Zite lo registró como single_select, pero",
+        "el campo mezcla tres conceptos que se fueron acumulando por separado: tipos",
+        "de columna reales (Texto, Número, Select...), tipos de gráfica (chart1..chart5)",
+        "y nombres de color de etiquetas de grupo (red-1..5, blue-1..5, etc). La lista de",
+        "colores es la que sigue creciendo sola conforme se usan más tonos en operación",
+        "(se vieron green-4, blue-4/5, purple-4, yellow-5 sin registrar) — no es una",
+        "enumeración cerrada, es un log de lo que se ha usado. Un CHECK aquí persigue",
+        "una lista que no para de crecer; validar el tipo de columna real, si hace",
+        "falta, debe vivir en la capa de aplicación, no en la base.",
+    ],
+    ('purchase_orders', 'payment_terms'): [
+        "payment_terms: sin CHECK a propósito. Zite lo registró como single_select con",
+        "22 opciones, pero mezcla términos reales ('30 días', 'Contado') con basura de",
+        "captura ('wrf', '334', 'greqt', '1') — nunca fue una enumeración validada.",
+    ],
+}
+CHECK_EXTRA = {
+    ('tasks', 'status'): ['Archivada'],
+    ('projects', 'status'): ['Stand by'],
+}
 
 def snake(s):
     s = re.sub(r'[^A-Za-z0-9áéíóúñÁÉÍÓÚÑ]+', ' ', s).strip()
@@ -56,7 +92,7 @@ KIND = {'single_line_text':'text','long_text':'text','rich_text':'text','email':
 # ── construir la definición canónica de cada tabla ───────────────────────
 canon = {}   # model -> {table, cols:[(prop,col,pgtype,kind,extra)], checks:[], fkcols:[]}
 for t in tables:
-    T, cols, checks = tbl(t['name']), [], []
+    T, cols, checks, notes = tbl(t['name']), [], [], []
     used = set()
     def add(prop, col, pg, kind, extra=None):
         if col in used: return          # comparación EXACTA de nombre de columna
@@ -73,15 +109,20 @@ for t in tables:
             'identity' if ty == 'autonumber' else ('now' if ty in ('created_at','updated_at') else None))
         opts = [o['label'] for o in (f.get('template') or {}).get('options', [])]
         if opts and ty == 'single_select':
-            v = ", ".join("'" + o.replace("'", "''") + "'" for o in opts)
-            checks.append(f"  constraint {T}_{col}_chk check ({q(col)} is null or {q(col)} in ({v}))")
+            skip = CHECK_SKIP.get((T, col))
+            if skip:
+                notes.append("\n".join(f"-- {line}" for line in skip))
+            else:
+                allopts = opts + CHECK_EXTRA.get((T, col), [])
+                v = ", ".join("'" + o.replace("'", "''") + "'" for o in allopts)
+                checks.append(f"  constraint {T}_{col}_chk check ({q(col)} is null or {q(col)} in ({v}))")
         elif opts and ty == 'multiple_select':
             v = ", ".join("'" + o.replace("'", "''") + "'" for o in opts)
             checks.append(f"  constraint {T}_{col}_chk check ({q(col)} is null or {q(col)} <@ array[{v}]::text[])")
     add('createdAt', 'created_at', 'timestamptz', 'datetime', 'now')
     add('updatedAt', 'updated_at', 'timestamptz', 'datetime', 'now')
     many = {mm['prop']: mm for mm in m2m.values() if mm['owner']['id'] == t['id']}
-    canon[model(t['name'])] = dict(table=T, cols=cols, checks=checks, many=many, name=t['name'])
+    canon[model(t['name'])] = dict(table=T, cols=cols, checks=checks, notes=notes, many=many, name=t['name'])
 
 # ── orden topológico ────────────────────────────────────────────────────
 order, left = [], list(canon.items())
@@ -129,6 +170,8 @@ for mname, c in order:
     S.append(",\n".join(lines + c['checks']))
     S.append(");")
     S.append(f"create trigger {c['table']}_set_updated before update on {c['table']} for each row execute function set_updated_at();")
+    for note in c['notes']:
+        S.append(note)
 
 S.append("\n\n-- ═══ Relaciones N-N ═══════════════════════════════════════════")
 S.append("-- Los tres roles de equipo de un proyecto. En Zite eran los campos")
@@ -167,7 +210,11 @@ create index on purchase_orders (status);
 create index on expenses (status);
 create index on payments (status);
 create index on supplier_invoices (status);
-create unique index on shared_views (token);
+-- Parcial, no un unique index simple: Zite representa "sin token" como "" (no
+-- NULL), y a diferencia de NULL, Postgres exige que los strings vacíos sean
+-- únicos entre sí. Con un índice simple, la primera fila sin token bloquea a
+-- las demás (se vio en vivo: 250 de 462 Shared Views rechazadas por esto).
+create unique index shared_views_token_uniq on shared_views (token) where token is not null and token <> '';
 create unique index on users (lower(email));
 
 -- El código filtra participantes con `contains`, que en Postgres es
@@ -178,7 +225,7 @@ create index on recruitment_rows using gin (participant_name gin_trgm_ops);
 -- REVISAR: project_code se usa como llave de negocio en 6 tablas pero es text
 -- suelto, sin FK a projects. Decidir si se normaliza a project_id (recomendado)
 -- o se deja denormalizado con FK a projects(project_code) unique.""")
-pathlib.Path('/home/claude/schema.sql').write_text("\n".join(S), encoding='utf-8')
+(ROOT / 'schema.sql').write_text("\n".join(S), encoding='utf-8')
 
 # ── emitir schema-map.ts ────────────────────────────────────────────────
 M = ["// GENERADO por generate.py. No editar a mano.",
@@ -205,7 +252,7 @@ for mname, c in canon.items():
 M.append("};")
 M.append("")
 M.append("export const MODEL_NAMES = Object.keys(SCHEMA) as (keyof typeof SCHEMA)[];")
-pathlib.Path('/home/claude/server/compat/schema-map.ts').write_text("\n".join(M), encoding='utf-8')
+(ROOT / 'server' / 'compat' / 'schema-map.ts').write_text("\n".join(M), encoding='utf-8')
 
 # ── emitir types.ts ─────────────────────────────────────────────────────
 TS = {'text':'string','number':'number','boolean':'boolean','date':'string','datetime':'string','json':'any','array':'string[]','link':'string[]','linkMany':'string[]'}
@@ -218,7 +265,7 @@ for mname, c in canon.items():
     for prop in c['many']:
         Y.append(f"  {prop}?: string[];")
     Y.append("}"); Y.append("")
-pathlib.Path('/home/claude/server/compat/types.ts').write_text("\n".join(Y), encoding='utf-8')
+(ROOT / 'server' / 'compat' / 'types.ts').write_text("\n".join(Y), encoding='utf-8')
 
 print(f"✅ generado de una sola fuente")
 print(f"   schema.sql · schema-map.ts · types.ts")

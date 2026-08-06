@@ -100,6 +100,16 @@ Tipos usados: `single_line_text` (160), `single_select` (64), `long_text` (50),
 **Si se migra a SQL:** `single_select` → enum o tabla de lookup, `linked_record` → FK
 (ojo: varios permiten múltiples → tabla puente), `attachments` → storage externo + tabla de archivos.
 
+**La migración a Postgres ya ocurrió.** `schema.sql`, `server/compat/schema-map.ts` y
+`server/compat/types.ts` están **generados por `server/generate.py`** a partir de
+`export-zite-schema.json` (el export de Zite con la metadata de las 41 tablas) — **no se editan
+a mano**. Los tres salen de la misma fuente a propósito: si se necesita un cambio de esquema,
+se ajusta `generate.py` (o el JSON) y se vuelve a correr, no se tocan los archivos generados
+directamente. Las pocas decisiones que no son derivables del export (qué `CHECK` ampliar, cuáles
+quitar por ser listas acumuladas sin validar, el índice parcial de `shared_views.token`) están
+codificadas explícitamente en `generate.py` (`CHECK_SKIP` / `CHECK_EXTRA`), con el porqué en
+comentario — no en un parche SQL aparte.
+
 ---
 
 ## 4. Integraciones externas

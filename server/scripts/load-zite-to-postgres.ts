@@ -18,16 +18,25 @@
 //   npx tsx --env-file=.env server/scripts/load-zite-to-postgres.ts
 //   npx tsx --env-file=.env server/scripts/load-zite-to-postgres.ts --only=Users,Deals,Projects
 
-import { readFile, access } from 'node:fs/promises';
+import { readFile, access, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Pool } from 'pg';
+import { Pool, Client } from 'pg';
+// pg-copy-streams no trae tipos; tsx no type-checkea, así que esto corre sin problema.
+// @ts-ignore
+import { from as copyFrom } from 'pg-copy-streams';
 import { SCHEMA, type TableDef, type FieldDef } from '../compat/schema-map';
 import { createModel } from '../compat/model';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DATA_DIR = path.join(ROOT, 'datos-zite');
 const BATCH_SIZE = 2000;
+// Tablas por encima de esto (Cell Values: ~2GB) se cargan por COPY FROM STDIN en
+// streaming en vez de con JSON.parse(readFile(...)) + INSERT por lotes: cargar el
+// archivo completo a memoria para 2.8M filas es exactamente lo que tronó antes
+// ("Invalid string length" al exportar; hubiera vuelto a tronar al cargar).
+const COPY_THRESHOLD_BYTES = 50 * 1024 * 1024;
 
 if (!process.env.DATABASE_URL) {
   console.error('Falta DATABASE_URL. Corre con:\n  npx tsx --env-file=.env server/scripts/load-zite-to-postgres.ts');
@@ -70,6 +79,10 @@ async function exists(p: string): Promise<boolean> {
 
 function coerce(kind: FieldDef['kind'], value: unknown): unknown {
   if (value === undefined || value === null) return null;
+  // Vacío = sin valor, no un valor a repetir: sin esto, un UNIQUE index (ej. shared_views.token)
+  // rechaza dos filas con "" aunque ambas debieran leerse como "sin token" (a diferencia de NULL,
+  // que Postgres sí deja repetir). Se vio en vivo: 250 de 462 Shared Views caían por esto.
+  if (value === '') return null;
   switch (kind) {
     case 'number': return typeof value === 'number' ? value : Number(value);
     case 'boolean': return Boolean(value);
@@ -112,7 +125,114 @@ function rowFromRecord(t: TableCtx, record: ZiteRecord): Record<string, unknown>
   return row;
 }
 
+// export-zite-tables.mjs escribe el .json final como `[\nrec1,\nrec2,\n...\nrecN\n]\n`
+// (una línea por registro, coma al final salvo la última) para poder ensamblarlo sin
+// nunca construir un string gigante. Esto lee esa misma estructura línea por línea,
+// sin cargar el archivo a memoria — así es como se lee un archivo de 2GB sin tronar.
+async function* streamRecords(file: string): AsyncGenerator<ZiteRecord> {
+  const parseLine = (line: string): ZiteRecord | null => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed === '[' || trimmed === ']') return null;
+    return JSON.parse(trimmed.endsWith(',') ? trimmed.slice(0, -1) : trimmed);
+  };
+  let tail = '';
+  for await (const chunk of createReadStream(file, { encoding: 'utf8' })) {
+    tail += chunk;
+    const lines = tail.split('\n');
+    tail = lines.pop() ?? '';
+    for (const line of lines) {
+      const rec = parseLine(line);
+      if (rec) yield rec;
+    }
+  }
+  const last = parseLine(tail);
+  if (last) yield last;
+}
+
 interface ColSpec { prop: string; col: string }
+
+/** Escapa un valor para una fila COPY en formato CSV. NULL = campo vacío sin comillas. */
+function csvField(kind: FieldDef['kind'], value: unknown): string {
+  const v = coerce(kind, value);
+  if (v === null || v === undefined) return '';
+  if (kind === 'array' && Array.isArray(v)) {
+    // Literal de arreglo de Postgres DENTRO del campo CSV: dos capas de escape distintas.
+    const inner = v.map((el) => `"${String(el).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',');
+    return `"${`{${inner}}`.replace(/"/g, '""')}"`;
+  }
+  return `"${String(v).replace(/"/g, '""')}"`;
+}
+
+/**
+ * Carga una tabla enorme con COPY FROM STDIN, leyendo su .json en streaming.
+ * Quita los índices no-PK antes (COPY los reconstruiría fila por fila si no) y los
+ * recrea al final con su definición real, tomada en vivo de pg_indexes — no hay
+ * nombres de columna ni de índice a mano en ningún lado de esta función.
+ */
+async function loadViaCopy(t: TableCtx, file: string): Promise<void> {
+  const cols: ColSpec[] = [{ prop: 'id', col: 'id' }, ...Object.entries(t.def.fields)
+    .filter(([prop, f]) => prop !== 'id' && f.kind !== 'link' && f.kind !== 'linkMany')
+    .map(([prop, f]) => ({ prop, col: f.col }))];
+
+  // Conexión dedicada, NO del pool compartido: un COPY de millones de filas es una sola
+  // sentencia larga por diseño, y el query_timeout de 60s del pool (pensado para las
+  // muchas consultas cortas de loadScalars/applyLinks) la mata a medio camino — se vio
+  // en vivo cortándose en 700k/2.83M con "Query read timeout". Nada de valor fijo aquí:
+  // sin query_timeout en el constructor (pg no lo activa si no se pasa) y con
+  // `SET statement_timeout = 0` explícito en la sesión, este COPY no tiene techo.
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    keepAlive: true,
+    connectionTimeoutMillis: 15_000,
+  });
+  await client.connect();
+  await client.query('SET statement_timeout = 0');
+  try {
+    // COPY no tiene ON CONFLICT: si ya hay filas, un id repetido tumba el COPY entero.
+    // No hay retomar-desde-la-mitad aquí (sí lo hay en el export); si ya hay algo, se salta.
+    const { rows: [{ n }] } = await client.query(`select count(*)::int as n from "${t.def.table}"`);
+    if (n > 0) {
+      console.log(`⏭  ${t.name}: ya tiene ${n} filas en Postgres, se salta el COPY`);
+      return;
+    }
+
+    const { rows: indexDefs } = await client.query(
+      `select indexname, indexdef from pg_indexes where tablename = $1 and indexname !~ '_pkey$'`,
+      [t.def.table],
+    );
+    if (indexDefs.length) {
+      console.log(`[copy] ${t.name}: quitando ${indexDefs.length} índice(s) antes del COPY`);
+      for (const idx of indexDefs) await client.query(`drop index if exists "${idx.indexname}"`);
+    }
+
+    const copySql = `COPY "${t.def.table}" (${cols.map((c) => `"${c.col}"`).join(', ')}) FROM STDIN WITH (FORMAT csv)`;
+    const copyStream = client.query(copyFrom(copySql));
+    const finished = new Promise<void>((resolve, reject) => {
+      copyStream.on('finish', resolve);
+      copyStream.on('error', reject);
+    });
+
+    let count = 0;
+    for await (const record of streamRecords(file)) {
+      const row = rowFromRecord(t, record);
+      const line = cols.map((c) => csvField(t.def.fields[c.prop].kind, row[c.prop])).join(',') + '\n';
+      if (!copyStream.write(line)) await new Promise((r) => copyStream.once('drain', r));
+      count++;
+      if (count % 100_000 === 0) console.log(`   ${t.name} (copy): ${count}`);
+    }
+    copyStream.end();
+    await finished;
+    console.log(`✅ ${t.name}: ${count} filas cargadas vía COPY`);
+
+    if (indexDefs.length) {
+      console.log(`[copy] ${t.name}: recreando ${indexDefs.length} índice(s)`);
+      for (const idx of indexDefs) await client.query(idx.indexdef);
+    }
+  } finally {
+    await client.end();
+  }
+}
 
 async function insertBatch(table: string, cols: ColSpec[], rows: Record<string, unknown>[]): Promise<void> {
   if (!rows.length) return;
@@ -151,19 +271,33 @@ async function loadScalars(t: TableCtx, records: ZiteRecord[]): Promise<void> {
   console.log(`✅ ${t.name}: ${inserted} insertadas${failed ? `, ${failed} fallidas` : ''}`);
 }
 
+// El pool ya trae query_timeout, pero se ha visto en vivo que tras un error de
+// conexión ("Connection terminated unexpectedly") una conexión del pool queda en un
+// estado zombie que ni siquiera dispara ese timeout — pool.query() se queda esperando
+// para siempre. Este timeout es del LADO DE NODE, no depende de que pg reaccione bien.
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`timeout de ${ms}ms esperando ${label}`)), ms)),
+  ]);
+}
+
 async function applyLinks(t: TableCtx, records: ZiteRecord[]): Promise<void> {
   const model = createModel(pool, t.modelKey as keyof typeof SCHEMA);
   let updated = 0;
   let failed = 0;
+  let processed = 0;
   for (const r of records) {
     const patch: Record<string, unknown> = {};
     for (const [label, value] of Object.entries(r.fields ?? {})) {
       const resolved = resolveField(t, label);
       if (resolved && (resolved[1].kind === 'link' || resolved[1].kind === 'linkMany')) patch[resolved[0]] = value;
     }
+    processed++;
+    if (records.length > 500 && processed % 500 === 0) console.log(`   ${t.name} (links): ${processed}/${records.length}`);
     if (!Object.keys(patch).length) continue;
     try {
-      await model.update({ id: r.id, record: patch });
+      await withTimeout(model.update({ id: r.id, record: patch }), 20_000, `update de ${t.name} id=${r.id}`);
       updated++;
     } catch (err) {
       failed++;
@@ -193,6 +327,12 @@ async function main() {
   for (const t of targets) {
     const file = path.join(DATA_DIR, `${t.name}.json`);
     if (!(await exists(file))) { console.log(`⏭  ${t.name}: no exportada aún, se salta`); continue; }
+    const { size } = await stat(file);
+    if (size > COPY_THRESHOLD_BYTES) {
+      console.log(`   ${t.name}: ${(size / 1024 / 1024).toFixed(0)}MB, va por COPY en streaming`);
+      await loadViaCopy(t, file);
+      continue;
+    }
     const records: ZiteRecord[] = JSON.parse(await readFile(file, 'utf8'));
     await loadScalars(t, records);
   }

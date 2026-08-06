@@ -21,6 +21,7 @@
     "@types/pg": "^8.20.3",
     "hono": "^4.13.0",
     "pg": "^8.22.0",
+    "pg-copy-streams": "^7.0.0",
     "zod": "^4.4.3"
   },
   "type": "module"

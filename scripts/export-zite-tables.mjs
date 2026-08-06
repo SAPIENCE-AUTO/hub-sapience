@@ -13,6 +13,7 @@
 //   node --env-file=.env scripts/export-zite-tables.mjs --force   (ignora lo ya exportado)
 
 import { readFile, writeFile, appendFile, mkdir, rm, access } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -138,10 +139,46 @@ async function exists(p) {
   try { await access(p); return true; } catch { return false; }
 }
 
-async function loadJsonl(file) {
-  if (!(await exists(file))) return [];
-  const text = await readFile(file, 'utf8');
-  return text.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+// Cuenta líneas en streaming, sin cargar el archivo completo a memoria: con tablas
+// de millones de filas (Cell Values: 2.8M), leerlo entero como un solo string revienta
+// contra el límite de longitud de string de V8, igual que le pasaba a la escritura final.
+async function countJsonlLines(file) {
+  if (!(await exists(file))) return 0;
+  let count = 0;
+  let tail = '';
+  for await (const chunk of createReadStream(file, { encoding: 'utf8' })) {
+    tail += chunk;
+    const lines = tail.split('\n');
+    tail = lines.pop();
+    count += lines.filter(Boolean).length;
+  }
+  if (tail.trim()) count++;
+  return count;
+}
+
+// Arma el JSON final reusando las líneas ya serializadas del .jsonl (no vuelve a
+// stringify-ar nada), escribiendo a disco en streaming: nunca construye un string
+// gigante en memoria como sí hacía `JSON.stringify(records, null, 2)`, que es
+// exactamente lo que tronó ("Invalid string length") con Cell Values.
+async function finalizeFromJsonl(jsonlPath, finalPath) {
+  const out = createWriteStream(finalPath);
+  const writeAsync = (s) => new Promise((res, rej) => out.write(s, (err) => (err ? rej(err) : res())));
+  await writeAsync('[\n');
+  let first = true;
+  let tail = '';
+  for await (const chunk of createReadStream(jsonlPath, { encoding: 'utf8' })) {
+    tail += chunk;
+    const lines = tail.split('\n');
+    tail = lines.pop();
+    for (const line of lines) {
+      if (!line) continue;
+      await writeAsync(first ? line : ',\n' + line);
+      first = false;
+    }
+  }
+  if (tail.trim()) await writeAsync(first ? tail : ',\n' + tail);
+  await writeAsync('\n]\n');
+  await new Promise((res, rej) => out.end((err) => (err ? rej(err) : res())));
 }
 
 async function exportTable(table, recordsTemplate) {
@@ -155,13 +192,12 @@ async function exportTable(table, recordsTemplate) {
     return { name: table.name, skipped: true };
   }
 
-  let records = await loadJsonl(jsonlPath);
-  let offset = records.length;
+  let offset = await countJsonlLines(jsonlPath);
   if (await exists(statePath)) {
     const state = JSON.parse(await readFile(statePath, 'utf8'));
     offset = state.offset ?? offset;
   }
-  if (offset > 0) console.log(`↻  ${table.name}: retomando desde offset ${offset} (${records.length} registros ya guardados)`);
+  if (offset > 0) console.log(`↻  ${table.name}: retomando desde offset ${offset}`);
 
   for (;;) {
     const res = await zfetch(buildRecordsPath(recordsTemplate, table.id, PAGE_SIZE, offset));
@@ -169,7 +205,6 @@ async function exportTable(table, recordsTemplate) {
     const pageRecords = extractArray(res.json) ?? [];
     if (pageRecords.length) {
       await appendFile(jsonlPath, pageRecords.map((r) => JSON.stringify(r)).join('\n') + '\n');
-      records = records.concat(pageRecords);
     }
     offset += pageRecords.length;
     await writeFile(statePath, JSON.stringify({ offset, total: res.json?.total }));
@@ -177,11 +212,11 @@ async function exportTable(table, recordsTemplate) {
     if (!shouldContinue(res.json, offset, pageRecords.length, PAGE_SIZE)) break;
   }
 
-  await writeFile(finalPath, JSON.stringify(records, null, 2));
+  await finalizeFromJsonl(jsonlPath, finalPath);
   await rm(jsonlPath, { force: true });
   await rm(statePath, { force: true });
-  console.log(`✅ ${table.name}: ${records.length} registros → datos-zite/${fileName}.json`);
-  return { name: table.name, count: records.length };
+  console.log(`✅ ${table.name}: ${offset} registros → datos-zite/${fileName}.json`);
+  return { name: table.name, count: offset };
 }
 
 async function main() {

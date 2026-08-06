@@ -121,10 +121,15 @@ create table recruitment_rows (
   row_order                     numeric,
   board_id                      text,
   created_at                    timestamptz not null default now(),
-  updated_at                    timestamptz not null default now(),
-  constraint recruitment_rows_status_chk check ("status" is null or "status" in ('Pendiente', 'Contactado', 'Confirmado', 'Asistió', 'No show', 'Descartado', 'Rechazado', 'Posible Candidato', 'Canceló participante', 'OK', 'Checar', 'Back Up', 'ABANDONO', 'CANCELADO', 'Rechazado por perfil', 'Rechazado por NSE', 'BU', 'CANCELO', 'Se pasa de edad', 'Cuota llena', 'NO CONTINUO', 'No es el perfil', 'Se baja de NSE', 'Prueba', 'Posible Candidata', 'No contesta', 'Ya en proyectos', 'No puede', 'MARCAR', 'FALTA CONFIRMAR', 'Duplicado', 'Canceló', 'NSE CT', 'BU LOYAL ENSURE', 'sesiones', 'Cuota llena - Posible candidato', 'Filtro duplicado', 'OK - DUPLA 1', 'OK - ENTREVISTA', 'OK - DUPLA 2', 'BU - DUPLA 2', 'BU - DUPLA 1', 'Consume ambas', 'Ya participó', 'Cancela', 'llenar nuevo filtro', 'OK - Principal', 'OK - Back Up', 'Principal / OK', 'Back Up / OK (para los 2)', 'No es perfil', 'FORTALEZA', 'Se baja NSE', 'No contesto nada', 'RECHAZADA', 'No termino el filtro', 'No subió foto', 'CLIENTE', 'SAPIENCE', 'CANCELADA', 'Rechazado por dirección', 'Rechazado /No es perfil', 'Rechazado / Se baja de NSE', 'XÓLOTL', 'Rechazado por perfil/Participó en otro proyecto', 'ES DE CDMX', 'Rechazado / Filtro mal llenado', 'QRO', 'Rechazado / No es el perfil', 'Rechazado / por edad', 'No es el rango de edad', 'Vetada', 'Vetado', 'Rechazada / No es Perfil', 'Ya participo', '.', 'Rechazado / Multiproyectos', '14', 'Status', '56', '61', '66', '70', 'Rechazado - no es perfil', 'Rechazado - Se baja de NSE', 'PP T2', 'Posible Candidato T6', 'Posible Candidato T2', 'Posible Candidato T1', 'GREEN - T1', 'PP T1', 'Posible Participante S5'))
+  updated_at                    timestamptz not null default now()
 );
 create trigger recruitment_rows_set_updated before update on recruitment_rows for each row execute function set_updated_at();
+-- status: sin CHECK a propósito. Zite lo registró como single_select con 92
+-- opciones, pero es texto casi libre que los reclutadores escriben en operación
+-- (typos, variantes, siglas de proyecto sueltas como '14', '56', 'QRO') — no es
+-- una enumeración real, es un log de lo que se ha escrito. No falló al cargar
+-- porque los valores existentes ya calzaban, pero el primer status nuevo que
+-- escriba un reclutador habría rebotado en producción sin explicación aparente.
 
 -- ─── Suppliers ─────────────────────────────────────────────────
 create table suppliers (
@@ -182,12 +187,14 @@ create table purchase_orders (
   updated_at                    timestamptz not null default now(),
   constraint purchase_orders_status_chk check ("status" is null or "status" in ('Borrador', 'Enviada a aprobación', 'Aprobada', 'Factura recibida', 'Factura validada', 'Pago programado', 'Pagada', 'Cancelada')),
   constraint purchase_orders_category_chk check ("category" is null or "category" in ('Reclutamiento e Incentivos', 'Logística', 'Moderaciones', 'Management', 'Otros')),
-  constraint purchase_orders_payment_terms_chk check ("payment_terms" is null or "payment_terms" in ('Contado', '15 días', '30 días', '60 días', '1 día', '10 días', '28 días', 'wrf', '34', '334', 'greqt', '1', '30 dias', '30', '28', '7 días', 'Un día', 'a 30 días', 'día siguiente', '7', '2', '5')),
   constraint purchase_orders_currency_chk check ("currency" is null or "currency" in ('MXN', 'USD')),
   constraint purchase_orders_tipo_de_oc_chk check ("tipo_de_oc" is null or "tipo_de_oc" in ('Normal', 'Anticipo', 'Cierre')),
   constraint purchase_orders_origen_chk check ("origen" is null or "origen" in ('Migrada', 'Sistema'))
 );
 create trigger purchase_orders_set_updated before update on purchase_orders for each row execute function set_updated_at();
+-- payment_terms: sin CHECK a propósito. Zite lo registró como single_select con
+-- 22 opciones, pero mezcla términos reales ('30 días', 'Contado') con basura de
+-- captura ('wrf', '334', 'greqt', '1') — nunca fue una enumeración validada.
 
 -- ─── PO Line Items ─────────────────────────────────────────────
 create table po_line_items (
@@ -220,7 +227,7 @@ create table tasks (
   board_id                      text,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now(),
-  constraint tasks_status_chk check ("status" is null or "status" in ('Pendiente', 'En progreso', 'Completada', 'Bloqueada'))
+  constraint tasks_status_chk check ("status" is null or "status" in ('Pendiente', 'En progreso', 'Completada', 'Bloqueada', 'Archivada'))
 );
 create trigger tasks_set_updated before update on tasks for each row execute function set_updated_at();
 
@@ -279,10 +286,18 @@ create table board_columns (
   deleted_at                    text,
   deleted_by                    text,
   created_at                    timestamptz not null default now(),
-  updated_at                    timestamptz not null default now(),
-  constraint board_columns_column_type_chk check ("column_type" is null or "column_type" in ('Texto', 'Número', 'Fecha', 'Checkbox', 'Select', 'Persona', 'Email', 'Teléfono', 'Archivo', 'Rating', 'Botón', 'Datetime', 'Status', 'chart1', 'chart2', 'Color', 'chart3', '__fillout_link__', 'chart4', 'chart5', 'primary', 'destructive', 'muted', 'orange-1', 'yellow-1', 'purple-3', 'red-1', 'purple-1', 'green-2', 'green-1', 'blue-1', 'red-2', 'orange-2', 'yellow-2', 'blue-2', 'purple-2', 'red-3', 'orange-3', 'yellow-3', 'green-3', 'blue-3', 'red-4', 'orange-4', 'yellow-4'))
+  updated_at                    timestamptz not null default now()
 );
 create trigger board_columns_set_updated before update on board_columns for each row execute function set_updated_at();
+-- column_type: sin CHECK a propósito. Zite lo registró como single_select, pero
+-- el campo mezcla tres conceptos que se fueron acumulando por separado: tipos
+-- de columna reales (Texto, Número, Select...), tipos de gráfica (chart1..chart5)
+-- y nombres de color de etiquetas de grupo (red-1..5, blue-1..5, etc). La lista de
+-- colores es la que sigue creciendo sola conforme se usan más tonos en operación
+-- (se vieron green-4, blue-4/5, purple-4, yellow-5 sin registrar) — no es una
+-- enumeración cerrada, es un log de lo que se ha usado. Un CHECK aquí persigue
+-- una lista que no para de crecer; validar el tipo de columna real, si hace
+-- falta, debe vivir en la capa de aplicación, no en la base.
 
 -- ─── Cell Values ───────────────────────────────────────────────
 create table cell_values (
@@ -714,7 +729,7 @@ create table projects (
   created_by                    text,
   created_at                    timestamptz,
   updated_at                    timestamptz not null default now(),
-  constraint projects_status_chk check ("status" is null or "status" in ('Prospecto', 'En curso', 'Finalizado', 'Cancelado', 'Activo')),
+  constraint projects_status_chk check ("status" is null or "status" in ('Prospecto', 'En curso', 'Finalizado', 'Cancelado', 'Activo', 'Stand by')),
   constraint projects_timeline_status_chk check ("timeline_status" is null or "timeline_status" in ('Pendiente', 'Listo', 'Error')),
   constraint projects_teams_channel_status_chk check ("teams_channel_status" is null or "teams_channel_status" in ('Pendiente', 'Creando', 'Listo', 'Error'))
 );
@@ -921,7 +936,11 @@ create index on purchase_orders (status);
 create index on expenses (status);
 create index on payments (status);
 create index on supplier_invoices (status);
-create unique index on shared_views (token);
+-- Parcial, no un unique index simple: Zite representa "sin token" como "" (no
+-- NULL), y a diferencia de NULL, Postgres exige que los strings vacíos sean
+-- únicos entre sí. Con un índice simple, la primera fila sin token bloquea a
+-- las demás (se vio en vivo: 250 de 462 Shared Views rechazadas por esto).
+create unique index shared_views_token_uniq on shared_views (token) where token is not null and token <> '';
 create unique index on users (lower(email));
 
 -- El código filtra participantes con `contains`, que en Postgres es
