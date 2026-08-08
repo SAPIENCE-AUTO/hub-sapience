@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Users } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Users } from '../../server/compat';
 
 export default createEndpoint({
   description: 'Updates the last active timestamp and active channel for the current user',

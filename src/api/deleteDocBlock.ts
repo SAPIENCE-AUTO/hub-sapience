@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, DocumentBlocks } from 'zite-integrations-backend-sdk';
+import { createEndpoint, DocumentBlocks } from '../../server/compat';
 
 export default createEndpoint({
   description: 'Delete a document block',

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Messages } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Messages } from '../../server/compat';
 import { parseReactions, serializeReactions } from '../lib/chatJson';
 import { publishEvent } from '../lib/ably';
 

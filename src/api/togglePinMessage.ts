@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Messages } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Messages } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 
 export default createEndpoint({

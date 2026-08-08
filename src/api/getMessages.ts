@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Messages, ChatConversations } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Messages, ChatConversations } from '../../server/compat';
 import { parseMembers } from '../lib/chatJson';
 
 const sanitize = (r: Awaited<ReturnType<typeof Messages.findAll>>['records'][0]) => ({

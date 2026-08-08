@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Users } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Users } from '../../server/compat';
 
 const ACTIVE_WINDOW_MS = 5 * 60 * 1000;   // 5 min — for activeEmails compat
 const PRESENCE_WINDOW_MS = 30 * 60 * 1000; // 30 min — for granular status

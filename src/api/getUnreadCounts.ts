@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Messages } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Messages } from '../../server/compat';
 
 function stripMarkdown(text: string): string {
   if (text.startsWith('{"type":"poll"')) return '📊 Encuesta';

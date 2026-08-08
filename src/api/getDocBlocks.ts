@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, DocumentBlocks } from 'zite-integrations-backend-sdk';
+import { createEndpoint, DocumentBlocks } from '../../server/compat';
 
 const BlockOut = z.object({
   id: z.string(),

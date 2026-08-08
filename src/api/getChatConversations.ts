@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ChatConversations } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ChatConversations } from '../../server/compat';
 import { parseMembers } from '../lib/chatJson';
 
 export default createEndpoint({

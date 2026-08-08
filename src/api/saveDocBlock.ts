@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, DocumentBlocks } from 'zite-integrations-backend-sdk';
+import { createEndpoint, DocumentBlocks } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 
 export default createEndpoint({

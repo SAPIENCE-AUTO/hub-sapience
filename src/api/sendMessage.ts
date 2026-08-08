@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Messages, ChatConversations, TaskComments, Users } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Messages, ChatConversations, TaskComments, Users } from '../../server/compat';
 import { parseMembers } from '../lib/chatJson';
 import { publishEvent, safeUserChannel } from '../lib/ably';
 
