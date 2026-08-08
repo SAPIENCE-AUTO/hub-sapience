@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { createEndpoint, ZiteError, PurchaseOrders, PoAuditLog } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ZiteError, PurchaseOrders, PoAuditLog } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
+import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 
 function textToHtml(text: string): string {
   return text
@@ -22,14 +23,6 @@ export default createEndpoint({
   }),
   outputSchema: z.object({ success: z.boolean(), message: z.string() }),
   execute: async ({ input, context }) => {
-    const accessToken = process.env.ZITE_OUTLOOK_ACCESS_TOKEN;
-    if (!accessToken) {
-      throw new ZiteError({
-        code: 'BAD_REQUEST',
-        message: 'La integración de Outlook no está configurada correctamente.',
-      });
-    }
-
     const po = await PurchaseOrders.findOne({ id: input.poId });
     if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'OC no encontrada' });
 
@@ -64,12 +57,8 @@ export default createEndpoint({
       saveToSentItems: true,
     };
 
-    const graphResp = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+    const graphResp = await graphFetch(`${graphMailboxBase()}/sendMail`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(mailPayload),
     });
 

@@ -5,6 +5,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { Users } from './compat';
 import { ZiteError } from './compat/errors';
+import { GraphAuthError } from './microsoft/graph';
 import type { AuthUser, CompiledEndpoint } from './compat/endpoint';
 
 /**
@@ -79,6 +80,12 @@ app.post('/api/:name', async (c) => {
   } catch (err) {
     if (err instanceof ZiteError) {
       return c.json({ message: err.message, code: err.code }, err.status as 400 | 401 | 403 | 404 | 500);
+    }
+    // GraphAuthError (server/microsoft/graph.ts) sale legible en vez de "Error
+    // interno" para los 7 endpoints que usan Microsoft Graph — un solo lugar
+    // en vez de repetir el mismo try/catch en cada uno.
+    if (err instanceof GraphAuthError) {
+      return c.json({ message: err.message, code: 'GRAPH_AUTH_ERROR' }, 400);
     }
     console.error(`[api/${name}]`, err);
     return c.json({ message: 'Error interno' }, 500);

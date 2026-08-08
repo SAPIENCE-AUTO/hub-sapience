@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { createEndpoint, ZiteError, Payments, Suppliers } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ZiteError, Payments, Suppliers } from '../../server/compat';
+import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 
 const fmtCurrency = (amount: number | undefined, currency: string | undefined) => {
   if (amount == null) return '—';
@@ -89,14 +90,6 @@ export default createEndpoint({
   }),
   outputSchema: z.object({ success: z.boolean(), message: z.string() }),
   execute: async ({ input, context }) => {
-    const accessToken = process.env.ZITE_OUTLOOK_ACCESS_TOKEN;
-    if (!accessToken) {
-      throw new ZiteError({
-        code: 'BAD_REQUEST',
-        message: 'La integración de Outlook no está configurada correctamente.',
-      });
-    }
-
     // ── Fetch payment ─────────────────────────────────────────────────────
     const payment = await Payments.findOne({ id: input.paymentId });
     if (!payment) throw new ZiteError({ code: 'NOT_FOUND', message: 'Pago no encontrado.' });
@@ -160,12 +153,8 @@ export default createEndpoint({
       saveToSentItems: true,
     };
 
-    const graphResp = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+    const graphResp = await graphFetch(`${graphMailboxBase()}/sendMail`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(mailPayload),
     });
 

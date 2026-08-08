@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, SupplierInvoices, Payments, Suppliers } from '../../server/compat';
+import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 
 export default createEndpoint({
   description: 'Validate or reject a supplier invoice. When validating, auto-creates a scheduled payment. When rejecting, notifies the supplier by email.',
@@ -75,9 +76,8 @@ export default createEndpoint({
         if (invoice?.supplierName) {
           const supplier = await Suppliers.findOne({ filters: { supplierName: invoice.supplierName } });
           const recipientEmail = supplier?.email;
-          const accessToken = process.env.ZITE_OUTLOOK_ACCESS_TOKEN;
 
-          if (recipientEmail && accessToken) {
+          if (recipientEmail) {
             const contactName = supplier?.contactName || invoice.supplierName;
             const invoiceNumber = invoice.invoiceNumber ?? 'Sin número';
             const amount = invoice.amount != null
@@ -131,12 +131,8 @@ export default createEndpoint({
               saveToSentItems: true,
             };
 
-            const graphResp = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+            const graphResp = await graphFetch(`${graphMailboxBase()}/sendMail`, {
               method: 'POST',
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-              },
               body: JSON.stringify(mailPayload),
             });
 

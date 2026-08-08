@@ -1,19 +1,17 @@
 import { z } from 'zod';
-import { createEndpoint, Projects } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects } from '../../server/compat';
+import { graphFetch } from '../../server/microsoft/graph';
 
 const FOLDER_NAMES = ['PROPUESTA', 'CALENDARIOS', 'TIMELINE', 'ENTREGABLES', 'MATERIALES', 'GRABACIONES', 'GUÍAS'];
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-async function createChannelFolders(token: string, teamId: string, channelId: string) {
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
+async function createChannelFolders(teamId: string, channelId: string) {
   // Retry up to 3 times with 5s delay — SharePoint may take time to provision the channel folder
   let folderRoot: { id: string; parentReference?: { driveId?: string } } | null = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const res = await fetch(
+    const res = await graphFetch(
       `https://graph.microsoft.com/v1.0/teams/${teamId}/channels/${channelId}/filesFolder`,
-      { headers }
     );
     if (res.ok) {
       folderRoot = await res.json();
@@ -37,9 +35,8 @@ async function createChannelFolders(token: string, teamId: string, channelId: st
 
   for (const name of FOLDER_NAMES) {
     try {
-      const r = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/children`, {
+      const r = await graphFetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/children`, {
         method: 'POST',
-        headers,
         body: JSON.stringify({ name, folder: {}, '@microsoft.graph.conflictBehavior': 'rename' }),
       });
       if (!r.ok) {
@@ -103,8 +100,7 @@ export default createEndpoint({
 
       // If webhook returns the channel ID, create folders via Graph API
       if (body.channelId && input.teamId) {
-        const token = process.env.ZITE_MICROSOFTTEAMS_ACCESS_TOKEN;
-        createChannelFolders(token, input.teamId, body.channelId).catch(e =>
+        createChannelFolders(input.teamId, body.channelId).catch(e =>
           console.log('createChannelFolders error:', e)
         );
       }

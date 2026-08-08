@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import { createEndpoint, CalendarEvents, BoardColumns, CellValues, Boards } from 'zite-integrations-backend-sdk';
-
-const GRAPH_BASE = 'https://graph.microsoft.com/v1.0/me';
+import { createEndpoint, CalendarEvents, BoardColumns, CellValues, Boards } from '../../server/compat';
+import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 
 // Parse attendees string into Graph API format
 function parseAttendees(raw?: string): { emailAddress: { address: string }; type: string }[] {
@@ -237,8 +236,11 @@ export default createEndpoint({
     message: z.string().optional(),
   }),
   execute: async ({ input }) => {
-    const accessToken = process.env.ZITE_OUTLOOK_ACCESS_TOKEN ?? '';
-    if (!accessToken) throw new Error('Outlook access token not configured');
+    // Calculado dentro de execute (no a nivel de módulo): graphMailboxBase()
+    // truena si falta MS_SEND_AS_EMAIL, y eso no debe tumbar el import del
+    // archivo completo al arrancar el server — solo debe fallar cuando se
+    // invoca el endpoint, igual que las demás variables de entorno de la app.
+    const GRAPH_BASE = graphMailboxBase();
 
     // Fetch the calendar event
     const event = await CalendarEvents.findOne({ id: input.eventId });
@@ -247,12 +249,8 @@ export default createEndpoint({
     // Handle cancel via Graph API
     if (input.action === 'cancel') {
       if (event.outlookEventId) {
-        const cancelRes = await fetch(`${GRAPH_BASE}/events/${event.outlookEventId}/cancel`, {
+        const cancelRes = await graphFetch(`${GRAPH_BASE}/events/${event.outlookEventId}/cancel`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({ comment: 'Evento cancelado.' }),
         });
         if (!cancelRes.ok) {
@@ -379,18 +377,16 @@ export default createEndpoint({
 
     let graphRes: Response;
     if (input.action === 'create') {
-      graphRes = await fetch(`${graphBase}/events`, {
+      graphRes = await graphFetch(`${graphBase}/events`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(graphBody),
       });
     } else {
       // update
       const existingId = event.outlookEventId;
       if (!existingId) throw new Error('No outlookEventId found to update');
-      graphRes = await fetch(`${graphBase}/events/${existingId}`, {
+      graphRes = await graphFetch(`${graphBase}/events/${existingId}`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(graphBody),
       });
     }
@@ -406,9 +402,8 @@ export default createEndpoint({
     // Verify DoNotForward property was set correctly
     if (isRestrictedForwarding && created.id) {
       const DO_NOT_FORWARD_ID = 'Boolean {00020329-0000-0000-C000-000000000046} Name DoNotForward';
-      const verifyRes = await fetch(
+      const verifyRes = await graphFetch(
         `${GRAPH_BASE}/events/${created.id}?$expand=singleValueExtendedProperties($filter=id eq '${DO_NOT_FORWARD_ID}')`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       if (verifyRes.ok) {
         const verifyData = await verifyRes.json() as { singleValueExtendedProperties?: { id: string; value: string }[] };

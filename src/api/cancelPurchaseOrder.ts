@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, ZiteError, PurchaseOrders, PoAuditLog, Suppliers } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
+import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 
 function buildCancellationEmailHtml(poNumber: unknown, totalAmount: number | undefined, currency: string | undefined, reason: string): string {
   const amtFormatted = totalAmount
@@ -126,44 +127,40 @@ export default createEndpoint({
     let emailSent = false;
     if (po.emailSentAt && po.supplierName) {
       try {
-        const accessToken = process.env.ZITE_OUTLOOK_ACCESS_TOKEN;
-        if (accessToken) {
-          const supplier = await Suppliers.findOne({ filters: { supplierName: po.supplierName } });
-          const recipientEmail = supplier?.email ?? po.emailSentTo;
-          if (recipientEmail) {
-            const sendAsEmail = process.env.ZITE_OUTLOOK_SEND_AS_EMAIL?.trim() || undefined;
-            const htmlBody = buildCancellationEmailHtml(po.poNumber, po.totalAmount, po.currency, input.comments);
-            const mailPayload = {
-              message: {
-                subject: `Cancelación de Orden de Compra OC-${po.poNumber}`,
-                body: { contentType: 'HTML', content: htmlBody },
-                toRecipients: [{ emailAddress: { address: recipientEmail } }],
-                ...(sendAsEmail ? { from: { emailAddress: { address: sendAsEmail } } } : {}),
+        const supplier = await Suppliers.findOne({ filters: { supplierName: po.supplierName } });
+        const recipientEmail = supplier?.email ?? po.emailSentTo;
+        if (recipientEmail) {
+          const sendAsEmail = process.env.ZITE_OUTLOOK_SEND_AS_EMAIL?.trim() || undefined;
+          const htmlBody = buildCancellationEmailHtml(po.poNumber, po.totalAmount, po.currency, input.comments);
+          const mailPayload = {
+            message: {
+              subject: `Cancelación de Orden de Compra OC-${po.poNumber}`,
+              body: { contentType: 'HTML', content: htmlBody },
+              toRecipients: [{ emailAddress: { address: recipientEmail } }],
+              ...(sendAsEmail ? { from: { emailAddress: { address: sendAsEmail } } } : {}),
+            },
+            saveToSentItems: true,
+          };
+          const resp = await graphFetch(`${graphMailboxBase()}/sendMail`, {
+            method: 'POST',
+            body: JSON.stringify(mailPayload),
+          });
+          if (resp.ok) {
+            emailSent = true;
+            await PoAuditLog.create({
+              record: {
+                timestamp: new Date().toISOString(),
+                purchaseOrder: input.id,
+                action: 'Email enviado',
+                userEmail: user.email,
+                userName,
+                comments: `Email de cancelación enviado a ${recipientEmail}`,
+                poNumber: String(po.poNumber ?? ''),
               },
-              saveToSentItems: true,
-            };
-            const resp = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify(mailPayload),
             });
-            if (resp.ok) {
-              emailSent = true;
-              await PoAuditLog.create({
-                record: {
-                  timestamp: new Date().toISOString(),
-                  purchaseOrder: input.id,
-                  action: 'Email enviado',
-                  userEmail: user.email,
-                  userName,
-                  comments: `Email de cancelación enviado a ${recipientEmail}`,
-                  poNumber: String(po.poNumber ?? ''),
-                },
-              });
-            } else {
-              const err = await resp.text().catch(() => '');
-              console.log('Cancellation email failed:', resp.status, err.slice(0, 300));
-            }
+          } else {
+            const err = await resp.text().catch(() => '');
+            console.log('Cancellation email failed:', resp.status, err.slice(0, 300));
           }
         }
       } catch (err) {
