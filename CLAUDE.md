@@ -121,10 +121,21 @@ de estas 6 columnas, hay que repetir el `setval()` — si no, el bug reaparece e
 
 **Los campos `currency`/`number`/`percent`** (kind `'number'` en `schema-map.ts`) requieren el
 parser de `pg` para el OID 1700 (`numeric`), registrado en `server/compat/datetimeParsers.ts` /
-`db.ts` junto con los de fecha — sin él, `pg` los devuelve como `string`, no como `number`. Como la
-validación de salida de `createEndpoint` solo advierte (no truena) si el tipo no calza, este bug
-pasaba desapercibido en logs hasta que algo hacía aritmética real sobre el valor (apareció primero
-en `getPayments`/`amount`).
+`db.ts` junto con los de fecha — sin él, `pg` los devuelve como `string`, no como `number`. Este
+bug pasó desapercibido en el primer lote porteado porque `createEndpoint` solo advertía (no
+tronaba) si la salida no calzaba con el `outputSchema` — apareció hasta que algo hacía aritmética
+real sobre el valor (`getPayments`/`amount`).
+
+**`STRICT_OUTPUT=true` está activo en `.env` durante todo el port**, a propósito: convierte esa
+advertencia en un `throw`, así que cualquier endpoint recién portado que no calce con su
+`outputSchema` truena de inmediato en vez de pasar silencioso. Fue así como se encontró el bug de
+`numeric` de arriba, y confirmó uno más grande al activarlo: Zite nunca devuelve `null` en un campo
+vacío (lo omite, equivale a `undefined`), pero Postgres sí manda `null` — como casi todos los
+`outputSchema` declaran esos campos `.optional()` (no `.nullable()`), **cualquier campo vacío
+tronaba el endpoint**. Se corrigió en un solo lugar (`model.ts` → `stripNullScalars`, corre después
+de `wrapLinks` en `findAll`, así que `create`/`update`/`findOne`/`bulkCreate` lo heredan gratis al
+pasar todos por ahí) en vez de tocar el `outputSchema` de cada endpoint. Antes de bajar
+`STRICT_OUTPUT` a `false`, confirmar que ya no hace falta para el port en curso.
 
 ---
 

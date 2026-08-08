@@ -88,6 +88,25 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
     return rows;
   }
 
+  /**
+   * Zite nunca devolvía `null` para un campo vacío — lo omitía (equivale a
+   * `undefined`). Los 207 endpoints están escritos contra ese contrato: leen
+   * `record.campo` directo, sin `?? undefined`, y su `outputSchema` declara
+   * esos campos `.optional()` (no `.nullable()`). Postgres sí manda `null` en
+   * columnas vacías, así que sin esto cualquier campo vacío rompe la
+   * validación de salida — invisible mientras esa validación solo advertía,
+   * pero revienta en cuanto se activa STRICT_OUTPUT (apareció primero en
+   * `getPayments`/`sourceBank`). Corre después de `wrapLinks`: los link ya
+   * son arreglo (nunca null) para entonces, así que no los toca.
+   */
+  function stripNullScalars(rows: any[]): void {
+    for (const r of rows) {
+      for (const key in r) {
+        if (r[key] === null) r[key] = undefined;
+      }
+    }
+  }
+
   /** Al escribir, acepta string o string[] y guarda un solo id en la FK. */
   function unwrapRecord(record: Record<string, any>): { cols: string[]; vals: unknown[]; many: [FieldDef, string[]][] } {
     const cols: string[] = [];
@@ -152,6 +171,7 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
       const hasMore = rows.length > limit;
       if (hasMore) rows.length = limit;
       wrapLinks(rows);
+      stripNullScalars(rows);
       await hydrateMany(rows, args.fields, exec);
       return { records: rows as T[], hasMore };
     },

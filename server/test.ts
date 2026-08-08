@@ -145,6 +145,14 @@ const liConMonto = await CotizacionLineItems.findOne({ filters: { cotizacion: co
 check('number (cantidad) sale como number, no string', typeof liConMonto?.cantidad === 'number', `typeof=${typeof liConMonto?.cantidad} valor=${JSON.stringify(liConMonto?.cantidad)}`);
 check('arithmetic real funciona sin parseFloat manual', (conMonto!.clientPrice as number) + 1 === 250001, String((conMonto!.clientPrice as number) + 1));
 
+console.log('\n── null sale como undefined, nunca null (Zite omitía los campos vacíos; regresión: rompía STRICT_OUTPUT en cualquier campo .optional() no .nullable()) ──');
+const sinNotas = await Deals.create({ record: { dealName: 'Sin notas' } });
+check('campo vacío sale como undefined, no null', sinNotas.notes === undefined, `typeof=${typeof sinNotas.notes} valor=${JSON.stringify(sinNotas.notes)}`);
+check('JSON.stringify omite la clave (como Zite, campo ausente)', !('notes' in JSON.parse(JSON.stringify(sinNotas))), JSON.stringify(sinNotas));
+const releidoSinNotas = await Deals.findOne({ id: sinNotas.id });
+check('sigue siendo undefined al releer con findOne', releidoSinNotas?.notes === undefined, `typeof=${typeof releidoSinNotas?.notes}`);
+check('link vacío sigue siendo [] y no undefined (wrapLinks corre antes, no lo toca)', Array.isArray(sinNotas.owner) && sinNotas.owner.length === 0, JSON.stringify(sinNotas.owner));
+
 console.log('\n── protecciones nuevas que Zite no tenía ──');
 const err = await Users.findAll({ filters: { campoQueNoExiste: 1 } }).catch((e: Error) => e);
 check('filtro sobre campo inexistente truena en vez de devolver todo', err instanceof Error, '');
