@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint } from 'zite-integrations-backend-sdk';
+import { createEndpoint } from '../../server/compat';
 import { inflateRawSync, inflateSync } from 'zlib';
 
 // ── CSV parser ─────────────────────────────────────────────────────────────────

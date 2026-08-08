@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CalendarEvents, CalendarAuditLog } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CalendarEvents, CalendarAuditLog } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 
 export default createEndpoint({

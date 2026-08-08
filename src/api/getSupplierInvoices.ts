@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, SupplierInvoices, PurchaseOrders } from 'zite-integrations-backend-sdk';
+import { createEndpoint, SupplierInvoices, PurchaseOrders } from '../../server/compat';
 
 const invoiceSchema = z.object({
   id: z.string(),

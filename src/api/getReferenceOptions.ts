@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Users, Projects, CalendarEvents, RecruitmentRows, Tasks } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Users, Projects, CalendarEvents, RecruitmentRows, Tasks } from '../../server/compat';
 
 // ── In-memory cache (10 min TTL) ─────────────────────────────────────────────
 const CACHE_TTL_MS = 10 * 60 * 1000;

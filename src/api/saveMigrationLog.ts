@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, MigrationLog } from 'zite-integrations-backend-sdk';
+import { createEndpoint, MigrationLog } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

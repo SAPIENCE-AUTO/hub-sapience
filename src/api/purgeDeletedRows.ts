@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RecruitmentRows } from '../../server/compat';
 
 // Endpoint to hard-delete one batch of soft-deleted rows.
 // Call repeatedly from the frontend until done === true.

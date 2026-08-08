@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Suppliers, PurchaseOrders, SupplierInvoices } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Suppliers, PurchaseOrders, SupplierInvoices } from '../../server/compat';
 
 const attachmentSchema = z.array(z.object({ url: z.string() }));
 

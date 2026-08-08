@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Tasks, Projects, BoardColumns, CellValues, Documents, Users, Boards } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Tasks, Projects, BoardColumns, CellValues, Documents, Users, Boards } from '../../server/compat';
 
 // Convert HSL (0-360, 0-100, 0-100) to hex string
 function hslToHex(h: number, s: number, l: number): string {

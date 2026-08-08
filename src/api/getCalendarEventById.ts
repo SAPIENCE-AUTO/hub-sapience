@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CalendarEvents } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CalendarEvents } from '../../server/compat';
 
 const eventSchema = z.object({
   id: z.string(),

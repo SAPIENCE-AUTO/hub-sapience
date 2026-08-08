@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, BoardColumns, RecruitmentRows } from 'zite-integrations-backend-sdk';
+import { createEndpoint, BoardColumns, RecruitmentRows } from '../../server/compat';
 import { resolveWriteBoardId, smartWriteCellValue } from '../serverUtils/smartWrite';
 
 export default createEndpoint({

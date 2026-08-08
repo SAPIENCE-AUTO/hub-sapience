@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, BoardColumns, CellValues } from 'zite-integrations-backend-sdk';
+import { createEndpoint, BoardColumns, CellValues } from '../../server/compat';
 import { resolveWriteBoardId, smartWriteCellValue } from '../serverUtils/smartWrite';
 
 const LINKED_GROUP_COLUMN_NAME = 'Grupo vinculado';

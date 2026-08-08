@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, Boards, BoardColumns, CellValues, Projects } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RecruitmentRows, Boards, BoardColumns, CellValues, Projects } from '../../server/compat';
 import { resolveWriteBoardId } from '../serverUtils/smartWrite';
 
 const GROUP_COLOR_IDS = ['chart1', 'chart2', 'chart3', 'chart4', 'chart5', 'primary', 'destructive', 'muted'];

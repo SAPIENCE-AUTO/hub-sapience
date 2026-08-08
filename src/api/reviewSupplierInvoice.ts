@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, SupplierInvoices, Payments, Suppliers } from 'zite-integrations-backend-sdk';
+import { createEndpoint, SupplierInvoices, Payments, Suppliers } from '../../server/compat';
 
 export default createEndpoint({
   description: 'Validate or reject a supplier invoice. When validating, auto-creates a scheduled payment. When rejecting, notifies the supplier by email.',

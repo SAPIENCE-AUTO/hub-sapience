@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint } from 'zite-integrations-backend-sdk';
+import { createEndpoint } from '../../server/compat';
 
 // Module-level in-memory cache — persists across requests within the same worker instance
 const cache = new Map<string, { embedUrl: string; mode: 'streetview' | 'place' }>();

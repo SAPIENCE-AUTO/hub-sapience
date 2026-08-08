@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { createEndpoint, BoardColumns, SharedViews, Boards } from 'zite-integrations-backend-sdk';
-import type { BoardsRecordType, BoardColumnsRecordType, SharedViewsRecordType } from 'zite-integrations-backend-sdk';
+import { createEndpoint, BoardColumns, SharedViews, Boards } from '../../server/compat';
+import type { BoardsRecordType, BoardColumnsRecordType, SharedViewsRecordType } from '../../server/compat';
 
 async function loadAllBoards(): Promise<BoardsRecordType[]> {
   const all: BoardsRecordType[] = [];

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RecruitmentRows } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

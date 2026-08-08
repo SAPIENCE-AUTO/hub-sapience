@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, Participants, BoardColumns, CellValues, Projects } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RecruitmentRows, Participants, BoardColumns, CellValues, Projects } from '../../server/compat';
 import { resolveWriteBoardId } from '../serverUtils/smartWrite';
 
 type ProjectDates = { startDate?: string; endDate?: string; client?: string };

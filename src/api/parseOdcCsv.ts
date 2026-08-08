@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Projects, Suppliers, PurchaseOrders } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects, Suppliers, PurchaseOrders } from '../../server/compat';
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
 function splitCSV(line: string): string[] {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, SupplierInvoices, PurchaseOrders } from 'zite-integrations-backend-sdk';
+import { createEndpoint, SupplierInvoices, PurchaseOrders } from '../../server/compat';
 
 export default createEndpoint({
   description: 'Get full details of a single supplier invoice including file attachments',

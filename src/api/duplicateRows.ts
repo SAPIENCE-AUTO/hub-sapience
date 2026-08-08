@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, Tasks, CalendarEvents, CellValues } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RecruitmentRows, Tasks, CalendarEvents, CellValues } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

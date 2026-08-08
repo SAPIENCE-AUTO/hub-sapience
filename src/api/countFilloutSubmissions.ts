@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, BoardColumns, RecruitmentRows } from 'zite-integrations-backend-sdk';
+import { createEndpoint, BoardColumns, RecruitmentRows } from '../../server/compat';
 
 const normalize = (str: string) =>
   str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();

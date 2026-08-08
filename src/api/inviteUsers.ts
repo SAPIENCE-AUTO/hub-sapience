@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ZiteError, Users } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ZiteError, Users } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,
@@ -54,7 +54,7 @@ export default createEndpoint({
 
     const users = result.records.map(r => ({
       id: r.id,
-      email: (r.fields.email ?? '') as string,
+      email: (r.email ?? '') as string,
     }));
 
     return {

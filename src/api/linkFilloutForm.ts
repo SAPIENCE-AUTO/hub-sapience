@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, BoardColumns } from 'zite-integrations-backend-sdk';
+import { createEndpoint, BoardColumns } from '../../server/compat';
 import { lookupBoardUUID } from '../serverUtils/resolveBoardId';
 
 const normalize = (str: string) =>
@@ -186,7 +186,7 @@ export default createEndpoint({
           })),
         });
         for (const r of created.records) {
-          const nm = normalize(r.fields.columnName ?? '');
+          const nm = normalize(r.columnName ?? '');
           if (nm) colByNorm.set(nm, r.id);
         }
       }

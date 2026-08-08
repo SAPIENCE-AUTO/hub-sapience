@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CalendarEvents, Projects, BoardColumns, CellValues, Boards, Documents } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CalendarEvents, Projects, BoardColumns, CellValues, Boards, Documents } from '../../server/compat';
 
 function toKey(name: string): string {
   return name

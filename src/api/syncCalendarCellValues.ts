@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CalendarEvents, BoardColumns, CellValues } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CalendarEvents, BoardColumns, CellValues } from '../../server/compat';
 
 const DATE_NAMES = ['Fecha y hora'];
 const DUR_NAMES  = ['Duración (hrs)'];

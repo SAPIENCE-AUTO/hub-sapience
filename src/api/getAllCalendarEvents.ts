@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CalendarEvents, Boards } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CalendarEvents, Boards } from '../../server/compat';
 
 const dedup = <T extends { id: string }>(a: T[], b: T[]): T[] => {
   const seen = new Map<string, T>();

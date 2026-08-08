@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint } from 'zite-integrations-backend-sdk';
+import { createEndpoint } from '../../server/compat';
 import { createSubscribeToken, safeUserChannel } from '../lib/ably';
 
 export default createEndpoint({
