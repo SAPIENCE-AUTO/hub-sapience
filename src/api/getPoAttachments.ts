@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, PoAttachments } from 'zite-integrations-backend-sdk';
+import { createEndpoint, PoAttachments } from '../../server/compat';
 
 const attachmentSchema = z.object({
   id: z.string(),

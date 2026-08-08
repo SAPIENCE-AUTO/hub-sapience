@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Deals, Cotizaciones, CotizacionLineItems } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Deals, Cotizaciones, CotizacionLineItems } from '../../server/compat';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

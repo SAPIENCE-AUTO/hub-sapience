@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, Projects } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RecruitmentRows, Projects } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 import { lookupBoardUUID } from '../serverUtils/resolveBoardId';
 

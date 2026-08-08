@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Projects, RecruitmentRows, BoardColumns, CellValues, Boards } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects, RecruitmentRows, BoardColumns, CellValues, Boards } from '../../server/compat';
 import OpenAI from 'openai';
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────

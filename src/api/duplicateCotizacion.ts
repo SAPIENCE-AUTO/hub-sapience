@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Cotizaciones, CotizacionLineItems } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Cotizaciones, CotizacionLineItems } from '../../server/compat';
 
 export default createEndpoint({
   description: 'Duplicates a cotizacion and all its line items',

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, Projects } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RecruitmentRows, Projects } from '../../server/compat';
 import {
   buildIdentityClusters, resolveSignals, DuplicateSignalEnum,
   Signal, IdentityRow,

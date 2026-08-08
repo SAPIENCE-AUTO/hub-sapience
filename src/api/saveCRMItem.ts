@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CrmItems } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CrmItems } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

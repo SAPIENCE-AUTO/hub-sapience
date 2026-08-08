@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, PurchaseOrders, PurchaseOrdersRecordType, Suppliers, BillingEntities, SupplierInvoices, Payments } from 'zite-integrations-backend-sdk';
+import { createEndpoint, PurchaseOrders, PurchaseOrdersRecordType, Suppliers, BillingEntities, SupplierInvoices, Payments } from '../../server/compat';
 
 const poSchema = z.object({
   id: z.string(),

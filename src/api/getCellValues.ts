@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CellValues, Boards } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CellValues, Boards } from '../../server/compat';
 import { resolveBoardId } from '../serverUtils/resolveBoardId';
 
 const DEBUG =

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CellValues, BoardColumns, CalendarEvents, RecruitmentRows, Tasks, Users, Boards } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CellValues, BoardColumns, CalendarEvents, RecruitmentRows, Tasks, Users, Boards } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 import { resolveWriteBoardId, smartWriteCellValue } from '../serverUtils/smartWrite';
 import { resolveBoardId } from '../serverUtils/resolveBoardId';

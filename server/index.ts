@@ -3,8 +3,9 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { Users } from './compat';
 import { ZiteError } from './compat/errors';
-import type { CompiledEndpoint } from './compat/endpoint';
+import type { AuthUser, CompiledEndpoint } from './compat/endpoint';
 
 /**
  * Descubrimiento automático: cada archivo de src/api/*.ts es un endpoint.
@@ -41,7 +42,20 @@ async function discoverEndpoints(): Promise<Record<string, CompiledEndpoint>> {
 }
 
 // TODO: reemplazar por el usuario real de Supabase Auth (ver server/compat/README.md).
-const MOCK_USER = { id: '00000000-0000-0000-0000-000000000001', email: 'sergio@sapience.mx' };
+// Se carga completo desde `users` (no un objeto con campos fijos) para que role,
+// purchaseLevel, maxApprovalAmount y los access_* vengan reales — los endpoints con
+// gate de rol/permiso se pueden probar de verdad contra este mock. El email debe
+// coincidir con VITE_MOCK_EMAIL del frontend para que las FK a users(id) resuelvan.
+const MOCK_USER_EMAIL = process.env.VITE_MOCK_EMAIL ?? 'sergio@sapience.com.mx';
+
+async function loadMockUser(): Promise<AuthUser> {
+  const { records } = await Users.findAll({ filters: { email: MOCK_USER_EMAIL }, limit: 1 });
+  const user = records[0];
+  if (!user) throw new Error(`MOCK_USER_EMAIL '${MOCK_USER_EMAIL}' no existe en la tabla users`);
+  return user as unknown as AuthUser;
+}
+
+const MOCK_USER = await loadMockUser();
 
 const ENDPOINTS = await discoverEndpoints();
 

@@ -1,4 +1,4 @@
-import { Boards, type BoardsRecordType } from 'zite-integrations-backend-sdk';
+import { Boards, type BoardsRecordType } from '../../server/compat';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

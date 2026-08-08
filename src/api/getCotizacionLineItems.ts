@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CotizacionLineItems } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CotizacionLineItems } from '../../server/compat';
 
 const LineItemOut = z.object({
   id: z.string(),

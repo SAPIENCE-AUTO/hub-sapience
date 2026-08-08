@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Boards, BoardColumns, Tasks, CellValues } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Boards, BoardColumns, Tasks, CellValues } from '../../server/compat';
 
 /**
  * Standard PM timeline tasks with assigned colors from GROUP_COLORS palette.
@@ -100,10 +100,10 @@ export default createEndpoint({
     const columns = columnsResult.records.map(r => ({
       id: r.id,
       boardId: legacyBoardId,           // ← defensive: always legacy in response
-      columnName: r.fields.columnName ?? null,
-      columnType: r.fields.columnType ?? null,
-      optionsJson: r.fields.optionsJson ?? null,
-      columnOrder: r.fields.columnOrder ?? null,
+      columnName: r.columnName ?? null,
+      columnType: r.columnType ?? null,
+      optionsJson: r.optionsJson ?? null,
+      columnOrder: r.columnOrder ?? null,
     }));
 
     const colorColumn = columns.find(c => c.columnType === 'Color');
@@ -156,13 +156,13 @@ export default createEndpoint({
       cellValues = cellValuesResult.records.map(r => ({
         id: r.id,
         boardId: legacyBoardId,          // ← defensive: always legacy in response
-        rowId: r.fields.rowId ?? null,
-        columnId: r.fields.columnId ?? null,
-        textValue: r.fields.textValue ?? null,
-        numberValue: r.fields.numberValue ?? null,
-        dateValue: r.fields.dateValue ?? null,
-        booleanValue: r.fields.booleanValue ?? null,
-        fileUrl: r.fields.fileUrl ?? null,
+        rowId: r.rowId ?? null,
+        columnId: r.columnId ?? null,
+        textValue: r.textValue ?? null,
+        numberValue: r.numberValue ?? null,
+        dateValue: r.dateValue ?? null,
+        booleanValue: r.booleanValue ?? null,
+        fileUrl: r.fileUrl ?? null,
       }));
     }
 

@@ -1,4 +1,4 @@
-import { BoardColumns } from 'zite-integrations-backend-sdk';
+import { BoardColumns } from '../../server/compat';
 
 const STATUS_OPTIONS = JSON.stringify([
   { label: 'Pendiente',   color: 'gray'  },
@@ -39,9 +39,9 @@ export async function ensureTimelineDefaultColumns(boardId: string) {
   return result.records.map(r => ({
     id: r.id,
     boardId,
-    columnName: r.fields.columnName ?? undefined,
-    columnType: r.fields.columnType ?? undefined,
-    optionsJson: r.fields.optionsJson ?? undefined,
-    columnOrder: r.fields.columnOrder ?? undefined,
+    columnName: r.columnName ?? undefined,
+    columnType: r.columnType ?? undefined,
+    optionsJson: r.optionsJson ?? undefined,
+    columnOrder: r.columnOrder ?? undefined,
   }));
 }

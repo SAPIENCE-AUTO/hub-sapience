@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CommercialDashboardViews, ZiteError } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CommercialDashboardViews, ZiteError } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

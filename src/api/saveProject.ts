@@ -17,71 +17,79 @@ async function batchUpdate<T extends { id: string }>(
   }
 }
 
+/**
+ * Lee TODAS las páginas antes de tocar nada. Es obligatorio separar lectura de
+ * escritura aquí: el filtro es `projectCode: oldCode`, el mismo campo que se
+ * está actualizando. Si se pagina con offset mientras se muta la página
+ * anterior, cada fila migrada deja de calzar con el filtro y el offset salta
+ * más allá de lo que realmente queda — perdiendo el resto en silencio (visto
+ * en pruebas: de 600 filas solo se migraban 500, quedaban 100 atoradas).
+ */
+async function fetchAllRecords<T extends { id: string }>(
+  fetcher: (params: { offset: number; limit: number }) => Promise<{ records: T[]; hasMore: boolean }>,
+  limit: number,
+): Promise<T[]> {
+  const all: T[] = [];
+  let offset = 0;
+  let hasMore = true;
+  while (hasMore) {
+    const result = await fetcher({ offset, limit });
+    all.push(...result.records);
+    hasMore = result.hasMore;
+    offset += result.records.length;
+  }
+  return all;
+}
+
 /** Cascade a single oldCode → newCode across all related tables */
 async function cascadeCode(oldCode: string, newCode: string) {
   const escaped = oldCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   // 1. Tasks
-  let offset = 0;
-  while (true) {
-    const { records, hasMore } = await Tasks.findAll({ filters: { projectCode: oldCode }, limit: 500, offset, fields: ['id'] });
-    if (records.length) await batchUpdate(records, r => Tasks.update({ id: r.id, record: { projectCode: newCode } }));
-    if (!hasMore) break;
-    offset += records.length;
-  }
+  const allTasks = await fetchAllRecords(
+    ({ offset, limit }) => Tasks.findAll({ filters: { projectCode: oldCode }, limit, offset, fields: ['id'] }),
+    500,
+  );
+  await batchUpdate(allTasks, r => Tasks.update({ id: r.id, record: { projectCode: newCode } }));
 
   // 2. Boards
-  offset = 0;
-  const boardIds: string[] = [];
-  while (true) {
-    const { records, hasMore } = await Boards.findAll({ filters: { projectCode: oldCode }, limit: 200, offset, fields: ['id'] });
-    if (records.length) {
-      boardIds.push(...records.map(r => r.id));
-      await batchUpdate(records, r => Boards.update({ id: r.id, record: { projectCode: newCode } } as any));
-    }
-    if (!hasMore) break;
-    offset += records.length;
-  }
+  const allBoards = await fetchAllRecords(
+    ({ offset, limit }) => Boards.findAll({ filters: { projectCode: oldCode }, limit, offset, fields: ['id'] }),
+    200,
+  );
+  await batchUpdate(allBoards, r => Boards.update({ id: r.id, record: { projectCode: newCode } } as any));
 
   // 3. CalendarEvents
-  offset = 0;
-  while (true) {
-    const { records, hasMore } = await CalendarEvents.findAll({ filters: { projectCode: oldCode }, limit: 500, offset, fields: ['id'] });
-    if (records.length) await batchUpdate(records, r => CalendarEvents.update({ id: r.id, record: { projectCode: newCode } } as any));
-    if (!hasMore) break;
-    offset += records.length;
-  }
+  const allEvents = await fetchAllRecords(
+    ({ offset, limit }) => CalendarEvents.findAll({ filters: { projectCode: oldCode }, limit, offset, fields: ['id'] }),
+    500,
+  );
+  await batchUpdate(allEvents, r => CalendarEvents.update({ id: r.id, record: { projectCode: newCode } } as any));
 
   // 4. RecruitmentRows
-  offset = 0;
-  while (true) {
-    const { records, hasMore } = await RecruitmentRows.findAll({ filters: { projectCode: oldCode }, limit: 500, offset, fields: ['id'] });
-    if (records.length) await batchUpdate(records, r => RecruitmentRows.update({ id: r.id, record: { projectCode: newCode } } as any));
-    if (!hasMore) break;
-    offset += records.length;
-  }
+  const allRows = await fetchAllRecords(
+    ({ offset, limit }) => RecruitmentRows.findAll({ filters: { projectCode: oldCode }, limit, offset, fields: ['id'] }),
+    500,
+  );
+  await batchUpdate(allRows, r => RecruitmentRows.update({ id: r.id, record: { projectCode: newCode } } as any));
 
   // 5. CellValues — boardId embeds the project code (e.g. "pm-OLDCODE-boardname")
   const prefixes = [`pm-${oldCode}-`, `cal-${oldCode}-`, `recruitment-${oldCode}-`];
   for (const prefix of prefixes) {
-    offset = 0;
-    while (true) {
-      const { records, hasMore } = await CellValues.findAll({
+    const allCells = await fetchAllRecords(
+      ({ offset, limit }) => CellValues.findAll({
         filters: { boardId: { contains: prefix } } as any,
-        limit: 500, offset, fields: ['id', 'boardId'],
-      });
-      if (records.length) {
-        await batchUpdate(records, r => {
-          const newBoardId = (r.boardId ?? '').replace(
-            new RegExp(`(pm|cal|recruitment)-${escaped}-`),
-            `$1-${newCode}-`
-          );
-          return CellValues.update({ id: r.id, record: { boardId: newBoardId } } as any);
-        });
-      }
-      if (!hasMore) break;
-      offset += records.length;
-    }
+        limit, offset, fields: ['id', 'boardId'],
+      }),
+      500,
+    );
+    await batchUpdate(allCells, r => {
+      const newBoardId = (r.boardId ?? '').replace(
+        new RegExp(`(pm|cal|recruitment)-${escaped}-`),
+        `$1-${newCode}-`
+      );
+      return CellValues.update({ id: r.id, record: { boardId: newBoardId } } as any);
+    });
   }
 }
 

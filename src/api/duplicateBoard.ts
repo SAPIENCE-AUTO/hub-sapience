@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Boards, BoardColumns, Tasks, CellValues } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Boards, BoardColumns, Tasks, CellValues } from '../../server/compat';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -161,10 +161,10 @@ export default createEndpoint({
           allTaskColsCreated.push({
             id:          newRec.id,
             boardId:     destBoardId,   // ← legacy in response
-            columnName:  newRec.fields.columnName  ?? undefined,
-            columnType:  newRec.fields.columnType  ?? undefined,
-            optionsJson: newRec.fields.optionsJson ?? undefined,
-            columnOrder: newRec.fields.columnOrder ?? undefined,
+            columnName:  newRec.columnName  ?? undefined,
+            columnType:  newRec.columnType  ?? undefined,
+            optionsJson: newRec.optionsJson ?? undefined,
+            columnOrder: newRec.columnOrder ?? undefined,
           });
         });
       }
@@ -193,10 +193,10 @@ export default createEndpoint({
           allGroupColsCreated.push({
             id:          newRec.id,
             boardId:     destGroupBoardId,   // ← legacy::groups in response
-            columnName:  newRec.fields.columnName  ?? undefined,
-            columnType:  newRec.fields.columnType  ?? undefined,
-            optionsJson: newRec.fields.optionsJson ?? undefined,
-            columnOrder: newRec.fields.columnOrder ?? undefined,
+            columnName:  newRec.columnName  ?? undefined,
+            columnType:  newRec.columnType  ?? undefined,
+            optionsJson: newRec.optionsJson ?? undefined,
+            columnOrder: newRec.columnOrder ?? undefined,
           });
         });
       }
@@ -272,13 +272,13 @@ export default createEndpoint({
       res.records.forEach(r => allTaskCellsCreated.push({
         id:           r.id,
         boardId:      destBoardId,                   // ← legacy in response
-        rowId:        r.fields.rowId       ?? undefined,
-        columnId:     r.fields.columnId    ?? undefined,
-        textValue:    r.fields.textValue   ?? undefined,
-        numberValue:  r.fields.numberValue ?? undefined,
-        dateValue:    r.fields.dateValue   ?? undefined,
-        booleanValue: r.fields.booleanValue ?? undefined,
-        fileUrl:      r.fields.fileUrl     ?? undefined,
+        rowId:        r.rowId       ?? undefined,
+        columnId:     r.columnId    ?? undefined,
+        textValue:    r.textValue   ?? undefined,
+        numberValue:  r.numberValue ?? undefined,
+        dateValue:    r.dateValue   ?? undefined,
+        booleanValue: r.booleanValue ?? undefined,
+        fileUrl:      r.fileUrl     ?? undefined,
       }));
     }
 
@@ -305,13 +305,13 @@ export default createEndpoint({
       res.records.forEach(r => allGroupCellsCreated.push({
         id:           r.id,
         boardId:      destGroupBoardId,                   // ← legacy::groups in response
-        rowId:        r.fields.rowId       ?? undefined,
-        columnId:     r.fields.columnId    ?? undefined,
-        textValue:    r.fields.textValue   ?? undefined,
-        numberValue:  r.fields.numberValue ?? undefined,
-        dateValue:    r.fields.dateValue   ?? undefined,
-        booleanValue: r.fields.booleanValue ?? undefined,
-        fileUrl:      r.fields.fileUrl     ?? undefined,
+        rowId:        r.rowId       ?? undefined,
+        columnId:     r.columnId    ?? undefined,
+        textValue:    r.textValue   ?? undefined,
+        numberValue:  r.numberValue ?? undefined,
+        dateValue:    r.dateValue   ?? undefined,
+        booleanValue: r.booleanValue ?? undefined,
+        fileUrl:      r.fileUrl     ?? undefined,
       }));
     }
 

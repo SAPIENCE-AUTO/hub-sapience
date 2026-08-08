@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, Tasks, BoardColumns, CellValues, Boards, CalendarEvents } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RecruitmentRows, Tasks, BoardColumns, CellValues, Boards, CalendarEvents } from '../../server/compat';
 import { resolveBoardId } from '../serverUtils/resolveBoardId';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

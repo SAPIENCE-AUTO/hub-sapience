@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Participants } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Participants } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, BoardColumns } from 'zite-integrations-backend-sdk';
+import { createEndpoint, BoardColumns } from '../../server/compat';
 import { resolveWriteBoardId } from '../serverUtils/smartWrite';
 
 const SUFFIXES = ['::groups', '::children'] as const;

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CotizacionLineItems, Cotizaciones } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CotizacionLineItems, Cotizaciones } from '../../server/compat';
 
 const LineItemInput = z.object({
   subRubro: z.string(),

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, PurchaseOrders, Suppliers, ZiteError } from 'zite-integrations-backend-sdk';
+import { createEndpoint, PurchaseOrders, Suppliers, ZiteError } from '../../server/compat';
 import { fmtCurrency } from '../lib/format';
 
 function generateUUID(): string {

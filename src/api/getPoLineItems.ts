@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, PoLineItems } from 'zite-integrations-backend-sdk';
+import { createEndpoint, PoLineItems } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

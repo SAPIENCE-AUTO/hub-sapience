@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ZiteError, PoAttachments } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ZiteError, PoAttachments } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

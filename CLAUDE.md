@@ -191,6 +191,26 @@ campo del SDK, que están atados al esquema de la base.
 Trabaja con `resolveBoardId.ts` / `lookupBoardUUID`. **No reimplementar sin leerlo completo**:
 es la deuda técnica de la migración a UUID y toca todas las escrituras del grid.
 
+*Migración de `board_id` legacy a UUID real (Postgres, no Zite):* se migraron 402,726 filas de
+`cell_values` y 3,901 de `board_columns` con prefijo `recruitment-{project_code}-{board_name}`
+(sufijo opcional `::groups`) a la UUID de `boards` correspondiente, cruzando por
+`project_code`+`board_name` (case-insensitive, trim) contra tableros con `deleted_at is null`.
+Quedó un **residuo intencional sin migrar**, por diseño (no por error):
+
+| Categoría | `cell_values` | `board_columns` | Motivo |
+|---|---|---|---|
+| Prefijo `recruitment-` sin tablero vivo (el único candidato con ese nombre está `deleted_at` no-null) | ~140k de las 173,101 | mayoría de las 797 | no hay UUID real al que mapear |
+| Ambiguo entre tableros vivos duplicados (2 casos: `ENERGÍA`/`STATUS RECLUTAMIENTO`, `EMPATHY PROGRAM 2026`/`EMPATHY LDAs BEER LOVERS`) | ~370 | ~100 | dos boards vivos con el mismo `project_code`+`board_name` (bug de doble-submit al crear); no se adivina cuál es el real |
+| `NEW NEWS` / `DOS DOS` | 27,750 | ~336 | confirmado que nunca tuvieron tablero registrado |
+| Destino ya tenía celdas propias | resto de las 173,101 | resto de las 797 | se dejó el legacy intacto para no mezclar datos de dos orígenes |
+| Prefijos `cal-` / `pm-` / `events-` (tableros de calendario y timeline) | 788 (465 `cal-`, 318 `pm-`, 5 `events-`) | 13 (`events-`) | **mismo problema, prefijo distinto — no fue parte de esta migración**, sigue pendiente de su propio análisis |
+
+Respaldo completo pre-migración en `cell_values_backup` / `board_columns_backup`.
+
+**Importante para quien toque `smartWrite.ts`/`resolveBoardId.ts`:** reconocen los prefijos
+`recruitment-`, `cal-`, `pm-` y `events-` como IDs legacy — no solo `recruitment-`. Los cuatro
+pueden aparecer en datos reales (ver tabla arriba), migrados o no.
+
 **`src/components/commercial/brief/`** — editor de documentos por bloques tipo Notion.
 `DocumentCanvas` + `ParagraphEditor` + `ImageBlockEditor` + `InlineRenderer` / `TokenRenderer`,
 con menciones de entidades (`EntityMentionMenu`, `MentionWrapper`) y referencias dinámicas

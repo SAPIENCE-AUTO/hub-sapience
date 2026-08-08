@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CommercialDashboardViews } from 'zite-integrations-backend-sdk';
+import { createEndpoint, CommercialDashboardViews } from '../../server/compat';
 
 const ViewOut = z.object({
   dbId: z.string(),

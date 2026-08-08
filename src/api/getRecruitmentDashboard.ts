@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Projects, Tasks, CalendarEvents, Users, PurchaseOrders, Messages, CellValues, BoardColumns, RecruitmentRows, Boards } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects, Tasks, CalendarEvents, Users, PurchaseOrders, Messages, CellValues, BoardColumns, RecruitmentRows, Boards } from '../../server/compat';
 
 const memberSchema = z.object({
   id: z.string(),

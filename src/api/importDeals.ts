@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Deals, ZiteError } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Deals, ZiteError } from '../../server/compat';
 
 const dealSchema = z.object({
   dealName: z.string().optional(),

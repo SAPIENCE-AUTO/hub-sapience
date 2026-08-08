@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ZiteError, PurchaseOrders, PoAuditLog, Suppliers } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ZiteError, PurchaseOrders, PoAuditLog, Suppliers } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 
 function buildCancellationEmailHtml(poNumber: unknown, totalAmount: number | undefined, currency: string | undefined, reason: string): string {

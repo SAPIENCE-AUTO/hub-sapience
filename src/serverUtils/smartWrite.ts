@@ -1,4 +1,4 @@
-import { CellValues } from 'zite-integrations-backend-sdk';
+import { CellValues } from '../../server/compat';
 import { lookupBoardUUID, resolveBoardId } from './resolveBoardId';
 
 // ── Constants ────────────────────────────────────────────────────────────────

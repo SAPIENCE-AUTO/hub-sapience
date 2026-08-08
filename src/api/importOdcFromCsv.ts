@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Projects, Suppliers, PurchaseOrders, PoLineItems } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects, Suppliers, PurchaseOrders, PoLineItems } from '../../server/compat';
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
 function splitCSV(line: string): string[] {
@@ -299,7 +299,7 @@ export default createEndpoint({
         const r = await Suppliers.bulkCreate({ records: suppliersToCreate, matchOn: ['supplierName'] });
         suppliersCreated = r.records.length;
         for (const rec of r.records) {
-          const name = (rec.fields as any)?.supplierName;
+          const name = rec.supplierName;
           if (name) nameMap[normalizeName(name)] = name;
         }
       }
@@ -391,7 +391,7 @@ export default createEndpoint({
 
     const poIdMap: Record<string, string> = {};
     for (const r of poResult.records) {
-      const num = (r.fields as any)?.poNumber;
+      const num = r.poNumber;
       if (num) poIdMap[num] = r.id;
     }
 

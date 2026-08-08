@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RecruitmentRows } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

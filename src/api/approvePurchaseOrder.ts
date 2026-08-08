@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, PurchaseOrders, ApprovalLimits, PoAuditLog, ZiteError } from 'zite-integrations-backend-sdk';
+import { createEndpoint, PurchaseOrders, ApprovalLimits, PoAuditLog, ZiteError } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 import { fmtCurrency } from '../lib/format';
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, PurchaseOrders, PoAuditLog, ZiteError } from 'zite-integrations-backend-sdk';
+import { createEndpoint, PurchaseOrders, PoAuditLog, ZiteError } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 
 export default createEndpoint({

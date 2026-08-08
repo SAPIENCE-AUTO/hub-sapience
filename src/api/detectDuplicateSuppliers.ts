@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Suppliers, PurchaseOrders } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Suppliers, PurchaseOrders } from '../../server/compat';
 
 const SUFFIXES = [
   'sapi de cv mi', 'sapi de cv', 'sa de cv mi', 'sa de cv', 's a de c v',

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Boards, BoardColumns } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Boards, BoardColumns } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

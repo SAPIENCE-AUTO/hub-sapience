@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Cotizaciones } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Cotizaciones } from '../../server/compat';
 
 const CotizOut = z.object({
   id: z.string(),

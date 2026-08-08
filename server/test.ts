@@ -96,6 +96,38 @@ check('count con filtro', (await CotizacionLineItems.count({ filters: { cotizaci
 await CotizacionLineItems.delete({ id: bulk.records[0].id });
 check('delete', (await CotizacionLineItems.count({})) === 3);
 
+console.log('\n── hasMore (regresión: salía siempre undefined, los ~24 endpoints que hacen while(hasMore) se detenían en la primera página) ──');
+for (let i = 0; i < 5; i++) await Deals.create({ record: { dealName: `Paginado ${i}` } });
+const pagina1 = await Deals.findAll({ filters: { dealName: { contains: 'Paginado' } }, limit: 2 });
+check('hasMore=true cuando quedan más filas', pagina1.hasMore === true, String(pagina1.hasMore));
+check('la página trae exactamente `limit` filas, no limit+1 (el peek se recorta)', pagina1.records.length === 2, String(pagina1.records.length));
+const paginaFinal = await Deals.findAll({ filters: { dealName: { contains: 'Paginado' } }, limit: 2, offset: 4 });
+check('hasMore=false en la última página', paginaFinal.hasMore === false, String(paginaFinal.hasMore));
+check('última página trae el resto exacto', paginaFinal.records.length === 1, String(paginaFinal.records.length));
+let recorridos = 0, offsetPag = 0, sigue = true;
+while (sigue) {
+  const r = await Deals.findAll({ filters: { dealName: { contains: 'Paginado' } }, limit: 2, offset: offsetPag });
+  recorridos += r.records.length;
+  sigue = r.hasMore;
+  offsetPag += r.records.length;
+}
+check('el patrón while(hasMore) del código real recorre las 5 filas, no solo la primera página', recorridos === 5, String(recorridos));
+
+console.log('\n── bulkCreate con matchOn (upsert real; antes se ignoraba y siempre insertaba) ──');
+const upsertAna = await Users.bulkCreate({ records: [{ email: 'ana@sapience.mx', firstName: 'Ana Actualizada' }], matchOn: ['email'] });
+check('matchOn actualiza el registro existente en vez de duplicarlo', upsertAna.records[0].id === ana.id, `${upsertAna.records[0].id} vs ${ana.id}`);
+check('matchOn sí aplica los campos nuevos del registro', upsertAna.records[0].firstName === 'Ana Actualizada', String(upsertAna.records[0].firstName));
+check('sigue habiendo un solo usuario con ese email', (await Users.count({ filters: { email: 'ana@sapience.mx' } })) === 1);
+const dupEnLote = await Users.bulkCreate({
+  records: [
+    { email: 'nuevo@sapience.mx', firstName: 'Primero' },
+    { email: 'nuevo@sapience.mx', firstName: 'Segundo' },
+  ],
+  matchOn: ['email'],
+});
+check('un duplicado dentro del mismo lote se resuelve contra la fila recién insertada', dupEnLote.records[0].id === dupEnLote.records[1].id, JSON.stringify(dupEnLote.records.map((r: any) => r.id)));
+check('no crea dos filas cuando el lote trae el mismo valor de matchOn dos veces', (await Users.count({ filters: { email: 'nuevo@sapience.mx' } })) === 1);
+
 console.log('\n── date/datetime salen como string, no Date de JS (regresión del bug de setTypeParser) ──');
 const conFechas = await Projects.create({ record: { projectCode: 'PJT-FECHAS', startDate: '2024-01-15' } });
 check('date sale como string', typeof conFechas.startDate === 'string', `typeof=${typeof conFechas.startDate} valor=${JSON.stringify(conFechas.startDate)}`);

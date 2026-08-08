@@ -1,4 +1,4 @@
-import { BoardColumns } from 'zite-integrations-backend-sdk';
+import { BoardColumns } from '../../server/compat';
 
 export const CAL_DEFAULT_COLUMNS = [
   { columnName: 'Responsable',            columnType: 'Persona',  columnOrder: 500   },
@@ -41,9 +41,9 @@ export async function ensureCalendarDefaultColumns(boardId: string) {
   return result.records.map(r => ({
     id: r.id,
     boardId,
-    columnName: r.fields.columnName ?? undefined,
-    columnType: r.fields.columnType ?? undefined,
-    optionsJson: r.fields.optionsJson ?? undefined,
-    columnOrder: r.fields.columnOrder ?? undefined,
+    columnName: r.columnName ?? undefined,
+    columnType: r.columnType ?? undefined,
+    optionsJson: r.optionsJson ?? undefined,
+    columnOrder: r.columnOrder ?? undefined,
   }));
 }

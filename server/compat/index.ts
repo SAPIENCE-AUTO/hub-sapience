@@ -15,11 +15,19 @@ import { createModel } from './model';
 export const Users = createModel(pool, 'Users');
 export const Projects = createModel(pool, 'Projects');
 export const CRMItems = createModel(pool, 'CRMItems');
+// Alias: el SDK real de Zite exportaba este modelo como `CrmItems` (mayúsculas
+// distintas a como generate.py nombró la tabla "CRM Items"). Los endpoints
+// getCRMItems/saveCRMItem/deleteCRMItem se escribieron contra ese nombre real;
+// en vez de tocar el cuerpo de esos 3 archivos, se alias aquí.
+export const CrmItems = CRMItems;
 export const Participants = createModel(pool, 'Participants');
 export const RecruitmentRows = createModel(pool, 'RecruitmentRows');
 export const Suppliers = createModel(pool, 'Suppliers');
 export const PurchaseOrders = createModel(pool, 'PurchaseOrders');
 export const POLineItems = createModel(pool, 'POLineItems');
+// Alias: el SDK real de Zite exportaba este modelo como `PoLineItems`
+// (mayúsculas distintas a como generate.py nombró la tabla "PO Line Items").
+export const PoLineItems = POLineItems;
 export const Tasks = createModel(pool, 'Tasks');
 export const CalendarEvents = createModel(pool, 'CalendarEvents');
 export const Messages = createModel(pool, 'Messages');
@@ -35,6 +43,8 @@ export const BillingEntities = createModel(pool, 'BillingEntities');
 export const SupplierInvoices = createModel(pool, 'SupplierInvoices');
 export const ApprovalLimits = createModel(pool, 'ApprovalLimits');
 export const POAuditLog = createModel(pool, 'POAuditLog');
+// Alias: el SDK real de Zite exportaba este modelo como `PoAuditLog`.
+export const PoAuditLog = POAuditLog;
 export const PoAttachments = createModel(pool, 'PoAttachments');
 export const AppSettings = createModel(pool, 'AppSettings');
 export const Deals = createModel(pool, 'Deals');

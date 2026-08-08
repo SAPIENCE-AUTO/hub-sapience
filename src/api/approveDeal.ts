@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   createEndpoint, Deals, Cotizaciones, CotizacionLineItems, Projects, Boards, Tasks,
   ChatConversations, Messages, Users, ZiteError, CollectionProcesses,
-} from 'zite-integrations-backend-sdk';
+} from '../../server/compat';
 import { parseMembers } from '../lib/chatJson';
 import { publishEvent, safeUserChannel } from '../lib/ably';
 

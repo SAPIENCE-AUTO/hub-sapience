@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ZiteError, Boards, Tasks, RecruitmentRows, BoardColumns, CellValues } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ZiteError, Boards, Tasks, RecruitmentRows, BoardColumns, CellValues } from '../../server/compat';
 
 async function fetchAllRecords<T extends { id: string }>(
   fetcher: (params: { offset: number; limit: number }) => Promise<{ records: T[]; hasMore: boolean }>,

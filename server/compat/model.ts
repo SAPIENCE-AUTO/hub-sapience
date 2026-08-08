@@ -22,7 +22,7 @@ export interface FindAllArgs {
   sorts?: { field: string; direction?: 'asc' | 'desc' }[];
 }
 
-export interface FindAllResult<T> { records: T[] }
+export interface FindAllResult<T> { records: T[]; hasMore: boolean }
 
 /**
  * Quien ejecuta la consulta: el pool, o un cliente concreto cuando estamos
@@ -142,12 +142,18 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
           .filter(Boolean);
         if (parts.length) sql += ` order by ${parts.join(', ')}`;
       }
-      sql += ` limit ${limit}`;
+      // Se pide un renglón de más ("peek") para saber si hay más páginas sin
+      // un count() aparte — se recorta antes de devolver. Sin esto, `hasMore`
+      // salía siempre undefined y los ~24 endpoints que paginan con
+      // `while (hasMore) ...` se detenían silenciosamente en la primera página.
+      sql += ` limit ${limit + 1}`;
       if (args.offset) sql += ` offset ${Math.max(0, args.offset)}`;
       const { rows } = await exec.query(sql, where.params);
+      const hasMore = rows.length > limit;
+      if (hasMore) rows.length = limit;
       wrapLinks(rows);
       await hydrateMany(rows, args.fields, exec);
-      return { records: rows as T[] };
+      return { records: rows as T[], hasMore };
     },
 
     /**
@@ -174,7 +180,15 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
       return (await this.findOne({ id }, exec)) as T;
     },
 
-    async bulkCreate({ records }: { records: Record<string, any>[] }): Promise<FindAllResult<T>> {
+    /**
+     * `matchOn`: upsert por igualdad exacta en esos campos (no por constraint de
+     * BD — Zite tampoco lo requería). Por cada registro, busca uno existente con
+     * esos valores dentro de la MISMA transacción/cliente (así un duplicado
+     * dentro del propio lote se resuelve contra la fila recién insertada, no
+     * crea dos) y actualiza en vez de insertar. Sin `matchOn`, comportamiento
+     * idéntico al de antes: insert siempre.
+     */
+    async bulkCreate({ records, matchOn }: { records: Record<string, any>[]; matchOn?: string[] }): Promise<FindAllResult<T>> {
       if (!records.length) return { records: [] };
       const out: T[] = [];
       // Todo el lote va por el MISMO cliente: es lo que hace que la transacción
@@ -182,7 +196,17 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
       const client = await pool.connect();
       try {
         await client.query('begin');
-        for (const r of records) out.push(await this.create({ record: r }, client));
+        for (const r of records) {
+          let existing: T | null = null;
+          if (matchOn?.length) {
+            const filters: Record<string, unknown> = {};
+            for (const key of matchOn) filters[key] = r[key];
+            if (Object.values(filters).every((v) => v !== undefined)) {
+              existing = await this.findOne({ filters }, client);
+            }
+          }
+          out.push(existing ? ((await this.update({ id: (existing as any).id, record: r }, client)) as T) : await this.create({ record: r }, client));
+        }
         await client.query('commit');
       } catch (e) {
         try { await client.query('rollback'); } catch { /* la conexión ya murió */ }

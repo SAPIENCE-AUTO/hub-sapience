@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, PurchaseOrders } from 'zite-integrations-backend-sdk';
+import { createEndpoint, PurchaseOrders } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,
