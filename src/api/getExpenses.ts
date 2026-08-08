@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Expenses, ExpenseLineItems } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Expenses, ExpenseLineItems } from '../../server/compat';
 
 const expenseOut = z.object({
   id: z.string(),

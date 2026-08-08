@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Payments } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Payments } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, PettyCashFunds, ZiteError } from 'zite-integrations-backend-sdk';
+import { createEndpoint, PettyCashFunds, ZiteError } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

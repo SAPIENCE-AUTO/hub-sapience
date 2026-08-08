@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ApprovalLimits } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ApprovalLimits } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

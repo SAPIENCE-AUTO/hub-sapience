@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Payments, PurchaseOrders } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Payments, PurchaseOrders } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,
@@ -71,13 +71,13 @@ export default createEndpoint({
       return { success: true, id };
     }
 
-    // Auto-generate payment ID
-    const allPayments = await Payments.findAll({ limit: 500 });
-    const nextNum = allPayments.records.length + 1;
-    const paymentId = `PAG-${String(nextNum).padStart(4, '0')}`;
+    // paymentId es autonumber (bigint identity) — lo asigna Postgres, no la app.
+    // El código original intentaba escribir un string "PAG-0001"; Zite lo
+    // ignoraba en silencio porque el campo es autonumber (los payment_id reales
+    // migrados son enteros planos: 310, 309, 308...). Aquí igual: no se escribe.
 
     // Force Programado status for all new payments
-    const created = await Payments.create({ record: { ...record, status: 'Programado', paymentId } });
+    const created = await Payments.create({ record: { ...record, status: 'Programado' } });
     return { success: true, id: created.id };
   },
 });

@@ -1,13 +1,16 @@
 import { Pool, types } from 'pg';
-import { DATE_OID, TIMESTAMPTZ_OID, parseDate, parseTimestamptz } from './datetimeParsers';
+import { DATE_OID, TIMESTAMPTZ_OID, NUMERIC_OID, parseDate, parseTimestamptz, parseNumeric } from './datetimeParsers';
 
 /**
  * Ver datetimeParsers.ts: sin esto, `pg` devuelve `Date` de JS para date/timestamptz
  * en vez del string que espera el código portado — tronaba con
  * "t.startDate?.split is not a function" en el primer endpoint que tocaba una fecha.
+ * Y devuelve `string` para `numeric` (currency/number/percent) en vez de `number`
+ * — no truena, pero deja pasar el tipo equivocado en silencio (ver getPayments).
  */
 types.setTypeParser(DATE_OID, parseDate);
 types.setTypeParser(TIMESTAMPTZ_OID, parseTimestamptz);
+types.setTypeParser(NUMERIC_OID, parseNumeric);
 
 /**
  * Un solo pool para todo el proceso.

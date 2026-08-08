@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Deals, Cotizaciones, CotizacionLineItems, Users, ZiteError } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Deals, Cotizaciones, CotizacionLineItems, Users, ZiteError } from '../../server/compat';
 
 const RUBROS_ORDER = [
   'Reclutamiento e incentivos',

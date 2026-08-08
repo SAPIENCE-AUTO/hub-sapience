@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RubroAssignments } from 'zite-integrations-backend-sdk';
+import { createEndpoint, RubroAssignments } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import { createModel } from './compat/model';
 import { buildWhere } from './compat/filters';
 import { SCHEMA } from './compat/schema-map';
-import { DATE_OID, TIMESTAMPTZ_OID, parseDate, parseTimestamptz } from './compat/datetimeParsers';
+import { DATE_OID, TIMESTAMPTZ_OID, NUMERIC_OID, parseDate, parseTimestamptz, parseNumeric } from './compat/datetimeParsers';
 
 // Mismos parsers que db.ts (ver datetimeParsers.ts), aplicados al mecanismo de
 // PGlite en vez de pg.types.setTypeParser: si esto falta, PGlite devuelve `Date`
 // de JS igual que `pg` sin el fix, y las pruebas de abajo lo detectan.
-const pg = await PGlite.create({ parsers: { [DATE_OID]: parseDate, [TIMESTAMPTZ_OID]: parseTimestamptz } });
+const pg = await PGlite.create({ parsers: { [DATE_OID]: parseDate, [TIMESTAMPTZ_OID]: parseTimestamptz, [NUMERIC_OID]: parseNumeric } });
 const sql = fs.readFileSync(new URL('./schema.sql', import.meta.url), 'utf8')
   .replace(/create extension if not exists pg_trgm;.*/g, '')
   .replace(/create index on recruitment_rows using gin \(participant_name gin_trgm_ops\);/, '');
@@ -136,6 +136,14 @@ check('datetime (updatedAt) sale como string', typeof conFechas.updatedAt === 's
 check('datetime con formato ISO 8601 y Z', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(conFechas.updatedAt as any), String(conFechas.updatedAt));
 const releida = await Projects.findOne({ id: conFechas.id });
 check('sigue siendo string al releer con findOne (no solo en el create)', typeof releida?.startDate === 'string', `typeof=${typeof releida?.startDate}`);
+
+console.log('\n── numeric sale como number, no string (regresión: pg no traía parser para el OID 1700) ──');
+check('currency (maxApprovalAmount) sale como number', typeof ana.maxApprovalAmount === 'number', `typeof=${typeof ana.maxApprovalAmount} valor=${JSON.stringify(ana.maxApprovalAmount)}`);
+const conMonto = await Deals.findOne({ id: deal.id });
+check('currency sigue siendo number al releer con findOne', typeof conMonto?.clientPrice === 'number', `typeof=${typeof conMonto?.clientPrice}`);
+const liConMonto = await CotizacionLineItems.findOne({ filters: { cotizacion: cot.id } });
+check('number (cantidad) sale como number, no string', typeof liConMonto?.cantidad === 'number', `typeof=${typeof liConMonto?.cantidad} valor=${JSON.stringify(liConMonto?.cantidad)}`);
+check('arithmetic real funciona sin parseFloat manual', (conMonto!.clientPrice as number) + 1 === 250001, String((conMonto!.clientPrice as number) + 1));
 
 console.log('\n── protecciones nuevas que Zite no tenía ──');
 const err = await Users.findAll({ filters: { campoQueNoExiste: 1 } }).catch((e: Error) => e);

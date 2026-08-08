@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Users, RubroAssignments } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Users, RubroAssignments } from '../../server/compat';
 
 const RUBROS_LIST = [
   'Reclutamiento e incentivos',

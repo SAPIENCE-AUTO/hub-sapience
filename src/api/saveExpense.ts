@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Expenses, ExpenseLineItems, ExpenseAuditLog, ZiteError } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Expenses, ExpenseLineItems, ExpenseAuditLog, ZiteError } from '../../server/compat';
 
 const lineItemSchema = z.object({
   id: z.string().optional(),

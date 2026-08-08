@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ExpenseComments } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ExpenseComments } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Expenses, ApprovalLimits, PettyCashFunds, ExpenseAuditLog, ZiteError } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Expenses, ApprovalLimits, PettyCashFunds, ExpenseAuditLog, ZiteError } from '../../server/compat';
 import { fmtCurrency } from '../lib/format';
 
 export default createEndpoint({
