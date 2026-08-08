@@ -71,6 +71,19 @@ export default createEndpoint({
 `accessMode: external`, **signup deshabilitado**. Métodos: **magic link** y **Google sign-in**
 (SSO apagado). Los usuarios se sincronizan contra la tabla `Users` vía `userSync` en `zite.config.json`.
 
+**Pendiente de decidir antes de conectar Supabase Auth real:** 9 de los 207 endpoints no declaran
+`authenticated` en su `createEndpoint(...)` (`filloutWebhook`, `filloutNativeWebhook`,
+`getSupplierPortalData`, `uploadSupplierInvoice`, `getStreetViewUrl`, `getSharedViewData`,
+`createBoardWithTemplate`, `duplicateCotizacion`, `migrateAgeColumns`). `server/compat/endpoint.ts`
+asume `authenticated: def.authenticated ?? true` — pero al menos los primeros 6 tienen que ser
+**públicos** para funcionar (webhooks externos de Fillout no pueden traer sesión de Sapience, el
+portal de proveedores se accede por token no por login, `getSharedViewData` dice explícito en su
+propia descripción "no auth required"). Fuerte indicio de que el default real de Zite era
+"ausente = público", al revés del que se implementó aquí. No tiene efecto hoy porque
+`server/index.ts` inyecta `MOCK_USER` sin condicionar por endpoint (su propio TODO pendiente) —
+pero en cuanto haya auth real, revisar estos 9 uno por uno antes de asumir que el default actual es
+correcto.
+
 ---
 
 ## 3. Base de datos: "Operations Hub"

@@ -199,7 +199,12 @@ export default createEndpoint({
 
     // UUID-native: batch-lookup unique boardIds against the Boards table to classify
     // by boardType instead of relying on legacy 'pm-' / 'cal-' prefixes.
-    const uniqueBoardIds = [...new Set(assignedCells.map(c => c.boardId).filter(Boolean) as string[])];
+    // boards.id es uuid real — filtrar antes de consultar, o Postgres truena con
+    // "invalid input syntax for type uuid" en cuanto una celda trae un boardId
+    // legacy sin migrar (mismo bug y mismo fix que getDashboardData.ts).
+    const UUID_RE_BOARDS = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uniqueBoardIds = [...new Set(assignedCells.map(c => c.boardId).filter(Boolean) as string[])]
+      .filter(id => UUID_RE_BOARDS.test(id));
     const boardTypeMap = new Map<string, string>();
     if (uniqueBoardIds.length > 0) {
       for (let i = 0; i < uniqueBoardIds.length; i += 100) {

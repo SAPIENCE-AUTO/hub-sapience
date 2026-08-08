@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, SharedViews } from 'zite-integrations-backend-sdk';
+import { createEndpoint, SharedViews } from '../../server/compat';
 import { resolveWriteBoardId } from '../serverUtils/smartWrite';
 
 export default createEndpoint({

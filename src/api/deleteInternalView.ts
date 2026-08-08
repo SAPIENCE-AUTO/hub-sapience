@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, SharedViews } from 'zite-integrations-backend-sdk';
+import { createEndpoint, SharedViews } from '../../server/compat';
 
 export default createEndpoint({
   description: 'Delete an internal view',

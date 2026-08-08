@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, SharedViews, RecruitmentRows, BoardColumns, CellValues, CalendarEvents, Boards } from 'zite-integrations-backend-sdk';
+import { createEndpoint, SharedViews, RecruitmentRows, BoardColumns, CellValues, CalendarEvents, Boards } from '../../server/compat';
 
 type FilterRule = {
   id: string;

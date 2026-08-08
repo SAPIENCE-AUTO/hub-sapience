@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Projects, Tasks, CalendarEvents, Users, RecruitmentRows, PurchaseOrders, CellValues, BoardColumns, Boards } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects, Tasks, CalendarEvents, Users, RecruitmentRows, PurchaseOrders, CellValues, BoardColumns, Boards } from '../../server/compat';
 
 // ---------------------------------------------------------------------------
 // Module-level inflight deduplication (per user + input)
@@ -273,7 +273,13 @@ async function buildDashboard(
   const dynamicAssignedTaskIds = new Set<string>();
   const dynamicAssignedEventIds = new Set<string>();
 
-  const uniqueBoardIds = [...new Set(assignedCells.map(c => c.boardId).filter(Boolean) as string[])];
+  // boards.id es uuid real — filtrar antes de consultar, o Postgres truena con
+  // "invalid input syntax for type uuid" en cuanto una celda trae un boardId
+  // legacy (cal-/pm-) sin migrar. classifyBoardId ya tiene su propio fallback
+  // por prefijo para esos casos, así que no se pierde nada al excluirlos aquí.
+  const UUID_RE_BOARDS = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const uniqueBoardIds = [...new Set(assignedCells.map(c => c.boardId).filter(Boolean) as string[])]
+    .filter(id => UUID_RE_BOARDS.test(id));
   const boardTypeMap = new Map<string, string>(); // boardId → 'pm' | 'calendar' | ...
 
   if (uniqueBoardIds.length > 0) {

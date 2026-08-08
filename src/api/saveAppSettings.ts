@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ZiteError, AppSettings } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ZiteError, AppSettings } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,

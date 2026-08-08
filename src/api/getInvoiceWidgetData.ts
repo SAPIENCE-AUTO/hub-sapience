@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, SupplierInvoices } from 'zite-integrations-backend-sdk';
+import { createEndpoint, SupplierInvoices } from '../../server/compat';
 
 export default createEndpoint({
   description: 'Returns unpaid supplier invoice count and last 10 invoices for the dashboard widget',

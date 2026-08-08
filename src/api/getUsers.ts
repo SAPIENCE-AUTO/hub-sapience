@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ZiteError, Users } from 'zite-integrations-backend-sdk';
+import { createEndpoint, ZiteError, Users } from '../../server/compat';
 
 const TEST_EMAILS = ['antonio.velasco@agcmx.com', 'sergiovelascor@yahoo.com'];
 
