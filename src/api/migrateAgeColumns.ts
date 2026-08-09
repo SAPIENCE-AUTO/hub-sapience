@@ -12,6 +12,7 @@ const NEW_RANGO_ID  = '24102bdb-0239-4d07-9de6-fe5f252a3cc8';
 const BOARD_ID = 'recruitment-FESTIVAL-Status';
 
 export default createEndpoint({
+  authenticated: true,
   description: 'Migra los valores de Edad y Rango de edad del tablero FESTIVAL de los IDs de Fillout a los IDs de BoardColumns',
   inputSchema: z.object({
     dryRun: z.boolean().optional().default(false),

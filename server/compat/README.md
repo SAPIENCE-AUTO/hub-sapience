@@ -74,7 +74,6 @@ siguió esperándola. No regenerar uno sin el otro.
 
 ## Pendiente
 
-- `context.user` viene del shim de autenticación; conectar con Supabase Auth.
 - El endpoint `analyzeRecruitmentStatus` usa `stream`; ese parámetro está declarado pero no implementado.
 - `sorts` no lo usa el código actual, pero está soportado.
 

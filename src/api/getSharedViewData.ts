@@ -59,6 +59,7 @@ const rowSchema = z.object({
 });
 
 export default createEndpoint({
+  authenticated: false,
   description: 'Public endpoint — returns data for a shared view by token (no auth required)',
   inputSchema: z.object({ token: z.string() }),
   outputSchema: z.object({

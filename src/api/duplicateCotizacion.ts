@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, Cotizaciones, CotizacionLineItems } from '../../server/compat';
 
 export default createEndpoint({
+  authenticated: true,
   description: 'Duplicates a cotizacion and all its line items',
   inputSchema: z.object({
     cotizacionId: z.string(),

@@ -18,12 +18,16 @@
  * usando VITE_MOCK_EMAIL. Así los permisos son los de verdad. Si no lo encuentra,
  * cae a un Owner sintético para no bloquear el desarrollo.
  *
- * PENDIENTE: conectar con Supabase Auth (magic link + Google, como en Zite).
- * Los puntos exactos están marcados con TODO.
+ * MODO REAL: Supabase Auth (magic link + Google). La sesión de Supabase solo trae
+ * email/id — el perfil completo (role, purchaseLevel, access*) se hidrata llamando
+ * a `getMe`, que resuelve el registro de `users` en el servidor. Si el correo autenticado
+ * no existe en `users` (NOT_PROVISIONED), se cierra la sesión y se expone `error` para
+ * que LoginPage muestre un mensaje claro en vez de rebotar en silencio.
  */
 
 import { useEffect, useState } from 'react';
-import { getUsers } from 'zite-endpoints-sdk';
+import { getUsers, getMe, ApiError } from 'zite-endpoints-sdk';
+import { supabase } from '@/lib/supabaseClient';
 
 export interface AuthUser {
   id: string;
@@ -44,7 +48,7 @@ export interface AuthUser {
   [k: string]: unknown;
 }
 
-/** Último recurso si no se encuentra el usuario en la base. */
+/** Último recurso si no se encuentra el usuario en la base (solo en modo simulado). */
 const OWNER_SINTETICO: AuthUser = {
   id: '00000000-0000-0000-0000-000000000001',
   email: 'dev@local',
@@ -64,9 +68,33 @@ const esSimulado = () => import.meta.env.VITE_MOCK_USER === 'true';
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelado = false;
+
+    /** Con una sesión de Supabase activa, hidrata el perfil completo desde `users` vía getMe. */
+    async function hydrate(hasSession: boolean) {
+      if (!hasSession) {
+        if (!cancelado) { setUser(null); setError(null); }
+        return;
+      }
+      try {
+        const perfil = await getMe({});
+        if (!cancelado) { setUser(perfil); setError(null); }
+      } catch (e) {
+        if (e instanceof ApiError && e.code === 'NOT_PROVISIONED') {
+          await supabase.auth.signOut();
+          if (!cancelado) {
+            setUser(null);
+            setError('Tu correo no está registrado en Hub Sapience. Contacta a un administrador.');
+          }
+        } else {
+          console.error('[auth] getMe falló:', e);
+          if (!cancelado) { setUser(null); setError('No se pudo cargar tu perfil. Intenta de nuevo.'); }
+        }
+      }
+    }
 
     (async () => {
       try {
@@ -90,10 +118,8 @@ export function useAuth() {
           return;
         }
 
-        // TODO: supabase.auth.getSession() + onAuthStateChange, y resolver
-        // el registro de `users` por el correo de la sesión.
-        const res = await fetch('/api/me', { credentials: 'include' });
-        if (!cancelado) setUser(res.ok ? await res.json() : null);
+        const { data: { session } } = await supabase.auth.getSession();
+        await hydrate(!!session);
       } catch (e) {
         console.error('[auth] falló la resolución del usuario:', e);
         if (!cancelado) setUser(esSimulado() ? OWNER_SINTETICO : null);
@@ -102,28 +128,37 @@ export function useAuth() {
       }
     })();
 
-    return () => { cancelado = true; };
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (esSimulado() || cancelado) return;
+      setIsLoading(true);
+      await hydrate(!!session);
+      if (!cancelado) setIsLoading(false);
+    });
+
+    return () => { cancelado = true; sub.subscription.unsubscribe(); };
   }, []);
 
   return {
     user,
     isLoading,
     isAuthenticated: !!user,
+    /** "Tu correo no está registrado", u otro error de carga del perfil — null si no hay ninguno. */
+    error,
 
-    /** En Zite abría el flujo de magic link / Google. */
-    loginWithRedirect: async () => {
+    /** En Zite abría el flujo de magic link / Google. Aquí manda a /login, que ofrece ambos. */
+    loginWithRedirect: async (opts?: { redirectUrl?: string }) => {
       if (esSimulado()) {
         console.info('[auth] modo simulado: loginWithRedirect no hace nada');
         return;
       }
-      // TODO: supabase.auth.signInWithOtp / signInWithOAuth({ provider: 'google' })
-      window.location.href = '/login';
+      const target = opts?.redirectUrl;
+      window.location.href = target ? `/login?redirect=${encodeURIComponent(target)}` : '/login';
     },
 
-    logout: async () => {
-      // TODO: supabase.auth.signOut()
+    logout: async (opts?: { returnTo?: string }) => {
+      if (!esSimulado()) await supabase.auth.signOut();
       setUser(null);
-      if (!esSimulado()) window.location.href = '/login';
+      window.location.href = opts?.returnTo ?? '/login';
     },
   };
 }

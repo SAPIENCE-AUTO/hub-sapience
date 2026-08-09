@@ -46,6 +46,7 @@ const paymentSchema = z.object({
 });
 
 export default createEndpoint({
+  authenticated: false,
   description: 'Get supplier portal data (public endpoint, validated by token + password)',
   inputSchema: z.object({ token: z.string(), password: z.string() }),
   outputSchema: z.object({

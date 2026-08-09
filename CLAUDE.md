@@ -68,21 +68,28 @@ export default createEndpoint({
 
 ### Autenticación
 
-`accessMode: external`, **signup deshabilitado**. Métodos: **magic link** y **Google sign-in**
-(SSO apagado). Los usuarios se sincronizan contra la tabla `Users` vía `userSync` en `zite.config.json`.
+`accessMode: external`, **signup deshabilitado**. Conectado a **Supabase Auth** real
+(`server/auth.ts` + `src/shims/zite-auth-sdk.ts` + `src/pages/LoginPage.tsx`), reemplazando el
+`MOCK_USER` fijo que inyectaba `server/index.ts`. Único método activo hoy: **magic link**. El
+`Google sign-in` que Zite ofrecía se quitó de `LoginPage.tsx` — era una opción heredada que el
+equipo nunca usó, todas las cuentas son de Microsoft/Azure, no de Google.
 
-**Pendiente de decidir antes de conectar Supabase Auth real:** 9 de los 207 endpoints no declaran
-`authenticated` en su `createEndpoint(...)` (`filloutWebhook`, `filloutNativeWebhook`,
-`getSupplierPortalData`, `uploadSupplierInvoice`, `getStreetViewUrl`, `getSharedViewData`,
-`createBoardWithTemplate`, `duplicateCotizacion`, `migrateAgeColumns`). `server/compat/endpoint.ts`
-asume `authenticated: def.authenticated ?? true` — pero al menos los primeros 6 tienen que ser
-**públicos** para funcionar (webhooks externos de Fillout no pueden traer sesión de Sapience, el
-portal de proveedores se accede por token no por login, `getSharedViewData` dice explícito en su
-propia descripción "no auth required"). Fuerte indicio de que el default real de Zite era
-"ausente = público", al revés del que se implementó aquí. No tiene efecto hoy porque
-`server/index.ts` inyecta `MOCK_USER` sin condicionar por endpoint (su propio TODO pendiente) —
-pero en cuanto haya auth real, revisar estos 9 uno por uno antes de asumir que el default actual es
-correcto.
+**Pendiente para después del despliegue:** conectar **Azure AD (Microsoft) como proveedor OAuth
+principal** en el dashboard de Supabase (Authentication → Providers), para que el equipo entre con
+su cuenta de Microsoft en vez de solo magic link. Requiere registrar el redirect URI de Supabase en
+el mismo tenant de Azure que ya usa `server/microsoft/graph.ts` (o uno nuevo) y agregar el permiso
+delegado de sign-in — no se hizo antes del despliegue porque el flujo de Graph API (`MS_CLIENT_ID`
+et al.) usa credenciales de aplicación (app-only), un registro distinto al que necesita OAuth de
+usuario para login.
+
+Verificación por correo contra `users` (case-insensitive, vía `pool.query` en `resolveAuth()`) —
+sin signup, un correo autenticado que no exista en la tabla se rechaza con `NOT_PROVISIONED` (403)
+antes de llegar al endpoint. Los 9 endpoints que en Zite eran públicos sin `authenticated`
+declarado ya están resueltos: `filloutWebhook`, `filloutNativeWebhook`, `getSupplierPortalData`,
+`uploadSupplierInvoice`, `getSharedViewData` → `false` (webhooks externos o auth propia por token);
+`getStreetViewUrl`, `createBoardWithTemplate`, `duplicateCotizacion`, `migrateAgeColumns` → `true`
+(uso exclusivamente interno — `getStreetViewUrl` contradice lo que se pensaba originalmente aquí,
+confirmado por grep de sus únicos llamadores, todos dentro de `Layout`).
 
 ---
 

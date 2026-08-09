@@ -125,6 +125,7 @@ const questionSchema = z.object({
 });
 
 export default createEndpoint({
+  authenticated: false,
   description: 'Receives real-time form submissions directly from Fillout webhooks',
   inputSchema: z.object({
     formId: z.string().optional(),

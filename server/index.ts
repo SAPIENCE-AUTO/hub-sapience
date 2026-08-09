@@ -3,10 +3,10 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
-import { Users } from './compat';
 import { ZiteError } from './compat/errors';
 import { GraphAuthError } from './microsoft/graph';
-import type { AuthUser, CompiledEndpoint } from './compat/endpoint';
+import { resolveAuth } from './auth';
+import type { CompiledEndpoint } from './compat/endpoint';
 
 /**
  * Descubrimiento automático: cada archivo de src/api/*.ts es un endpoint.
@@ -42,22 +42,6 @@ async function discoverEndpoints(): Promise<Record<string, CompiledEndpoint>> {
   return endpoints;
 }
 
-// TODO: reemplazar por el usuario real de Supabase Auth (ver server/compat/README.md).
-// Se carga completo desde `users` (no un objeto con campos fijos) para que role,
-// purchaseLevel, maxApprovalAmount y los access_* vengan reales — los endpoints con
-// gate de rol/permiso se pueden probar de verdad contra este mock. El email debe
-// coincidir con VITE_MOCK_EMAIL del frontend para que las FK a users(id) resuelvan.
-const MOCK_USER_EMAIL = process.env.VITE_MOCK_EMAIL ?? 'sergio@sapience.com.mx';
-
-async function loadMockUser(): Promise<AuthUser> {
-  const { records } = await Users.findAll({ filters: { email: MOCK_USER_EMAIL }, limit: 1 });
-  const user = records[0];
-  if (!user) throw new Error(`MOCK_USER_EMAIL '${MOCK_USER_EMAIL}' no existe en la tabla users`);
-  return user as unknown as AuthUser;
-}
-
-const MOCK_USER = await loadMockUser();
-
 const ENDPOINTS = await discoverEndpoints();
 
 const app = new Hono();
@@ -67,6 +51,22 @@ app.post('/api/:name', async (c) => {
   const endpoint = ENDPOINTS[name];
   if (!endpoint) return c.json({ message: `Endpoint no montado todavía: ${name}` }, 404);
 
+  // Solo se resuelve auth para endpoints que la piden — un endpoint público
+  // (authenticated: false) no debe bloquearse por una sesión de Supabase vieja
+  // o no aprovisionada que el navegador mande de todos modos (getSharedViewData,
+  // getSupplierPortalData, etc. tienen su propio auth por token).
+  let user = null;
+  if (endpoint.authenticated) {
+    const resolved = await resolveAuth(c.req.header('Authorization'));
+    if (resolved.notProvisioned) {
+      return c.json({
+        message: 'Tu correo no está registrado en Hub Sapience. Contacta a un administrador.',
+        code: 'NOT_PROVISIONED',
+      }, 403);
+    }
+    user = resolved.user;
+  }
+
   let input: unknown = {};
   try {
     input = await c.req.json();
@@ -75,7 +75,7 @@ app.post('/api/:name', async (c) => {
   }
 
   try {
-    const result = await endpoint.run(input, { user: MOCK_USER });
+    const result = await endpoint.run(input, { user });
     return c.json(result as object);
   } catch (err) {
     if (err instanceof ZiteError) {

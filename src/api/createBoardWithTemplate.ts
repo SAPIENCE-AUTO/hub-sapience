@@ -42,6 +42,7 @@ const cellValueSchema = z.object({
 });
 
 export default createEndpoint({
+  authenticated: true,
   description: 'Creates a new PM timeline board with default columns and 7 standard tasks with colors, all in a single call',
   inputSchema: z.object({
     projectCode: z.string(),

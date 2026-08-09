@@ -19,6 +19,7 @@ import ProjectCostsPage from './pages/ProjectCostsPage';
 import ChatPage from './pages/ChatPage';
 import SharedViewPage from './pages/SharedViewPage';
 import SupplierPortalPage from './pages/SupplierPortalPage';
+import LoginPage from './pages/LoginPage';
 import SupplierInvoicesPage from './pages/SupplierInvoicesPage';
 import SettingsPage from './pages/SettingsPage';
 import DataImportPage from './pages/DataImportPage';
@@ -72,6 +73,7 @@ export default function App() {
             <Routes>
               <Route path="/shared/:token" element={<SharedViewPage />} />
               <Route path="/portal/:token" element={<SupplierPortalPage />} />
+              <Route path="/login" element={<LoginPage />} />
               <Route path="/" element={<Layout />}>
                 <Route index element={null} />
                 <Route path="dashboard" element={<DashboardPage />} />

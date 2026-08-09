@@ -86,6 +86,7 @@ const buildParticipationNote = (
 };
 
 export default createEndpoint({
+  authenticated: false,
   description: 'Receive form submissions from Fillout and create recruitment rows. Supports arbitrary custom fields that auto-create dynamic columns. UUID-first writes.',
   inputSchema: z.object({
     projectCode: z.string().optional(),

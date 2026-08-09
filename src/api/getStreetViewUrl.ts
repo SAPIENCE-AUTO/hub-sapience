@@ -17,6 +17,7 @@ function streetViewUrl(lat: number, lng: number): string {
 }
 
 export default createEndpoint({
+  authenticated: true,
   description: 'Geocodes an address server-side and returns a Maps Embed API iframe URL (Street View or Place fallback)',
   inputSchema: z.object({
     address: z.string(),

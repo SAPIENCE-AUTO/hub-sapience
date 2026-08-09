@@ -6,22 +6,42 @@
 // esté en pie, conviene generarlos de los outputSchema zod de cada endpoint
 // para recuperar el tipado real que tenías en Zite.
 
+import { supabase } from '@/lib/supabaseClient';
+
 const BASE = import.meta.env.VITE_API_URL ?? '/api';
 
+/** Preserva el `code` del servidor (p.ej. NOT_PROVISIONED) para que la UI lo distinga de un error genérico. */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 async function call<T = any>(name: string, input?: unknown): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
+
   const res = await fetch(`${BASE}/${name}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     credentials: 'include',
     body: JSON.stringify(input ?? {}),
   });
   if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json())?.message ?? ''; } catch { /* respuesta no JSON */ }
-    throw new Error(`${name} falló (${res.status})${detail ? ': ' + detail : ''}`);
+    let body: any = {};
+    try { body = await res.json(); } catch { /* respuesta no JSON */ }
+    throw new ApiError(body?.message ?? `${name} falló (${res.status})`, res.status, body?.code);
   }
   return res.json() as Promise<T>;
 }
+
+export const getMe = (input?: any): Promise<any> => call('getMe', input);
 
 export const addExpenseComment = (input?: any): Promise<any> => call('addExpenseComment', input);
 export const analyzeRecruitmentStatus = (input?: any): Promise<any> => call('analyzeRecruitmentStatus', input);

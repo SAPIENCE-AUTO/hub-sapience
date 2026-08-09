@@ -237,10 +237,12 @@ export default createEndpoint({
   }),
   execute: async ({ input }) => {
     // Calculado dentro de execute (no a nivel de módulo): graphMailboxBase()
-    // truena si falta MS_SEND_AS_EMAIL, y eso no debe tumbar el import del
-    // archivo completo al arrancar el server — solo debe fallar cuando se
+    // truena si falta la variable de entorno, y eso no debe tumbar el import
+    // del archivo completo al arrancar el server — solo debe fallar cuando se
     // invoca el endpoint, igual que las demás variables de entorno de la app.
-    const GRAPH_BASE = graphMailboxBase();
+    // Los eventos de sesiones salen del buzón de calendario, no del de compras
+    // (MS_SEND_AS_EMAIL, que usan los otros 4 endpoints de correo).
+    const GRAPH_BASE = graphMailboxBase(process.env.MS_CALENDAR_EMAIL);
 
     // Fetch the calendar event
     const event = await CalendarEvents.findOne({ id: input.eventId });

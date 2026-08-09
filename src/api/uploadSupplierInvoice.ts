@@ -4,6 +4,7 @@ import { createEndpoint, Suppliers, PurchaseOrders, SupplierInvoices } from '../
 const attachmentSchema = z.array(z.object({ url: z.string() }));
 
 export default createEndpoint({
+  authenticated: false,
   description: 'Upload a supplier invoice linked to a PO (public, validated by token + password)',
   inputSchema: z.object({
     token: z.string(),
