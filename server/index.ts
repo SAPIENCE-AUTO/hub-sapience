@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { ZiteError } from './compat/errors';
 import { GraphAuthError } from './microsoft/graph';
 import { resolveAuth } from './auth';
@@ -45,6 +46,32 @@ async function discoverEndpoints(): Promise<Record<string, CompiledEndpoint>> {
 const ENDPOINTS = await discoverEndpoints();
 
 const app = new Hono();
+
+// En dev, Vite hace proxy de /api al backend (mismo origen desde el navegador,
+// nunca dispara CORS). En prod, front (Static Site) y back (Web Service) viven
+// en dominios distintos de Render — sin esto el navegador bloquea la respuesta.
+// Reusa ZITE_APP_URL (ya es "la URL pública del front", ver preparePoEmail.ts
+// y afines) en vez de inventar otra variable para lo mismo. Acepta lista
+// separada por comas para cubrir un dominio propio + el subdominio de Render.
+const allowedOrigins = (process.env.ZITE_APP_URL ?? 'http://localhost:5173')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  '/api/*',
+  cors({
+    origin: allowedOrigins,
+    allowMethods: ['POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  }),
+);
+
+// Para el health check de Render: la única ruta que existe es POST /api/:name,
+// así que un GET a cualquier /api/* de por sí ya daría 404 aunque el server
+// esté sano — Render lo leería como caído.
+app.get('/healthz', (c) => c.json({ ok: true }));
 
 app.post('/api/:name', async (c) => {
   const name = c.req.param('name');

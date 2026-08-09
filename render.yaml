@@ -1,0 +1,74 @@
+services:
+  # Backend Hono — server/index.ts descubre y monta cada src/api/*.ts.
+  - type: web
+    name: hub-sapience-api
+    runtime: node
+    region: virginia # más cercano a Supabase (ca-central-1) — Render no tiene región en Canadá
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: MS_TENANT_ID
+        sync: false
+      - key: MS_CLIENT_ID
+        sync: false
+      - key: MS_CLIENT_SECRET
+        sync: false
+      - key: MS_SEND_AS_EMAIL
+        sync: false
+      - key: MS_CALENDAR_EMAIL
+        sync: false
+      # URL pública del front ya desplegado — también sirve como origen permitido de CORS (ver server/index.ts)
+      - key: ZITE_APP_URL
+        sync: false
+      - key: ZITE_ABLY_API_KEY
+        sync: false
+      - key: ZITE_FILLOUT_API_KEY
+        sync: false
+      - key: ZITE_GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: ZITE_OPENAI_ACCESS_TOKEN
+        sync: false
+      - key: ZITE_OUTLOOK_SEND_AS_EMAIL
+        sync: false
+      - key: ZITE_N8N_ODC_WEBHOOK_URL
+        sync: false
+      - key: ZITE_N8N_CALENDAR_WEBHOOK_URL
+        sync: false
+      - key: ZITE_N8N_TIMELINE_WEBHOOK_URL
+        sync: false
+      - key: ZITE_N8N_TEAMS_WEBHOOK_URL
+        sync: false
+      - key: STRICT_OUTPUT
+        value: "true"
+      # NO agregar VITE_MOCK_USER aquí — si se define en true, se salta toda
+      # la autenticación real (ver server/auth.ts). Debe quedar ausente.
+
+  # Frontend Vite — build estático servido por el CDN de Render.
+  - type: web
+    name: hub-sapience-front
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # URL pública del backend de arriba + /api, p.ej. https://hub-sapience-api.onrender.com/api
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      # NO agregar VITE_MOCK_USER aquí por la misma razón que arriba.

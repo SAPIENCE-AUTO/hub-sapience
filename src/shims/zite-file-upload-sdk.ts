@@ -3,6 +3,8 @@
 // Destino natural: Supabase Storage. Por ahora sube al backend, que decide dónde
 // guardar. En modo simulado devuelve una URL local para poder ver la interfaz.
 
+import { BASE } from './zite-endpoints-sdk';
+
 export interface UploadResult { url: string; name: string; size: number; mimeType?: string }
 
 export async function uploadFile(file: File, options?: { folder?: string }): Promise<UploadResult> {
@@ -12,7 +14,7 @@ export async function uploadFile(file: File, options?: { folder?: string }): Pro
   const form = new FormData();
   form.append('file', file);
   if (options?.folder) form.append('folder', options.folder);
-  const res = await fetch('/api/upload', { method: 'POST', body: form, credentials: 'include' });
+  const res = await fetch(`${BASE}/upload`, { method: 'POST', body: form, credentials: 'include' });
   if (!res.ok) throw new Error(`Falló la subida de ${file.name} (${res.status})`);
   return res.json();
 }

@@ -8,7 +8,7 @@
 
 import { supabase } from '@/lib/supabaseClient';
 
-const BASE = import.meta.env.VITE_API_URL ?? '/api';
+export const BASE = import.meta.env.VITE_API_URL ?? '/api';
 
 /** Preserva el `code` del servidor (p.ej. NOT_PROVISIONED) para que la UI lo distinga de un error genérico. */
 export class ApiError extends Error {
