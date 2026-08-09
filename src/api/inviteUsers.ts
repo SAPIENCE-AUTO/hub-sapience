@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, ZiteError, Users } from '../../server/compat';
+import { getSupabaseAdmin } from '../../server/supabaseAdmin';
 
 export default createEndpoint({
   authenticated: true,
@@ -51,6 +52,29 @@ export default createEndpoint({
     }));
 
     const result = await Users.bulkCreate({ records, matchOn: ['email'] });
+
+    // Da de alta en Supabase Auth a los correos nuevos, sin mandar invitación
+    // por correo (email_confirm: true evita el flujo de confirmación). Es
+    // necesario porque LoginPage.tsx pide magic link con shouldCreateUser:
+    // false — sin esto, un usuario recién agregado no podría ni pedir su
+    // primer link ("Signups not allowed for otp").
+    const newEmails = uniqueEmails.filter(e => !existingEmails.has(e));
+    if (newEmails.length > 0) {
+      const admin = getSupabaseAdmin();
+      const failures: string[] = [];
+      for (const email of newEmails) {
+        const { error } = await admin.auth.admin.createUser({ email, email_confirm: true });
+        if (error && !error.message?.toLowerCase().includes('already')) {
+          failures.push(`${email}: ${error.message}`);
+        }
+      }
+      if (failures.length > 0) {
+        throw new ZiteError({
+          code: 'INTERNAL_ERROR',
+          message: `Usuario(s) creado(s), pero falló el alta en Supabase Auth: ${failures.join('; ')}`,
+        });
+      }
+    }
 
     const users = result.records.map(r => ({
       id: r.id,

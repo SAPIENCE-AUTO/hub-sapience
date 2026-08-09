@@ -23,7 +23,11 @@ export default function LoginPage() {
     setSendError(null);
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTarget },
+      // Sin esto, signInWithOtp crea una cuenta nueva en auth.users para
+      // cualquier correo así no exista en la tabla `users` — el toggle de
+      // "disable signup" de Supabase no cubre el flujo de magic link.
+      // Los usuarios reales ya se aprovisionaron de antemano (ver server/auth.ts).
+      options: { emailRedirectTo: redirectTarget, shouldCreateUser: false },
     });
     setBusy(false);
     if (err) { setSendError(err.message); return; }
