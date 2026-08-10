@@ -31,6 +31,9 @@ import { createModel } from '../compat/model';
 import { isExcludedRecord } from './zite-exclusions';
 import { normalizeNumericOverflow } from './zite-normalizations';
 import { migrateLegacyBoardIds } from './migrate-legacy-board-ids.mjs';
+import { migrateMondayPoPdfs } from './migrate-monday-po-pdfs.mjs';
+import { migrateZiteUploads } from './migrate-zite-uploads.mjs';
+import { pool as compatPool } from '../compat/index';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DATA_DIR = path.join(ROOT, 'datos-zite');
@@ -409,8 +412,20 @@ async function main() {
     } finally {
       await boardIdClient.end();
     }
+
+    // Fases 5 y 6: los adjuntos que Zite exporta apuntan a hosts externos
+    // (monday.com, uploads.zite.com) que se están dejando de usar — se migran
+    // a Supabase Storage. Idempotentes: cada una solo toca lo que todavía
+    // apunta al host viejo, así que corren seguido sin re-subir nada.
+    console.log(`\n── Fase 5: PDFs de Órdenes de Compra en monday.com -> Supabase Storage ──`);
+    await migrateMondayPoPdfs();
+
+    console.log(`\n── Fase 6: archivos en uploads.zite.com -> Supabase Storage ──`);
+    await migrateZiteUploads();
+
+    await compatPool.end();
   } else {
-    console.log(`\n⏭  Fases 3/4 (secuencias autonumber, board_id legacy) se saltan con --only: dependen de una carga completa`);
+    console.log(`\n⏭  Fases 3-6 (secuencias autonumber, board_id legacy, migración de adjuntos) se saltan con --only: dependen de una carga completa`);
   }
 }
 
