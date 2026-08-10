@@ -9,7 +9,7 @@ import { DATE_OID, TIMESTAMPTZ_OID, NUMERIC_OID, parseDate, parseTimestamptz, pa
 // PGlite en vez de pg.types.setTypeParser: si esto falta, PGlite devuelve `Date`
 // de JS igual que `pg` sin el fix, y las pruebas de abajo lo detectan.
 const pg = await PGlite.create({ parsers: { [DATE_OID]: parseDate, [TIMESTAMPTZ_OID]: parseTimestamptz, [NUMERIC_OID]: parseNumeric } });
-const sql = fs.readFileSync(new URL('./schema.sql', import.meta.url), 'utf8')
+const sql = fs.readFileSync(new URL('../schema.sql', import.meta.url), 'utf8')
   .replace(/create extension if not exists pg_trgm;.*/g, '')
   .replace(/create index on recruitment_rows using gin \(participant_name gin_trgm_ops\);/, '');
 await pg.exec(sql);
