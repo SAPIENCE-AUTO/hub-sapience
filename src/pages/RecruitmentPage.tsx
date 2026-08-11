@@ -1699,16 +1699,17 @@ function FilloutLinkDialog({ open, onOpenChange, boardId, projectCode, boardName
       await new Promise(r => setTimeout(r, 750)); // Let user see "X encontradas"
 
       // ── Phase: importing ───────────────────────────────────────────────
-      // Antes intentaba consumir esto como stream (`for await` + `.result`),
-      // pero checkNewSubmissions nunca transmitió progreso de verdad — el
-      // compat layer no implementa `stream` (ver server/compat/endpoint.ts) y
-      // el shim del frontend regresa un Promise normal. Eso hacía tronar el
-      // `for await` con "no es async iterable" en CADA intento, silenciado
-      // por el catch de abajo — de ahí el mensaje genérico sin rastro en
-      // logs, aunque linkFilloutForm ya hubiera terminado bien. Se pierde la
-      // barra de progreso en vivo; el resultado final es el mismo.
+      // checkNewSubmissions transmite progreso real por SSE (ver
+      // server/index.ts + server/compat/endpoint.ts) — cada chunk trae cuántas
+      // van importadas de cuántas en total, así la barra avanza de verdad en
+      // vez de saltar de 0% a 100% al terminar.
       setImportPhase('importing');
-      const finalRes = await checkNewSubmissions({ boardId });
+      const importStream = checkNewSubmissions({ boardId });
+      for await (const chunk of importStream) {
+        setImportedCount(chunk.imported);
+        if (chunk.total) setFoundCount(chunk.total);
+      }
+      const finalRes = await importStream;
       setImportedCount(finalRes.newCount);
       setImportPhase('done');
       busyRef.current = false;

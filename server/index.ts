@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { streamSSE } from 'hono/streaming';
 import { ZiteError } from './compat/errors';
 import { GraphAuthError } from './microsoft/graph';
 import { resolveAuth } from './auth';
@@ -130,6 +131,31 @@ app.post('/api/:name', async (c) => {
     input = await c.req.json();
   } catch {
     // body vacío, los endpoints sin input lo aceptan
+  }
+
+  // Endpoints con `streaming: true` (ver compat/endpoint.ts) transmiten
+  // progreso real por SSE en vez de que el cliente espere a ciegas la
+  // respuesta completa — hoy solo checkNewSubmissions lo usa. El formato de
+  // cada evento es JSON plano en `data:` — no hace falta `event:` porque el
+  // shim del front distingue por el campo `type` dentro del payload.
+  if (endpoint.streaming) {
+    return streamSSE(c, async (stream) => {
+      try {
+        const result = await endpoint.run(input, { user }, (chunk) => {
+          void stream.writeSSE({ data: JSON.stringify({ type: 'progress', ...(chunk as object) }) });
+        });
+        await stream.writeSSE({ data: JSON.stringify({ type: 'done', result }) });
+      } catch (err) {
+        if (err instanceof ZiteError) {
+          await stream.writeSSE({ data: JSON.stringify({ type: 'error', message: err.message, code: err.code }) });
+        } else if (err instanceof GraphAuthError) {
+          await stream.writeSSE({ data: JSON.stringify({ type: 'error', message: err.message, code: 'GRAPH_AUTH_ERROR' }) });
+        } else {
+          console.error(`[api/${name}]`, err);
+          await stream.writeSSE({ data: JSON.stringify({ type: 'error', message: 'Error interno' }) });
+        }
+      }
+    });
   }
 
   try {

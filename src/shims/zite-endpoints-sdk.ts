@@ -41,6 +41,99 @@ async function call<T = any>(name: string, input?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/**
+ * Para endpoints con `streaming: true` en el compat layer (ver
+ * server/compat/endpoint.ts + server/index.ts, que los transmite por SSE).
+ * Devuelve un objeto que es AMBAS cosas a la vez:
+ *   - thenable: `await checkNewSubmissions(...)` funciona igual que `call()`,
+ *     resuelve al resultado final — no rompe a quien no necesita progreso.
+ *   - async-iterable: `for await (const chunk of checkNewSubmissions(...))`
+ *     entrega cada chunk de progreso conforme llega.
+ * El fetch arranca de inmediato (no espera a que alguien itere), así que
+ * `await` por sí solo también dispara la llamada real y resuelve al final.
+ */
+function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & AsyncIterable<any> {
+  let resolveResult!: (v: T) => void;
+  let rejectResult!: (e: unknown) => void;
+  const result = new Promise<T>((res, rej) => { resolveResult = res; rejectResult = rej; });
+
+  const queue: any[] = [];
+  const waiters: Array<(r: IteratorResult<any>) => void> = [];
+  let done = false;
+
+  const pushChunk = (chunk: any) => {
+    const waiter = waiters.shift();
+    if (waiter) waiter({ value: chunk, done: false });
+    else queue.push(chunk);
+  };
+  const finish = () => {
+    done = true;
+    while (waiters.length) waiters.shift()!({ value: undefined, done: true });
+  };
+
+  (async () => {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
+
+      const res = await fetch(`${BASE}/${name}`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(input ?? {}),
+      });
+      if (!res.ok || !res.body) {
+        let body: any = {};
+        try { body = await res.json(); } catch { /* respuesta no JSON */ }
+        throw new ApiError(body?.message ?? `${name} falló (${res.status})`, res.status, body?.code);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done: readerDone, value } = await reader.read();
+        if (readerDone) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sep;
+        while ((sep = buffer.indexOf('\n\n')) !== -1) {
+          const frame = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          const dataLine = frame.split('\n').find((l) => l.startsWith('data:'));
+          if (!dataLine) continue;
+          const raw = dataLine.slice(5).trim();
+          if (!raw) continue;
+          let parsed: any;
+          try { parsed = JSON.parse(raw); } catch { continue; }
+          if (parsed.type === 'progress') pushChunk(parsed);
+          else if (parsed.type === 'done') resolveResult(parsed.result);
+          else if (parsed.type === 'error') throw new ApiError(parsed.message ?? `${name} falló`, 500, parsed.code);
+        }
+      }
+    } catch (err) {
+      rejectResult(err);
+    } finally {
+      finish();
+    }
+  })();
+
+  const iterator: AsyncIterator<any> = {
+    next: () => {
+      if (queue.length) return Promise.resolve({ value: queue.shift(), done: false });
+      if (done) return Promise.resolve({ value: undefined, done: true });
+      return new Promise((resolve) => waiters.push(resolve));
+    },
+  };
+
+  return {
+    [Symbol.asyncIterator]: () => iterator,
+    then: (onFulfilled?: any, onRejected?: any) => result.then(onFulfilled, onRejected),
+    catch: (onRejected?: any) => result.catch(onRejected),
+    finally: (onFinally?: any) => result.finally(onFinally),
+  } as Promise<T> & AsyncIterable<any>;
+}
+
 export const getMe = (input?: any): Promise<any> => call('getMe', input);
 
 export const addExpenseComment = (input?: any): Promise<any> => call('addExpenseComment', input);
@@ -53,7 +146,7 @@ export const backfillExchangeRates = (input?: any): Promise<any> => call('backfi
 export const bulkDeletePayments = (input?: any): Promise<any> => call('bulkDeletePayments', input);
 export const bulkUpdatePayments = (input?: any): Promise<any> => call('bulkUpdatePayments', input);
 export const cancelPurchaseOrder = (input?: any): Promise<any> => call('cancelPurchaseOrder', input);
-export const checkNewSubmissions = (input?: any): Promise<any> => call('checkNewSubmissions', input);
+export const checkNewSubmissions = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('checkNewSubmissions', input);
 export const cleanupDuplicateCellValues = (input?: any): Promise<any> => call('cleanupDuplicateCellValues', input);
 export const cleanupPJT001 = (input?: any): Promise<any> => call('cleanupPJT001', input);
 export const countFilloutSubmissions = (input?: any): Promise<any> => call('countFilloutSubmissions', input);

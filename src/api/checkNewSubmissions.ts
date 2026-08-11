@@ -139,10 +139,11 @@ const buildParticipationNote = (
 
 export default createEndpoint({
   authenticated: true,
+  streaming: true,
   description: 'Lightweight delta-sync: fetches only new Fillout submissions since the last sync cursor. Fast path returns immediately if nothing new.',
   inputSchema: z.object({ boardId: z.string() }),
   outputSchema: z.object({ newCount: z.number(), total: z.number() }),
-  execute: async ({ input }) => {
+  execute: async ({ input, stream }) => {
     const apiKey = process.env.ZITE_FILLOUT_API_KEY ?? '';
     if (!apiKey) throw new Error('Fillout API key not configured');
 
@@ -397,6 +398,7 @@ export default createEndpoint({
     // ── 7. Import new submissions ─────────────────────────────────────────
     let newCount = 0;
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    stream?.write({ imported: 0, total: newSubmissions.length });
 
     for (const submission of newSubmissions) {
       // Una submission fallida (ej. un valor con forma inesperada) no debe
@@ -513,16 +515,17 @@ export default createEndpoint({
       } catch { /* non-blocking */ }
 
       newCount++;
-      // Antes mandaba progreso por stream — nunca funcionó (ver createEndpoint
-      // en server/compat/endpoint.ts, que no implementa `stream`) y el shim del
-      // frontend no lo espera como async-iterable; solo generaba un no-op y el
-      // frontend truena al hacer `for await` sobre un Promise normal. El pausado
-      // sigue sirviendo para no exceder el rate limit de Fillout.
+      // El pausado sigue sirviendo para no exceder el rate limit de Fillout.
       if (newCount % 3 === 0) await sleep(300);
       } catch (err) {
         console.error('[checkNewSubmissions] Fallo al importar una submission — se omite y se sigue con el resto', {
           submissionId: submission.submissionId ?? submission.id, error: String(err),
         });
+      } finally {
+        // `finally` corre en los tres casos (éxito, `continue` por dedup, o
+        // catch de arriba) — así el progreso avanza aunque una submission se
+        // omita, y `imported` nunca se queda atorado por debajo de `total`.
+        stream?.write({ imported: newCount, total: newSubmissions.length });
       }
     }
 
