@@ -44,6 +44,20 @@ CHECK_EXTRA = {
     ('projects', 'status'): ['Stand by'],
 }
 
+# Índice único agregado directamente en Supabase después de la carga inicial
+# (migración `20260808172245_remote_schema.sql`), no derivable del export de
+# Zite: Zite nunca impidió dos cell_values "vivas" para la misma posición
+# (board_id, row_id, column_id), pero en producción se vieron duplicados reales
+# ahí, así que se agregó esta unicidad parcial (excluye borrados) directo en la
+# base. Se refleja aquí para que una carga desde cero (schema.sql) no quede sin
+# ella, y CONFLICT_TARGETS le dice a model.ts cómo escribir CellValues como
+# upsert real (INSERT ... ON CONFLICT ... DO UPDATE) en vez de INSERT liso —
+# sin esto, cualquier escritura que choque con la posición viva revienta con
+# "duplicate key value violates unique constraint cell_values_posicion_viva_uniq".
+CONFLICT_TARGETS = {
+    'CellValues': {'cols': ['board_id', 'row_id', 'column_id'], 'where': 'deleted_at is null'},
+}
+
 def snake(s):
     s = re.sub(r'[^A-Za-z0-9áéíóúñÁÉÍÓÚÑ]+', ' ', s).strip()
     s = re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', s)
@@ -196,6 +210,10 @@ create index on board_columns (column_type);
 create index on cell_values (board_id);
 create index on cell_values (row_id);
 create index on cell_values (board_id, row_id, column_id);
+-- Unicidad parcial real de producción (ver comentario de CONFLICT_TARGETS arriba
+-- en este archivo) — no proviene del export de Zite, se agregó directo en
+-- Supabase tras encontrar celdas duplicadas vivas para la misma posición.
+create unique index cell_values_posicion_viva_uniq on cell_values (board_id, row_id, column_id) where deleted_at is null;
 create index on boards (project_code);
 create index on boards (board_name);
 create index on boards (board_type);
@@ -232,11 +250,17 @@ M = ["// GENERADO por generate.py. No editar a mano.",
 "// Sale de la MISMA fuente que schema.sql, así que columnas y mapeo no se desalinean.", "",
 "export type FieldKind = 'text'|'number'|'boolean'|'date'|'datetime'|'json'|'array'|'link'|'linkMany';", "",
 "export interface FieldDef { col: string; kind: FieldKind; target?: string; join?: string; selfCol?: string; otherCol?: string }",
-"export interface TableDef { table: string; fields: Record<string, FieldDef> }", "",
+"export interface ConflictTarget { cols: string[]; where?: string }",
+"export interface TableDef { table: string; fields: Record<string, FieldDef>; conflictTarget?: ConflictTarget }", "",
 "export const SCHEMA: Record<string, TableDef> = {"]
 for mname, c in canon.items():
     M.append(f"  {mname}: {{")
     M.append(f"    table: '{c['table']}',")
+    if mname in CONFLICT_TARGETS:
+        ct = CONFLICT_TARGETS[mname]
+        cols_lit = ", ".join(f"'{col}'" for col in ct['cols'])
+        where_lit = f", where: '{ct['where']}'" if ct.get('where') else ''
+        M.append(f"    conflictTarget: {{ cols: [{cols_lit}]{where_lit} }},")
     M.append("    fields: {")
     fl = []
     for col in c['cols']:

@@ -138,18 +138,22 @@ export default createEndpoint({
     const visibleColCount = visibleCols.length;
 
     const colByNorm = new Map<string, string>();
-    const colNameSet = new Set<string>();
     for (const col of visibleCols) {
-      if (col.columnName) {
-        colByNorm.set(normalize(col.columnName), col.id);
-        colNameSet.add(col.columnName.toLowerCase());
-      }
+      if (col.columnName) colByNorm.set(normalize(col.columnName), col.id);
     }
 
-    // ── 3. First pass: decide which columns need to be created ─────────────
+    // ── 3. Resolve each question to a column, uno a uno por filloutId ──────
+    //    Fillout solo garantiza que el id de la pregunta es estable — el
+    //    nombre no. Si dos preguntas genuinamente distintas comparten
+    //    etiqueta (o normalizan igual) y se emparejan por nombre, la segunda
+    //    pisa la celda de la primera en cada respuesta: se pierde una
+    //    respuesta por participante en silencio. Por eso ninguna columna
+    //    puede quedar reclamada por más de un filloutId en este formulario.
     type PendingCol = { filloutId: string; name: string; type: string; orderOffset: number };
     const toCreate: PendingCol[] = [];
-    const seenNames = new Set<string>();
+    const claimedColIds = new Set<string>();
+    const createdNorms = new Set<string>();
+    const resolution = new Map<string, { colId: string } | { pendingName: string }>();
 
     for (const q of questions) {
       const name = (q.name ?? '').trim();
@@ -157,22 +161,39 @@ export default createEndpoint({
       const normName = normalize(name);
       const coreKey = matchCore(name);
 
+      let candidateColId: string | undefined;
       if (coreKey) {
         const aliases = CORE_ALIASES[coreKey] ?? [];
-        const found = aliases.some(a => colByNorm.has(a)) || colByNorm.has(normName);
-        if (!found && !seenNames.has(normName)) {
-          toCreate.push({ filloutId: q.id, name, type: q.type, orderOffset: toCreate.length });
-          seenNames.add(normName);
+        for (const alias of aliases) {
+          if (colByNorm.has(alias)) { candidateColId = colByNorm.get(alias); break; }
         }
+        if (!candidateColId) candidateColId = colByNorm.get(normName);
       } else {
-        if (!colByNorm.has(normName) && !colNameSet.has(name.toLowerCase()) && !seenNames.has(normName)) {
-          toCreate.push({ filloutId: q.id, name, type: q.type, orderOffset: toCreate.length });
-          seenNames.add(normName);
-        }
+        candidateColId = colByNorm.get(normName);
       }
+
+      if (candidateColId && !claimedColIds.has(candidateColId)) {
+        claimedColIds.add(candidateColId);
+        resolution.set(q.id, { colId: candidateColId });
+        continue;
+      }
+
+      // Ninguna columna coincide, o la que coincide ya es de OTRA pregunta de
+      // este mismo formulario — nunca se comparte. Esta pregunta se queda con
+      // su propia columna, desambiguando el nombre si la etiqueta se repite.
+      let finalName = name;
+      let n = 2;
+      while (createdNorms.has(normalize(finalName))) {
+        finalName = `${name} (${n})`;
+        n++;
+      }
+      createdNorms.add(normalize(finalName));
+      toCreate.push({ filloutId: q.id, name: finalName, type: q.type, orderOffset: toCreate.length });
+      resolution.set(q.id, { pendingName: finalName });
     }
 
     // ── 4. Bulk-create all missing columns ────────────────────────────────
+    const createdColIdByFilloutId = new Map<string, string>();
     if (toCreate.length > 0) {
       const batchSize = 100;
       for (let i = 0; i < toCreate.length; i += batchSize) {
@@ -185,33 +206,21 @@ export default createEndpoint({
             columnOrder: visibleColCount + c.orderOffset,
           })),
         });
-        for (const r of created.records) {
-          const nm = normalize(r.columnName ?? '');
-          if (nm) colByNorm.set(nm, r.id);
+        for (let j = 0; j < created.records.length; j++) {
+          createdColIdByFilloutId.set(batch[j].filloutId, created.records[j].id);
         }
       }
     }
 
-    // ── 5. Second pass: build question → column mapping ────────────────────
+    // ── 5. Build final question → column mapping ────────────────────────────
     const questionMapping: { filloutId: string; columnId: string; questionName: string }[] = [];
 
     for (const q of questions) {
       const name = (q.name ?? '').trim();
       if (!name) continue;
-      const normName = normalize(name);
-      const coreKey = matchCore(name);
-
-      let colId: string | undefined;
-      if (coreKey) {
-        const aliases = CORE_ALIASES[coreKey] ?? [];
-        for (const alias of aliases) {
-          if (colByNorm.has(alias)) { colId = colByNorm.get(alias); break; }
-        }
-        if (!colId) colId = colByNorm.get(normName);
-      } else {
-        colId = colByNorm.get(normName);
-      }
-
+      const r = resolution.get(q.id);
+      if (!r) continue;
+      const colId = 'colId' in r ? r.colId : createdColIdByFilloutId.get(q.id);
       if (colId) questionMapping.push({ filloutId: q.id, columnId: colId, questionName: name });
     }
 

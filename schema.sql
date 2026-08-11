@@ -922,6 +922,10 @@ create index on board_columns (column_type);
 create index on cell_values (board_id);
 create index on cell_values (row_id);
 create index on cell_values (board_id, row_id, column_id);
+-- Unicidad parcial real de producción (ver comentario de CONFLICT_TARGETS arriba
+-- en este archivo) — no proviene del export de Zite, se agregó directo en
+-- Supabase tras encontrar celdas duplicadas vivas para la misma posición.
+create unique index cell_values_posicion_viva_uniq on cell_values (board_id, row_id, column_id) where deleted_at is null;
 create index on boards (project_code);
 create index on boards (board_name);
 create index on boards (board_type);

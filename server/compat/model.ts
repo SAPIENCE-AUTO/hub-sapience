@@ -198,9 +198,23 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
       const { cols, vals, many } = unwrapRecord(record);
       const ph = cols.map((_, i) => `$${i + 1}`).join(', ');
       const quoted = cols.map((c) => `"${c}"`).join(', ');
-      const sql = cols.length
-        ? `insert into "${def.table}" (${quoted}) values (${ph}) returning id`
-        : `insert into "${def.table}" default values returning id`;
+      let sql: string;
+      if (def.conflictTarget && cols.length) {
+        // Upsert real por índice único parcial (ver CONFLICT_TARGETS en
+        // generate.py): sin esto, reescribir la misma posición viva (ej. una
+        // celda ya importada) truena con "duplicate key value violates unique
+        // constraint" en vez de actualizarla. Re-asigna TODAS las columnas
+        // (incluidas las del conflicto, a su propio valor) para que el SET
+        // nunca quede vacío y `returning id` siempre traiga una fila.
+        const conflictCols = def.conflictTarget.cols.map((c) => `"${c}"`).join(', ');
+        const wherePart = def.conflictTarget.where ? ` where ${def.conflictTarget.where}` : '';
+        const updateSet = cols.map((c) => `"${c}" = excluded."${c}"`).join(', ');
+        sql = `insert into "${def.table}" (${quoted}) values (${ph}) on conflict (${conflictCols})${wherePart} do update set ${updateSet} returning id`;
+      } else {
+        sql = cols.length
+          ? `insert into "${def.table}" (${quoted}) values (${ph}) returning id`
+          : `insert into "${def.table}" default values returning id`;
+      }
       const { rows } = await exec.query(sql, vals);
       const id = rows[0].id;
       if (many.length) await syncMany(id, many, exec);

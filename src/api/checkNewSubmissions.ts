@@ -227,6 +227,12 @@ export default createEndpoint({
     // ── 1c. Auto-create columns for new questions not yet in the mapping ───
     if (currentFormQuestions.length > 0) {
       const mappedFilloutIds = new Set(questionMapping.map(m => m.filloutId));
+      // Columnas ya asignadas a OTRO filloutId (en este sync o en uno previo)
+      // — nunca se le reasignan a una pregunta distinta, aunque el nombre
+      // coincida. Ver linkFilloutForm.ts para el porqué completo: dos
+      // preguntas distintas compartiendo columna pierden una respuesta cada
+      // vez que ambas vienen contestadas en la misma submission.
+      const claimedColIds = new Set(questionMapping.map(m => m.columnId));
 
       const colByNorm = new Map<string, string>();
       for (const col of boardCols) {
@@ -239,7 +245,7 @@ export default createEndpoint({
 
       const toCreate: { filloutId: string; name: string; type: string; orderOffset: number }[] = [];
       const toMapExisting: { filloutId: string; columnId: string; questionName: string }[] = [];
-      const seenNorms = new Set<string>();
+      const createdNorms = new Set<string>();
 
       for (const q of currentFormQuestions) {
         const name = (q.name ?? '').trim();
@@ -248,15 +254,18 @@ export default createEndpoint({
         if (matchCore(name)) continue;
 
         const normName = normalize(name);
-        const existingColId = colByNorm.get(normName);
-        if (existingColId) {
-          toMapExisting.push({ filloutId: q.id, columnId: existingColId, questionName: name });
+        const candidateColId = colByNorm.get(normName);
+        if (candidateColId && !claimedColIds.has(candidateColId)) {
+          claimedColIds.add(candidateColId);
+          toMapExisting.push({ filloutId: q.id, columnId: candidateColId, questionName: name });
           continue;
         }
 
-        if (seenNorms.has(normName)) continue;
-        seenNorms.add(normName);
-        toCreate.push({ filloutId: q.id, name, type: q.type, orderOffset: toCreate.length });
+        let finalName = name;
+        let n = 2;
+        while (createdNorms.has(normalize(finalName))) { finalName = `${name} (${n})`; n++; }
+        createdNorms.add(normalize(finalName));
+        toCreate.push({ filloutId: q.id, name: finalName, type: q.type, orderOffset: toCreate.length });
       }
 
       const newMappingEntries: { filloutId: string; columnId: string; questionName: string }[] = [
@@ -390,6 +399,10 @@ export default createEndpoint({
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
     for (const submission of newSubmissions) {
+      // Una submission fallida (ej. un valor con forma inesperada) no debe
+      // abortar el resto del lote — antes sí, y el front reportaba "error"
+      // aunque N-1 de N ya hubieran importado bien.
+      try {
       const questions: any[] = submission.questions ?? submission.answers ?? [];
       const submissionId = String(submission.submissionId ?? submission.id ?? '');
 
@@ -506,6 +519,11 @@ export default createEndpoint({
       // frontend truena al hacer `for await` sobre un Promise normal. El pausado
       // sigue sirviendo para no exceder el rate limit de Fillout.
       if (newCount % 3 === 0) await sleep(300);
+      } catch (err) {
+        console.error('[checkNewSubmissions] Fallo al importar una submission — se omite y se sigue con el resto', {
+          submissionId: submission.submissionId ?? submission.id, error: String(err),
+        });
+      }
     }
 
     // ── 8. Update lastSyncedAt cursor ─────────────────────────────────────

@@ -229,6 +229,12 @@ export default createEndpoint({
     // ── 1c. Auto-create columns for new questions not in the mapping ────────
     if (currentFormQuestions.length > 0) {
       const mappedFilloutIds = new Set(questionMapping.map(m => m.filloutId));
+      // Columnas ya asignadas a OTRO filloutId (en este sync o en uno previo)
+      // — nunca se le reasignan a una pregunta distinta, aunque el nombre
+      // coincida. Ver linkFilloutForm.ts para el porqué completo: dos
+      // preguntas distintas compartiendo columna pierden una respuesta cada
+      // vez que ambas vienen contestadas en la misma submission.
+      const claimedColIds = new Set(questionMapping.map(m => m.columnId));
 
       // Build a name→colId lookup for existing board columns
       const colByNorm = new Map<string, string>();
@@ -243,7 +249,7 @@ export default createEndpoint({
       // Partition new questions into "create" and "map to existing"
       const toCreate: { filloutId: string; name: string; type: string; orderOffset: number }[] = [];
       const toMapExisting: { filloutId: string; columnId: string; questionName: string }[] = [];
-      const seenNorms = new Set<string>();
+      const createdNorms = new Set<string>();
 
       for (const q of currentFormQuestions) {
         const name = (q.name ?? '').trim();
@@ -252,17 +258,23 @@ export default createEndpoint({
         if (matchCore(name)) continue;               // core field — handled separately
 
         const normName = normalize(name);
+        const candidateColId = colByNorm.get(normName);
 
-        // A column with this name already exists → just add to mapping
-        const existingColId = colByNorm.get(normName);
-        if (existingColId) {
-          toMapExisting.push({ filloutId: q.id, columnId: existingColId, questionName: name });
+        // A column with this name already exists AND no other question in
+        // this pass already claimed it → reuse it.
+        if (candidateColId && !claimedColIds.has(candidateColId)) {
+          claimedColIds.add(candidateColId);
+          toMapExisting.push({ filloutId: q.id, columnId: candidateColId, questionName: name });
           continue;
         }
 
-        if (seenNorms.has(normName)) continue; // duplicate question name in form
-        seenNorms.add(normName);
-        toCreate.push({ filloutId: q.id, name, type: q.type, orderOffset: toCreate.length });
+        // No column matches, or the matching one already belongs to a
+        // different question — never share it, disambiguate the name instead.
+        let finalName = name;
+        let n = 2;
+        while (createdNorms.has(normalize(finalName))) { finalName = `${name} (${n})`; n++; }
+        createdNorms.add(normalize(finalName));
+        toCreate.push({ filloutId: q.id, name: finalName, type: q.type, orderOffset: toCreate.length });
       }
 
       // Bulk-create new columns (batches of 100)
@@ -374,6 +386,9 @@ export default createEndpoint({
       const batch = submissions.slice(i, i + BATCH_SIZE);
 
       for (const submission of batch) {
+        // Una submission fallida no debe abortar el resto del lote — antes sí,
+        // y el front reportaba "error" aunque N-1 de N ya hubieran importado bien.
+        try {
         const questions: any[] = submission.questions ?? submission.answers ?? [];
 
         const coreFields: Record<string, string> = {};
@@ -492,6 +507,11 @@ export default createEndpoint({
         } catch { /* non-blocking */ }
 
         imported++;
+        } catch (err) {
+          console.error('[syncFilloutResponses] Fallo al importar una submission — se omite y se sigue con el resto', {
+            submissionId: submission.submissionId ?? submission.id, error: String(err),
+          });
+        }
       }
 
       if (i + BATCH_SIZE < submissions.length) await sleep(BATCH_DELAY_MS);

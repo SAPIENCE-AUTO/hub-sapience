@@ -28,6 +28,7 @@ const Projects = createModel(pool, 'Projects');
 const Deals = createModel(pool, 'Deals');
 const Cotizaciones = createModel(pool, 'Cotizaciones');
 const CotizacionLineItems = createModel(pool, 'CotizacionLineItems');
+const CellValues = createModel(pool, 'CellValues');
 
 let pass = 0, fail = 0;
 const check = (name: string, cond: boolean, extra = '') => {
@@ -163,6 +164,28 @@ const updVacios = await Projects.update({ id: conVacios.id, record: { startDate:
 check('update con "" también convierte a null, no solo create', updVacios?.startDate === undefined, JSON.stringify(updVacios?.startDate));
 const notaVacia = await Deals.create({ record: { dealName: 'Nota vacía a propósito', notes: '' } });
 check('el fix no se filtra a `text`: "" en un campo de texto se queda como "", no se vuelve null', notaVacia.notes === '', `typeof=${typeof notaVacia.notes} valor=${JSON.stringify(notaVacia.notes)}`);
+
+console.log('\n── CellValues upsert real por posición viva (regresión: checkNewSubmissions truena con "duplicate key value violates unique constraint cell_values_posicion_viva_uniq" al reescribir board_id+row_id+column_id — Zite no tenía esa restricción, se agregó directo en Supabase; ver conflictTarget en schema-map.ts) ──');
+const celda1 = await CellValues.create({ record: { boardId: 'b1', rowId: 'r1', columnId: 'c1', textValue: 'primero' } });
+const celda2 = await CellValues.create({ record: { boardId: 'b1', rowId: 'r1', columnId: 'c1', textValue: 'segundo' } }).catch((e: Error) => e);
+check('reescribir la misma posición no truena (antes sí)', !(celda2 instanceof Error), String(celda2 instanceof Error ? celda2.message : ''));
+check('la segunda escritura actualiza en vez de duplicar', (celda2 as any).id === celda1.id, `${(celda2 as any)?.id} vs ${celda1.id}`);
+check('el valor queda con el más reciente', (celda2 as any).textValue === 'segundo', String((celda2 as any).textValue));
+check('sigue habiendo una sola celda viva en esa posición', (await CellValues.count({ filters: { boardId: 'b1', rowId: 'r1', columnId: 'c1' } })) === 1);
+
+const loteConChoque = await CellValues.bulkCreate({
+  records: [
+    { boardId: 'b2', rowId: 'r2', columnId: 'c2', textValue: 'uno' },
+    { boardId: 'b2', rowId: 'r2', columnId: 'c2', textValue: 'dos' },
+  ],
+}).catch((e: Error) => e);
+check('dos posiciones iguales en el MISMO lote (ej. dos preguntas de Fillout mapeadas a la misma columna) no truenan', !(loteConChoque instanceof Error), String(loteConChoque instanceof Error ? loteConChoque.message : ''));
+check('sigue habiendo una sola celda viva tras el lote con choque', (await CellValues.count({ filters: { boardId: 'b2', rowId: 'r2', columnId: 'c2' } })) === 1);
+
+await CellValues.update({ id: celda1.id, record: { deletedAt: new Date().toISOString() } });
+const celdaNuevaTrasBorrado = await CellValues.create({ record: { boardId: 'b1', rowId: 'r1', columnId: 'c1', textValue: 'tercero' } });
+check('una posición con la celda anterior borrada (deletedAt) sí permite una celda viva nueva, sin pisar la borrada', celdaNuevaTrasBorrado.id !== celda1.id, `${celdaNuevaTrasBorrado.id} vs ${celda1.id}`);
+check('quedan 2 filas en esa posición: la borrada + la nueva viva (el índice es parcial, no de por vida)', (await CellValues.count({ filters: { boardId: 'b1', rowId: 'r1', columnId: 'c1' } })) === 2);
 
 console.log('\n── protecciones nuevas que Zite no tenía ──');
 const err = await Users.findAll({ filters: { campoQueNoExiste: 1 } }).catch((e: Error) => e);

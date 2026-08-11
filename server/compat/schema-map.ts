@@ -4,7 +4,8 @@
 export type FieldKind = 'text'|'number'|'boolean'|'date'|'datetime'|'json'|'array'|'link'|'linkMany';
 
 export interface FieldDef { col: string; kind: FieldKind; target?: string; join?: string; selfCol?: string; otherCol?: string }
-export interface TableDef { table: string; fields: Record<string, FieldDef> }
+export interface ConflictTarget { cols: string[]; where?: string }
+export interface TableDef { table: string; fields: Record<string, FieldDef>; conflictTarget?: ConflictTarget }
 
 export const SCHEMA: Record<string, TableDef> = {
   Users: {
@@ -279,6 +280,7 @@ export const SCHEMA: Record<string, TableDef> = {
   },
   CellValues: {
     table: 'cell_values',
+    conflictTarget: { cols: ['board_id', 'row_id', 'column_id'], where: 'deleted_at is null' },
     fields: {
       id: { col: 'id', kind: 'text' },
       cellId: { col: 'cell_id', kind: 'number' },
