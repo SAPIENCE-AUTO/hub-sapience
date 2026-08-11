@@ -395,138 +395,168 @@ export default createEndpoint({
       if (p.projectCode) projectDatesMap.set(p.projectCode, { startDate: p.startDate, endDate: p.endDate });
     }
 
-    // ── 7. Import new submissions ─────────────────────────────────────────
+    // ── 7. Import new submissions, por lotes ────────────────────────────────
+    // BATCH_SIZE = 20: cada respuesta ya no paga ~10 round-trips propios a
+    // Postgres (fila, participante, celdas, cellData, detección de
+    // duplicados, cada uno por separado) — se procesan 20 juntas por vez.
+    // Es grande para que valga la pena el viaje, chico para que un lote que
+    // falla no tire de golpe mucho progreso, y deja margen amplio bajo el
+    // límite de 65,535 parámetros por sentencia de Postgres.
+    const BATCH_SIZE = 20;
     let newCount = 0;
-    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-    stream?.write({ imported: 0, total: newSubmissions.length });
+    const totalCandidates = newSubmissions.length;
+    stream?.write({ imported: 0, total: totalCandidates });
 
-    for (const submission of newSubmissions) {
-      // Una submission fallida (ej. un valor con forma inesperada) no debe
-      // abortar el resto del lote — antes sí, y el front reportaba "error"
-      // aunque N-1 de N ya hubieran importado bien.
+    type Prepared = {
+      coreFields: Record<string, string>;
+      cellsToWrite: { columnId: string; value: string }[];
+      submissionId: string;
+      sourceFormValue: string;
+      autoRowOrder: number;
+    };
+
+    for (let bi = 0; bi < newSubmissions.length; bi += BATCH_SIZE) {
+      const batch = newSubmissions.slice(bi, bi + BATCH_SIZE);
+
       try {
-      const questions: any[] = submission.questions ?? submission.answers ?? [];
-      const submissionId = String(submission.submissionId ?? submission.id ?? '');
+        // ── 7a. Preparar en memoria + dedup secuencial (sin tocar la DB) ──
+        const prepared: Prepared[] = [];
+        for (const submission of batch) {
+          const questions: any[] = submission.questions ?? submission.answers ?? [];
+          const submissionId = String(submission.submissionId ?? submission.id ?? '');
 
-      const coreFields: Record<string, string> = {};
-      const cellsToWrite: { columnId: string; value: string }[] = [];
-
-      for (const q of questions) {
-        const name  = (q.name ?? q.label ?? '').trim();
-        const value = toText(q.value);
-        const coreKey = matchCore(name);
-        if (coreKey && value) coreFields[coreKey] = value;
-        const colId = idToColId.get(q.id);
-        if (colId && value) cellsToWrite.push({ columnId: colId, value });
-      }
-
-      if (!coreFields.participantName && !coreFields.email) continue;
-
-      const emailLower = coreFields.email?.toLowerCase() ?? '';
-      const normName   = normalize(coreFields.participantName ?? '');
-      if (!submissionId) {
-        if (emailLower && existingEmails.has(emailLower)) continue;
-        if (!emailLower && normName && existingNames.has(normName)) continue;
-      }
-
-      if (emailLower) existingEmails.add(emailLower);
-      if (normName)   existingNames.add(normName);
-      if (submissionId) importedSubmissionIds.add(submissionId);
-
-      await Participants.bulkCreate({
-        records: [{ fullName: coreFields.participantName, email: coreFields.email, phone: coreFields.phone, idNumber: coreFields.idNumber }],
-        matchOn: coreFields.email ? ['email'] : undefined,
-      });
-
-      const sourceFormValue = submissionId ? `${formName}|${submissionId}` : formName;
-
-      if (submissionId) {
-        const { records: existing } = await RecruitmentRows.findAll({
-          filters: { sourceForm: sourceFormValue, boardName, projectCode },
-          limit: 1,
-          fields: ['id'],
-        });
-        if (existing.length > 0) continue;
-      }
-
-      const submissionTime = submission.submissionTime ?? submission.createdAt ?? submission.lastUpdatedAt;
-      const autoRowOrder = submissionTime ? Math.floor(new Date(submissionTime).getTime() / 1000) : Math.floor(Date.now() / 1000);
-
-      const record = await RecruitmentRows.create({
-        record: {
-          rowName: coreFields.participantName ?? coreFields.email ?? 'Sin nombre',
-          projectCode, boardName,
-          boardId: resolvedBoardId,
-          participantName: coreFields.participantName,
-          email: coreFields.email,
-          phone: coreFields.phone,
-          idNumber: coreFields.idNumber,
-          status: 'Pendiente',
-          sourceForm: sourceFormValue,
-          level: 0,
-          rowOrder: autoRowOrder,
-        },
-      });
-
-      if (cellsToWrite.length > 0) {
-        const cellRecords = cellsToWrite.map(c => {
-          const colType = colIdToType.get(c.columnId) ?? 'Texto';
-          return {
-            boardId: resolvedBoardId,
-            rowId: record.id,
-            columnId: c.columnId,
-            ...toTypedValue(c.value, colType),
-          };
-        });
-        for (let ci = 0; ci < cellRecords.length; ci += 100) {
-          await CellValues.bulkCreate({ records: cellRecords.slice(ci, ci + 100) });
-        }
-        await RecruitmentRows.update({
-          id: record.id,
-          record: {
-            cellData: JSON.stringify(
-              Object.fromEntries(cellsToWrite.map(c => {
-                const colType = colIdToType.get(c.columnId) ?? 'Texto';
-                return [c.columnId, toTypedValue(c.value, colType)];
-              }))
-            ),
-          },
-        });
-      }
-
-      // Duplicate detection (non-blocking)
-      try {
-        const detectionFields = ['id', 'participantName', 'email', 'phone', 'projectCode', 'boardName', 'status', 'group', 'deletedAt'];
-        const queries: Promise<{ records: any[] }>[] = [];
-        if (coreFields.email) queries.push(RecruitmentRows.findAll({ filters: { email: coreFields.email }, limit: 50, fields: detectionFields }));
-        if (coreFields.participantName) queries.push(RecruitmentRows.findAll({ filters: { participantName: { contains: coreFields.participantName } }, limit: 50, fields: detectionFields }));
-        if (coreFields.phone) queries.push(RecruitmentRows.findAll({ filters: { phone: coreFields.phone }, limit: 50, fields: detectionFields }));
-        if (queries.length > 0) {
-          const results = await Promise.all(queries);
-          const seen = new Set<string>();
-          const merged: any[] = [];
-          for (const { records } of results) {
-            for (const r of records) { if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); } }
+          const coreFields: Record<string, string> = {};
+          const cellsToWrite: { columnId: string; value: string }[] = [];
+          for (const q of questions) {
+            const name  = (q.name ?? q.label ?? '').trim();
+            const value = toText(q.value);
+            const coreKey = matchCore(name);
+            if (coreKey && value) coreFields[coreKey] = value;
+            const colId = idToColId.get(q.id);
+            if (colId && value) cellsToWrite.push({ columnId: colId, value });
           }
-          const activeRows = merged.filter(r => !r.deletedAt);
-          const note = buildParticipationNote(activeRows, record.id, projectCode, boardName, projectDatesMap);
-          if (note) await RecruitmentRows.update({ id: record.id, record: { notes: note } });
-        }
-      } catch { /* non-blocking */ }
+          if (!coreFields.participantName && !coreFields.email) continue;
 
-      newCount++;
-      // El pausado sigue sirviendo para no exceder el rate limit de Fillout.
-      if (newCount % 3 === 0) await sleep(300);
+          const emailLower = coreFields.email?.toLowerCase() ?? '';
+          const normName   = normalize(coreFields.participantName ?? '');
+          if (!submissionId) {
+            if (emailLower && existingEmails.has(emailLower)) continue;
+            if (!emailLower && normName && existingNames.has(normName)) continue;
+          }
+          if (emailLower) existingEmails.add(emailLower);
+          if (normName)   existingNames.add(normName);
+          if (submissionId) importedSubmissionIds.add(submissionId);
+
+          const sourceFormValue = submissionId ? `${formName}|${submissionId}` : formName;
+          const submissionTime = submission.submissionTime ?? submission.createdAt ?? submission.lastUpdatedAt;
+          const autoRowOrder = submissionTime ? Math.floor(new Date(submissionTime).getTime() / 1000) : Math.floor(Date.now() / 1000);
+
+          prepared.push({ coreFields, cellsToWrite, submissionId, sourceFormValue, autoRowOrder });
+        }
+
+        // ── 7b. Reconfirmar "ya existe" para TODO el lote de un jalón ──────
+        // (guarda contra una carrera con otro proceso — antes era un
+        // findAll por submission, ahora uno solo por lote con `in`).
+        const withSubmissionId = prepared.filter(p => p.submissionId);
+        let existingSourceForms = new Set<string>();
+        if (withSubmissionId.length > 0) {
+          const { records: existingCheck } = await RecruitmentRows.findAll({
+            filters: { sourceForm: { in: withSubmissionId.map(p => p.sourceFormValue) }, boardName, projectCode },
+            limit: withSubmissionId.length,
+            fields: ['sourceForm'],
+          });
+          existingSourceForms = new Set(existingCheck.map(r => r.sourceForm));
+        }
+        const toImport = prepared.filter(p => !p.submissionId || !existingSourceForms.has(p.sourceFormValue));
+
+        if (toImport.length > 0) {
+          // ── 7c. Resolver participantes juntos ──────────────────────────
+          await Participants.bulkCreate({
+            records: toImport.map(p => ({
+              fullName: p.coreFields.participantName, email: p.coreFields.email,
+              phone: p.coreFields.phone, idNumber: p.coreFields.idNumber,
+            })),
+            matchOn: ['email'],
+          });
+
+          // ── 7d. Crear las filas de reclutamiento juntas ────────────────
+          const { records: createdRows } = await RecruitmentRows.bulkCreate({
+            records: toImport.map(p => ({
+              rowName: p.coreFields.participantName ?? p.coreFields.email ?? 'Sin nombre',
+              projectCode, boardName,
+              boardId: resolvedBoardId,
+              participantName: p.coreFields.participantName,
+              email: p.coreFields.email,
+              phone: p.coreFields.phone,
+              idNumber: p.coreFields.idNumber,
+              status: 'Pendiente',
+              sourceForm: p.sourceFormValue,
+              level: 0,
+              rowOrder: p.autoRowOrder,
+            })),
+          });
+
+          // ── 7e. Escribir las celdas de todo el lote de una vez ─────────
+          const cellRecords: Record<string, unknown>[] = [];
+          const cellDataUpdates: { id: string; cellData: string }[] = [];
+          for (let i = 0; i < toImport.length; i++) {
+            const p = toImport[i];
+            const row = createdRows[i] as any;
+            if (!row || p.cellsToWrite.length === 0) continue;
+            const cellData: Record<string, unknown> = {};
+            for (const c of p.cellsToWrite) {
+              const colType = colIdToType.get(c.columnId) ?? 'Texto';
+              const typed = toTypedValue(c.value, colType);
+              cellRecords.push({ boardId: resolvedBoardId, rowId: row.id, columnId: c.columnId, ...typed });
+              cellData[c.columnId] = typed;
+            }
+            cellDataUpdates.push({ id: row.id, cellData: JSON.stringify(cellData) });
+          }
+          for (let ci = 0; ci < cellRecords.length; ci += 300) {
+            await CellValues.bulkCreate({ records: cellRecords.slice(ci, ci + 300) });
+          }
+          if (cellDataUpdates.length > 0) await RecruitmentRows.bulkUpdate(cellDataUpdates);
+
+          // ── 7f. Detección de duplicados, en paralelo por fila ──────────
+          // Las filas del lote ya quedaron creadas en 7d, así que si dos
+          // respuestas del MISMO lote comparten teléfono/correo/nombre, se
+          // detectan entre sí igual que si vinieran de sincronizaciones
+          // distintas (el índice gin_trgm/las columnas ya las tienen). Cada
+          // fila excluye únicamente SU PROPIO id — vía buildParticipationNote
+          // — nunca al resto del lote: no se "pierde" a sí misma del conteo,
+          // pero tampoco se cuenta a sí misma como su propio duplicado.
+          await Promise.all(toImport.map(async (p, i) => {
+            const row = createdRows[i] as any;
+            if (!row) return;
+            try {
+              const detectionFields = ['id', 'participantName', 'email', 'phone', 'projectCode', 'boardName', 'status', 'group', 'deletedAt'];
+              const queries: Promise<{ records: any[] }>[] = [];
+              if (p.coreFields.email) queries.push(RecruitmentRows.findAll({ filters: { email: p.coreFields.email }, limit: 50, fields: detectionFields }));
+              if (p.coreFields.participantName) queries.push(RecruitmentRows.findAll({ filters: { participantName: { contains: p.coreFields.participantName } }, limit: 50, fields: detectionFields }));
+              if (p.coreFields.phone) queries.push(RecruitmentRows.findAll({ filters: { phone: p.coreFields.phone }, limit: 50, fields: detectionFields }));
+              if (queries.length > 0) {
+                const results = await Promise.all(queries);
+                const seen = new Set<string>();
+                const merged: any[] = [];
+                for (const { records } of results) {
+                  for (const r of records) { if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); } }
+                }
+                const activeRows = merged.filter(r => !r.deletedAt);
+                const note = buildParticipationNote(activeRows, row.id, projectCode, boardName, projectDatesMap);
+                if (note) await RecruitmentRows.update({ id: row.id, record: { notes: note } });
+              }
+            } catch { /* non-blocking */ }
+          }));
+
+          newCount += toImport.length;
+        }
       } catch (err) {
-        console.error('[checkNewSubmissions] Fallo al importar una submission — se omite y se sigue con el resto', {
-          submissionId: submission.submissionId ?? submission.id, error: String(err),
+        // Un lote fallido no debe abortar los demás — se omite y se sigue.
+        console.error('[checkNewSubmissions] Fallo al importar un lote — se omite y se sigue con el siguiente', {
+          batchStart: bi, batchSize: batch.length, error: String(err),
         });
-      } finally {
-        // `finally` corre en los tres casos (éxito, `continue` por dedup, o
-        // catch de arriba) — así el progreso avanza aunque una submission se
-        // omita, y `imported` nunca se queda atorado por debajo de `total`.
-        stream?.write({ imported: newCount, total: newSubmissions.length });
       }
+      stream?.write({ imported: newCount, total: totalCandidates });
     }
 
     // ── 8. Update lastSyncedAt cursor ─────────────────────────────────────

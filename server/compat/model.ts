@@ -231,6 +231,19 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
      */
     async bulkCreate({ records, matchOn }: { records: Record<string, any>[]; matchOn?: string[] }): Promise<FindAllResult<T>> {
       if (!records.length) return { records: [] };
+
+      // Sin matchOn no hay que buscar existentes por registro — se puede
+      // insertar el lote entero en un solo INSERT multi-fila. Es el camino que
+      // usan los 6 endpoints que escriben CellValues (checkNewSubmissions,
+      // syncFilloutResponses, saveCellValue, importExcelData, duplicateRows,
+      // duplicateBoard): antes "bulkCreate" hacía N × create() secuenciales —
+      // un INSERT + un SELECT de vuelta por cada fila — así que 100 celdas
+      // eran 200 viajes de ida y vuelta a Postgres. Visible en vivo con el
+      // progreso real de checkNewSubmissions: importaba "una respuesta a la
+      // vez" porque, literalmente, cada celda de cada respuesta esperaba su
+      // propio round-trip.
+      if (!matchOn?.length) return this.bulkInsert(records);
+
       const out: T[] = [];
       // Todo el lote va por el MISMO cliente: es lo que hace que la transacción
       // sea real y que el pool no se agote esperándose a sí mismo.
@@ -238,14 +251,11 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
       try {
         await client.query('begin');
         for (const r of records) {
-          let existing: T | null = null;
-          if (matchOn?.length) {
-            const filters: Record<string, unknown> = {};
-            for (const key of matchOn) filters[key] = r[key];
-            if (Object.values(filters).every((v) => v !== undefined)) {
-              existing = await this.findOne({ filters }, client);
-            }
-          }
+          const filters: Record<string, unknown> = {};
+          for (const key of matchOn) filters[key] = r[key];
+          const existing = Object.values(filters).every((v) => v !== undefined)
+            ? await this.findOne({ filters }, client)
+            : null;
           out.push(existing ? ((await this.update({ id: (existing as any).id, record: r }, client)) as T) : await this.create({ record: r }, client));
         }
         await client.query('commit');
@@ -258,6 +268,91 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
       return { records: out };
     },
 
+    /**
+     * INSERT multi-fila real (una sola sentencia, todo el lote), con upsert
+     * si el modelo declara `conflictTarget`. Las filas del lote pueden traer
+     * distintos subconjuntos de columnas (ej. una celda de texto y una
+     * numérica) — se usa la unión de columnas de todo el lote y se rellena
+     * con null lo que cada fila no trae, igual que create() haría uno por uno.
+     */
+    async bulkInsert(records: Record<string, any>[]): Promise<FindAllResult<T>> {
+      let unwrapped = records.map((r) => unwrapRecord(r));
+
+      if (def.conflictTarget) {
+        // Postgres no permite que un solo INSERT ... ON CONFLICT DO UPDATE
+        // afecte la misma fila dos veces ("cannot affect row a second time")
+        // — si el lote trae dos registros para la MISMA posición (ej. un bug
+        // de mapeo mandando dos preguntas de Fillout a la misma celda), se
+        // deduplica quedándose con el último, igual que hacía el camino
+        // secuencial de antes (cada create() pisaba al anterior en esa misma
+        // posición, uno tras otro).
+        const target = def.conflictTarget;
+        const keyOf = (u: (typeof unwrapped)[number]) =>
+          target.cols
+            .map((c) => { const idx = u.cols.indexOf(c); return idx === -1 ? '' : JSON.stringify(u.vals[idx]); })
+            .join(' ');
+        const byKey = new Map<string, (typeof unwrapped)[number]>();
+        for (const u of unwrapped) byKey.set(keyOf(u), u);
+        unwrapped = Array.from(byKey.values());
+      }
+
+      const allCols = Array.from(new Set(unwrapped.flatMap((u) => u.cols)));
+
+      const client = await pool.connect();
+      try {
+        await client.query('begin');
+        let ids: string[];
+        if (allCols.length === 0) {
+          ids = [];
+          for (let i = 0; i < records.length; i++) {
+            const { rows } = await client.query(`insert into "${def.table}" default values returning id`);
+            ids.push(rows[0].id);
+          }
+        } else {
+          const quoted = allCols.map((c) => `"${c}"`).join(', ');
+          const placeholders: string[] = [];
+          const vals: unknown[] = [];
+          let p = 1;
+          for (const u of unwrapped) {
+            const rowVals = allCols.map((c) => {
+              const idx = u.cols.indexOf(c);
+              return idx === -1 ? null : u.vals[idx];
+            });
+            placeholders.push(`(${rowVals.map(() => `$${p++}`).join(', ')})`);
+            vals.push(...rowVals);
+          }
+          let sql = `insert into "${def.table}" (${quoted}) values ${placeholders.join(', ')}`;
+          if (def.conflictTarget) {
+            const conflictCols = def.conflictTarget.cols.map((c) => `"${c}"`).join(', ');
+            const wherePart = def.conflictTarget.where ? ` where ${def.conflictTarget.where}` : '';
+            const updateSet = allCols.map((c) => `"${c}" = excluded."${c}"`).join(', ');
+            sql += ` on conflict (${conflictCols})${wherePart} do update set ${updateSet}`;
+          }
+          sql += ' returning id';
+          const { rows } = await client.query(sql, vals);
+          ids = rows.map((r: any) => r.id);
+        }
+
+        for (let i = 0; i < unwrapped.length; i++) {
+          if (unwrapped[i].many.length) await syncMany(ids[i], unwrapped[i].many, client);
+        }
+        await client.query('commit');
+
+        if (!ids.length) return { records: [] };
+        // Un solo SELECT para hidratar todo el lote (en vez de un findOne por
+        // fila) — preserva el orden de inserción original, no el que devuelva
+        // el SELECT.
+        const hydrated = await this.findAll({ filters: { id: { in: ids } } as any, limit: ids.length });
+        const byId = new Map(hydrated.records.map((r: any) => [r.id, r]));
+        return { records: ids.map((id) => byId.get(id)).filter(Boolean) as T[] };
+      } catch (e) {
+        try { await client.query('rollback'); } catch { /* la conexión ya murió */ }
+        throw e;
+      } finally {
+        client.release();
+      }
+    },
+
     async update({ id, record }: { id: string; record: Record<string, any> }, exec: Executor = pool): Promise<T | null> {
       const { cols, vals, many } = unwrapRecord(record);
       if (cols.length) {
@@ -266,6 +361,51 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
       }
       if (many.length) await syncMany(id, many, exec);
       return this.findOne({ id }, exec);
+    },
+
+    /**
+     * Actualiza muchas filas con valores DISTINTOS cada una en una sola
+     * sentencia (`update ... from (values ...)`), en vez de un update() por
+     * fila. No hidrata de vuelta (nadie lo necesitaba en el único lugar que
+     * usa esto hoy — checkNewSubmissions escribía `cellData` y descartaba el
+     * resultado, pagando un SELECT de vuelta por cada fila para nada).
+     * Cada registro puede traer un subconjunto de columnas distinto; se
+     * agrupan por firma de columnas para que cada UPDATE tenga una lista de
+     * columnas uniforme.
+     */
+    async bulkUpdate(records: ({ id: string } & Record<string, any>)[], exec: Executor = pool): Promise<void> {
+      if (!records.length) return;
+      const groups = new Map<string, { ids: string[]; unwrapped: ReturnType<typeof unwrapRecord>[] }>();
+      for (const { id, ...rest } of records) {
+        const u = unwrapRecord(rest);
+        const sig = u.cols.slice().sort().join(',');
+        if (!groups.has(sig)) groups.set(sig, { ids: [], unwrapped: [] });
+        const g = groups.get(sig)!;
+        g.ids.push(id);
+        g.unwrapped.push(u);
+      }
+      for (const { ids, unwrapped } of groups.values()) {
+        const cols = unwrapped[0].cols;
+        if (!cols.length) continue;
+        const valueRows: string[] = [];
+        const params: unknown[] = [];
+        let p = 1;
+        for (let i = 0; i < ids.length; i++) {
+          const rowVals = cols.map((c) => {
+            const idx = unwrapped[i].cols.indexOf(c);
+            return idx === -1 ? null : unwrapped[i].vals[idx];
+          });
+          const rowParams = [ids[i], ...rowVals];
+          valueRows.push(`(${rowParams.map(() => `$${p++}`).join(', ')})`);
+          params.push(...rowParams);
+        }
+        const setList = cols.map((c) => `"${c}" = v."${c}"`).join(', ');
+        const vCols = ['id', ...cols].map((c) => `"${c}"`).join(', ');
+        await exec.query(
+          `update "${def.table}" t set ${setList} from (values ${valueRows.join(', ')}) as v(${vCols}) where t.id = v.id::uuid`,
+          params,
+        );
+      }
     },
 
     async delete({ id }: { id: string }, exec: Executor = pool): Promise<{ id: string }> {

@@ -187,6 +187,25 @@ const celdaNuevaTrasBorrado = await CellValues.create({ record: { boardId: 'b1',
 check('una posición con la celda anterior borrada (deletedAt) sí permite una celda viva nueva, sin pisar la borrada', celdaNuevaTrasBorrado.id !== celda1.id, `${celdaNuevaTrasBorrado.id} vs ${celda1.id}`);
 check('quedan 2 filas en esa posición: la borrada + la nueva viva (el índice es parcial, no de por vida)', (await CellValues.count({ filters: { boardId: 'b1', rowId: 'r1', columnId: 'c1' } })) === 2);
 
+console.log('\n── bulkUpdate: valores distintos por fila en una sola sentencia (nuevo, para el import por lotes de checkNewSubmissions) ──');
+const bu1 = await Projects.create({ record: { projectCode: 'PJT-BU-1', description: 'uno' } });
+const bu2 = await Projects.create({ record: { projectCode: 'PJT-BU-2', description: 'dos', tematica: 'algo' } });
+const bu3 = await Projects.create({ record: { projectCode: 'PJT-BU-3' } });
+await Projects.bulkUpdate([
+  { id: bu1.id, description: 'uno actualizado' },
+  { id: bu2.id, description: 'dos actualizado' },
+  { id: bu3.id, description: 'tres nuevo' },
+]);
+const bu1r = await Projects.findOne({ id: bu1.id });
+const bu2r = await Projects.findOne({ id: bu2.id });
+const bu3r = await Projects.findOne({ id: bu3.id });
+check('fila 1 se actualiza con su propio valor', bu1r?.description === 'uno actualizado', String(bu1r?.description));
+check('fila 2 se actualiza con SU propio valor, no el de la fila 1', bu2r?.description === 'dos actualizado', String(bu2r?.description));
+check('fila 2 conserva columnas que bulkUpdate no tocó', bu2r?.tematica === 'algo', String(bu2r?.tematica));
+check('fila 3 (sin description previo) también se actualiza', bu3r?.description === 'tres nuevo', String(bu3r?.description));
+const buVacio = await Projects.bulkUpdate([]).catch((e: Error) => e);
+check('bulkUpdate con arreglo vacío no truena', !(buVacio instanceof Error));
+
 console.log('\n── protecciones nuevas que Zite no tenía ──');
 const err = await Users.findAll({ filters: { campoQueNoExiste: 1 } }).catch((e: Error) => e);
 check('filtro sobre campo inexistente truena en vez de devolver todo', err instanceof Error, '');
