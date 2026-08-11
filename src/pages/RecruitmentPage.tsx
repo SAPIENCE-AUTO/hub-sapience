@@ -1698,21 +1698,23 @@ function FilloutLinkDialog({ open, onOpenChange, boardId, projectCode, boardName
       setImportPhase('found');
       await new Promise(r => setTimeout(r, 750)); // Let user see "X encontradas"
 
-      // ── Phase: importing with progress ───────────────────────────────
+      // ── Phase: importing ───────────────────────────────────────────────
+      // Antes intentaba consumir esto como stream (`for await` + `.result`),
+      // pero checkNewSubmissions nunca transmitió progreso de verdad — el
+      // compat layer no implementa `stream` (ver server/compat/endpoint.ts) y
+      // el shim del frontend regresa un Promise normal. Eso hacía tronar el
+      // `for await` con "no es async iterable" en CADA intento, silenciado
+      // por el catch de abajo — de ahí el mensaje genérico sin rastro en
+      // logs, aunque linkFilloutForm ya hubiera terminado bien. Se pierde la
+      // barra de progreso en vivo; el resultado final es el mismo.
       setImportPhase('importing');
-      const importStream = checkNewSubmissions({ boardId });
-      for await (const chunk of importStream) {
-        try {
-          const data = JSON.parse(chunk) as { imported: number; total: number };
-          setImportedCount(data.imported);
-        } catch { /* ignore malformed chunks */ }
-      }
-      const finalRes = await importStream.result;
+      const finalRes = await checkNewSubmissions({ boardId });
       setImportedCount(finalRes.newCount);
       setImportPhase('done');
       busyRef.current = false;
       onImportDone(finalRes.newCount);
-    } catch {
+    } catch (err) {
+      console.error('[RecruitmentPage] Error al vincular formulario de Fillout:', err);
       toast.error('Error al vincular el formulario');
       setImportPhase('idle');
       setResult(null);
@@ -2124,7 +2126,8 @@ export default function RecruitmentPage() {
       }
       if (res.imported > 0) silentReload();
       setLastSyncTime(new Date());
-    } catch {
+    } catch (err) {
+      console.error('[RecruitmentPage] Error al sincronizar con Fillout:', err);
       if (!silent) toast.error('Error al sincronizar con Fillout');
     }
     busyRef.current = false;

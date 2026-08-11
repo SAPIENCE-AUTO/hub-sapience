@@ -141,9 +141,8 @@ export default createEndpoint({
   authenticated: true,
   description: 'Lightweight delta-sync: fetches only new Fillout submissions since the last sync cursor. Fast path returns immediately if nothing new.',
   inputSchema: z.object({ boardId: z.string() }),
-  stream: true,
   outputSchema: z.object({ newCount: z.number(), total: z.number() }),
-  execute: async ({ input, stream }) => {
+  execute: async ({ input }) => {
     const apiKey = process.env.ZITE_FILLOUT_API_KEY ?? '';
     if (!apiKey) throw new Error('Fillout API key not configured');
 
@@ -501,7 +500,11 @@ export default createEndpoint({
       } catch { /* non-blocking */ }
 
       newCount++;
-      await stream?.write(JSON.stringify({ imported: newCount, total: newSubmissions.length }));
+      // Antes mandaba progreso por stream — nunca funcionó (ver createEndpoint
+      // en server/compat/endpoint.ts, que no implementa `stream`) y el shim del
+      // frontend no lo espera como async-iterable; solo generaba un no-op y el
+      // frontend truena al hacer `for await` sobre un Promise normal. El pausado
+      // sigue sirviendo para no exceder el rate limit de Fillout.
       if (newCount % 3 === 0) await sleep(300);
     }
 
