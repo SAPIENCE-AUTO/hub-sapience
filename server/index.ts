@@ -15,10 +15,30 @@ import type { CompiledEndpoint } from './compat/endpoint';
  * el servidor no se toca. Los que aún importan 'zite-integrations-backend-sdk'
  * fallan el import y se listan como pendientes, sin tumbar el arranque.
  */
+// Relativo al archivo (import.meta.url), no al cwd del proceso — así resuelve
+// igual sin importar desde dónde se invoque `tsx index.ts`.
 const API_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/api');
 
 async function discoverEndpoints(): Promise<Record<string, CompiledEndpoint>> {
-  const files = (await readdir(API_DIR)).filter((f) => f.endsWith('.ts'));
+  // Si src/api/ no llegó al entorno donde corre esto (p.ej. un rootDir de
+  // despliegue que aísla server/ del resto del repo), antes esto se colaba
+  // silencioso como "0 endpoints, N pendientes" — indistinguible en el log de
+  // que simplemente falta portar N endpoints. Ahora truena de inmediato y con
+  // el path exacto que se intentó leer, en vez de arrancar en un estado roto.
+  let files: string[];
+  try {
+    files = (await readdir(API_DIR)).filter((f) => f.endsWith('.ts'));
+  } catch (err) {
+    throw new Error(
+      `No se pudo leer el directorio de endpoints en "${API_DIR}" (resuelto desde ${import.meta.url}). ` +
+      `Si src/api/ no está presente ahí, es un problema del entorno de despliegue (p.ej. un rootDir ` +
+      `que sube solo server/ y deja fuera el resto del repo), no del código. Causa original: ${(err as Error).message}`,
+    );
+  }
+  if (files.length === 0) {
+    throw new Error(`"${API_DIR}" existe pero no tiene ningún archivo .ts — nada que montar.`);
+  }
+
   const endpoints: Record<string, CompiledEndpoint> = {};
   const pending: string[] = [];
 
@@ -35,6 +55,17 @@ async function discoverEndpoints(): Promise<Record<string, CompiledEndpoint>> {
     } catch (err) {
       pending.push(`${name} (${err instanceof Error ? err.message.split('\n')[0] : err})`);
     }
+  }
+
+  // Siempre hay al menos varias decenas de endpoints ya portados hoy — cero
+  // montados con archivos de sobra es un entorno roto (dependencias faltantes,
+  // módulos no resueltos), no "todavía no se ha portado nada". Fallar aquí en
+  // vez de servir un backend que responde 404 a todo como si estuviera sano.
+  if (Object.keys(endpoints).length === 0) {
+    throw new Error(
+      `Se encontraron ${files.length} archivos en "${API_DIR}" pero ninguno se pudo montar. ` +
+      `Primer error: ${pending[0]}`,
+    );
   }
 
   console.log(`[server] ${Object.keys(endpoints).length} endpoints montados, ${pending.length} pendientes de portar`);

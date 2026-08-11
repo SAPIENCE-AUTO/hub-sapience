@@ -4,9 +4,12 @@ services:
     name: hub-sapience-api
     runtime: node
     region: virginia # más cercano a Supabase (ca-central-1) — Render no tiene región en Canadá
-    rootDir: server
-    buildCommand: npm install
-    startCommand: npm start
+    # Sin rootDir: los comandos corren desde la raíz del repo con un `cd server`
+    # explícito, en vez de dejar que Render aísle el árbol de server/ del resto
+    # (src/api/ vive fuera de server/ — discoverEndpoints en server/index.ts lo
+    # necesita en disco junto al resto del checkout, no solo el subárbol server/).
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
     healthCheckPath: /healthz
     envVars:
       - key: DATABASE_URL
