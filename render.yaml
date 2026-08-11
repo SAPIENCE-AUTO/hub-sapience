@@ -4,11 +4,16 @@ services:
     name: hub-sapience-api
     runtime: node
     region: virginia # más cercano a Supabase (ca-central-1) — Render no tiene región en Canadá
-    # Sin rootDir: los comandos corren desde la raíz del repo con un `cd server`
-    # explícito, en vez de dejar que Render aísle el árbol de server/ del resto
-    # (src/api/ vive fuera de server/ — discoverEndpoints en server/index.ts lo
-    # necesita en disco junto al resto del checkout, no solo el subárbol server/).
-    buildCommand: cd server && npm install
+    # Sin rootDir: los comandos corren desde la raíz del repo. server/ es
+    # HERMANO de src/, no ancestro — desde src/api/*.ts, Node resuelve
+    # node_modules subiendo (src/api → src/ → raíz), nunca bajando a
+    # server/node_modules. Cada endpoint importa `zod` directo, así que sin el
+    # `npm install` de la raíz (que sí tiene zod/openai/@supabase-js), TODOS
+    # los endpoints fallan al montar — no es un problema de rutas, es que su
+    # node_modules real nunca se instaló. `cd server && npm install` cubre las
+    # dependencias propias del server (pg, hono, etc.), que sí resuelven bien
+    # porque compat/*.ts vive dentro de server/.
+    buildCommand: npm install && cd server && npm install
     startCommand: cd server && npm start
     healthCheckPath: /healthz
     envVars:
