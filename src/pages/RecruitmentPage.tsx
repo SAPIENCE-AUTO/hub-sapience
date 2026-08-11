@@ -2155,9 +2155,7 @@ export default function RecruitmentPage() {
       if (cancelled) return;
       if (busyRef.current) { if (!cancelled) schedule(currentDelay); return; }
       try {
-        const pollStream = checkNewSubmissions({ boardId: activeBoardId });
-        for await (const _ of pollStream) {} // consume stream silently
-        const res = await pollStream.result;
+        const res = await checkNewSubmissions({ boardId: activeBoardId });
         if (res.newCount > 0) {
           silentReload();
           setLastSyncTime(new Date());
