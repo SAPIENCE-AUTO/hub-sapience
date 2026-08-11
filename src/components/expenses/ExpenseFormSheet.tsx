@@ -165,7 +165,7 @@ export default function ExpenseFormSheet({
     if (!file || idx === null) return;
     setUploadingIdx(idx);
     try {
-      const { fileUrl } = await uploadFile({ data: file, filename: file.name });
+      const { fileUrl } = await uploadFile({ data: file, filename: file.name, folder: 'expenses' });
       updateLine(idx, { receipt: [{ url: fileUrl }] });
     } catch {
       toast.error('Error al subir comprobante');
@@ -526,7 +526,7 @@ function LineRow({ line, uploading, onChange, onRemove, onUpload, canRemove, rea
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
     try {
-      const { fileUrl } = await uploadFile({ data: file, filename: file.name });
+      const { fileUrl } = await uploadFile({ data: file, filename: file.name, folder: 'expenses' });
       onChange({ receipt: [{ url: fileUrl }] });
     } catch {
       toast.error('Error al subir comprobante');

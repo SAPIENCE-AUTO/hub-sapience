@@ -331,7 +331,7 @@ export default function Layout() {
 
   const handleAvatarSave = async (file: File) => {
     try {
-      const { fileUrl } = await uploadFile({ data: file, filename: 'avatar.jpg' });
+      const { fileUrl } = await uploadFile({ data: file, filename: 'avatar.jpg', folder: 'avatars' });
       await uploadProfilePhoto({ photoUrl: fileUrl });
       setLocalPhotoUrl(fileUrl);
       setSidebarImgError(false);

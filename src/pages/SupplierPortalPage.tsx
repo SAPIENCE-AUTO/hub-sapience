@@ -281,11 +281,11 @@ function UploadInvoiceDialog({ po, token, password, onDone, open, onClose }: {
     }
     setSaving(true);
     try {
-      const { fileUrl: pdfUrl } = await uploadFile({ data: pdfFile, filename: pdfFile.name });
+      const { fileUrl: pdfUrl } = await uploadFile({ data: pdfFile, filename: pdfFile.name, folder: 'supplier-invoices', token, password });
       let xmlUrl: string | undefined;
       let supportUrl: string | undefined;
-      if (xmlFile) { const r = await uploadFile({ data: xmlFile, filename: xmlFile.name }); xmlUrl = r.fileUrl; }
-      if (supportFile) { const r = await uploadFile({ data: supportFile, filename: supportFile.name }); supportUrl = r.fileUrl; }
+      if (xmlFile) { const r = await uploadFile({ data: xmlFile, filename: xmlFile.name, folder: 'supplier-invoices', token, password }); xmlUrl = r.fileUrl; }
+      if (supportFile) { const r = await uploadFile({ data: supportFile, filename: supportFile.name, folder: 'supplier-invoices', token, password }); supportUrl = r.fileUrl; }
       await uploadSupplierInvoice({
         token, password, poId: po.id,
         invoiceNumber: form.invoiceNumber,

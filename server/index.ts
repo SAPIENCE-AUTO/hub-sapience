@@ -8,6 +8,7 @@ import { streamSSE } from 'hono/streaming';
 import { ZiteError } from './compat/errors';
 import { GraphAuthError } from './microsoft/graph';
 import { resolveAuth } from './auth';
+import { uploadApp } from './upload';
 import type { CompiledEndpoint } from './compat/endpoint';
 
 /**
@@ -104,6 +105,10 @@ app.use(
 // así que un GET a cualquier /api/* de por sí ya daría 404 aunque el server
 // esté sano — Render lo leería como caído.
 app.get('/healthz', (c) => c.json({ ok: true }));
+
+// Ruta dedicada para multipart/form-data — antes del dispatcher genérico
+// (que solo entiende JSON) para que /api/upload no caiga ahí.
+app.route('/api', uploadApp);
 
 app.post('/api/:name', async (c) => {
   const name = c.req.param('name');

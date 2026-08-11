@@ -65,7 +65,7 @@ export default function PoAttachmentsSection({ poId, status, userEmail, canUploa
     }
     setUploading(true);
     try {
-      const { fileUrl } = await uploadFile({ data: file, filename: file.name });
+      const { fileUrl } = await uploadFile({ data: file, filename: file.name, folder: 'purchase-orders' });
       const result = await savePoAttachment({
         poId,
         fileUrl,
