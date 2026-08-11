@@ -125,6 +125,13 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
         vals.push(ids[0] ?? null);
       } else if (f.kind === 'json') {
         vals.push(value == null ? null : JSON.stringify(value));
+      } else if ((f.kind === 'date' || f.kind === 'datetime' || f.kind === 'number') && value === '') {
+        // Un <input type="date"|"number"> sin llenar manda "" en vez de omitir
+        // el campo — Zite lo toleraba, pero Postgres rechaza "" para date/
+        // numeric con "invalid input syntax" (se vio en vivo con saveProject).
+        // Solo estos tres kinds: en 'text' un "" es un valor legítimo (una
+        // nota vacía a propósito), no "sin dato" como en date/number.
+        vals.push(null);
       } else {
         vals.push(value === undefined ? null : value);
       }

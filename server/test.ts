@@ -153,6 +153,17 @@ const releidoSinNotas = await Deals.findOne({ id: sinNotas.id });
 check('sigue siendo undefined al releer con findOne', releidoSinNotas?.notes === undefined, `typeof=${typeof releidoSinNotas?.notes}`);
 check('link vacío sigue siendo [] y no undefined (wrapLinks corre antes, no lo toca)', Array.isArray(sinNotas.owner) && sinNotas.owner.length === 0, JSON.stringify(sinNotas.owner));
 
+console.log('\n── "" en date/datetime/number se guarda como null (regresión: saveProject truena en producción con `invalid input syntax for type date: ""` — un <input type="date"|"number"> sin llenar manda "", Zite lo toleraba, Postgres no) ──');
+const conVacios = await Projects.create({ record: { projectCode: 'PJT-VACIOS', startDate: '', endDate: '', budget: '' as any, timelineUpdatedAt: '' } });
+check('date ("") no truena y sale undefined, no ""', conVacios.startDate === undefined, `typeof=${typeof conVacios.startDate} valor=${JSON.stringify(conVacios.startDate)}`);
+check('el otro campo date también', conVacios.endDate === undefined, JSON.stringify(conVacios.endDate));
+check('datetime ("") no truena y sale undefined', conVacios.timelineUpdatedAt === undefined, JSON.stringify(conVacios.timelineUpdatedAt));
+check('number/currency ("") no truena y sale undefined', conVacios.budget === undefined, JSON.stringify(conVacios.budget));
+const updVacios = await Projects.update({ id: conVacios.id, record: { startDate: '' } });
+check('update con "" también convierte a null, no solo create', updVacios?.startDate === undefined, JSON.stringify(updVacios?.startDate));
+const notaVacia = await Deals.create({ record: { dealName: 'Nota vacía a propósito', notes: '' } });
+check('el fix no se filtra a `text`: "" en un campo de texto se queda como "", no se vuelve null', notaVacia.notes === '', `typeof=${typeof notaVacia.notes} valor=${JSON.stringify(notaVacia.notes)}`);
+
 console.log('\n── protecciones nuevas que Zite no tenía ──');
 const err = await Users.findAll({ filters: { campoQueNoExiste: 1 } }).catch((e: Error) => e);
 check('filtro sobre campo inexistente truena en vez de devolver todo', err instanceof Error, '');
