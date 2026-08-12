@@ -65,6 +65,11 @@ export default createEndpoint({
     await delay(150);
 
     // Step 2: Fetch referenced POs (sequential batches with delays)
+    // fields explícito: sin esto, cada fila trae pdfBase64 completo (68 KB en
+    // promedio, hasta 415 KB) — medido en producción: un solo lote de 100 OCs
+    // así tardó 37s y sumó ~35 MB de heap. Ninguno de los dos usos de
+    // PurchaseOrders en este archivo (poMap ni poOptions) lee pdfBase64/pdfFile.
+    const PO_FIELDS = ['poNumber', 'supplierName', 'projectCode', 'totalAmount', 'billingEntity'];
     const uniquePoIds = [...new Set(paymentsResult.records.map(p => p.poId).filter(Boolean))] as string[];
     let referencedPOs: Awaited<ReturnType<typeof PurchaseOrders.findAll>>['records'] = [];
     if (uniquePoIds.length > 0) {
@@ -74,6 +79,7 @@ export default createEndpoint({
         const batch = uniquePoIds.slice(i, i + BATCH);
         const result = await PurchaseOrders.findAll({
           filters: { id: { in: batch } },
+          fields: PO_FIELDS,
           limit: BATCH,
         });
         referencedPOs = [...referencedPOs, ...result.records];
@@ -92,11 +98,29 @@ export default createEndpoint({
 
     await delay(150);
 
-    // Step 5: Fetch approved POs for form options (reduced limit)
-    const approvedPosResult = await PurchaseOrders.findAll({
-      filters: { status: { in: ['Aprobada', 'Enviada a aprobación'] } },
-      limit: 500,
-    });
+    // Step 5: Fetch ALL approved POs for the form dropdown.
+    // Antes: limit: 500 sin paginar — con 1,154 OCs aprobadas reales en
+    // producción, eso truncaba silenciosamente más de la mitad del
+    // desplegable (cuáles 500 quedaban fuera dependía del orden de escaneo
+    // de Postgres, no de nada elegido). Ahora pagina hasta traerlas todas;
+    // como ya no arrastra pdfBase64 (ver PO_FIELDS arriba), traer el total
+    // real es barato.
+    let approvedPos: Awaited<ReturnType<typeof PurchaseOrders.findAll>>['records'] = [];
+    {
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const page = await PurchaseOrders.findAll({
+          filters: { status: { in: ['Aprobada', 'Enviada a aprobación'] } },
+          fields: PO_FIELDS,
+          limit: 2000,
+          offset,
+        });
+        approvedPos = [...approvedPos, ...page.records];
+        hasMore = page.hasMore;
+        offset += page.records.length;
+      }
+    }
 
     // Build supplier email map
     const supplierEmailMap: Record<string, string> = {};
@@ -163,7 +187,7 @@ export default createEndpoint({
     if (input.projectCode) payments = payments.filter(p => p.projectCode === input.projectCode);
 
     // Build PO options
-    const poOptions = approvedPosResult.records.map(po => ({
+    const poOptions = approvedPos.map(po => ({
       id: po.id,
       poNumber: String(po.poNumber ?? ''),
       supplierName: po.supplierName ?? '',

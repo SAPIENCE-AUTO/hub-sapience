@@ -14,7 +14,7 @@ export default createEndpoint({
     const level = context.user!.purchaseLevel ?? 'Creador';
     if (level !== 'Aprobador' && level !== 'Finanzas' && level !== 'Socios') throw new ZiteError({ code: 'FORBIDDEN', message: 'No tienes permisos para rechazar órdenes de compra' });
 
-    const po = await PurchaseOrders.findOne({ id: input.id });
+    const po = await PurchaseOrders.findOne({ id: input.id, fields: ['status', 'category', 'poNumber'] });
     if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'Orden de compra no encontrada' });
     if (po.status !== 'Enviada a aprobación') throw new ZiteError({ code: 'BAD_REQUEST', message: 'Solo se pueden rechazar OCs en estatus Enviada a aprobación' });
 

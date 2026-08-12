@@ -41,7 +41,7 @@ export default createEndpoint({
 
     if (id) {
       // Editing existing PO — validate permissions
-      const po = await PurchaseOrders.findOne({ id });
+      const po = await PurchaseOrders.findOne({ id, fields: ['status', 'createdBy', 'poNumber'] });
       if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'Orden de compra no encontrada' });
 
       if (po.status !== 'Borrador') {

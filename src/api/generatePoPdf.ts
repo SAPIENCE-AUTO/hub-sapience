@@ -16,7 +16,10 @@ export default createEndpoint({
       });
     }
 
-    const po = await PurchaseOrders.findOne({ id: input.id });
+    const po = await PurchaseOrders.findOne({
+      id: input.id,
+      fields: ['poNumber', 'projectCode', 'supplierName', 'issueDate', 'totalAmount', 'status', 'category', 'paymentTerms', 'currency', 'createdBy', 'approvedBy', 'notes', 'serviceDescription', 'billingEntity'],
+    });
     if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'OC no encontrada' });
 
     const [{ records: lineItems }, supplierResult, billingEntityResult] = await Promise.all([

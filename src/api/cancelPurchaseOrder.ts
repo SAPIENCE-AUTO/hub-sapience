@@ -89,7 +89,10 @@ export default createEndpoint({
   outputSchema: z.object({ success: z.boolean(), emailSent: z.boolean() }),
   execute: async ({ input, context }) => {
     const user = context.user!;
-    const po = await PurchaseOrders.findOne({ id: input.id });
+    const po = await PurchaseOrders.findOne({
+      id: input.id,
+      fields: ['status', 'category', 'createdBy', 'poNumber', 'emailSentAt', 'supplierName', 'emailSentTo', 'totalAmount', 'currency'],
+    });
     if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'Orden de compra no encontrada' });
 
     // Cannot cancel if already Pagada or Cancelada

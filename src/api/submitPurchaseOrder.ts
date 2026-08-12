@@ -10,7 +10,7 @@ export default createEndpoint({
   execute: async ({ input, context }) => {
     const level = context.user!.purchaseLevel ?? 'Creador';
 
-    const po = await PurchaseOrders.findOne({ id: input.id });
+    const po = await PurchaseOrders.findOne({ id: input.id, fields: ['status', 'createdBy', 'supplierName', 'totalAmount', 'poNumber'] });
     if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'Orden de compra no encontrada' });
     if (po.status !== 'Borrador') throw new ZiteError({ code: 'BAD_REQUEST', message: 'Solo se pueden enviar OCs en estatus Borrador' });
 

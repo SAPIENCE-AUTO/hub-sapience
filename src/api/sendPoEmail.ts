@@ -23,7 +23,7 @@ export default createEndpoint({
   }),
   outputSchema: z.object({ success: z.boolean(), message: z.string() }),
   execute: async ({ input, context }) => {
-    const po = await PurchaseOrders.findOne({ id: input.poId });
+    const po = await PurchaseOrders.findOne({ id: input.poId, fields: ['poNumber', 'pdfBase64'] });
     if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'OC no encontrada' });
 
     // Build email attachments from stored pdfBase64 field

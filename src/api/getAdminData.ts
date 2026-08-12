@@ -58,7 +58,11 @@ export default createEndpoint({
   execute: async ({ input }) => {
     const poFilters = input.projectCode ? { projectCode: input.projectCode } : {};
     const [posResult, suppliersResult, itemsResult] = await Promise.all([
-      PurchaseOrders.findAll({ filters: poFilters, limit: 500 }),
+      PurchaseOrders.findAll({
+        filters: poFilters,
+        fields: ['id', 'poNumber', 'projectCode', 'supplierName', 'issueDate', 'totalAmount', 'status', 'pdfUrl', 'notes'],
+        limit: 500,
+      }),
       Suppliers.findAll({ limit: 500 }),
       PoLineItems.findAll({ limit: 1000 }),
     ]);

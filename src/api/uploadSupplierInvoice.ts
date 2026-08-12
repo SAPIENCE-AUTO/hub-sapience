@@ -29,7 +29,7 @@ export default createEndpoint({
     if (!supplier) throw new Error('Token de acceso inválido.');
     if (supplier.portalPassword !== input.password) throw new Error('Clave de acceso incorrecta.');
 
-    const po = await PurchaseOrders.findOne({ id: input.poId });
+    const po = await PurchaseOrders.findOne({ id: input.poId, fields: ['supplierName'] });
     if (!po || po.supplierName !== supplier.supplierName) {
       throw new Error('La orden de compra no corresponde a este proveedor.');
     }

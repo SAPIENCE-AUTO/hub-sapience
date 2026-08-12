@@ -71,7 +71,11 @@ async function fetchAllPOs(): Promise<PurchaseOrdersRecordType[]> {
   const all: PurchaseOrdersRecordType[] = [];
   let offset = 0;
   while (true) {
-    const result = await PurchaseOrders.findAll({ limit: 2000, offset });
+    const result = await PurchaseOrders.findAll({
+      fields: ['status', 'projectCode', 'category', 'totalAmount'],
+      limit: 2000,
+      offset,
+    });
     all.push(...result.records);
     if (!result.hasMore || result.records.length === 0) break;
     offset += result.records.length;

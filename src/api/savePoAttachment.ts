@@ -22,7 +22,7 @@ export default createEndpoint({
   }),
   outputSchema: z.object({ success: z.boolean(), attachment: attachmentSchema }),
   execute: async ({ input, context }) => {
-    const po = await PurchaseOrders.findOne({ id: input.poId });
+    const po = await PurchaseOrders.findOne({ id: input.poId, fields: ['status', 'createdBy', 'category'] });
     if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'Orden de compra no encontrada' });
     if (po.status === 'Cancelada') {
       throw new ZiteError({ code: 'BAD_REQUEST', message: 'No se pueden adjuntar evidencias a una OC cancelada' });

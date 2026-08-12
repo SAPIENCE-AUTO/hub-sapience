@@ -32,7 +32,10 @@ export default createEndpoint({
     hasPdf: z.boolean(),
   }),
   execute: async ({ input, context }) => {
-    const po = await PurchaseOrders.findOne({ id: input.poId });
+    const po = await PurchaseOrders.findOne({
+      id: input.poId,
+      fields: ['supplierName', 'poNumber', 'projectCode', 'totalAmount', 'currency', 'paymentTerms', 'serviceDescription', 'pdfUrl', 'pdfBase64'],
+    });
     if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'Orden de compra no encontrada' });
 
     // Find supplier by name

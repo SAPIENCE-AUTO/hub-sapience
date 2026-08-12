@@ -10,7 +10,7 @@ export default createEndpoint({
   execute: async ({ input, context }) => {
     const level = context.user!.purchaseLevel ?? 'Creador';
 
-    const po = await PurchaseOrders.findOne({ id: input.id });
+    const po = await PurchaseOrders.findOne({ id: input.id, fields: ['createdBy', 'status', 'poNumber'] });
     if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'Orden de compra no encontrada' });
 
     const isCreator = po.createdBy === context.user!.email;

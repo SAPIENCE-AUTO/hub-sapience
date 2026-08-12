@@ -32,7 +32,7 @@ export default createEndpoint({
     let supplierName = rest.supplierName;
     let projectCode = rest.projectCode;
     if (poId) {
-      const po = await PurchaseOrders.findOne({ id: poId });
+      const po = await PurchaseOrders.findOne({ id: poId, fields: ['status', 'supplierName', 'projectCode', 'billingEntity'] });
       if (!po) throw new Error('ODC no encontrada.');
       if (po.status !== 'Enviada a aprobación' && po.status !== 'Aprobada') {
         throw new Error(`No se puede registrar un pago para una ODC con status "${po.status}". Solo se permiten ODCs Enviadas o Aprobadas.`);
