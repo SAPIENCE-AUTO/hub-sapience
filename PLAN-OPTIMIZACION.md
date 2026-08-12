@@ -224,6 +224,33 @@ capa de datos debajo.
 
 ---
 
+### 1.7 Portal de proveedores: manda todos los PDFs incrustados de una vez
+
+`getSupplierPortalData` (público, por token — cualquier proveedor con su link lo puede
+abrir) ya no arrastra `pdfBase64` de OCs que no va a mostrar (el filtro "tiene PDF y se
+envió por correo" se empujó a SQL — ver commit de esta sesión), pero las OCs que **sí**
+pasan el filtro siguen mandando su PDF completo incrustado en la misma respuesta.
+
+Medido con el proveedor de mayor volumen en producción (Elizabeth Campos Linares): 279 OCs
+totales, 242 "visibles" → **~8 MB de PDFs en una sola respuesta**. El push-down a SQL evita
+traer los 37 restantes de más, pero no reduce nada para un proveedor con muchas OCs
+genuinamente visibles — eso es inherente a mandar el PDF completo de cada una por adelantado,
+en vez de bajo demanda.
+
+**Arreglo, mismo patrón que ya existe para el equipo interno (`getPoPdfBase64.ts`):**
+
+```diff
+- purchaseOrders: visiblePos.map(p => ({ ...campos, pdfUrl: p.pdfUrl, pdfBase64: p.pdfBase64, pdfFile: p.pdfFile }))
++ purchaseOrders: visiblePos.map(p => ({ ...campos /* sin pdfBase64/pdfFile */ }))
+```
+
+Y un endpoint nuevo, público por el mismo token+password, que entregue el PDF de una sola
+OC cuando el proveedor de verdad la abre — el frontend del portal lo pide al hacer click,
+no de entrada. Paginar la lista (`limit`/`offset` o cursor) también evita que un proveedor
+con muchas OCs traiga todo de golpe, aunque sea sin PDF.
+
+---
+
 ## Fase 2 — El cambio estructural (semanas)
 
 ### 2.1 Terminar lo que ya empezaron: `cellData` como única fuente
@@ -332,6 +359,7 @@ realtime sea confiable.
 | 1.4 | El chat se siente inmediato al enviar |
 | 1.5 | Abrir un chat, un tablero o una lista deja de traer miles de registros de más |
 | 1.6 | Búsqueda en el chat, editar/borrar mensajes, historial al hacer scroll |
+| 1.7 | Portal de proveedores deja de mandar todos los PDFs de golpe |
 | 2.1 + 2.2 | **La sensación "como Monday"**: columnas dinámicas al instante, cambiar de vista sin congelar |
 | 3.1 | Primera carga de la app |
 | 3.2 | La pastosidad al escribir y seleccionar |

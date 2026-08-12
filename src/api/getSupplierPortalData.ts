@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Suppliers, PurchaseOrders, SupplierInvoices, Payments, PoAuditLog } from '../../server/compat';
+import { createEndpoint, Suppliers, PurchaseOrders, SupplierInvoices, Payments, PoAuditLog, pool } from '../../server/compat';
 
 const poSchema = z.object({
   id: z.string(),
@@ -59,23 +59,48 @@ export default createEndpoint({
     if (!supplier) throw new Error('Token de acceso inválido.');
     if (supplier.portalPassword !== input.password) throw new Error('Clave de acceso incorrecta.');
 
-    const [posResult, invResult, paymentsResult] = await Promise.all([
-      PurchaseOrders.findAll({
-        filters: { supplierName: supplier.supplierName },
-        limit: 500,
-      }),
+    // Antes: traía TODAS las OCs del proveedor completas (con pdfBase64,
+    // hasta 415 KB c/u — ver commit 0c3bfae) y filtraba las "visibles" en JS.
+    // Un proveedor con muchas OCs (el mayor en producción tiene 279) podía
+    // tumbar el servidor igual que pasaba en Pagos. El filtro "tiene PDF Y
+    // se envió por correo" es un OR entre tres columnas (pdfUrl/pdfBase64/
+    // pdfFile) que buildWhere no expresa — el motor de filtros de la capa de
+    // compatibilidad solo arma ANDs de igualdad/operador simple por campo,
+    // no ORs entre columnas — así que esta consulta puntual va directo a SQL
+    // en vez de forzar esa capacidad a los otros 365 call sites que sí usan
+    // findAll. Mismo criterio exacto que antes, solo que ahora Postgres filtra
+    // antes de mandar los bytes, no Node después de recibirlos.
+    const visiblePosResult = await pool.query(
+      `select id, po_number as "poNumber", service_description as "serviceDescription",
+              total_amount as "totalAmount", currency, issue_date as "issueDate",
+              status, category, project_code as "projectCode", payment_terms as "paymentTerms",
+              pdf_url as "pdfUrl", pdf_base64 as "pdfBase64", pdf_file as "pdfFile"
+       from purchase_orders
+       where supplier_name = $1
+         and email_sent_at is not null
+         and (pdf_url is not null or pdf_base64 is not null or (pdf_file is not null and jsonb_array_length(pdf_file) > 0))
+       limit 500`,
+      [supplier.supplierName],
+    );
+    const visiblePos = visiblePosResult.rows;
+
+    // poMap necesita el poNumber de TODAS las OCs del proveedor (para
+    // resolver el poNumber de cada pago más abajo, no solo de las
+    // "visibles") — consulta liviana aparte, sin pdfBase64.
+    const { records: allPosLite } = await PurchaseOrders.findAll({
+      filters: { supplierName: supplier.supplierName },
+      fields: ['id', 'poNumber'],
+      limit: 2000,
+    });
+
+    const [invResult, paymentsResult] = await Promise.all([
       SupplierInvoices.findAll({ filters: { supplierId: supplier.id }, limit: 500 }),
       Payments.findAll({ filters: { supplierName: supplier.supplierName }, limit: 500 }),
     ]);
 
-    // Show POs that have both a PDF generated AND an email sent, OR are cancelled (were previously sent)
-    const visiblePos = posResult.records.filter(p =>
-      (p.pdfUrl || p.pdfBase64 || (p.pdfFile && p.pdfFile.length > 0)) && p.emailSentAt
-    );
-
     // Build PO number map
     const poMap: Record<string, string> = {};
-    posResult.records.forEach(p => { poMap[p.id] = String(p.poNumber ?? ''); });
+    allPosLite.forEach(p => { poMap[p.id] = String(p.poNumber ?? ''); });
 
     // Group invoices by poId, keep only the latest per PO
     const latestInvByPo: Record<string, typeof invResult.records[0]> = {};
