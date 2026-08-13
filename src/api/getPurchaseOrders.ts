@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, PurchaseOrders, PurchaseOrdersRecordType, Suppliers, BillingEntities, SupplierInvoices, Payments } from '../../server/compat';
+import { createEndpoint, PurchaseOrders, PurchaseOrdersRecordType, Suppliers, BillingEntities, SupplierInvoices, Payments, pool } from '../../server/compat';
 
 const poSchema = z.object({
   id: z.string(),
@@ -102,12 +102,28 @@ export default createEndpoint({
       { records: billingEntitiesRecs },
       { records: invoices },
       { records: payments },
+      hasPdfRows,
     ] = await Promise.all([
       Suppliers.findAll({ fields: ['supplierName'], limit: 2000 }),
       BillingEntities.findAll({ fields: ['companyName', 'rfc', 'address', 'postalCode', 'city', 'state'], limit: 100 }),
       SupplierInvoices.findAll({ fields: ['poId', 'status'], limit: 2000 }),
       Payments.findAll({ fields: ['poId', 'status'], filters: { type: 'Pago a proveedor' } as never, limit: 2000 }),
+      // hasPdf real: 892 de 2,673 OCs tienen pdf_url = "" (no null) pero sí
+      // pdf_base64 — !!p.pdfUrl las reportaba sin PDF aunque sí lo tuvieran,
+      // y como PODetailSheet.tsx decide si pedir el PDF bajo demanda según
+      // este flag, esas 892 nunca disparaban el fetch. "is not null" en
+      // Postgres no necesita leer el contenido TOASTed, así que revisar los
+      // tres campos así de barato no repite el problema de memoria de
+      // getPayments — nunca se transfiere el valor real, solo si existe.
+      pool.query(
+        `select id,
+                ((pdf_url is not null and pdf_url <> '')
+                  or pdf_base64 is not null
+                  or (pdf_file is not null and jsonb_array_length(pdf_file) > 0)) as "hasPdf"
+         from purchase_orders`,
+      ).then((r) => r.rows as { id: string; hasPdf: boolean }[]),
     ]);
+    const hasPdfMap = new Map(hasPdfRows.map((r) => [r.id, r.hasPdf]));
 
     const baseFilters: Record<string, unknown> = {};
     if (input.projectCode) baseFilters.projectCode = input.projectCode;
@@ -183,7 +199,7 @@ export default createEndpoint({
           serviceDescription: p.serviceDescription,
           billingEntity: p.billingEntity,
           pdfUrl: p.pdfUrl,
-          hasPdf: !!p.pdfUrl,
+          hasPdf: hasPdfMap.get(p.id) ?? !!p.pdfUrl,
           supplierInDb: p.supplierName ? supplierNameSet.has(p.supplierName.trim()) : false,
           emailSentAt: p.emailSentAt,
           emailSentTo: p.emailSentTo,
