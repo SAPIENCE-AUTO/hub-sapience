@@ -159,17 +159,18 @@ export default function ProjectHubPage() {
             <div className="flex items-center gap-1 flex-wrap">
               {visibleTabs.map(tab => {
                 const Icon = tab.icon;
+                const active = activeTab === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors ${
-                      activeTab === tab.id
-                        ? 'bg-primary/10 text-primary font-semibold'
+                      active
+                        ? 'bg-primary text-white font-semibold shadow-sm'
                         : 'text-muted-foreground font-medium hover:text-foreground hover:bg-muted'
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className={`w-3.5 h-3.5 ${active ? 'text-yellow-400' : ''}`} />
                     {tab.label}
                   </button>
                 );
