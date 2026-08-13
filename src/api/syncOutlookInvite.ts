@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { createEndpoint, CalendarEvents, BoardColumns, CellValues, Boards } from '../../server/compat';
 import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 
+const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/zite-uploads/branding/sapience-logo.png';
+
 // Parse attendees string into Graph API format
 function parseAttendees(raw?: string): { emailAddress: { address: string }; type: string }[] {
   if (!raw) return [];
@@ -46,17 +48,38 @@ function formatWhenText(startIso: string, durationHours: number): string {
   return `${datePart} — ${startTime}–${endTime} hrs (Mexico City)`;
 }
 
-// Build the section divider HTML
-const DIVIDER = `
-  <div style="height:24px;"></div>
-  <div style="border-top:1px solid #E9EDF3; width:100%; line-height:1px;">&nbsp;</div>
-  <div style="height:24px;"></div>`;
+// Split start/duration into the two lines shown in the date/time pill
+// (kept separate from formatWhenText: that one stays a single string because
+// replaceTemplatePlaceholders' {{fechahora}} placeholder depends on its shape).
+function formatWhenParts(startIso: string, durationHours: number): { datePart: string; timePart: string } {
+  const tz = 'America/Mexico_City';
+  const start = new Date(startIso);
+  const end = new Date(addHours(startIso, durationHours));
 
-// Build a labeled section
-function section(label: string, content: string): string {
-  return `${DIVIDER}
-  <div style="font-variant:small-caps; letter-spacing:.4px; color:#F1A34F; font-weight:800; font-size:22px;">${label}</div>
-  <div style="color:#111; font-size:18px; padding-top:6px;">${content}</div>`;
+  const datePart = new Intl.DateTimeFormat('es-MX', {
+    timeZone: tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(start);
+  const timeOpts: Intl.DateTimeFormatOptions = { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false };
+  const startTime = new Intl.DateTimeFormat('es-MX', timeOpts).format(start);
+  const endTime = new Intl.DateTimeFormat('es-MX', timeOpts).format(end);
+
+  return { datePart, timePart: `${startTime} – ${endTime} hrs · Ciudad de México` };
+}
+
+// One info block: orange accent bar + bold teal label + body content
+function section(label: string, contentHtml: string): string {
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+    <tr>
+      <td width="3" style="background:#F1A34F; border-radius:2px;">&nbsp;</td>
+      <td style="width:14px;">&nbsp;</td>
+      <td>
+        <div style="color:#0e4b5a; font-size:17px; font-weight:800;">${label}</div>
+        ${contentHtml}
+      </td>
+    </tr>
+  </table>
+  <div style="height:22px;"></div>`;
 }
 
 // Convert newline-separated text into <li> items
@@ -69,65 +92,66 @@ function toListItems(text: string): string {
     .join('\n');
 }
 
+const FONT = "'Poppins', Arial, Helvetica, sans-serif";
+const BODY_TEXT = (html: string) =>
+  `<div style="color:#374151; font-size:15px; line-height:1.5; padding-top:3px; font-weight:400;">${html}</div>`;
+
 // Build the full HTML email body
 function buildEmailHtml(opts: {
   subject: string;
-  whenText: string;
+  startIso: string;
+  durationHours: number;
   dinamica: string;
   profile: string;
   descripcion: string;
   detailsText: string;
   link: string;
 }): string {
-  const { subject, whenText, dinamica, profile, descripcion, detailsText, link } = opts;
+  const { subject, startIso, durationHours, dinamica, profile, descripcion, detailsText, link } = opts;
+  const { datePart, timePart } = formatWhenParts(startIso, durationHours);
 
-  const dinamicaSection = dinamica
-    ? section('Dinámica', dinamica)
-    : '';
-
-  const profileSection = profile
-    ? section('Perfil', profile)
-    : '';
-
-  const descripcionSection = descripcion
-    ? section('Descripción', descripcion)
-    : '';
+  const dinamicaSection = dinamica ? section('Dinámica', BODY_TEXT(dinamica)) : '';
+  const profileSection = profile ? section('Perfil', BODY_TEXT(profile)) : '';
+  const descripcionSection = descripcion ? section('Descripción', BODY_TEXT(descripcion)) : '';
 
   const detailsSection = detailsText
-    ? `${DIVIDER}
-  <div style="font-variant:small-caps; letter-spacing:.4px; color:#F1A34F; font-weight:800; font-size:22px;">Detalles</div>
-  <ul style="margin:8px 0 0 20px; padding:0; color:#111; font-size:16px; line-height:1.5;">
-    ${toListItems(detailsText)}
-  </ul>`
+    ? section('Detalles', `<ul style="margin:5px 0 0; padding:0 0 0 16px; color:#374151; font-size:15px; line-height:1.6; font-weight:400;">${toListItems(detailsText)}</ul>`)
     : '';
 
   const linkSection = link
-    ? `${DIVIDER}
-  <div style="font-variant:small-caps; letter-spacing:.4px; color:#F1A34F; font-weight:800; font-size:22px;">Link de conexión</div>
-  <div style="color:#111; font-size:18px; padding-top:6px; word-break:break-word;">
-    <a href="${link}" target="_blank" style="color:#0e4b5a; text-decoration:underline;">${link}</a>
-  </div>
-  <div style="text-align:center; padding:24px 0 16px;">
-    <!--[if mso]>
-    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${link}" style="height:44px; v-text-anchor:middle; width:360px;" arcsize="10%" stroke="f" fillcolor="#F1A34F">
-      <w:anchorlock/>
-      <center style="color:#ffffff; font-family:Trebuchet MS, Arial, sans-serif; font-size:20px; font-weight:800;">Unirse a la reunión</center>
-    </v:roundrect>
-    <![endif]-->
-    <!--[if !mso]><!-- -->
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
-      <tr>
-        <td align="center" valign="middle" height="44" style="background:#F1A34F; border-radius:8px;">
-          <a href="${link}" target="_blank" style="display:inline-block; color:#ffffff; text-decoration:none; font-family:Trebuchet MS, Arial, sans-serif; font-size:20px; font-weight:800; line-height:44px; padding:0 24px;">Unirse a la reunión</a>
-        </td>
-      </tr>
-    </table>
-    <!--<![endif]-->
-  </div>
-  <div style="color:#6b7280; font-size:14px; text-align:center;">
-    Si el botón no funciona, copia y pega este enlace en tu navegador:<br>
-    <a href="${link}" target="_blank" style="color:#0e4b5a;">${link}</a>
-  </div>`
+    ? `<tr>
+    <td style="padding:0 40px;">
+      <div style="border-top:1px solid #E9EDF3; line-height:1px;">&nbsp;</div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:24px 40px 8px; font-family:${FONT};">
+      <div style="color:#0e4b5a; font-size:17px; font-weight:800;">Link de conexión</div>
+      <div style="color:#374151; font-size:15px; padding-top:4px; word-break:break-word;">
+        <a href="${link}" target="_blank" style="color:#0e4b5a; text-decoration:underline;">${link}</a>
+      </div>
+      <div style="text-align:center; padding:20px 0 8px;">
+        <!--[if mso]>
+        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${link}" style="height:50px; v-text-anchor:middle; width:320px;" arcsize="16%" stroke="f" fillcolor="#F1A34F">
+          <w:anchorlock/>
+          <center style="color:#ffffff; font-family:Arial, sans-serif; font-size:17px; font-weight:700;">Unirse a la reunión &rarr;</center>
+        </v:roundrect>
+        <![endif]-->
+        <!--[if !mso]><!-- -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+          <tr>
+            <td align="center" valign="middle" height="50" style="background:#F1A34F; border-radius:10px;">
+              <a href="${link}" target="_blank" style="display:inline-block; color:#ffffff; text-decoration:none; font-family:${FONT}; font-size:17px; font-weight:700; line-height:50px; padding:0 32px;">Unirse a la reunión &rarr;</a>
+            </td>
+          </tr>
+        </table>
+        <!--<![endif]-->
+      </div>
+      <div style="color:#9ca3af; font-size:13px; text-align:center; padding-top:6px; font-weight:400;">
+        ¿El botón no funciona? Copia este enlace de arriba en tu navegador.
+      </div>
+    </td>
+  </tr>`
     : '';
 
   return `<!doctype html>
@@ -136,39 +160,53 @@ function buildEmailHtml(opts: {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${subject}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
+  </style>
 </head>
-<body style="margin:0; padding:0; background:#f7f9fc;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f7f9fc;">
+<body style="margin:0; padding:0; background:#eef1f5;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#eef1f5;">
     <tr>
-      <td align="center" style="padding:20px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" width="680" style="width:680px; max-width:100%; background:#ffffff; border:1px solid #E9EDF3; border-radius:8px;">
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px; max-width:100%; background:#ffffff; border-radius:16px; overflow:hidden; border:1px solid #E4E9F0;">
+
           <tr>
-            <td style="padding:32px; font-family:Trebuchet MS, Arial, sans-serif; color:#0e4b5a;">
+            <td style="background:#0e4b5a; padding:32px 40px 28px; font-family:${FONT};">
+              <div style="color:#ffffff; font-size:26px; font-weight:700; line-height:1.3;">${subject}</div>
+            </td>
+          </tr>
 
-              <div style="text-align:center; font-size:30px; line-height:1.35; font-weight:800;">${subject}</div>
-              <div style="height:16px;"></div>
+          <tr>
+            <td style="padding:24px 40px 0; font-family:${FONT};">
+              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#FDF3E7; border-radius:12px;">
+                <tr>
+                  <td style="padding:18px 20px;">
+                    <div style="color:#7a5a26; font-size:11px; font-weight:600; letter-spacing:.8px; text-transform:uppercase;">${datePart}</div>
+                    <div style="color:#111827; font-size:17px; font-weight:700; padding-top:2px;">${timePart}</div>
+                  </td>
+                </tr>
+              </table>
+              <div style="color:#9ca3af; font-size:12px; padding-top:8px;">UTC&minus;06:00 · Si te conectas desde otra zona horaria, verifica la hora local.</div>
+            </td>
+          </tr>
 
-              <div style="font-variant:small-caps; letter-spacing:.4px; color:#F1A34F; font-weight:800; font-size:22px;">Fecha y hora</div>
-              <div style="color:#111; font-size:18px; padding-top:6px;">${whenText}</div>
-              <div style="color:#6b7280; font-size:16px; padding-top:8px;">UTC−06:00 · Si te conectas desde otra zona horaria, verifica la hora local.</div>
-
+          <tr>
+            <td style="padding:28px 40px 4px; font-family:${FONT};">
               ${dinamicaSection}
               ${profileSection}
               ${descripcionSection}
               ${detailsSection}
-              ${linkSection}
-
-              <div style="height:24px;"></div>
-              <div style="border-top:1px solid #E9EDF3; width:100%; line-height:1px;">&nbsp;</div>
-              <div style="height:24px;"></div>
-
-              <div style="text-align:center;">
-                <img src="https://i.imgur.com/GayErMC.png" alt="SAPIENCE" width="260" style="display:block; margin:0 auto; border:0; outline:none; text-decoration:none;">
-                <div style="color:#808a98; font-size:14px; padding-top:8px; font-weight:600; letter-spacing:.8px;">Human Insights Strategy</div>
-              </div>
-
             </td>
           </tr>
+
+          ${linkSection}
+
+          <tr>
+            <td style="background:#F9FAFB; padding:24px 40px; text-align:center; border-top:1px solid #E9EDF3;">
+              <img src="${LOGO_URL}" alt="SAPIENCE — Human Insights Strategy" width="140" style="display:block; margin:0 auto; border:0; outline:none; text-decoration:none;">
+            </td>
+          </tr>
+
         </table>
       </td>
     </tr>
@@ -334,7 +372,7 @@ export default createEndpoint({
     const whenText = formatWhenText(startIso, durationHours);
     const subject = event.eventName ?? 'Sesión';
 
-    const inviteBodyHtml = (customHtml ? replaceTemplatePlaceholders(customHtml, boardData, whenText) : null) || buildEmailHtml({ subject, whenText, dinamica, profile, descripcion, detailsText, link });
+    const inviteBodyHtml = (customHtml ? replaceTemplatePlaceholders(customHtml, boardData, whenText) : null) || buildEmailHtml({ subject, startIso, durationHours, dinamica, profile, descripcion, detailsText, link });
 
     const attendees = parseAttendees(event.inviteEmails ?? '');
     // Use "Dirección" dynamic column for Outlook location (external-facing address)
