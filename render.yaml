@@ -19,6 +19,12 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      # Tope de conexiones del pool de este proceso contra el pool_size:15 de
+      # Supavisor en modo sesión (aws-0-ca-central-1.pooler.supabase.com:5432).
+      # 6 deja margen para que un rolling deploy solape 2 instancias (6×2=12)
+      # sin acercarse al límite, más scripts de server/scripts/ o el dashboard.
+      - key: PG_POOL_MAX
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY

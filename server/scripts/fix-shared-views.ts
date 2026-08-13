@@ -74,4 +74,4 @@ async function main() {
   await pool.end();
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch(async (err) => { console.error(err); await pool.end().catch(() => {}); process.exit(1); });
