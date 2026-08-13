@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { saveCalendarEvent, duplicateRows, syncOutlookInvite } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -18,52 +17,194 @@ import { getLocationColor } from '../WeeklyCalendar';
 import { ColumnFilterPopover } from '../ColumnFilterPopover';
 import type { CalEvent } from './pmTypes';
 
+// Emails "asistentes" llegan pegados de Outlook/Excel con formatos mixtos:
+// "correo@x.com", "Nombre Apellido <correo@x.com>", separados por coma, punto
+// y coma o salto de línea. EMAIL_RE encuentra el correo dentro de cualquiera
+// de esas formas; lo que no matchea se conserva tal cual pero marcado inválido
+// (chip rojo) en vez de guardarse en silencio — es justo lo que el usuario no
+// podía ver antes con el textarea plano.
+const EMAIL_RE = /[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/;
+
+type EmailChip = { value: string; valid: boolean };
+
+function parseEmailToken(token: string): EmailChip {
+  const angle = token.match(/<([^<>]+)>/);
+  const candidate = (angle ? angle[1] : token).trim();
+  const match = candidate.match(EMAIL_RE);
+  return match ? { value: match[0], valid: true } : { value: token.trim(), valid: false };
+}
+
+function parseEmailTokens(raw: string): EmailChip[] {
+  return raw.split(/[,;\n\r\t]+/).map(s => s.trim()).filter(Boolean).map(parseEmailToken);
+}
+
 // ── Stable EmailsCell component (must be defined OUTSIDE EventsTable so React
 //    keeps the same component type across re-renders and never remounts it) ──
 function EmailsCell({ ev, onRefresh, onInviteStatusChanged }: { ev: CalEvent; onRefresh?: () => void; onInviteStatusChanged?: (evId: string) => void }) {
   const [open, setOpen] = React.useState(false);
-  const [draft, setDraft] = React.useState(ev.inviteEmails ?? '');
+  const [chips, setChips] = React.useState<EmailChip[]>([]);
+  const [inputText, setInputText] = React.useState('');
+  const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
+  const [editingText, setEditingText] = React.useState('');
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const editInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Sync draft when external data changes (e.g. after refresh), but only when closed
+  // Reparse from the saved value when closed (mount + after external refresh) —
+  // frozen while open so mid-edit chips don't get clobbered by a background reload.
   React.useEffect(() => {
-    if (!open) setDraft(ev.inviteEmails ?? '');
+    if (!open) { setChips(parseEmailTokens(ev.inviteEmails ?? '')); setInputText(''); setEditingIndex(null); setEditingText(''); }
   }, [ev.inviteEmails, open]);
 
+  const commit = (text: string) => {
+    const tokens = parseEmailTokens(text);
+    if (tokens.length === 0) return;
+    setChips(prev => {
+      const seen = new Set(prev.map(c => c.value.toLowerCase()));
+      return [...prev, ...tokens.filter(t => !seen.has(t.value.toLowerCase()))];
+    });
+  };
+
+  // Clic en el cuerpo del chip (no en la X): lo edita EN SU MISMO LUGAR (un
+  // input inline reemplaza al chip), en vez de moverlo al final de la lista.
+  const startEdit = (index: number) => {
+    setEditingIndex(index);
+    setEditingText(chips[index]?.value ?? '');
+    requestAnimationFrame(() => editInputRef.current?.focus());
+  };
+
+  const commitEdit = () => {
+    setEditingIndex(prevIndex => {
+      if (prevIndex === null) return null;
+      const text = editingText.trim();
+      setChips(prev => {
+        if (!text) return prev.filter((_, idx) => idx !== prevIndex);
+        const next = [...prev];
+        next[prevIndex] = parseEmailToken(text);
+        return next;
+      });
+      return null;
+    });
+    setEditingText('');
+  };
+
+  const cancelEdit = () => { setEditingIndex(null); setEditingText(''); };
+
+  const validCount = chips.filter(c => c.valid).length;
+  const invalidCount = chips.length - validCount;
+
   const save = async () => {
-    const res = await saveCalendarEvent({ id: ev.id, inviteEmails: draft || undefined });
+    const value = chips.filter(c => c.valid).map(c => c.value).join(', ');
+    const res = await saveCalendarEvent({ id: ev.id, inviteEmails: value || undefined });
     if (res.inviteStatusChanged) onInviteStatusChanged?.(ev.id);
     onRefresh?.();
   };
+
+  const previewText = ev.inviteEmails ?? '';
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <div
-          style={{ fontSize: 11, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', color: draft ? 'inherit' : 'hsl(var(--muted-foreground))', minHeight: 16, cursor: 'pointer' }}
+          style={{ fontSize: 11, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', color: previewText ? 'inherit' : 'hsl(var(--muted-foreground))', minHeight: 16, cursor: 'pointer' }}
           onClick={() => setOpen(true)}
         >
-          {draft || 'correo@mail.com...'}
+          {previewText || 'correo@mail.com...'}
         </div>
       </PopoverTrigger>
       <PopoverContent
         side="bottom"
         align="start"
-        style={{ width: 300, padding: 12 }}
+        style={{ width: 360, padding: 12 }}
         onOpenAutoFocus={e => e.preventDefault()}
         onInteractOutside={() => setOpen(false)}
         onPointerDownOutside={() => setOpen(false)}
       >
         <p style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: 'hsl(var(--foreground))' }}>Emails asistentes</p>
-        <Textarea
-          rows={4}
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          placeholder="Un email por línea o separados por coma..."
-          className="text-xs resize-none"
-          autoFocus
-        />
+        <div className="flex flex-wrap gap-1 p-1.5 border border-input rounded-md bg-background max-h-32 overflow-y-auto">
+          {chips.map((c, i) => (
+            editingIndex === i ? (
+              <input
+                key={`editing-${i}`}
+                ref={editInputRef}
+                value={editingText}
+                onChange={e => setEditingText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+                  else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+                }}
+                onBlur={commitEdit}
+                className="text-[11px] leading-tight px-1.5 py-0.5 rounded border border-primary bg-background outline-none"
+                style={{ width: Math.max(90, editingText.length * 6.5 + 24) }}
+              />
+            ) : (
+              <span
+                key={`${c.value.toLowerCase()}-${i}`}
+                title={c.valid ? 'Clic para editar' : 'No parece un correo válido — clic para editar'}
+                onClick={() => startEdit(i)}
+                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] leading-tight cursor-pointer hover:opacity-80 ${c.valid ? 'bg-muted text-foreground' : 'bg-destructive/10 text-destructive border border-destructive/40'}`}
+              >
+                {c.value}
+                <button type="button" onClick={e => { e.stopPropagation(); setChips(prev => prev.filter((_, idx) => idx !== i)); }} className="hover:opacity-70">
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </span>
+            )
+          ))}
+          <input
+            ref={inputRef}
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
+                e.preventDefault();
+                commit(inputText);
+                setInputText('');
+              } else if (e.key === 'Backspace' && inputText === '' && chips.length > 0) {
+                setChips(prev => prev.slice(0, -1));
+              }
+            }}
+            onPaste={e => {
+              const pasted = e.clipboardData.getData('text');
+              if (/[,;\n\r\t]/.test(pasted)) {
+                e.preventDefault();
+                commit(pasted);
+                setInputText('');
+              }
+            }}
+            onBlur={() => { if (inputText.trim()) { commit(inputText); setInputText(''); } }}
+            placeholder={chips.length === 0 ? 'correo@ejemplo.com, otro@ejemplo.com...' : ''}
+            className="flex-1 min-w-[100px] text-xs outline-none bg-transparent"
+            autoFocus
+          />
+        </div>
+        {invalidCount > 0 && (
+          <p className="text-[10px] text-destructive mt-1">
+            {invalidCount} entrada{invalidCount !== 1 ? 's' : ''} no parece{invalidCount === 1 ? '' : 'n'} correo{invalidCount === 1 ? '' : 's'} válido{invalidCount === 1 ? '' : 's'} — no se guardará{invalidCount === 1 ? '' : 'n'}.
+          </p>
+        )}
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-[10px] text-muted-foreground">{validCount} destinatario{validCount !== 1 ? 's' : ''}</p>
+          {validCount > 0 && (
+            <button
+              type="button"
+              title="Copiar todos los correos"
+              onClick={async () => {
+                const value = chips.filter(c => c.valid).map(c => c.value).join(', ');
+                try {
+                  await navigator.clipboard.writeText(value);
+                  toast.success(`${validCount} correo${validCount !== 1 ? 's' : ''} copiado${validCount !== 1 ? 's' : ''}`);
+                } catch {
+                  toast.error('No se pudo copiar');
+                }
+              }}
+              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+            >
+              <ClipboardCopy className="w-3 h-3" /> Copiar todos
+            </button>
+          )}
+        </div>
         <div className="flex gap-2 justify-end mt-2">
-          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setDraft(ev.inviteEmails ?? ''); setOpen(false); }} type="button">
+          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setChips(parseEmailTokens(ev.inviteEmails ?? '')); setInputText(''); setOpen(false); }} type="button">
             <X className="w-3 h-3" /> Cancelar
           </Button>
           <Button size="sm" className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white" onClick={async () => { await save(); setOpen(false); }}>
