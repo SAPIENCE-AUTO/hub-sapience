@@ -109,15 +109,19 @@ function buildEmailHtml(opts: {
   </div>
   <div style="text-align:center; padding:24px 0 16px;">
     <!--[if mso]>
-    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${link}" style="height:52px; v-text-anchor:middle; width:360px;" arcsize="10%" stroke="f" fillcolor="#F1A34F">
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${link}" style="height:44px; v-text-anchor:middle; width:360px;" arcsize="10%" stroke="f" fillcolor="#F1A34F">
       <w:anchorlock/>
       <center style="color:#ffffff; font-family:Trebuchet MS, Arial, sans-serif; font-size:20px; font-weight:800;">Unirse a la reunión</center>
     </v:roundrect>
     <![endif]-->
     <!--[if !mso]><!-- -->
-    <a href="${link}" target="_blank" style="display:block; width:100%; max-width:360px; margin:0 auto; background:#F1A34F; color:#ffffff; text-decoration:none; font-family:Trebuchet MS, Arial, sans-serif; font-size:20px; font-weight:800; text-align:center; padding:16px 24px; border-radius:8px; min-height:48px; line-height:1.2; border:1px solid #d8913a; box-shadow:0 2px 0 #cf8a3f; mso-padding-alt:16px 24px;">
-      Unirse a la reunión
-    </a>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+      <tr>
+        <td align="center" valign="middle" height="44" style="background:#F1A34F; border-radius:8px;">
+          <a href="${link}" target="_blank" style="display:inline-block; color:#ffffff; text-decoration:none; font-family:Trebuchet MS, Arial, sans-serif; font-size:20px; font-weight:800; line-height:44px; padding:0 24px;">Unirse a la reunión</a>
+        </td>
+      </tr>
+    </table>
     <!--<![endif]-->
   </div>
   <div style="color:#6b7280; font-size:14px; text-align:center;">
