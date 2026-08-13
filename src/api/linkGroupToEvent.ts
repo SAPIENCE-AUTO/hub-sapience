@@ -113,13 +113,17 @@ export default createEndpoint({
       })).records[0];
     }
 
-    // Create under UUID if not found anywhere
+    // Create under UUID if not found anywhere. columnType '__linked_group__'
+    // (not 'Texto') — this column stores an internal reference
+    // (recruitmentBoardId::groupColumnId), never meant for a human to read;
+    // useDynamicColumns.ts excludes it from every grid the same way it
+    // already excludes '__fillout_link__'.
     if (!calCol) {
       calCol = await BoardColumns.create({
         record: {
           boardId: resolvedCalendarId,
           columnName: LINKED_GROUP_COLUMN_NAME,
-          columnType: 'Texto',
+          columnType: '__linked_group__',
           columnOrder: 9999,
         },
       });

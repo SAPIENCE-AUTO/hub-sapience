@@ -13,16 +13,22 @@ const AUTO_DISMISS_MS = 8000;
 export const CHART_VARS = ['--chart-1','--chart-2','--chart-3','--chart-4','--chart-5'];
 
 export const LOCATION_COLORS: Record<string, string> = {
-  'Online':   'hsl(199 89% 48%)',
-  'Sala 5-A': 'hsl(217 91% 60%)',
-  'Sala 5-B': 'hsl(262 80% 60%)',
-  'Sala 5-C': 'hsl(240 70% 55%)',
-  'Sala 6-A': 'hsl(142 71% 45%)',
-  'Sala 6-B': 'hsl(160 65% 40%)',
-  'Sala 6-D': 'hsl(38 92% 50%)',
-  'Sala 6-F': 'hsl(25 90% 50%)',
-  'Sala 6-G': 'hsl(330 70% 55%)',
-  'Sala 6-H': 'hsl(0 72% 55%)',
+  'Online':      'hsl(199 89% 48%)',
+  'Sala 5-A':    'hsl(217 91% 60%)',
+  'Sala 5-B':    'hsl(262 80% 60%)',
+  'Sala 5-C':    'hsl(240 70% 55%)',
+  'Sala 6-A':    'hsl(142 71% 45%)',
+  'Sala 6-B':    'hsl(160 65% 40%)',
+  'Sala 6-D':    'hsl(38 92% 50%)',
+  'Sala 6-F':    'hsl(25 90% 50%)',
+  'Sala 6-G':    'hsl(330 70% 55%)',
+  'Sala 6-H':    'hsl(0 72% 55%)',
+  // "Otro" es una opción real del selector (2° valor más común en producción,
+  // ~13% de los eventos con ubicación) — sin entrada aquí caía al gris
+  // genérico junto con cualquier texto libre, dando la impresión de que el
+  // color por lugar no funcionaba.
+  'Otro':        'hsl(280 10% 55%)',
+  'Sala Focus':  'hsl(45 85% 50%)',
 };
 const LOCATION_COLOR_FALLBACK = 'hsl(0 0% 60%)';
 

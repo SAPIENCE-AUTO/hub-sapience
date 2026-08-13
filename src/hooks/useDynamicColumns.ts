@@ -818,7 +818,7 @@ export function useDynamicColumns(boardId: string, seedRows?: SeedRow[], options
   };
 
   // ── Derived values ─────────────────────────────────────────────────────────
-  const visibleColumns = columns.filter(c => c.columnType !== '__fillout_link__');
+  const visibleColumns = columns.filter(c => c.columnType !== '__fillout_link__' && c.columnType !== '__linked_group__');
   const linkCol = columns.find(c => c.columnType === '__fillout_link__');
   const linkedFormInfo: { formId: string; formName: string; linkedAt: string } | null = linkCol?.optionsJson
     ? (() => { try { return JSON.parse(linkCol.optionsJson); } catch { return null; } })()
