@@ -75,8 +75,8 @@ function EmailsCell({ ev, onRefresh, onInviteStatusChanged }: { ev: CalEvent; on
   );
 }
 
-export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEventName, onQuickCreate, onCreateGroup, dynCols, childDynCols, groupDynCols, boardId, childLabel, onChildLabelChange, columnFilters, setColFilter, colUniqueValues, onRefresh, onEventsUpdate, onInviteStatusChanged, onGroupStructureChanged }: {
-  events: CalEvent[]; onEdit: (e: CalEvent) => void; onDelete: (id: string) => void; onBulkDelete: (ids: string[]) => void;
+export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDelete, onSaveEventName, onQuickCreate, onCreateGroup, dynCols, childDynCols, groupDynCols, boardId, childLabel, onChildLabelChange, columnFilters, setColFilter, colUniqueValues, onRefresh, onEventsUpdate, onInviteStatusChanged, onGroupStructureChanged }: {
+  events: CalEvent[]; onEdit: (e: CalEvent) => void; onOpenInvite: (e: CalEvent) => void; onDelete: (id: string) => void; onBulkDelete: (ids: string[]) => void;
   onSaveEventName: (id: string, name: string) => void;
   onQuickCreate: (name: string, parentId?: string, groupId?: string) => void;
   onCreateGroup: () => void;
@@ -114,6 +114,7 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
   const [localFields,    setLocalFields]    = useState<Map<string, { location?: string; attendees?: string }>>(new Map());
   const [localReenvio,   setLocalReenvio]   = useState<Map<string, boolean>>(new Map());
   const [bulkSyncing,    setBulkSyncing]    = useState(false);
+  const [quickSyncingId, setQuickSyncingId] = useState<string | null>(null);
   const nameCol = useResizableCol('pm-events-name-col', 250, 120);
 
   const EVT_LOCS = ['Online', 'Sala 5-A', 'Sala 5-B', 'Sala 5-C', 'Sala 6-A', 'Sala 6-B', 'Sala 6-D', 'Sala 6-F', 'Sala 6-G', 'Sala 6-H', 'Otro'];
@@ -165,7 +166,7 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
   const groups       = groupDynCols.columns;
   const topLevel     = events.filter(e => !e.parentEventId);
   const getChildEvts = (id: string) => events.filter(e => e.parentEventId === id);
-  const totalCols    = 6 + dynCols.columns.filter(c => visibleColIds.has(c.id)).length + 1;
+  const totalCols    = 7 + dynCols.columns.filter(c => visibleColIds.has(c.id)).length + 1;
 
   const getEvtGroupId = (evId: string) =>
     groups.find(g => groupDynCols.getCellVal(evId, g.id)?.textValue === '1')?.id ?? null;
@@ -275,14 +276,39 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
               const cls = statusColors[ev.inviteStatus] ?? 'bg-muted text-muted-foreground';
               return (
                 <button
-                  onClick={() => onEdit(ev)}
-                  title="Abrir detalle del evento"
+                  onClick={() => onOpenInvite(ev)}
+                  title="Ver invitación de Outlook"
                   className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity ${cls}`}
                 >
                   {ev.inviteStatus}
                 </button>
               );
             })() : null}
+          </td>
+          {/* Outlook quick action: crea/actualiza directo, sin abrir el modal de vista previa */}
+          <td style={{ width: 90, maxWidth: 90, padding: '2px 6px', borderBottom: '1px solid hsl(var(--border) / 0.3)', borderRight: '1px solid hsl(var(--border) / 0.3)', textAlign: 'center' }}>
+            <button
+              onClick={async () => {
+                if (quickSyncingId) return;
+                setQuickSyncingId(ev.id);
+                const action = ev.outlookEventId ? 'update' : 'create';
+                try {
+                  const result = await syncOutlookInvite({ eventId: ev.id, action });
+                  if (result.success) {
+                    toast.success(action === 'create' ? 'Invitación creada en Outlook' : 'Invitación actualizada en Outlook');
+                    onRefresh?.();
+                  } else {
+                    toast.error('Error al sincronizar con Outlook');
+                  }
+                } catch { toast.error('Error al sincronizar con Outlook'); }
+                finally { setQuickSyncingId(null); }
+              }}
+              disabled={quickSyncingId === ev.id}
+              title={ev.outlookEventId ? 'Actualizar invitación' : 'Crear invitación'}
+              className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+            >
+              {quickSyncingId === ev.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            </button>
           </td>
           {/* Restringir reenvío checkbox */}
           <td style={{ width: 44, maxWidth: 44, padding: '2px 0', borderBottom: '1px solid hsl(var(--border) / 0.3)', borderRight: '1px solid hsl(var(--border) / 0.3)', textAlign: 'center' }}>
@@ -487,13 +513,14 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
         </Button>
       </div>
       <div className="bg-card border rounded-lg overflow-auto max-h-[calc(100vh-360px)]">
-        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + 128 + 128 + 96 + 44 + dynCols.columns.filter(c => visibleColIds.has(c.id)).reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}>
+        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + 128 + 128 + 96 + 90 + 44 + dynCols.columns.filter(c => visibleColIds.has(c.id)).reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}>
           <colgroup>
             <col style={{ width: 32 }} />
             <col style={{ width: nameCol.width }} />
             <col style={{ width: 128 }} />
             <col style={{ width: 128 }} />
             <col style={{ width: 96 }} />
+            <col style={{ width: 90 }} />
             <col style={{ width: 44 }} />
             {dynCols.columns.filter(c => visibleColIds.has(c.id)).map(c => { const w = dynCols.getColWidth(c.id); return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
             <col />
@@ -514,7 +541,8 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
               </th>
               <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 128 }}>Ubic. Interna</th>
               <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 160 }}>Emails asist.</th>
-              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }}>Outlook</th>
+              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }}>Invite</th>
+              <th className="text-center px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 90 }}>Outlook</th>
               <th className="text-center px-0 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 44 }}>
                 <TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center justify-center w-full"><Lock className="w-3.5 h-3.5 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top"><p className="text-xs">Restringir reenvío de invitación</p></TooltipContent></Tooltip></TooltipProvider>
               </th>

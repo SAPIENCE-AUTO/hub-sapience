@@ -42,6 +42,7 @@ import { CalendarExcelDialog } from '../components/CalendarExcelDialog';
 import { Task, CalEvent, GanttScale, BoardGanttGroup, BoardObj } from '../components/pm/pmTypes';
 import { TASK_COLS, EVENT_COLS, BOARD_GANTT_STATUS_COLORS } from '../components/pm/pmConstants';
 import { EventDetailDialog } from '../components/pm/EventDetailDialog';
+import { InvitePreviewDialog } from '../components/pm/InvitePreviewDialog';
 import { BoardTabsBar } from '../components/pm/BoardTabsBar';
 import { TeamSection } from '../components/pm/TeamSection';
 import { TeamEditDialog } from '../components/pm/TeamEditDialog';
@@ -111,6 +112,7 @@ export default function PMPage() {
   const [calExcelDialogOpen, setCalExcelDialogOpen] = useState(false);
   const [outlookSyncing, setOutlookSyncing] = useState(false);
   const [htmlPreviewOpen, setHtmlPreviewOpen] = useState(false);
+  const [invitePreviewOpen, setInvitePreviewOpen] = useState(false);
 
   // ── Team state ────────────────────────────────────────────────────────────
   type UserItem = GetTeamMembersOutputType['members'][0];
@@ -1461,6 +1463,7 @@ export default function PMPage() {
                             .finally(() => setRecGroupsLoading(false));
                         }
                       }}
+                      onOpenInvite={e => { setEditingEvent(e); setInvitePreviewOpen(true); }}
                       onDelete={setDeletingEvent}
                       onSaveEventName={saveEventName}
                       onQuickCreate={quickCreateEvent}
@@ -1660,6 +1663,14 @@ export default function PMPage() {
           setEditingEvent(prev => prev?.id === evId ? { ...prev, inviteStatus: 'Por actualizar' } : prev);
         }}
         onSaved={debouncedSilentReload}
+      />
+
+      <InvitePreviewDialog
+        open={invitePreviewOpen}
+        onOpenChange={setInvitePreviewOpen}
+        event={editingEvent}
+        outlookSyncing={outlookSyncing}
+        onOutlookSync={handleOutlookSync}
       />
 
       <AlertDialog open={!!deletingTask} onOpenChange={o => !o && setDeletingTask(null)}>
