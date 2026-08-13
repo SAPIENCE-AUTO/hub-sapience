@@ -127,8 +127,10 @@ export default function ProjectHubPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Project Header */}
-      <div className="flex-shrink-0 px-6 py-3 bg-card border-b flex items-center gap-3 shadow-xs flex-wrap">
+      {/* Project Header — título + pestañas de sección en la misma fila (antes eran
+          dos filas separadas; se aprovecha el espacio en blanco junto al badge
+          de estatus para ahorrar una fila completa de alto). */}
+      <div className="flex-shrink-0 px-6 py-2.5 bg-card border-b flex items-center gap-3 shadow-xs flex-wrap">
         <Button
           variant="ghost" size="sm"
           className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2 flex-shrink-0"
@@ -144,46 +146,39 @@ export default function ProjectHubPage() {
             <Skeleton className="h-4 w-44" />
           </div>
         ) : project ? (
-          <div className="flex items-center gap-3 min-w-0 flex-wrap flex-1">
-            <span className="font-bold text-primary text-sm">{project.projectCode}</span>
-            <span className="text-sm text-foreground font-medium truncate">{project.fullName}</span>
-            {project.client && <span className="text-xs text-muted-foreground hidden sm:inline">· {project.client}</span>}
-            <StatusBadge status={project.status} />
-            <Button
-              size="sm" variant={hasMuestra ? 'default' : 'outline'}
-              className="gap-1.5 h-7 text-xs ml-auto flex-shrink-0"
-              onClick={openMuestra}
-            >
-              <ClipboardList className="w-3 h-3" />
-              {hasMuestra ? 'Ver muestra' : 'Definir muestra'}
-            </Button>
-          </div>
+          <>
+            <div className="flex items-center gap-3 min-w-0 flex-wrap flex-shrink-0">
+              <span className="font-bold text-primary text-sm">{project.projectCode}</span>
+              <span className="text-sm text-foreground font-medium truncate max-w-[220px]">{project.fullName}</span>
+              {project.client && <span className="text-xs text-muted-foreground hidden sm:inline">· {project.client}</span>}
+              <StatusBadge status={project.status} />
+            </div>
+
+            <div className="h-4 w-px bg-border flex-shrink-0 hidden md:block" />
+
+            <div className="flex items-center gap-1 flex-wrap">
+              {visibleTabs.map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors ${
+                      activeTab === tab.id
+                        ? 'bg-primary/10 text-primary font-semibold'
+                        : 'text-muted-foreground font-medium hover:text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
         ) : (
           <span className="text-sm text-muted-foreground">Proyecto no encontrado</span>
         )}
-      </div>
-
-      {/* Tab Bar */}
-      <div className="flex-shrink-0 bg-muted/50 border-b px-6">
-        <div className="flex">
-          {visibleTabs.map(tab => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap border-b-[3px] transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-primary text-primary font-semibold'
-                    : 'border-transparent text-muted-foreground font-medium hover:text-foreground'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* Tab Content */}
@@ -195,7 +190,7 @@ export default function ProjectHubPage() {
           </div>
         ) : (
           <>
-            {activeTab === 'reclutamiento' && <RecruitmentPage />}
+            {activeTab === 'reclutamiento' && <RecruitmentPage hasMuestra={hasMuestra} onOpenMuestra={openMuestra} />}
             {activeTab === 'actividades'   && <PMPage />}
             {activeTab === 'presupuesto'   && (
               <div className="h-full overflow-y-auto">

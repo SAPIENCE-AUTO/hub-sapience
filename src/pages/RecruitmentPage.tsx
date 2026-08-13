@@ -32,7 +32,7 @@ import { InlineInput } from '../components/table/InlineInput';
 import { GroupPicker } from '../components/table/GroupPicker';
 import { GroupSectionHeader } from '../components/table/GroupSectionHeader';
 import { ChildSubTable } from '../components/table/ChildSubTable';
-import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, ChevronUp, FileText, X, CornerDownRight, AlertTriangle, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, ChevronUp, FileText, X, CornerDownRight, AlertTriangle, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList } from 'lucide-react';
 import RecruitmentStatusPanel from '../components/RecruitmentStatusPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
@@ -1900,7 +1900,7 @@ const loadGeneralHiddenColumns = (boardId: string): Set<string> => {
 };
 
 // ── Main RecruitmentPage ──────────────────────────────────────────────────────
-export default function RecruitmentPage() {
+export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMuestra?: boolean; onOpenMuestra?: () => void } = {}) {
   const { selectedProject, projects } = useProject();
   const { user } = useAuth();
   const presence = useProjectPresence({ projectCode: selectedProject, pageName: 'recruitment', enabled: !!selectedProject && !!user, user: user ?? undefined });
@@ -2754,6 +2754,16 @@ export default function RecruitmentPage() {
           <div className="flex items-center px-3 pb-1 flex-shrink-0">
             <ProjectPresenceAvatars members={presence.members} />
           </div>
+        )}
+        {onOpenMuestra && (
+          <Button
+            size="sm" variant={hasMuestra ? 'default' : 'outline'}
+            className="gap-1.5 h-7 text-xs ml-auto mr-3 flex-shrink-0"
+            onClick={onOpenMuestra}
+          >
+            <ClipboardList className="w-3 h-3" />
+            {hasMuestra ? 'Ver muestra' : 'Definir muestra'}
+          </Button>
         )}
       </div>
 
