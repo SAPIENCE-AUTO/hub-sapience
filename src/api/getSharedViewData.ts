@@ -520,6 +520,11 @@ export default createEndpoint({
 
     // ── 12. Apply advanced filterRules ────────────────────────────────────
     if (filterRules.length > 0) {
+      // '_group' is a virtual column (not in fixedVals/dynCellMap) — the
+      // frontend flattens it onto each row as the group's display name
+      // (RecruitmentPage.tsx's rowsWithGroup) before evaluating rules, so a
+      // saved filterRule on '_group' must be resolved the same way here.
+      const groupIdToName = new Map(activeGroupCols.map(g => [g.id, g.name]));
       rows = rows.filter(row => {
         const fixedVals: Record<string, string> = {
           participantName: row.participantName ?? '',
@@ -529,7 +534,8 @@ export default createEndpoint({
           status: row.status ?? '',
         };
         const dynVals = dynCellMap.get(row.id) ?? {};
-        const allVals = { ...fixedVals, ...dynVals };
+        const groupName = groupIdToName.get(rowGroupMap.get(row.id) ?? '') ?? 'Sin grupo';
+        const allVals = { ...fixedVals, ...dynVals, _group: groupName };
 
         const readyRules = filterRules.filter(r => {
           const noVal = ['vacio', 'no_vacio', 'esta_semana', 'este_mes'].includes(r.operator);
