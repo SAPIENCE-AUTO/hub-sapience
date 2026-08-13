@@ -119,6 +119,13 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
   const EVT_LOCS = ['Online', 'Sala 5-A', 'Sala 5-B', 'Sala 5-C', 'Sala 6-A', 'Sala 6-B', 'Sala 6-D', 'Sala 6-F', 'Sala 6-G', 'Sala 6-H', 'Otro'];
   const locCol    = dynCols.columns.find(c => c.columnName === 'Ubicación Interna') ?? dynCols.columns.find(c => c.columnName === 'Ubicación (interna)') ?? dynCols.columns.find(c => c.columnName === 'Espacio');
   const personCol = dynCols.columns.find(c => c.columnName === 'Moderador') ?? dynCols.columns.find(c => c.columnName === 'Persona/Moderador');
+  // locCol ya tiene su propia columna fija ("Ubic. Interna", más abajo) — sin
+  // esto, DynamicColumnHeaders/Cells la vuelve a mostrar con su nombre real
+  // ("Ubicación Interna"/"Ubicación (interna)"), duplicada.
+  const visibleColIds = useMemo(
+    () => new Set(dynCols.columns.filter(c => c.id !== locCol?.id).map(c => c.id)),
+    [dynCols.columns, locCol?.id],
+  );
   const getField = (evId: string, field: 'location' | 'attendees', fallback?: string | null) => {
     const local = localFields.get(evId)?.[field];
     if (local !== undefined) return local;
@@ -158,7 +165,7 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
   const groups       = groupDynCols.columns;
   const topLevel     = events.filter(e => !e.parentEventId);
   const getChildEvts = (id: string) => events.filter(e => e.parentEventId === id);
-  const totalCols    = 6 + dynCols.columns.length + 1;
+  const totalCols    = 6 + dynCols.columns.filter(c => visibleColIds.has(c.id)).length + 1;
 
   const getEvtGroupId = (evId: string) =>
     groups.find(g => groupDynCols.getCellVal(evId, g.id)?.textValue === '1')?.id ?? null;
@@ -295,6 +302,7 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
           <DynamicColumnCells rowId={ev.id} dynCols={dynCols} recentColors={recentColors}
             colUniqueValues={colUniqueValues}
             selectedIds={selectedIds}
+            visibleColIds={visibleColIds}
             onBulkSave={(colId, value, label) => showBulkConfirm(label, () => {
               const ops = [...selectedIds].filter(id => id !== ev.id).map(id => ({ rowId: id, colId, value }));
               if (ops.length > 0) dynCols.batchSetCellVals(ops);
@@ -479,7 +487,7 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
         </Button>
       </div>
       <div className="bg-card border rounded-lg overflow-auto max-h-[calc(100vh-360px)]">
-        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + 128 + 128 + 96 + 44 + dynCols.columns.reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}>
+        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + 128 + 128 + 96 + 44 + dynCols.columns.filter(c => visibleColIds.has(c.id)).reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}>
           <colgroup>
             <col style={{ width: 32 }} />
             <col style={{ width: nameCol.width }} />
@@ -487,7 +495,7 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
             <col style={{ width: 128 }} />
             <col style={{ width: 96 }} />
             <col style={{ width: 44 }} />
-            {dynCols.columns.map(c => { const w = dynCols.getColWidth(c.id); return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
+            {dynCols.columns.filter(c => visibleColIds.has(c.id)).map(c => { const w = dynCols.getColWidth(c.id); return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
             <col />
           </colgroup>
           <thead className="bg-muted sticky top-0 z-30">
@@ -510,7 +518,7 @@ export function EventsTable({ events, onEdit, onDelete, onBulkDelete, onSaveEven
               <th className="text-center px-0 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 44 }}>
                 <TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center justify-center w-full"><Lock className="w-3.5 h-3.5 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top"><p className="text-xs">Restringir reenvío de invitación</p></TooltipContent></Tooltip></TooltipProvider>
               </th>
-              <DynamicColumnHeaders dynCols={dynCols} columnFilters={columnFilters} setColFilter={setColFilter} colUniqueValues={colUniqueValues} />
+              <DynamicColumnHeaders dynCols={dynCols} columnFilters={columnFilters} setColFilter={setColFilter} colUniqueValues={colUniqueValues} visibleColIds={visibleColIds} />
             </tr>
           </thead>
           <tbody>
