@@ -2,22 +2,20 @@ import { z } from 'zod';
 import { createEndpoint, Boards, BoardColumns, Tasks, CellValues } from '../../server/compat';
 
 /**
- * Standard PM timeline tasks with assigned colors from GROUP_COLORS palette.
- * Colors chosen to best match the target palette:
- *   #00B32D (verde)  → green-3
- *   #9E9E9E (gris)   → orange-1 (no gray exists; neutral warm tone)
- *   #FFBB00 (amarillo) → yellow-3
- *   #3D74BD (azul)   → blue-3
- *   #DB0000 (rojo)   → red-3
+ * Standard PM timeline tasks with fixed colors. The "Color" column
+ * (columnType: 'Color') is rendered by ColorPickerCell, which expects a raw
+ * #RRGGBB value — NOT a GROUP_COLORS palette id (those resolve to
+ * hsl(var(--group-...)) and are only meaningful for group-coloring, a
+ * different feature).
  */
 const TEMPLATE_TASKS = [
-  { name: 'Go Ahead',                      order: 0, color: 'green-3'  },
-  { name: 'Reclutamiento',                 order: 1, color: 'orange-1' },
-  { name: 'Envío de guía de tópicos',      order: 2, color: 'yellow-3' },
-  { name: 'Aprobación de guía de tópicos', order: 3, color: 'yellow-3' },
-  { name: 'Fieldwork',                     order: 4, color: 'blue-3'   },
-  { name: 'Análisis',                      order: 5, color: 'orange-1' },
-  { name: 'Reporte',                       order: 6, color: 'red-3'    },
+  { name: 'Go Ahead',                      order: 0, color: '#00B32D' },
+  { name: 'Reclutamiento',                 order: 1, color: '#9E9E9E' },
+  { name: 'Envío de guía de tópicos',      order: 2, color: '#FFBB00' },
+  { name: 'Aprobación de guía de tópicos', order: 3, color: '#FFBB00' },
+  { name: 'Fieldwork',                     order: 4, color: '#3D74BD' },
+  { name: 'Análisis',                      order: 5, color: '#9E9E9E' },
+  { name: 'Reporte',                       order: 6, color: '#DB0000' },
 ];
 
 const columnSchema = z.object({
