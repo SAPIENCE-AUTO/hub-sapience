@@ -940,6 +940,11 @@ create index on purchase_orders (status);
 create index on expenses (status);
 create index on payments (status);
 create index on supplier_invoices (status);
+-- getMessages filtra por channel y ordena/pagina por sent_at (asc en la carga
+-- inicial, desc al pedir mensajes anteriores) — sin este índice, ambas
+-- consultas hacían Seq Scan (confirmado con EXPLAIN). La tabla es chica hoy
+-- (1,743 filas), pero es el mismo patrón que ya costó caro en cell_values.
+create index on messages (channel, sent_at);
 -- Parcial, no un unique index simple: Zite representa "sin token" como "" (no
 -- NULL), y a diferencia de NULL, Postgres exige que los strings vacíos sean
 -- únicos entre sí. Con un índice simple, la primera fila sin token bloquea a

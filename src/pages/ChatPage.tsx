@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 import { useNavigate } from 'react-router-dom';
 import { useProject } from '../context/ProjectContext';
 import {
-  getMessages, sendMessage, getTeamMembers, getProjectDocuments,
+  getMessages, searchMessages, sendMessage, getTeamMembers, getProjectDocuments,
   toggleReaction, togglePinMessage, saveTask,
   getChatConversations, saveChatConversation,
   updatePresence, getPresence, votePoll,
@@ -63,7 +63,27 @@ const STICKERS = [
 ];
 
 // ── Module-level messages cache ───────────────────────────────────────────────
+// Antes crecía sin límite: una entrada por cada canal visitado en la sesión,
+// nunca se liberaba. En una sesión larga navegando muchos canales/DMs esto
+// acumula memoria indefinidamente. Se acota a los MAX_CACHED_CHANNELS canales
+// usados más recientemente (LRU aproximado: cada set/get reinserta la key al
+// final del Map, que preserva orden de inserción; se evict la primera —
+// la menos recientemente usada — al pasarse del límite).
+const MAX_CACHED_CHANNELS = 20;
 const messagesCache = new Map<string, Message[]>();
+function getCachedMessages(channel: string): Message[] | undefined {
+  const cached = messagesCache.get(channel);
+  if (cached) { messagesCache.delete(channel); messagesCache.set(channel, cached); }
+  return cached;
+}
+function cacheMessages(channel: string, messages: Message[]) {
+  messagesCache.delete(channel);
+  messagesCache.set(channel, messages);
+  if (messagesCache.size > MAX_CACHED_CHANNELS) {
+    const lru = messagesCache.keys().next().value;
+    if (lru !== undefined) messagesCache.delete(lru);
+  }
+}
 let cachedDms: DMConv[] | null = null;
 let cachedGroups: GroupConv[] | null = null;
 let cachedTeamMembers: TeamMember[] | null = null;
@@ -145,17 +165,21 @@ function getMessageDedupeKey(m: Message): string {
 
 function mergeMessagesReplacingOptimistic(prev: Message[], incoming: Message[]): Message[] {
   const incomingKeys = new Set(incoming.map(getMessageDedupeKey));
+  // Los optimistic-* todavía no traen el id real del servidor (normalmente sí
+  // lo tienen ya, ver handleSend/handleSendAudio/handleSendSticker, que lo
+  // estampan en cuanto sendMessage() responde — esto es solo la red de
+  // seguridad para la carrera rara donde el evento realtime llega antes que
+  // esa respuesta), así que a ellos se les hace match por contenido.
   const withoutMatchedOptimistic = prev.filter(p => {
     if (!String(p.id ?? '').startsWith('optimistic-')) return true;
     return !incomingKeys.has(getMessageDedupeKey(p));
   });
+  // El dedupe de mensajes YA confirmados es solo por id. Antes también se
+  // comparaba por contenido contra todo `prev` — eso descartaba en silencio
+  // un segundo mensaje real con el mismo texto (ej. alguien escribe "ok" dos
+  // veces), no solo duplicados legítimos.
   const existingIds = new Set(withoutMatchedOptimistic.map(m => m.id));
-  const existingKeys = new Set(withoutMatchedOptimistic.map(getMessageDedupeKey));
-  const newMessages = incoming.filter(m => {
-    if (existingIds.has(m.id)) return false;
-    if (existingKeys.has(getMessageDedupeKey(m))) return false;
-    return true;
-  });
+  const newMessages = incoming.filter(m => !existingIds.has(m.id));
   return [...withoutMatchedOptimistic, ...newMessages].sort((a, b) =>
     new Date(a.sentAt ?? 0).getTime() - new Date(b.sentAt ?? 0).getTime()
   );
@@ -752,17 +776,18 @@ function CreateTaskFromMessageDialog({
 }
 
 // ── Single message ────────────────────────────────────────────────────────────
-function MessageItem({ msg, isOwn, myEmail, onReply, onPin, onReact, onCreateTask, onVote, quotedMessage, senderPhotoUrl, onDocClick, nameMap, activeChannel, isActiveActions, onActivate }: {
+const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, onPin, onReact, onCreateTask, onVote, parentMsg, senderPhotoUrl, onDocClick, nameMap, activeChannel, isActiveActions, onActivate }: {
   msg: Message; isOwn: boolean; myEmail: string;
   onReply: (m: Message) => void; onPin: (id: string) => void;
   onReact: (id: string, emoji: string) => void; onCreateTask: (m: Message) => void;
-  onVote: (msgId: string, option: string) => void; quotedMessage?: { senderName?: string; content?: string }; senderPhotoUrl?: string;
+  onVote: (msgId: string, option: string) => void; parentMsg?: Message; senderPhotoUrl?: string;
   onDocClick?: (docId: string, docName: string) => void;
   nameMap: Record<string, string>;
   activeChannel?: string;
   isActiveActions?: boolean;
-  onActivate?: () => void;
+  onActivate?: (id: string) => void;
 }) {
+  const quotedMessage = parentMsg ? { senderName: parentMsg.senderName ?? undefined, content: parentMsg.content ?? undefined } : undefined;
   const navigate = useNavigate();
   const [emojiPopoverOpen, setEmojiPopoverOpen] = useState(false);
   const time = msg.sentAt ? new Date(msg.sentAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -774,7 +799,7 @@ function MessageItem({ msg, isOwn, myEmail, onReply, onPin, onReact, onCreateTas
   const isRead = msg.sentAt ? (Date.now() - new Date(msg.sentAt).getTime()) > 30000 : false;
 
   return (
-    <div className={`group flex gap-3 px-4 py-1 hover:bg-muted/20 relative ${isOwn ? 'flex-row-reverse' : ''}`} onClick={() => onActivate?.()}>
+    <div className={`group flex gap-3 px-4 py-1 hover:bg-muted/20 relative ${isOwn ? 'flex-row-reverse' : ''}`} onClick={() => onActivate?.(msg.id)}>
       {!isOwn && <Avatar name={msg.senderName ?? undefined} email={msg.senderEmail ?? undefined} photoUrl={senderPhotoUrl} />}
       <div className={`flex flex-col max-w-[85%] md:max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
         {quotedMessage && (
@@ -921,7 +946,7 @@ function MessageItem({ msg, isOwn, myEmail, onReply, onPin, onReact, onCreateTas
       </div>
     </div>
   );
-}
+});
 
 // ── Chat Input helpers ────────────────────────────────────────────────────────
 function resolveToMarkdown(text: string, map: Map<string, string>): string {
@@ -1513,6 +1538,8 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   const [activeConvId, setActiveConvId] = useState<string | null>(null); // id for DM/group
   const [activeConvLabel, setActiveConvLabel] = useState<string>('');
   const [allMessages, setAllMessages] = useState<Message[]>([]);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState(() => loadDraft(initChannel));
   const [sending, setSending] = useState(false);
@@ -1520,6 +1547,11 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // Antes la búsqueda era un .filter() sobre topMessages (los ~60 mensajes ya
+  // cargados) — no alcanzaba el historial real. null = sin búsqueda activa,
+  // usa la lista normal; array = resultado real del servidor para esta query.
+  const [searchResults, setSearchResults] = useState<Message[] | null>(null);
+  const [searching, setSearching] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => cachedTeamMembers ?? []);
   const [projectChannelsWithStatus, setProjectChannelsWithStatus] = useState<{ code: string; status: string }[]>([]);
@@ -1590,6 +1622,14 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     saveDraft(channel, text);
   }, 1500);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  // "Cargar mensajes anteriores" prepende al inicio de allMessages, lo que
+  // también dispara el efecto de auto-scroll-al-fondo (depende de
+  // allMessages.length) — sin esto, cada vez que se pide historial viejo el
+  // scroll saltaría de regreso al mensaje más reciente en vez de quedarse
+  // donde el usuario estaba leyendo.
+  const skipAutoScrollRef = useRef(false);
+  const pendingScrollRestoreRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null);
   const initialLoadRef = useRef(true);
 
   // The channel used for messaging: either activeConvId (DM/group) or activeChannel
@@ -1955,7 +1995,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
 
   useEffect(() => {
     // ── Cache check: restore instantly without skeleton ──────────────────────
-    const cached = messagesCache.get(effectiveChannel);
+    const cached = getCachedMessages(effectiveChannel);
     if (cached) {
       setAllMessages(cached);
       setLoading(false);
@@ -1966,6 +2006,8 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     setReplyingTo(null);
     setTypingUsers({});
     setActiveMsgId(null);
+    setHasMoreOlder(false);
+    setLoadingOlder(false);
     initialLoadRef.current = true;
     clearReadStateForChannel(effectiveChannel);
     lastSentAtRef.current = null;
@@ -1976,7 +2018,8 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
         const d = await getMessages({ channel: effectiveChannel, limit: 60 });
         if (!cancelled) {
           setAllMessages(d.messages);
-          messagesCache.set(effectiveChannel, d.messages);
+          setHasMoreOlder(d.hasMoreOlder ?? false);
+          cacheMessages(effectiveChannel, d.messages);
           const last = d.messages[d.messages.length - 1];
           if (last?.sentAt) lastSentAtRef.current = last.sentAt;
         }
@@ -1994,7 +2037,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       try {
         const d = await getMessages({ channel: effectiveChannel, since: lastSentAtRef.current });
         if (!cancelled && d.messages.length > 0) {
-          setAllMessages(prev => { const next = mergeMessagesReplacingOptimistic(prev, d.messages); messagesCache.set(effectiveChannel, next); return next; });
+          setAllMessages(prev => { const next = mergeMessagesReplacingOptimistic(prev, d.messages); cacheMessages(effectiveChannel, next); return next; });
           const last = d.messages[d.messages.length - 1];
           if (last?.sentAt) lastSentAtRef.current = last.sentAt;
         }
@@ -2032,8 +2075,44 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
 
   useEffect(() => {
     if (!allMessages.length) return;
+    if (skipAutoScrollRef.current) {
+      skipAutoScrollRef.current = false;
+      const restore = pendingScrollRestoreRef.current;
+      const container = messagesContainerRef.current;
+      if (restore && container) {
+        container.scrollTop = restore.prevScrollTop + (container.scrollHeight - restore.prevScrollHeight);
+      }
+      pendingScrollRestoreRef.current = null;
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: initialLoadRef.current ? 'instant' : 'smooth' });
   }, [allMessages.length]);
+
+  const loadOlderMessages = async () => {
+    if (loadingOlder || !hasMoreOlder || allMessages.length === 0) return;
+    const oldest = allMessages[0];
+    if (!oldest?.sentAt) return;
+    setLoadingOlder(true);
+    try {
+      const d = await getMessages({ channel: effectiveChannel, before: oldest.sentAt });
+      setHasMoreOlder(d.hasMoreOlder ?? false);
+      if (d.messages.length > 0) {
+        const container = messagesContainerRef.current;
+        pendingScrollRestoreRef.current = container
+          ? { prevScrollHeight: container.scrollHeight, prevScrollTop: container.scrollTop }
+          : null;
+        skipAutoScrollRef.current = true;
+        setAllMessages(prev => {
+          const seen = new Set(prev.map(m => m.id));
+          const older = d.messages.filter(m => !seen.has(m.id));
+          const next = [...older, ...prev];
+          cacheMessages(effectiveChannel, next);
+          return next;
+        });
+      }
+    } catch { /* silent — el botón sigue disponible, el usuario puede reintentar */ }
+    setLoadingOlder(false);
+  };
 
   // ── Signal-driven immediate refresh ─────────────────────────────────────────
   // When Layout receives a personal Ably notification for the active channel
@@ -2092,11 +2171,49 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
 
   const topMessages = useMemo(() => allMessages, [allMessages]);
   const pinnedMessages = useMemo(() => allMessages.filter(m => m.pinned && !m.parentMessageId), [allMessages]);
+  // Antes cada fila del render buscaba su mensaje padre con allMessages.find(),
+  // O(n) por mensaje visible → O(n·m) total y empeora con cada "cargar mensajes
+  // anteriores". El Map se arma una vez por cambio de allMessages, lookup O(1).
+  const messagesById = useMemo(() => {
+    const map = new Map<string, Message>();
+    allMessages.forEach(m => map.set(m.id, m));
+    return map;
+  }, [allMessages]);
   const filteredTopMessages = useMemo(() => {
     if (!searchQuery.trim()) return topMessages;
+    if (searchResults !== null) {
+      // El backend devuelve más reciente primero (orden natural de resultados
+      // de búsqueda); se reordena ascendente para que groupedMessages (que
+      // asume orden cronológico normal) no necesite un camino aparte.
+      return [...searchResults].sort((a, b) => new Date(a.sentAt ?? 0).getTime() - new Date(b.sentAt ?? 0).getTime());
+    }
+    // Mientras la búsqueda real al servidor está en camino (debounce/en
+    // vuelo), se muestra el filtro local sobre lo ya cargado como vista
+    // previa instantánea, para que la caja no se sienta como que no responde.
     const q = searchQuery.toLowerCase();
     return topMessages.filter(m => m.content?.toLowerCase().includes(q) || m.senderName?.toLowerCase().includes(q));
-  }, [topMessages, searchQuery]);
+  }, [topMessages, searchQuery, searchResults]);
+
+  const debouncedSearch = useDebouncedCallback(async (query: string, channel: string) => {
+    setSearching(true);
+    try {
+      const d = await searchMessages({ query, channels: [channel], limit: 100 });
+      setSearchResults(d.results ?? []);
+    } catch {
+      setSearchResults(null); // falla la búsqueda real → se queda con el filtro local de vista previa
+    }
+    setSearching(false);
+  }, 350);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    debouncedSearch(searchQuery.trim(), effectiveChannel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, effectiveChannel]);
   const groupedMessages = useMemo(() => {
     const groups: { date: string; messages: Message[] }[] = [];
     filteredTopMessages.forEach(msg => {
@@ -2119,7 +2236,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       getMessages({ channel, since: lastSentAtRef.current ?? undefined, limit: 5 })
         .then(d => {
           if (d.messages.length > 0) {
-            setAllMessages(prev => { const next = mergeMessagesReplacingOptimistic(prev, d.messages); messagesCache.set(channel, next); return next; });
+            setAllMessages(prev => { const next = mergeMessagesReplacingOptimistic(prev, d.messages); cacheMessages(channel, next); return next; });
             const last = d.messages[d.messages.length - 1];
             if (last?.sentAt) lastSentAtRef.current = last.sentAt;
           }
@@ -2137,7 +2254,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
             getMessages({ channel, since: lastSentAtRef.current ?? undefined, limit: 5 })
               .then(d => {
                 if (d.messages.length > 0) {
-                  setAllMessages(p => { const next = mergeMessagesReplacingOptimistic(p, d.messages); messagesCache.set(channel, next); return next; });
+                  setAllMessages(p => { const next = mergeMessagesReplacingOptimistic(p, d.messages); cacheMessages(channel, next); return next; });
                   const last = d.messages[d.messages.length - 1];
                   if (last?.sentAt) lastSentAtRef.current = last.sentAt;
                 }
@@ -2159,6 +2276,19 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     setUploading(false);
   };
 
+  // sendMessage() ya devuelve el id real apenas el servidor confirma — se
+  // estampa de inmediato sobre el mensaje optimista para que el dedupe de
+  // mergeMessagesReplacingOptimistic sea por id en el camino normal, y el
+  // match por contenido quede solo como red de seguridad para la carrera rara
+  // donde el evento realtime llega antes que esta respuesta.
+  const stampRealMessageId = (channel: string, optimisticId: string, realId: string) => {
+    setAllMessages(prev => {
+      const next = prev.map(m => m.id === optimisticId ? { ...m, id: realId } : m);
+      cacheMessages(channel, next);
+      return next;
+    });
+  };
+
   const handleSendAudio = async (file: File) => {
     if (file.size < 100) { toast.error('La grabación está vacía, intenta de nuevo'); return; }
     setUploading(true);
@@ -2178,8 +2308,9 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
         pinned: false,
         reactions: undefined,
       };
-      setAllMessages(prev => { const next = [...prev, optimisticAudio]; messagesCache.set(effectiveChannel, next); return next; });
-      await sendMessage({ channel: effectiveChannel, content: ' ', attachments: serializeAttachments([{ url: fileUrl, name: file.name, type: file.type }]) });
+      setAllMessages(prev => { const next = [...prev, optimisticAudio]; cacheMessages(effectiveChannel, next); return next; });
+      const sent = await sendMessage({ channel: effectiveChannel, content: ' ', attachments: serializeAttachments([{ url: fileUrl, name: file.name, type: file.type }]) });
+      stampRealMessageId(effectiveChannel, optimisticAudio.id, sent.id);
       markRead(effectiveChannel);
     } catch { toast.error('Error al enviar nota de voz'); }
     setUploading(false); setSending(false);
@@ -2202,8 +2333,12 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       pinned: false,
       reactions: undefined,
     };
-    setAllMessages(prev => { const next = [...prev, optimisticSticker]; messagesCache.set(effectiveChannel, next); return next; });
-    try { await sendMessage({ channel: effectiveChannel, content: emoji }); markRead(effectiveChannel); }
+    setAllMessages(prev => { const next = [...prev, optimisticSticker]; cacheMessages(effectiveChannel, next); return next; });
+    try {
+      const sent = await sendMessage({ channel: effectiveChannel, content: emoji });
+      stampRealMessageId(effectiveChannel, optimisticSticker.id, sent.id);
+      markRead(effectiveChannel);
+    }
     catch { toast.error('Error al enviar sticker'); }
     setSending(false);
     // ── Fase B Etapa 1 (P5): quick-refresh conditional on Ably ──────────────
@@ -2235,7 +2370,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       pinned: false,
       reactions: undefined,
     };
-    setAllMessages(prev => { const next = [...prev, optimisticMsg]; messagesCache.set(effectiveChannel, next); return next; });
+    setAllMessages(prev => { const next = [...prev, optimisticMsg]; cacheMessages(effectiveChannel, next); return next; });
 
     // Optimistic sidebar update — reflect the sent message in the sidebar instantly
     const _nowStr = optimisticMsg.sentAt!;
@@ -2262,7 +2397,8 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     }
 
     try {
-      await sendMessage({ channel: effectiveChannel, content: content || ' ', parentMessageId: parentId, attachments: atts.length ? serializeAttachments(atts) : undefined });
+      const sent = await sendMessage({ channel: effectiveChannel, content: content || ' ', parentMessageId: parentId, attachments: atts.length ? serializeAttachments(atts) : undefined });
+      stampRealMessageId(effectiveChannel, optimisticMsg.id, sent.id);
       saveDraft(effectiveChannel, '');
       markRead(effectiveChannel);
     } catch { toast.error('Error al enviar'); setInput(content); setPendingAttachments(atts); }
@@ -2271,7 +2407,10 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     scheduleOptimisticSafetyRefresh(effectiveChannel);
   };
 
-  const handleReact = async (msgId: string, emoji: string) => {
+  // useCallback (deps [myEmail]) para que MessageItem (memo) no re-renderice
+  // todas las filas visibles cada vez que el padre re-renderiza por algo
+  // no relacionado (typing indicator, presencia, etc.).
+  const handleReact = useCallback(async (msgId: string, emoji: string) => {
     setAllMessages(prev => prev.map(m => {
       if (m.id !== msgId) return m;
       const r = parseReactions(m.reactions);
@@ -2280,14 +2419,14 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       return { ...m, reactions: serializeReactions(r) };
     }));
     try { await toggleReaction({ messageId: msgId, emoji }); } catch { /* polling corrects */ }
-  };
+  }, [myEmail]);
 
-  const handlePin = async (msgId: string) => {
+  const handlePin = useCallback(async (msgId: string) => {
     setAllMessages(prev => prev.map(m => m.id === msgId ? { ...m, pinned: !m.pinned } : m));
     try { await togglePinMessage({ messageId: msgId }); } catch { /* polling corrects */ }
-  };
+  }, []);
 
-  const handleVote = async (msgId: string, option: string) => {
+  const handleVote = useCallback(async (msgId: string, option: string) => {
     // Optimistic update
     setAllMessages(prev => prev.map(m => {
       if (m.id !== msgId) return m;
@@ -2306,7 +2445,17 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     }));
     try { await votePoll({ messageId: msgId, selectedOption: option }); }
     catch { /* polling corrects */ }
-  };
+  }, [myEmail]);
+
+  // Referencia estable para las ~60+ filas de MessageItem (memo) — antes cada
+  // fila recibía una arrow function nueva por render, lo que anulaba el memo.
+  const handleActivateMessage = useCallback((id: string) => {
+    setActiveMsgId(prev => prev === id ? null : id);
+  }, []);
+  const handleDocClick = useCallback((docId: string, _docName: string) => {
+    const doc = projectDocs.find(d => d.id === docId);
+    if (doc?.fileUrl) window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
+  }, [projectDocs]);
 
   const handleSendPoll = async (pollContent: string) => {
     setSending(true);
@@ -2968,7 +3117,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto py-4">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto py-4">
           {/* Reconnecting banner — shows when incremental fetches are failing */}
           {messagesFetchError && !loading && (
             <div className="sticky top-0 z-10 mx-3 mb-2 flex items-center gap-2 rounded-lg border border-border bg-muted/90 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm shadow-sm">
@@ -2994,7 +3143,19 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
               <p className="text-xs text-muted-foreground mt-1">{searchQuery ? 'Prueba con otras palabras' : 'Sé el primero en escribir algo.'}</p>
             </div>
           ) : (
-            groupedMessages.map(({ date, messages: dayMsgs }) => (
+            <>
+              {!searchQuery && hasMoreOlder && (
+                <div className="flex justify-center py-2">
+                  <button
+                    onClick={loadOlderMessages}
+                    disabled={loadingOlder}
+                    className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 px-3 py-1 rounded-md hover:bg-muted transition-colors"
+                  >
+                    {loadingOlder ? 'Cargando...' : 'Cargar mensajes anteriores'}
+                  </button>
+                </div>
+              )}
+              {groupedMessages.map(({ date, messages: dayMsgs }) => (
               <div key={date}>
                 <div className="flex items-center gap-3 px-5 py-2">
                   <div className="flex-1 h-px bg-border" />
@@ -3002,25 +3163,22 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                   <div className="flex-1 h-px bg-border" />
                 </div>
                 {dayMsgs.map(msg => {
-                  const parentMsg = msg.parentMessageId ? allMessages.find(m => m.id === msg.parentMessageId) : undefined;
-                  const quotedMessage = parentMsg ? { senderName: parentMsg.senderName ?? undefined, content: parentMsg.content ?? undefined } : undefined;
+                  const parentMsg = msg.parentMessageId ? messagesById.get(msg.parentMessageId) : undefined;
                   return (
                     <MessageItem key={msg.id} msg={msg} isOwn={msg.senderEmail === myEmail} myEmail={myEmail}
                       onReply={setReplyingTo} onPin={handlePin} onReact={handleReact} onCreateTask={setTaskMessage} onVote={handleVote}
-                      quotedMessage={quotedMessage}
+                      parentMsg={parentMsg}
                       activeChannel={activeChannel}
                       senderPhotoUrl={msg.senderEmail ? photoMap[msg.senderEmail] : undefined}
                       nameMap={nameMap}
                       isActiveActions={activeMsgId === msg.id}
-                      onActivate={() => setActiveMsgId(prev => prev === msg.id ? null : msg.id)}
-                      onDocClick={(docId, _name) => {
-                        const doc = projectDocs.find(d => d.id === docId);
-                        if (doc?.fileUrl) window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
-                      }} />
+                      onActivate={handleActivateMessage}
+                      onDocClick={handleDocClick} />
                   );
                 })}
               </div>
-            ))
+            ))}
+            </>
           )}
           <div ref={bottomRef} />
         </div>

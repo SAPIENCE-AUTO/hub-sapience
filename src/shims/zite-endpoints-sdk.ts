@@ -221,6 +221,7 @@ export const getLastAnalysis = (input?: any): Promise<any> => call('getLastAnaly
 export const getLinkedEventsInfo = (input?: any): Promise<any> => call('getLinkedEventsInfo', input);
 export const getLinkedParticipants = (input?: any): Promise<any> => call('getLinkedParticipants', input);
 export const getMessages = (input?: any): Promise<any> => call('getMessages', input);
+export const searchMessages = (input?: any): Promise<any> => call('searchMessages', input);
 export const getMigrationLogs = (input?: any): Promise<any> => call('getMigrationLogs', input);
 export const getMultiProjectCostAnalysis = (input?: any): Promise<any> => call('getMultiProjectCostAnalysis', input);
 export const getParticipants = (input?: any): Promise<any> => call('getParticipants', input);

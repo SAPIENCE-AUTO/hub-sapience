@@ -37,9 +37,15 @@ export default createEndpoint({
     const effectiveMin = minTimestamp < sevenDaysAgo ? minTimestamp : sevenDaysAgo;
 
     const { records } = await Messages.findAll({
-      filters: { sentAt: { gt: effectiveMin } } as any,
+      // Antes solo filtraba por fecha y escaneaba TODOS los canales de la
+      // organización, filtrando por canal en JS después de traer hasta 2000
+      // filas — el costo escalaba con el volumen total, no con los canales
+      // que de verdad le interesan a quien llama. También traía "sort"
+      // (typo — la interfaz real es "sorts"), silenciado por el `as any` de
+      // abajo, así que nunca ordenaba nada en SQL.
+      filters: { sentAt: { gt: effectiveMin }, channel: { in: [...channelSet] } } as any,
       limit: 2000,
-      sort: [{ field: 'sentAt', direction: 'desc' }],
+      sorts: [{ field: 'sentAt', direction: 'desc' }],
       fields: ['channel', 'senderEmail', 'senderName', 'parentMessageId', 'sentAt', 'content'],
     } as any);
 
