@@ -778,7 +778,12 @@ export function useDynamicColumns(boardId: string, seedRows?: SeedRow[], options
       }
 
       const calculated = Math.max(headerWidth, typeMinWidth, maxSampleWidth);
-      defaults[col.id] = Math.min(Math.max(calculated, 70), 340);
+      // Tope subido de 340 a 420 — nombres de columna reales de >40 caracteres
+      // (ej. "CALENDARIO DE MICROSESIONES Y TRIADAS (PERÚ)") se truncaban sí o
+      // sí con el tope viejo. Sigue habiendo un tope (no queremos que un solo
+      // nombre larguísimo vuelva la tabla completa inmanejable) — para lo que
+      // ni así quepa, el título completo sigue disponible en el tooltip.
+      defaults[col.id] = Math.min(Math.max(calculated, 70), 420);
     }
     return defaults;
   }, [columns, cellMap]);

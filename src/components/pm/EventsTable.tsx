@@ -671,7 +671,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
               <th className="pl-2 pr-0 py-1 w-8 sticky left-0 z-40 bg-muted" />
               <th className="relative text-left px-2 py-1 text-xs font-semibold whitespace-nowrap group/nth sticky z-40 bg-muted border-r border-border/40"
                   style={{ width: nameCol.width, minWidth: 120, left: 35 }}>
-                <div className="flex items-center">
+                <div className="flex items-center" title="Calendario / Evento">
                   Calendario / Evento
                   {setColFilter && (
                     <ColumnFilterPopover allValues={colUniqueValues?.('eventName') ?? []} activeValues={columnFilters?.['eventName'] ?? new Set()} onApply={v => setColFilter('eventName', v)} />
@@ -680,10 +680,10 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
                 <div className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 opacity-0 group-hover/nth:opacity-100 transition-opacity z-10"
                   onMouseDown={e => { e.preventDefault(); e.stopPropagation(); nameCol.startResize(e.clientX); }} />
               </th>
-              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 128 }}>Ubic. Interna</th>
-              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 160 }}>Emails asist.</th>
-              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }}>Invite</th>
-              <th className="text-center px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 90 }}>Outlook</th>
+              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 128 }} title="Ubicación Interna">Ubic. Interna</th>
+              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 160 }} title="Emails asistentes">Emails asist.</th>
+              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }} title="Estatus de la invitación">Invite</th>
+              <th className="text-center px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 90 }} title="Crear/actualizar la invitación en Outlook">Outlook</th>
               <th className="text-center px-0 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 44 }}>
                 <TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center justify-center w-full"><Lock className="w-3.5 h-3.5 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top"><p className="text-xs">Restringir reenvío de invitación</p></TooltipContent></Tooltip></TooltipProvider>
               </th>

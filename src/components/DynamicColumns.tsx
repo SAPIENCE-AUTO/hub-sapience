@@ -1873,7 +1873,7 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
             <div className="flex items-center gap-1.5 group/hdr">
               <GripVertical className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground/40" />
               <ColTypeIcon type={col.columnType} className="w-3 h-3 flex-shrink-0 text-muted-foreground/60" />
-              <span className="truncate max-w-[250px] whitespace-nowrap">{col.columnName}</span>
+              <span className="truncate max-w-[250px] whitespace-nowrap" title={col.columnName}>{col.columnName}</span>
               {onToggleSort && (
                 <button
                   type="button"
