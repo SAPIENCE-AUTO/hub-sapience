@@ -72,17 +72,26 @@ export function useAuth() {
 
   useEffect(() => {
     let cancelado = false;
+    // Último user.id ya hidratado — Supabase re-emite onAuthStateChange (p.ej.
+    // TOKEN_REFRESHED) cada vez que la pestaña vuelve a estar visible, sin que
+    // el usuario haya cambiado. Sin este control, cada regreso a la pestaña
+    // ponía isLoading en true y volvía a pedir getMe(), lo que se veía como
+    // un reload completo de la app.
+    let ultimoUserId: string | null = null;
 
     /** Con una sesión de Supabase activa, hidrata el perfil completo desde `users` vía getMe. */
-    async function hydrate(hasSession: boolean) {
+    async function hydrate(hasSession: boolean, sessionUserId: string | null) {
       if (!hasSession) {
+        ultimoUserId = null;
         if (!cancelado) { setUser(null); setError(null); }
         return;
       }
       try {
         const perfil = await getMe({});
+        ultimoUserId = sessionUserId;
         if (!cancelado) { setUser(perfil); setError(null); }
       } catch (e) {
+        ultimoUserId = null;
         if (e instanceof ApiError && e.code === 'NOT_PROVISIONED') {
           await supabase.auth.signOut();
           if (!cancelado) {
@@ -119,7 +128,7 @@ export function useAuth() {
         }
 
         const { data: { session } } = await supabase.auth.getSession();
-        await hydrate(!!session);
+        await hydrate(!!session, session?.user?.id ?? null);
       } catch (e) {
         console.error('[auth] falló la resolución del usuario:', e);
         if (!cancelado) setUser(esSimulado() ? OWNER_SINTETICO : null);
@@ -130,8 +139,12 @@ export function useAuth() {
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (esSimulado() || cancelado) return;
+      const sessionUserId = session?.user?.id ?? null;
+      // Mismo usuario que ya teníamos hidratado (o seguimos sin sesión):
+      // no es un login/logout real, solo Supabase revalidando el token.
+      if (sessionUserId === ultimoUserId) return;
       setIsLoading(true);
-      await hydrate(!!session);
+      await hydrate(!!session, sessionUserId);
       if (!cancelado) setIsLoading(false);
     });
 
