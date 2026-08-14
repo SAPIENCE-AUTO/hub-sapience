@@ -13,7 +13,12 @@ services:
     # node_modules real nunca se instaló. `cd server && npm install` cubre las
     # dependencias propias del server (pg, hono, etc.), que sí resuelven bien
     # porque compat/*.ts vive dentro de server/.
-    buildCommand: npm install && cd server && npm install
+    # `npx puppeteer browsers install chrome` es idempotente (no-op si ya
+    # está) — sin esto, un deploy donde Render reutiliza el node_modules
+    # cacheado puede saltarse el postinstall que descarga Chrome, y
+    # generatePoPdf.ts vuelve a tronar con "Could not find Chrome" aunque
+    # PUPPETEER_CACHE_DIR (abajo) esté bien configurada.
+    buildCommand: npm install && npx puppeteer browsers install chrome && cd server && npm install
     startCommand: cd server && npm start
     healthCheckPath: /healthz
     envVars:
