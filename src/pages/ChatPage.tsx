@@ -2996,7 +2996,10 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
         )}
         {(!isDrawer || hasExplicitSelection) && <>
         {/* Header */}
-        <div className="flex items-center gap-2 px-5 py-3 border-b bg-card flex-shrink-0">
+        {/* pr-12 en modo drawer: Layout.tsx dibuja el botón "Cerrar chat" (✕) como
+            absolute top-3 right-3 encima de este header — sin este espacio reservado,
+            tapa la lupa de búsqueda (el último control a la derecha). */}
+        <div className={`flex items-center gap-2 px-5 py-3 border-b bg-card flex-shrink-0 ${isDrawer ? 'pr-12' : ''}`}>
           {!projectOnly && (
             <button
               onClick={() => setMobileShowChat(false)}
