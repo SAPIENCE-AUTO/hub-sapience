@@ -109,18 +109,61 @@ async function exists(p: string): Promise<boolean> {
 
 interface ColSpec { prop: string; col: string }
 
-async function upsertBatch(table: string, cols: ColSpec[], protectedProps: Set<string>, rows: Record<string, unknown>[]): Promise<void> {
-  if (!rows.length) return;
+// El upsert normal es por `id` — cubre el caso ampliamente más común: el id
+// de Zite ya existe en Postgres (viene de la carga inicial o de una corrida
+// previa de este mismo script) y solo hay que refrescar sus columnas.
+//
+// CellValues (y cualquier otra tabla con `conflictTarget` en schema-map.ts)
+// tiene además el índice parcial cell_values_posicion_viva_uniq (board_id,
+// row_id, column_id) where deleted_at is null: un id NUEVO de Zite puede
+// aterrizar en una posición que YA tiene una fila viva bajo otro id distinto.
+// `ON CONFLICT (id)` no puede atrapar ese choque (Postgres solo suprime el
+// árbitro que se le indica) — truena con "duplicate key ... posicion_viva".
+// Ese caso, comprobado en vivo, es RARO frente al de arriba, así que no
+// conviene hacer TODO el upsert por posición: eso rompe el camino rápido y
+// común (id ya existente) con "duplicate key ... cell_values_pkey", porque un
+// id que ya existe en la tabla nunca se declaró como árbitro. La solución es
+// intentar por id primero, y solo si eso falla, reintentar esa fila puntual
+// por posición — ahí sí excluyendo `id` del SET (la fila que ya ocupaba esa
+// posición debe conservar SU id, no adoptar el de Zite; ver server/test.ts,
+// sección "CellValues upsert real por posición viva").
+function buildUpsertSql(
+  table: string,
+  cols: ColSpec[],
+  protectedProps: Set<string>,
+  rows: Record<string, unknown>[],
+  arbiter: { cols: string[]; where?: string; excludeFromSet?: string[] },
+): { sql: string; values: unknown[] } {
   const values: unknown[] = [];
   const placeholders = rows.map((row, ri) => {
     const base = ri * cols.length;
     cols.forEach((c) => values.push(row[c.prop] ?? null));
     return `(${cols.map((_, ci) => `$${base + ci + 1}`).join(', ')})`;
   });
-  const updatable = cols.filter((c) => c.prop !== 'id' && !protectedProps.has(c.prop));
+  const exclude = new Set(arbiter.excludeFromSet ?? []);
+  const updatable = cols.filter((c) => c.prop !== 'id' && !protectedProps.has(c.prop) && !exclude.has(c.prop));
   const setClause = updatable.map((c) => `"${c.col}" = excluded."${c.col}"`).join(', ');
+  const arbiterCols = arbiter.cols.map((c) => `"${c}"`).join(', ');
+  const wherePart = arbiter.where ? ` where ${arbiter.where}` : '';
   const sql = `insert into "${table}" (${cols.map((c) => `"${c.col}"`).join(', ')}) values ${placeholders.join(', ')}
-    on conflict (id) do update set ${setClause}`;
+    on conflict (${arbiterCols})${wherePart} do update set ${setClause}`;
+  return { sql, values };
+}
+
+async function upsertById(table: string, cols: ColSpec[], protectedProps: Set<string>, rows: Record<string, unknown>[]): Promise<void> {
+  if (!rows.length) return;
+  const { sql, values } = buildUpsertSql(table, cols, protectedProps, rows, { cols: ['id'] });
+  await pool.query(sql, values);
+}
+
+async function upsertByPosition(
+  table: string,
+  cols: ColSpec[],
+  protectedProps: Set<string>,
+  row: Record<string, unknown>,
+  conflictTarget: { cols: string[]; where?: string },
+): Promise<void> {
+  const { sql, values } = buildUpsertSql(table, cols, protectedProps, [row], { ...conflictTarget, excludeFromSet: ['id'] });
   await pool.query(sql, values);
 }
 
@@ -139,20 +182,25 @@ async function applyTable(t: TableCtx, deltaFile: string): Promise<{ name: strin
     return { name: t.name, applied: records.length, failed: 0 };
   }
 
-  let applied = 0, failed = 0;
+  const conflictTarget = t.def.conflictTarget;
+  let applied = 0, failed = 0, byPosition = 0;
   for (let i = 0; i < records.length; i += BATCH_SIZE) {
     const batch = records.slice(i, i + BATCH_SIZE).map((r) => rowFromRecord(t, r));
     try {
-      await upsertBatch(t.def.table, cols, protectedProps, batch);
+      await upsertById(t.def.table, cols, protectedProps, batch);
       applied += batch.length;
     } catch (err) {
       for (const row of batch) {
-        try { await upsertBatch(t.def.table, cols, protectedProps, [row]); applied++; }
-        catch (rowErr) { failed++; console.error(`❌ ${t.name} id=${row.id}: ${(rowErr as Error).message.split('\n')[0]}`); }
+        try { await upsertById(t.def.table, cols, protectedProps, [row]); applied++; }
+        catch (idErr) {
+          if (!conflictTarget) { failed++; console.error(`❌ ${t.name} id=${row.id}: ${(idErr as Error).message.split('\n')[0]}`); continue; }
+          try { await upsertByPosition(t.def.table, cols, protectedProps, row, conflictTarget); applied++; byPosition++; }
+          catch (posErr) { failed++; console.error(`❌ ${t.name} id=${row.id}: ${(posErr as Error).message.split('\n')[0]}`); }
+        }
       }
     }
   }
-  console.log(`✅ ${t.name}: ${applied} aplicadas${failed ? `, ${failed} fallidas` : ''}${protectedProps.size ? ` (protegido: ${[...protectedProps].join(', ')})` : ''}`);
+  console.log(`✅ ${t.name}: ${applied} aplicadas${byPosition ? ` (${byPosition} por posición)` : ''}${failed ? `, ${failed} fallidas` : ''}${protectedProps.size ? ` (protegido: ${[...protectedProps].join(', ')})` : ''}`);
   return { name: t.name, applied, failed };
 }
 

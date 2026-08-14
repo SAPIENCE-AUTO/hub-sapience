@@ -290,7 +290,7 @@ export function createModel<T extends Record<string, any> = Record<string, any>>
         const keyOf = (u: (typeof unwrapped)[number]) =>
           target.cols
             .map((c) => { const idx = u.cols.indexOf(c); return idx === -1 ? '' : JSON.stringify(u.vals[idx]); })
-            .join(' ');
+            .join(' ');
         const byKey = new Map<string, (typeof unwrapped)[number]>();
         for (const u of unwrapped) byKey.set(keyOf(u), u);
         unwrapped = Array.from(byKey.values());

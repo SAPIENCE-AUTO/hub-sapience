@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Projects } from 'zite-integrations-backend-sdk';
+import { createEndpoint, Projects } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,
@@ -9,9 +9,11 @@ export default createEndpoint({
   execute: async ({ input }) => {
     const project = await Projects.findOne({ filters: { projectCode: input.projectCode } });
     if (!project) throw new Error(`Project not found: ${input.projectCode}`);
+    // teamsChannelStatus solo acepta null o 'Pendiente'/'Creando'/'Listo'/'Error'
+    // (ver users_departamento_chk-style CHECK en schema.sql) — '' truena el guardado.
     await Projects.update({
       id: project.id,
-      record: { teamsChannelStatus: '', teamsChannelUrl: '' },
+      record: { teamsChannelStatus: null, teamsChannelUrl: null },
     });
     return { success: true };
   },
