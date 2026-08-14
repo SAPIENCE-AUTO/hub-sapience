@@ -62,6 +62,14 @@ services:
         sync: false
       - key: STRICT_OUTPUT
         value: "true"
+      # Render usa contenedores distintos para build y runtime: el default de
+      # Puppeteer ($HOME/.cache/puppeteer, fuera del proyecto) se descarga en
+      # el build pero no sobrevive al contenedor que sirve la app — Chrome
+      # "desaparece" en producción aunque el build haya salido bien. Se fuerza
+      # la descarga dentro de /opt/render/project/src (el propio checkout,
+      # que sí persiste) para que build y runtime miren la misma carpeta.
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/project/src/.cache/puppeteer
       # NO agregar VITE_MOCK_USER aquí — si se define en true, se salta toda
       # la autenticación real (ver server/auth.ts). Debe quedar ausente.
 
