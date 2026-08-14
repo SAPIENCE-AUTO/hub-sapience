@@ -84,7 +84,12 @@ export default createEndpoint({
 
       await DocumentBlocks.update({ id, record });
 
-      // ── Publish Ably events best-effort ────────────────────────────────────
+      // ── Publish Ably events best-effort, sin bloquear la respuesta ──────────
+      // Antes esto se esperaba (await) antes de responder al cliente: cada
+      // ciclo de autosave (cada 1.5s mientras se escribe) pagaba la latencia
+      // de una llamada HTTP a rest.ably.io encima del guardado en Postgres.
+      // Es "best-effort" desde que se escribió (ver el catch de abajo), así
+      // que no hay razón para bloquear la respuesta esperándolo.
       if (savedVersion !== undefined && finalDocJson) {
         const basePayload = {
           docId: id,
@@ -100,24 +105,20 @@ export default createEndpoint({
             const docObj = JSON.parse(finalDocJson);
             const foundBlock = docObj.blocks?.find((b: any) => b.id === changedBlockId);
             if (foundBlock) {
-              await publishEvent(`doc:${id}`, 'block.update', {
+              void publishEvent(`doc:${id}`, 'block.update', {
                 ...basePayload,
                 blockId: changedBlockId,
                 block: foundBlock,
-              });
+              }).catch(err => console.warn('[saveDocBlock] block.update publish failed:', (err as Error).message));
             }
           } catch (err) {
-            console.warn('[saveDocBlock] block.update publish failed:', (err as Error).message);
+            console.warn('[saveDocBlock] block.update parse failed:', (err as Error).message);
           }
         } else if (operationType === 'structure_update') {
-          try {
-            await publishEvent(`doc:${id}`, 'doc.structure_changed', {
-              ...basePayload,
-              operationId: Math.random().toString(36).slice(2, 10),
-            });
-          } catch (err) {
-            console.warn('[saveDocBlock] doc.structure_changed publish failed:', (err as Error).message);
-          }
+          void publishEvent(`doc:${id}`, 'doc.structure_changed', {
+            ...basePayload,
+            operationId: Math.random().toString(36).slice(2, 10),
+          }).catch(err => console.warn('[saveDocBlock] doc.structure_changed publish failed:', (err as Error).message));
         }
       }
 

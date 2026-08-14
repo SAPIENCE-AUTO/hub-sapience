@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { saveDocBlock } from 'zite-endpoints-sdk';
-import MinutaEditor from './MinutaEditor';
+import BlockNoteDocEditor from './docblock/BlockNoteDocEditor';
 
 interface Props {
   open: boolean;
@@ -82,7 +82,7 @@ export default function MinutaDialog({ open, blockId, initialTitle, onClose, onT
 
           {/* Editor */}
           <div className="flex-1 min-h-0 overflow-hidden">
-            <MinutaEditor blockId={blockId} onMetaChange={handleMetaChange} />
+            <BlockNoteDocEditor blockId={blockId} onMetaChange={handleMetaChange} />
           </div>
 
           {/* Footer */}

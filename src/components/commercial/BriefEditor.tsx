@@ -1,5 +1,5 @@
-import DocumentCanvas from './brief/DocumentCanvas';
+import BlockNoteDocEditor from '../docblock/BlockNoteDocEditor';
 
 export default function BriefEditor({ dealId }: { dealId: string }) {
-  return <DocumentCanvas dealId={dealId} />;
+  return <BlockNoteDocEditor dealId={dealId} />;
 }

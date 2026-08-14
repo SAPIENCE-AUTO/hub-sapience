@@ -21,10 +21,18 @@ interface MyUser {
   lastName?: string;
 }
 
-interface UseCollaborativeDocumentProps {
+interface UseCollaborativeDocumentProps<TDoc = DocumentModel> {
   docId: string | null;
-  setDocument: React.Dispatch<React.SetStateAction<DocumentModel | null>>;
-  docRef: MutableRefObject<DocumentModel | null>;
+  // Camino "clásico" (DocumentCanvas.tsx/MinutaEditor.tsx, editor controlado por
+  // React): un block.update remoto se aplica reemplazando el bloque dentro de
+  // `prev.blocks` y dejando que React re-renderice.
+  setDocument?: React.Dispatch<React.SetStateAction<TDoc | null>>;
+  docRef?: MutableRefObject<TDoc | null>;
+  // Camino BlockNote (BlockNoteDocEditor.tsx): el editor mantiene su propio
+  // estado interno (ProseMirror), no es controlado por React — un block.update
+  // remoto se aplica llamando editor.updateBlock(...) imperativamente en vez
+  // de pasar por setState. Si se pasa esto, tiene prioridad sobre setDocument/docRef.
+  onRemoteBlockUpdate?: (blockId: string, block: any, docVersion?: number) => void;
   myUser: MyUser | undefined;
   onReloadDocument: () => Promise<void>;
   enabled?: boolean;
@@ -32,14 +40,15 @@ interface UseCollaborativeDocumentProps {
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useCollaborativeDocument({
+export function useCollaborativeDocument<TDoc extends { blocks: any[]; version: number } = DocumentModel>({
   docId,
   setDocument,
   docRef,
+  onRemoteBlockUpdate,
   myUser,
   onReloadDocument,
   enabled = true,
-}: UseCollaborativeDocumentProps) {
+}: UseCollaborativeDocumentProps<TDoc>) {
   // Locks from OTHER users (triggers re-render for UI)
   const [locks, setLocks] = useState<Record<string, BlockLock>>({});
   const [structureLockOwner, setStructureLockOwner] = useState<string | null>(null);
@@ -133,10 +142,17 @@ export function useCollaborativeDocument({
     });
   }, []);
 
+  const onRemoteBlockUpdateRef = useRef(onRemoteBlockUpdate);
+  onRemoteBlockUpdateRef.current = onRemoteBlockUpdate;
+
   const handleBlockUpdate = useCallback((data: any) => {
     const { blockId, block, docVersion } = data;
     if (!block || !blockId) return;
-    setDocument(prev => {
+    if (onRemoteBlockUpdateRef.current) {
+      onRemoteBlockUpdateRef.current(blockId, block, docVersion);
+      return;
+    }
+    setDocument?.(prev => {
       if (!prev) return prev;
       const blocks = prev.blocks.map((b: any) => b.id === blockId ? block : b);
       const next = { ...prev, blocks, version: typeof docVersion === 'number' ? docVersion : prev.version };

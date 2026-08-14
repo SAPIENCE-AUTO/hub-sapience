@@ -20,34 +20,8 @@ export type DocumentModel = {
   updatedBy: string;
 };
 
-export type TriggerState = {
-  type: 'user' | 'project' | 'event' | 'group';
-  query: string;
-  rect: DOMRect;
-};
-
 export function generateBlockId(): string {
   return crypto.randomUUID().slice(0, 8);
-}
-
-function marksEqual(a: Mark[] = [], b: Mark[] = []): boolean {
-  if (a.length !== b.length) return false;
-  const sa = [...a].sort();
-  const sb = [...b].sort();
-  return sa.every((m, i) => m === sb[i]);
-}
-
-export function mergeAdjacentText(inlines: Inline[]): Inline[] {
-  const result: Inline[] = [];
-  for (const node of inlines) {
-    const last = result[result.length - 1];
-    if (node.type === 'text' && last?.type === 'text' && marksEqual(last.marks, node.marks)) {
-      result[result.length - 1] = { ...last, text: last.text + node.text };
-    } else {
-      result.push(node);
-    }
-  }
-  return result;
 }
 
 export function makeEmptyDoc(updatedBy: string): DocumentModel {
