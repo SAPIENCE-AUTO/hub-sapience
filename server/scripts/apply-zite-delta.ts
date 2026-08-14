@@ -29,7 +29,11 @@ const DATA_DIR = path.join(ROOT, 'datos-zite');
 const BATCH_SIZE = 500;
 
 const PROTECTED_COLUMNS: Record<string, string[]> = {
-  PurchaseOrders: ['pdfUrl'],
+  // pdfBase64 se agregó junto con pdfUrl: generatePoPdf.ts (Puppeteer, sin n8n)
+  // ahora guarda el PDF en ambos campos, y sendPoEmail.ts adjunta el correo
+  // usando pdfBase64, no pdfUrl — sin esto, un sync de Zite podía dejar la
+  // URL apuntando al PDF nuevo pero el adjunto del correo con el viejo.
+  PurchaseOrders: ['pdfUrl', 'pdfBase64'],
   SupplierInvoices: ['pdfFile', 'xmlFile', 'supportFile'],
   Payments: ['attachment'],
   PoAttachments: ['fileUrl'],
