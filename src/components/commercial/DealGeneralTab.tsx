@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { GetDealsOutputType, saveDeal, deleteDeal, getUsers, GetUsersOutputType, saveProject, approveSelectedCotizaciones } from 'zite-endpoints-sdk';
+import { GetDealsOutputType, saveDeal, deleteDeal, getUsers, GetUsersOutputType, saveProject, approveSelectedCotizaciones, getProjectForDeal } from 'zite-endpoints-sdk';
 import ApprovalReviewDialog from './ApprovalReviewDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,23 +46,40 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
   const [clientFocused, setClientFocused] = useState(false);
   const clientBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const dealAny = deal as any;
-  const hasLinkedProject = Array.isArray(dealAny.projects)
-    ? (dealAny.projects as string[]).length > 0
-    : !!dealAny.projects;
+  // Deals no tiene una columna real de vuelta hacia Projects — solo existe
+  // Projects.dealVinculado (ver server/compat/schema-map.ts). Un deal.projects
+  // en el objeto Deal siempre viene undefined, así que la única forma
+  // confiable de saber si ya existe un proyecto es preguntarle a Projects
+  // directamente. checkingProject evita el "flash" del botón "Crear Proyecto"
+  // mientras se resuelve — mostrarlo de más, aunque sea un instante, es
+  // exactamente el hueco que generaba proyectos duplicados.
+  const [linkedProject, setLinkedProject] = useState<{ id: string; projectCode?: string } | null>(null);
+  const [checkingProject, setCheckingProject] = useState(true);
+
+  useEffect(() => {
+    if (!deal.id) { setLinkedProject(null); setCheckingProject(false); return; }
+    setCheckingProject(true);
+    getProjectForDeal({ dealId: deal.id })
+      .then(d => setLinkedProject(d.project))
+      .catch(() => setLinkedProject(null))
+      .finally(() => setCheckingProject(false));
+  }, [deal.id]);
 
   const handleCreateProject = async () => {
+    if (!deal.id) return;
     setCreatingProject(true);
     try {
       const code = form.dealName || 'Proyecto ' + Date.now().toString().slice(-4);
-      await saveProject({
+      const result = await saveProject({
         projectCode: code,
         fullName: form.dealName || undefined,
         client: form.client || undefined,
         tematica: form.tematica || undefined,
         status: 'Activo',
+        dealVinculado: deal.id,
       });
       toast.success(`Proyecto "${code}" creado exitosamente`);
+      setLinkedProject({ id: result.id, projectCode: code });
     } catch { toast.error('Error al crear el proyecto'); }
     setCreatingProject(false);
   };
@@ -70,8 +87,8 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
   const handleApprovalSuccess = (res: { projectCode: string; projectId: string; quotedCost: number; notificationsSent: number }) => {
     const today = new Date().toISOString().split('T')[0];
     const updated: Deal = { ...deal, phase: 'Ganado', approvalDate: today, quotedCost: res.quotedCost };
-    (updated as any).projects = [res.projectId];
     setForm(f => ({ ...f, phase: 'Ganado', approvalDate: today }));
+    setLinkedProject({ id: res.projectId, projectCode: res.projectCode });
     onSaved(updated);
   };
 
@@ -295,8 +312,18 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
         </div>
       )}
 
+      {/* ── Deal ganado + proyecto ya vinculado: confirmación, no botón ── */}
+      {form.phase === 'Ganado' && deal.id && !checkingProject && linkedProject && (
+        <div className="border rounded-xl p-3 bg-muted/20 border-border flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
+          <p className="text-sm text-foreground">
+            Proyecto ya creado: <span className="font-semibold">{linkedProject.projectCode ?? linkedProject.id}</span>
+          </p>
+        </div>
+      )}
+
       {/* ── Fallback: "Crear Proyecto" when already Ganado but no project linked ── */}
-      {form.phase === 'Ganado' && deal.id && !hasLinkedProject && (
+      {form.phase === 'Ganado' && deal.id && !checkingProject && !linkedProject && (
         <div className="border rounded-xl p-3 bg-muted/20 border-border flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">

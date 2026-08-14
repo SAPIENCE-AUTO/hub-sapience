@@ -115,10 +115,11 @@ export default createEndpoint({
     muestra: z.string().optional(),
     muestraImagen: z.string().optional(),
     instruccionesDeAnalisis: z.string().optional(),
+    dealVinculado: z.string().optional(), // solo se usa al crear — ver DealGeneralTab.handleCreateProject
   }),
   outputSchema: z.object({ success: z.boolean(), id: z.string(), cascaded: z.boolean().optional() }),
   execute: async ({ input, context }) => {
-    const { id, oldProjectCode, projectCode, additionalOldCodes, fullName, status, client, tematica, startDate, endDate, description, lider, analistas, moderadores, asistentes, muestra, muestraImagen, instruccionesDeAnalisis } = input;
+    const { id, oldProjectCode, projectCode, additionalOldCodes, fullName, status, client, tematica, startDate, endDate, description, lider, analistas, moderadores, asistentes, muestra, muestraImagen, instruccionesDeAnalisis, dealVinculado } = input;
     const now = new Date().toISOString();
     const updateFields: Record<string, any> = { projectCode, fullName, status, client, tematica, startDate, endDate, description };
     if (muestra !== undefined) updateFields.muestra = muestra;
@@ -156,7 +157,14 @@ export default createEndpoint({
     }
 
     // ── Create new project ─────────────────────────────────────────────────────
-    const record = await Projects.create({ record: { ...updateFields, createdBy: context.user!.email, createdAt: now } });
+    const record = await Projects.create({
+      record: {
+        ...updateFields,
+        ...(dealVinculado ? { dealVinculado: [dealVinculado] } : {}),
+        createdBy: context.user!.email,
+        createdAt: now,
+      } as any,
+    });
 
     // Auto-create a default calendar board for the new project
     const calendarBoard = await Boards.create({

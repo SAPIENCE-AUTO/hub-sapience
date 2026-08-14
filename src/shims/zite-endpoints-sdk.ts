@@ -236,6 +236,7 @@ export const getPresence = (input?: any): Promise<any> => call('getPresence', in
 export const getProjectBudget = (input?: any): Promise<any> => call('getProjectBudget', input);
 export const getProjectCostAnalysis = (input?: any): Promise<any> => call('getProjectCostAnalysis', input);
 export const getProjectDocuments = (input?: any): Promise<any> => call('getProjectDocuments', input);
+export const getProjectForDeal = (input?: any): Promise<any> => call('getProjectForDeal', input);
 export const getProjects = (input?: any): Promise<any> => call('getProjects', input);
 export const getPurchaseOrders = (input?: any): Promise<any> => call('getPurchaseOrders', input);
 export const getRecruitmentDashboard = (input?: any): Promise<any> => call('getRecruitmentDashboard', input);

@@ -83,10 +83,14 @@ export default createEndpoint({
         })) as any,
       });
 
-      // ── 4a. Update deal (phase, approvalDate, quotedCost, link project) ──────
+      // ── 4a. Update deal (phase, approvalDate, quotedCost) ────────────────────
+      // El link real Proyecto↔Deal ya quedó puesto arriba vía
+      // Projects.dealVinculado — Deals no tiene columna de vuelta hacia
+      // Projects (ver getProjectForDeal.ts), así que no hay nada que
+      // guardar aquí de ese lado.
       await Deals.update({
         id: input.dealId,
-        record: { phase: 'Ganado', approvalDate: today, quotedCost, projects: [newProject.id] } as any,
+        record: { phase: 'Ganado', approvalDate: today, quotedCost } as any,
       });
 
       // ── 5. Create collection process record ──────────────────────────────────
