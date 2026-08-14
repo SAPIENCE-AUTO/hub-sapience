@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { GetDealsOutputType, saveDeal, deleteDeal, getUsers, GetUsersOutputType, saveProject, approveSelectedCotizaciones, getProjectForDeal } from 'zite-endpoints-sdk';
 import ApprovalReviewDialog from './ApprovalReviewDialog';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { Trash2, FolderPlus, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PHASES, CURRENCIES, getCurrencySymbol, fmtMoneyFull } from './dealUtils';
 import NumericInput from '@/components/NumericInput';
+import ComboboxCreatable from '@/components/ComboboxCreatable';
 
 type Deal = GetDealsOutputType['deals'][0];
 type UserItem = GetUsersOutputType['users'][0];
@@ -43,8 +44,6 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
   const [pendingApprove, setPendingApprove] = useState<{ dealId: string; updated: Deal } | null>(null);
   const [approving, setApproving] = useState(false);
   const [approvalReviewOpen, setApprovalReviewOpen] = useState(false);
-  const [clientFocused, setClientFocused] = useState(false);
-  const clientBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Deals no tiene una columna real de vuelta hacia Projects — solo existe
   // Projects.dealVinculado (ver server/compat/schema-map.ts). Un deal.projects
@@ -157,10 +156,6 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
   const totalACobrar = clientPrice + impuestos - retenciones;
   const sym = getCurrencySymbol(form.currency);
 
-  const clientSuggestions = clientFocused && form.client.length > 0
-    ? existingClients.filter(c => c.toLowerCase().includes(form.client.toLowerCase()) && c !== form.client)
-    : [];
-
   const canApprove = deal.id && APPROVE_PHASES.includes(form.phase);
 
   return (
@@ -175,37 +170,13 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
             <SelectContent>{PHASE_KEYS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-        <div className="space-y-1 relative"><Label>Cliente</Label>
-          <Input
+        <div className="space-y-1"><Label>Cliente</Label>
+          <ComboboxCreatable
             value={form.client}
-            onChange={sf('client')}
-            onFocus={() => {
-              if (clientBlurTimer.current) clearTimeout(clientBlurTimer.current);
-              setClientFocused(true);
-            }}
-            onBlur={() => {
-              clientBlurTimer.current = setTimeout(() => setClientFocused(false), 150);
-            }}
+            onChange={v => setForm(f => ({ ...f, client: v }))}
+            options={existingClients}
             placeholder="Nombre del cliente..."
           />
-          {clientSuggestions.length > 0 && (
-            <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-lg shadow-lg max-h-40 overflow-y-auto">
-              {clientSuggestions.map(c => (
-                <button
-                  key={c}
-                  type="button"
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors first:rounded-t-lg last:rounded-b-lg"
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => {
-                    setForm(f => ({ ...f, client: c }));
-                    setClientFocused(false);
-                  }}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
         <div className="space-y-1"><Label>Tipo de proyecto</Label>
           <Input value={form.projectType} onChange={sf('projectType')} placeholder="Cualitativo, Cuantitativo..." />

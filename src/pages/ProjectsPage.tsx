@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusBadge } from '../components/StatusBadge';
+import ComboboxCreatable from '../components/ComboboxCreatable';
 import { GanttTimeline } from '../components/GanttTimeline';
 import { Plus, Pencil, Trash2, Search, LayoutGrid, List, ChevronRight, CalendarDays, ArrowUpAZ, ArrowDownAZ, ArrowUp, ArrowDown, ChevronDown, GanttChartSquare, MessageSquarePlus, ExternalLink, Loader2, RefreshCw, Calendar, MapPin, Users, Clock, X, Eye, Mail } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -1244,7 +1245,12 @@ export default function ProjectsPage() {
             </div>
             <div className="space-y-1">
               <Label>Cliente</Label>
-              <Input placeholder="Empresa S.A." value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} />
+              <ComboboxCreatable
+                value={form.client}
+                onChange={v => setForm(f => ({ ...f, client: v }))}
+                options={uniqueClients}
+                placeholder="Empresa S.A."
+              />
             </div>
             <div className="space-y-1">
               <Label>Estado</Label>
