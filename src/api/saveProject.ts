@@ -157,9 +157,13 @@ export default createEndpoint({
     }
 
     // ── Create new project ─────────────────────────────────────────────────────
+    // Sin startDate el proyecto queda sin fecha de inicio hasta que alguien la
+    // ponga a mano — se ancla al día de creación por default, tanto aquí como
+    // en approveDeal.ts (que crea el Project directo, sin pasar por aquí).
     const record = await Projects.create({
       record: {
         ...updateFields,
+        startDate: startDate || now.slice(0, 10),
         ...(dealVinculado ? { dealVinculado: [dealVinculado] } : {}),
         createdBy: context.user!.email,
         createdAt: now,

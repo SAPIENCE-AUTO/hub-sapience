@@ -64,6 +64,7 @@ export default createEndpoint({
           tematica: (deal as any).tematica,
           status: 'En curso',
           budget: deal.clientPrice,
+          startDate: today,
           dealVinculado: [input.dealId],
           createdBy: context.user!.email,
           createdAt: new Date().toISOString(),

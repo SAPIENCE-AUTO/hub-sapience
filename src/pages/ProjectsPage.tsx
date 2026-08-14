@@ -591,7 +591,12 @@ export default function ProjectsPage() {
     localStorage.setItem(`projects-view-prefs-${user.id}`, JSON.stringify({ scope, statusFilter }));
   }, [scope, statusFilter, user?.id]);
 
-  const openNew = () => { setEditing(null); setForm({ ...emptyForm }); setOpen(true); };
+  const openNew = () => {
+    setEditing(null);
+    // Default a hoy — antes se dejaba vacía si nadie la tocaba (ver ajuste solicitado).
+    setForm({ ...emptyForm, startDate: new Date().toISOString().slice(0, 10) });
+    setOpen(true);
+  };
   const toIdArray = (v: string | string[] | null | undefined): string[] => {
     if (!v) return [];
     if (Array.isArray(v)) return v;
