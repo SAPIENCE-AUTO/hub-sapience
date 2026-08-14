@@ -35,19 +35,28 @@ export default createEndpoint({
 
     if (!isAdmin) throw new ZiteError({ code: 'FORBIDDEN', message: 'No tienes permisos para editar usuarios' });
 
+    // Los <Select> del front inicializan estos campos en '' cuando el usuario
+    // no tiene valor guardado (p.ej. departamento nunca asignado) — sus CHECK
+    // constraints en Postgres solo permiten null o un valor de la lista, no
+    // '' (ver users_departamento_chk y similares en schema.sql). '' truena
+    // el guardado con un error de constraint que el front solo ve como
+    // "Error al guardar" genérico. Tratarlo como "sin cambio" es lo correcto:
+    // no hay una opción real de "vaciar" estos selects en la UI.
+    const orUndef = (v?: string) => (v === '' ? undefined : v);
+
     await Users.update({
       id: input.id,
       record: {
         firstName: input.firstName,
         lastName: input.lastName,
-        role: input.role,
-        departamento: input.departamento,
-        accessComercial: input.accessComercial,
-        accessOperacion: input.accessOperacion,
-        accessAdmin: input.accessAdmin,
-        accessFinanzas: input.accessFinanzas,
-        accessOtros: input.accessOtros,
-        purchaseLevel: input.purchaseLevel,
+        role: orUndef(input.role),
+        departamento: orUndef(input.departamento),
+        accessComercial: orUndef(input.accessComercial),
+        accessOperacion: orUndef(input.accessOperacion),
+        accessAdmin: orUndef(input.accessAdmin),
+        accessFinanzas: orUndef(input.accessFinanzas),
+        accessOtros: orUndef(input.accessOtros),
+        purchaseLevel: orUndef(input.purchaseLevel),
         costCenters: input.costCenters,
         maxApprovalAmount: input.maxApprovalAmount,
         visiblePages: input.visiblePages,

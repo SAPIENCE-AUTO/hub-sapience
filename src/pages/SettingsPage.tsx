@@ -137,6 +137,13 @@ function UserEditSheet({
 
   const handleSave = async () => {
     if (!user) return;
+    const missing: string[] = [];
+    if (!role) missing.push('Rol');
+    if (!departamento) missing.push('Departamento');
+    if (missing.length > 0) {
+      toast.error(`Falta ${missing.length > 1 ? 'seleccionar' : 'seleccionar el campo'}: ${missing.join(', ')}`);
+      return;
+    }
     setSaving(true);
     try {
       const parsedMax = maxApprovalAmount.trim() !== '' && !isNaN(parseFloat(maxApprovalAmount))
