@@ -54,8 +54,6 @@ services:
         sync: false
       - key: ZITE_OUTLOOK_SEND_AS_EMAIL
         sync: false
-      - key: ZITE_N8N_ODC_WEBHOOK_URL
-        sync: false
       - key: ZITE_N8N_CALENDAR_WEBHOOK_URL
         sync: false
       - key: ZITE_N8N_TIMELINE_WEBHOOK_URL
