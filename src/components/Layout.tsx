@@ -61,14 +61,14 @@ function layoutAvatarGradient(email?: string): React.CSSProperties {
 type Project = GetProjectsOutputType['projects'][0];
 type LucideIcon = React.ComponentType<{ className?: string }>;
 
-interface NavItem {
+export interface NavItem {
   to: string;
   icon: LucideIcon;
   label: string;
   roles?: string[];
 }
 
-interface NavSection {
+export interface NavSection {
   id: string;
   label: string;
   icon: LucideIcon;
@@ -78,7 +78,7 @@ interface NavSection {
 
 const ALL_ROLES = ['Owner', 'Socio', 'Head', 'Líder', 'Coordinador', 'Analista'];
 
-const NAV_SECTIONS: NavSection[] = [
+export const NAV_SECTIONS: NavSection[] = [
   {
     id: 'comercial',
     label: 'Comercial',
@@ -156,7 +156,7 @@ const statusDot: Record<string, string> = {
   'Cancelado':  'bg-rose-400',
 };
 
-type UserWithAccess = {
+export type UserWithAccess = {
   role?: string;
   accessComercial?: string;
   accessOperacion?: string;
@@ -167,7 +167,7 @@ type UserWithAccess = {
   [key: string]: unknown;
 };
 
-function isAdmin(user?: UserWithAccess) {
+export function isAdmin(user?: UserWithAccess) {
   if (!user) return false;
   return user.role === 'Owner' || user.role === 'Socio' ||
     user.accessComercial === 'Administrar' ||
@@ -185,7 +185,7 @@ const SECTION_ACCESS_FIELD: Record<string, keyof UserWithAccess> = {
   otros:     'accessOtros',
 };
 
-function canSeeSection(section: NavSection, user?: UserWithAccess) {
+export function canSeeSection(section: NavSection, user?: UserWithAccess) {
   if (!user) return true;
   if (user.role === 'Owner' || user.role === 'Socio') return true;
   const field = SECTION_ACCESS_FIELD[section.id];
@@ -194,7 +194,7 @@ function canSeeSection(section: NavSection, user?: UserWithAccess) {
   return !!val && val !== 'Sin acceso';
 }
 
-function canSeeItem(item: NavItem, user?: UserWithAccess) {
+export function canSeeItem(item: NavItem, user?: UserWithAccess) {
   if (!item.roles) return true;
   if (item.roles.includes('__admin__')) return isAdmin(user);
   if (item.roles.includes('__settings__')) {

@@ -26,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import { PAGE_SECTIONS_DEF } from '../lib/pageVisibility';
 import { COST_CENTERS } from '../lib/constants';
 import { fmtCurrency } from '../lib/format';
+import NavPreviewDialog from '../components/NavPreviewDialog';
 
 type UserRecord = GetUsersOutputType['users'][0];
 type LimitRecord = GetApprovalLimitsOutputType['limits'][0];
@@ -911,6 +912,7 @@ function UsersTab() {
   const [loading, setLoading] = useState(true);
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [previewUser, setPreviewUser] = useState<UserRecord | null>(null);
 
   const loadUsers = () => {
     setLoading(true);
@@ -994,6 +996,16 @@ function UsersTab() {
                   )}
                 </div>
 
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                  title="Ver navegación como este usuario"
+                  onClick={e => { e.stopPropagation(); setPreviewUser(user); }}
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </Button>
+
                 <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors flex-shrink-0" />
               </div>
             );
@@ -1013,6 +1025,12 @@ function UsersTab() {
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
         onInvited={loadUsers}
+      />
+
+      <NavPreviewDialog
+        user={previewUser}
+        open={!!previewUser}
+        onClose={() => setPreviewUser(null)}
       />
     </>
   );
