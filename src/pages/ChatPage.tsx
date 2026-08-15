@@ -71,17 +71,25 @@ const STICKERS = [
 // la menos recientemente usada — al pasarse del límite).
 const MAX_CACHED_CHANNELS = 20;
 const messagesCache = new Map<string, Message[]>();
+// Guarda si hay más mensajes viejos por cargar para cada canal cacheado, en
+// sincronía con messagesCache (misma key, mismo evict), para que reabrir un
+// canal en la misma sesión no pierda el progreso de "cargar anteriores".
+const hasMoreOlderCache = new Map<string, boolean>();
 function getCachedMessages(channel: string): Message[] | undefined {
   const cached = messagesCache.get(channel);
   if (cached) { messagesCache.delete(channel); messagesCache.set(channel, cached); }
   return cached;
 }
-function cacheMessages(channel: string, messages: Message[]) {
+function getCachedHasMoreOlder(channel: string): boolean | undefined {
+  return hasMoreOlderCache.get(channel);
+}
+function cacheMessages(channel: string, messages: Message[], hasMoreOlder?: boolean) {
   messagesCache.delete(channel);
   messagesCache.set(channel, messages);
+  if (hasMoreOlder !== undefined) hasMoreOlderCache.set(channel, hasMoreOlder);
   if (messagesCache.size > MAX_CACHED_CHANNELS) {
     const lru = messagesCache.keys().next().value;
-    if (lru !== undefined) messagesCache.delete(lru);
+    if (lru !== undefined) { messagesCache.delete(lru); hasMoreOlderCache.delete(lru); }
   }
 }
 let cachedDms: DMConv[] | null = null;
@@ -2006,11 +2014,21 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     setReplyingTo(null);
     setTypingUsers({});
     setActiveMsgId(null);
-    setHasMoreOlder(false);
     setLoadingOlder(false);
     initialLoadRef.current = true;
     clearReadStateForChannel(effectiveChannel);
     lastSentAtRef.current = null;
+    // Si ya había mensajes cacheados de este canal (ej. con "cargar anteriores"
+    // ya usado antes en esta sesión), se restaura ese hasMoreOlder y se arranca
+    // desde el último sentAt cacheado — así loadIncremental() de abajo solo
+    // trae lo nuevo en vez de que load() reemplace todo por los últimos 60.
+    if (cached && cached.length > 0) {
+      setHasMoreOlder(getCachedHasMoreOlder(effectiveChannel) ?? false);
+      const last = cached[cached.length - 1];
+      if (last?.sentAt) lastSentAtRef.current = last.sentAt;
+    } else {
+      setHasMoreOlder(false);
+    }
     let cancelled = false;
 
     const load = async () => {
@@ -2019,7 +2037,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
         if (!cancelled) {
           setAllMessages(d.messages);
           setHasMoreOlder(d.hasMoreOlder ?? false);
-          cacheMessages(effectiveChannel, d.messages);
+          cacheMessages(effectiveChannel, d.messages, d.hasMoreOlder ?? false);
           const last = d.messages[d.messages.length - 1];
           if (last?.sentAt) lastSentAtRef.current = last.sentAt;
         }
@@ -2059,7 +2077,19 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     // Expose to ref so signal listeners outside this effect can call the latest version
     loadIncrementalRef.current = loadIncremental;
 
-    load();
+    // Con cache: solo trae lo nuevo desde el último sentAt cacheado (preserva
+    // las páginas viejas ya traídas con "cargar anteriores"). Sin cache: carga
+    // completa de los últimos 60, como antes.
+    if (cached && cached.length > 0 && lastSentAtRef.current) {
+      loadIncremental().finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+          setTimeout(() => { initialLoadRef.current = false; }, 500);
+        }
+      });
+    } else {
+      load();
+    }
     // ── Fase B Etapa 1 (P1): polling OFF when Ably connected, ON as fallback ──
     const interval = setInterval(() => {
       if (!cancelled && document.visibilityState === 'visible' && realtimeStatusRef.current !== 'connected') {
@@ -2106,7 +2136,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
           const seen = new Set(prev.map(m => m.id));
           const older = d.messages.filter(m => !seen.has(m.id));
           const next = [...older, ...prev];
-          cacheMessages(effectiveChannel, next);
+          cacheMessages(effectiveChannel, next, d.hasMoreOlder ?? false);
           return next;
         });
       }
