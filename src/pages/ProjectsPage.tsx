@@ -832,42 +832,48 @@ export default function ProjectsPage() {
             </div>
 
             {myProjectCount > 0 && (
-              <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 border border-border/40">
-                <button
-                  onClick={() => setScope('mine')}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-all ${scope === 'mine' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  Mis proyectos
-                  <span className={`text-[11px] rounded-full px-1.5 py-0 font-semibold leading-5 ${scope === 'mine' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted-foreground/15 text-muted-foreground'}`}>
-                    {myProjectCount}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setScope('all')}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-all ${scope === 'all' ? 'bg-card text-foreground shadow-sm border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  Todo Sapience
-                  <span className={`text-[11px] rounded-full px-1.5 py-0 font-semibold leading-5 ${scope === 'all' ? 'bg-primary/10 text-primary' : 'bg-muted-foreground/15 text-muted-foreground'}`}>
-                    {projects.length}
-                  </span>
-                </button>
+              <div>
+                <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Vista</div>
+                <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 border border-border/40">
+                  <button
+                    onClick={() => setScope('mine')}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-all ${scope === 'mine' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Mis proyectos
+                    <span className={`text-[11px] rounded-full px-1.5 py-0 font-semibold leading-5 ${scope === 'mine' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted-foreground/15 text-muted-foreground'}`}>
+                      {myProjectCount}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setScope('all')}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-all ${scope === 'all' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Todo Sapience
+                    <span className={`text-[11px] rounded-full px-1.5 py-0 font-semibold leading-5 ${scope === 'all' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted-foreground/15 text-muted-foreground'}`}>
+                      {projects.length}
+                    </span>
+                  </button>
+                </div>
               </div>
             )}
 
-            <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 border border-border/40">
-              {STATUS_FILTERS.map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => setStatusFilter(f.key)}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-all ${statusFilter === f.key ? 'bg-card text-foreground shadow-sm border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  {'dotClass' in f && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${f.dotClass}`} />}
-                  {f.label}
-                  <span className={`text-[11px] rounded-full px-1.5 py-0 font-semibold leading-5 ${statusFilter === f.key ? 'bg-primary/10 text-primary' : 'bg-muted-foreground/15 text-muted-foreground'}`}>
-                    {countFor(f.key)}
-                  </span>
-                </button>
-              ))}
+            <div>
+              <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Estatus</div>
+              <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 border border-border/40">
+                {STATUS_FILTERS.map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setStatusFilter(f.key)}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-all ${statusFilter === f.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    {'dotClass' in f && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${f.dotClass}`} />}
+                    {f.label}
+                    <span className={`text-[11px] rounded-full px-1.5 py-0 font-semibold leading-5 ${statusFilter === f.key ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted-foreground/15 text-muted-foreground'}`}>
+                      {countFor(f.key)}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <Popover>
