@@ -40,10 +40,14 @@ const PROJECT_STATUSES = ['En curso', 'Stand by', 'Finalizado', 'Cancelado'];
 
 const emptyForm = { projectCode: '', tematica: '', status: 'En curso', client: '', startDate: '', endDate: '', description: '', lider: [] as string[], analistas: [] as string[], moderadores: [] as string[], asistentes: [] as string[] };
 
+// "En curso" ya incluye Stand by (antes existía un "Activos" aparte que
+// combinaba los dos, y quedaba junto al chip individual "En curso" con
+// statuses:['En curso'] — mismo color, nombre casi igual, se veían
+// duplicados). Quien quiera solo los que están en pausa usa el chip
+// "Stand by" aparte.
 const STATUS_FILTERS = [
+  { key: 'en-curso',   label: 'En curso',   statuses: ['En curso', 'Stand by'], dotClass: 'bg-chart-2' },
   { key: 'all',        label: 'Todos' },
-  { key: 'activos',    label: 'Activos',    statuses: ['En curso', 'Stand by'], dotClass: 'bg-chart-2' },
-  { key: 'en-curso',   label: 'En curso',   statuses: ['En curso'],   dotClass: 'bg-chart-2' },
   { key: 'stand-by',   label: 'Stand by',   statuses: ['Stand by'],   dotClass: 'bg-chart-4' },
   { key: 'finalizado', label: 'Finalizado', statuses: ['Finalizado'], dotClass: 'bg-muted-foreground' },
   { key: 'cancelado',  label: 'Cancelado',  statuses: ['Cancelado'],  dotClass: 'bg-destructive' },
@@ -384,7 +388,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
-  const [statusFilter, setStatusFilter] = useState<FilterKey>('activos');
+  const [statusFilter, setStatusFilter] = useState<FilterKey>('en-curso');
   const [clientFilter, setClientFilter] = useState('all');
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -571,11 +575,15 @@ export default function ProjectsPage() {
     getTeamMembers({}).then(d => setUsers(d.members)).catch(() => {});
   }, [user?.email]);
 
-  // Load per-user view prefs once projects + user are ready
+  // Load per-user view prefs once projects + user are ready.
+  // Llave con "-v2": todos tenían guardado el viejo default (statusFilter
+  // 'all') de antes de que "En curso" pasara a ser el default — sin cambiar
+  // la llave, ese valor persistido seguiría ganándole al default nuevo para
+  // quien ya hubiera usado esta página, y solo lo verían los usuarios nuevos.
   useEffect(() => {
     if (!user?.id || loading || prefsLoadedRef.current) return;
     prefsLoadedRef.current = true;
-    const saved = localStorage.getItem(`projects-view-prefs-${user.id}`);
+    const saved = localStorage.getItem(`projects-view-prefs-v2-${user.id}`);
     if (saved) {
       try {
         const { scope: s, statusFilter: sf } = JSON.parse(saved);
@@ -592,7 +600,7 @@ export default function ProjectsPage() {
   // Save prefs whenever scope or status filter changes
   useEffect(() => {
     if (!user?.id || !prefsLoadedRef.current) return;
-    localStorage.setItem(`projects-view-prefs-${user.id}`, JSON.stringify({ scope, statusFilter }));
+    localStorage.setItem(`projects-view-prefs-v2-${user.id}`, JSON.stringify({ scope, statusFilter }));
   }, [scope, statusFilter, user?.id]);
 
   const openNew = () => {
@@ -838,7 +846,7 @@ export default function ProjectsPage() {
                   onClick={() => setScope('all')}
                   className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-all ${scope === 'all' ? 'bg-card text-foreground shadow-sm border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
                 >
-                  Todos
+                  Todo Sapience
                   <span className={`text-[11px] rounded-full px-1.5 py-0 font-semibold leading-5 ${scope === 'all' ? 'bg-primary/10 text-primary' : 'bg-muted-foreground/15 text-muted-foreground'}`}>
                     {projects.length}
                   </span>
