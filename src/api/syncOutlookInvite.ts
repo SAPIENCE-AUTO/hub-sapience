@@ -366,7 +366,13 @@ export default createEndpoint({
     const profile = pick('Perfil', 'perfil');
     const descripcion = pick('Descripción', 'descripcion');
     const detailsText = pick('Detalles adicionales', 'Detalles', 'detalles');
-    const link = pick('Link', 'link', 'Liga', 'liga');
+    // Quien captura la columna "Link" del tablero suele escribir solo el
+    // dominio (p.ej. "www.youtube.com"), sin protocolo — un <a href> así lo
+    // interpreta el navegador como ruta RELATIVA del sitio, no como URL
+    // externa, y el botón "Unirse a la reunión" no lleva a ningún lado. Si no
+    // trae ya un protocolo (://), se asume https.
+    const rawLink = pick('Link', 'link', 'Liga', 'liga');
+    const link = rawLink && !/^[a-z][a-z0-9+.-]*:\/\//i.test(rawLink) ? `https://${rawLink}` : rawLink;
     const customHtml = pick('HTML Invite', 'htmlinvite', 'HTML Personalizado', 'htmlpersonalizado');
 
     const whenText = formatWhenText(startIso, durationHours);
