@@ -83,6 +83,16 @@ export default createEndpoint({
       [supplier.supplierName],
     );
     const visiblePos = visiblePosResult.rows;
+    // Esta consulta va directo a SQL (ver comentario arriba), así que no pasa
+    // por stripNullScalars (server/compat/model.ts) — el normalizador que en
+    // el resto de la app convierte columnas vacías de `null` a `undefined`
+    // para calzar con los campos `.optional()` del outputSchema. Sin esto,
+    // cualquier OC "visible" por un solo criterio del OR (ej. tiene pdfFile
+    // pero pdfUrl/pdfBase64 están vacíos) manda `null` en esos otros campos y
+    // truena todo el portal con STRICT_OUTPUT, no solo esa OC.
+    for (const row of visiblePos) {
+      for (const key in row) if (row[key] === null) row[key] = undefined;
+    }
 
     // poMap necesita el poNumber de TODAS las OCs del proveedor (para
     // resolver el poNumber de cada pago más abajo, no solo de las
