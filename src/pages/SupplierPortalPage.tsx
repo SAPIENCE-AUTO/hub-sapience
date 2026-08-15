@@ -27,7 +27,10 @@ type TabId = 'ordenes' | 'facturas' | 'pagos';
 
 const PO_STATUS_STYLES: Record<string, string> = {
   'Enviada a aprobación':  'bg-blue-100 text-blue-700 border-blue-200',
-  'Aprobada': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  'Aprobada':          'bg-emerald-100 text-emerald-700 border-emerald-200',
+  'Factura recibida':  'bg-orange-100 text-orange-700 border-orange-200',
+  'Factura validada':  'bg-teal-100 text-teal-700 border-teal-200',
+  'Pago programado':   'bg-yellow-100 text-yellow-700 border-yellow-200',
   'Pagada':   'bg-purple-100 text-purple-700 border-purple-200',
 };
 const INV_STATUS_STYLES: Record<string, string> = {
@@ -655,6 +658,86 @@ function PendingPOsSection({ pos, onUpload, onSelect }: { pos: PO[]; onUpload: (
   );
 }
 
+// ── History (already resolved by another route — read-only, still consultable) ──
+function HistoryPOsSection({ pos, onSelect }: { pos: PO[]; onSelect: (po: PO) => void }) {
+  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string>('Todos');
+  if (pos.length === 0) return null;
+
+  const statuses = ['Todos', ...Array.from(new Set(pos.map(p => p.status).filter(Boolean) as string[]))];
+  const filtered = statusFilter === 'Todos' ? pos : pos.filter(p => p.status === statusFilter);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2.5">
+        <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
+          <List className="w-3.5 h-3.5 text-muted-foreground" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold leading-tight">Historial</h3>
+          <p className="text-xs text-muted-foreground">Órdenes ya resueltas — consulta, no requieren acción</p>
+        </div>
+        <Badge variant="outline" className="ml-auto shrink-0 text-muted-foreground">{pos.length}</Badge>
+      </div>
+      {statuses.length > 2 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {statuses.map(s => (
+            <button
+              key={s}
+              onClick={() => { setStatusFilter(s); setPage(1); }}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${statusFilter === s ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:text-foreground'}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold"># OC</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold">Proyecto</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold">Servicio</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold">Monto</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold">Fecha</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold">Estado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {paginated.map(po => (
+                <tr
+                  key={po.id}
+                  className="hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => onSelect(po)}
+                >
+                  <td className="px-4 py-3 font-mono font-semibold text-muted-foreground"># {po.poNumber}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{po.projectCode ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground max-w-[200px]"><span className="line-clamp-2">{po.serviceDescription || '—'}</span></td>
+                  <td className="px-4 py-3 font-semibold text-muted-foreground whitespace-nowrap">{fmtCurrency(po.totalAmount, po.currency ?? undefined)}</td>
+                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{fmtDate(po.issueDate)}</td>
+                  <td className="px-4 py-3">
+                    {po.status && <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${PO_STATUS_STYLES[po.status] ?? 'bg-muted text-muted-foreground border-border'}`}>{po.status}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {totalPages > 1 && (
+          <PaginationBar
+            page={page} totalPages={totalPages} total={filtered.length} pageSize={PAGE_SIZE}
+            onPrev={() => setPage(p => p - 1)} onNext={() => setPage(p => p + 1)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Rejected POs (need correction) ───────────────────────────────────────────
 function RejectedPOsSection({ pos, onResubmit, onSelect }: { pos: PO[]; onResubmit: (po: PO) => void; onSelect: (po: PO) => void }) {
   const [page, setPage] = useState(1);
@@ -1165,8 +1248,18 @@ export default function SupplierPortalPage() {
   const handleVerify = (pw: string) => { setPassword(pw); load(pw); };
 
   const pos = data?.purchaseOrders ?? [];
+  // Estatus donde la factura ya quedó resuelta por otra vía (casi siempre OCs
+  // de antes de que existiera este portal) — sin esto, una OC ya "Pagada" sin
+  // invoiceStatus en el portal seguía apareciendo en "Pendientes de facturar"
+  // con botón de subir, confundiendo al proveedor.
+  const INVOICE_RESOLVED_STATUSES = new Set(['Factura recibida', 'Factura validada', 'Pago programado', 'Pagada']);
   const cancelledPos = pos.filter(p => p.status === 'Cancelada');
-  const pendingPos   = pos.filter(p => !p.invoiceStatus && p.status !== 'Cancelada');
+  const pendingPos   = pos.filter(p => !p.invoiceStatus && p.status !== 'Cancelada' && !INVOICE_RESOLVED_STATUSES.has(p.status ?? ''));
+  // Ya resueltas por otra vía (casi siempre de antes de que existiera este
+  // portal) — no van en "Pendientes" (nada que subir) ni en "Facturas" (no
+  // hay un registro de invoice del portal que mostrar), pero el proveedor
+  // debe poder seguir consultándolas.
+  const historyPos   = pos.filter(p => !p.invoiceStatus && p.status !== 'Cancelada' && INVOICE_RESOLVED_STATUSES.has(p.status ?? ''));
   const invoicedPos  = pos.filter(p => p.invoiceStatus && p.invoiceStatus !== 'Rechazada' && p.status !== 'Cancelada');
   const rejectedPos  = pos.filter(p => p.invoiceStatus === 'Rechazada' && p.status !== 'Cancelada');
   const payments     = data?.payments ?? [];
@@ -1176,7 +1269,7 @@ export default function SupplierPortalPage() {
       id: 'ordenes',
       label: 'Órdenes de compra',
       icon: <ShoppingCart className="w-4 h-4" />,
-      count: pendingPos.length + rejectedPos.length + cancelledPos.length,
+      count: pendingPos.length + rejectedPos.length + cancelledPos.length + historyPos.length,
       urgent: rejectedPos.length > 0,
     },
     {
@@ -1235,7 +1328,7 @@ export default function SupplierPortalPage() {
         {/* ── Pestaña 1: Órdenes de compra ── */}
         {activeTab === 'ordenes' && (
           <div className="space-y-8">
-            {rejectedPos.length === 0 && pendingPos.length === 0 && cancelledPos.length === 0 ? (
+            {rejectedPos.length === 0 && pendingPos.length === 0 && cancelledPos.length === 0 && historyPos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
                 <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
                   <FileCheck className="w-7 h-7 text-muted-foreground" />
@@ -1255,6 +1348,9 @@ export default function SupplierPortalPage() {
                 )}
                 {cancelledPos.length > 0 && (
                   <CancelledPOsSection pos={cancelledPos} onSelect={handleSelectPO} />
+                )}
+                {historyPos.length > 0 && (
+                  <HistoryPOsSection pos={historyPos} onSelect={handleSelectPO} />
                 )}
               </>
             )}

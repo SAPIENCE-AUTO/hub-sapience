@@ -79,6 +79,7 @@ export default createEndpoint({
        where supplier_name = $1
          and email_sent_at is not null
          and (pdf_url is not null or pdf_base64 is not null or (pdf_file is not null and jsonb_array_length(pdf_file) > 0))
+       order by issue_date desc nulls last
        limit 500`,
       [supplier.supplierName],
     );
