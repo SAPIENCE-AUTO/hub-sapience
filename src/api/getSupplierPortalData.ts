@@ -106,7 +106,10 @@ export default createEndpoint({
 
     const [invResult, paymentsResult] = await Promise.all([
       SupplierInvoices.findAll({ filters: { supplierId: supplier.id }, limit: 500 }),
-      Payments.findAll({ filters: { supplierName: supplier.supplierName }, limit: 500 }),
+      // dueDate desc: mismo orden que la columna "Fecha comprometida" que ve
+      // el proveedor en la tabla — sin esto salían en orden físico de
+      // Postgres, no cronológico (mismo bug que ya se arregló para las OCs).
+      Payments.findAll({ filters: { supplierName: supplier.supplierName }, sorts: [{ field: 'dueDate', direction: 'desc' }], limit: 500 }),
     ]);
 
     // Build PO number map
