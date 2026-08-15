@@ -32,17 +32,21 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 type Project = GetProjectsOutputType['projects'][0];
 type UserItem = GetTeamMembersOutputType['members'][0];
 
-const PROJECT_STATUSES = ['Prospecto', 'En curso', 'Stand by', 'Finalizado', 'Cancelado'];
+// "Prospecto" existe como fase de Deal, pero un Proyecto solo nace cuando un
+// Deal se gana — nunca debería poder quedar en "Prospecto" (confirmado: 0 de
+// 302 proyectos reales lo usan hoy). "Activo" era un valor legado (6 proyectos
+// reales lo tenían) que se unificó con "En curso" — ver migración de datos.
+const PROJECT_STATUSES = ['En curso', 'Stand by', 'Finalizado', 'Cancelado'];
 
 const emptyForm = { projectCode: '', tematica: '', status: 'En curso', client: '', startDate: '', endDate: '', description: '', lider: [] as string[], analistas: [] as string[], moderadores: [] as string[], asistentes: [] as string[] };
 
 const STATUS_FILTERS = [
   { key: 'all',        label: 'Todos' },
-  { key: 'prospecto',  label: 'Prospecto',  statuses: ['Prospecto'] },
-  { key: 'en-curso',   label: 'En curso',   statuses: ['En curso'] },
-  { key: 'stand-by',   label: 'Stand by',   statuses: ['Stand by'] },
-  { key: 'finalizado', label: 'Finalizado', statuses: ['Finalizado'] },
-  { key: 'cancelado',  label: 'Cancelado',  statuses: ['Cancelado'] },
+  { key: 'activos',    label: 'Activos',    statuses: ['En curso', 'Stand by'], dotClass: 'bg-chart-2' },
+  { key: 'en-curso',   label: 'En curso',   statuses: ['En curso'],   dotClass: 'bg-chart-2' },
+  { key: 'stand-by',   label: 'Stand by',   statuses: ['Stand by'],   dotClass: 'bg-chart-4' },
+  { key: 'finalizado', label: 'Finalizado', statuses: ['Finalizado'], dotClass: 'bg-muted-foreground' },
+  { key: 'cancelado',  label: 'Cancelado',  statuses: ['Cancelado'],  dotClass: 'bg-destructive' },
 ] as const;
 type FilterKey = typeof STATUS_FILTERS[number]['key'];
 type ScopeKey = 'mine' | 'all';
@@ -58,7 +62,6 @@ type SortDir = 'asc' | 'desc';
 
 const statusBarStyle: Record<string, string> = {
   'En curso':   'bg-chart-2',
-  'Prospecto':  'bg-chart-3',
   'Stand by':   'bg-chart-4',
   'Finalizado': 'bg-muted-foreground',
   'Cancelado':  'bg-destructive',
@@ -381,7 +384,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
-  const [statusFilter, setStatusFilter] = useState<FilterKey>('all');
+  const [statusFilter, setStatusFilter] = useState<FilterKey>('activos');
   const [clientFilter, setClientFilter] = useState('all');
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -850,6 +853,7 @@ export default function ProjectsPage() {
                   onClick={() => setStatusFilter(f.key)}
                   className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-all ${statusFilter === f.key ? 'bg-card text-foreground shadow-sm border border-border/50' : 'text-muted-foreground hover:text-foreground'}`}
                 >
+                  {'dotClass' in f && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${f.dotClass}`} />}
                   {f.label}
                   <span className={`text-[11px] rounded-full px-1.5 py-0 font-semibold leading-5 ${statusFilter === f.key ? 'bg-primary/10 text-primary' : 'bg-muted-foreground/15 text-muted-foreground'}`}>
                     {countFor(f.key)}
