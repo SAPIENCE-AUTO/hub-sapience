@@ -252,7 +252,11 @@ export default createEndpoint({
       const activeRows = await loadAllActiveRows();
       if (activeRows.length === 0) return { results: [] };
 
-      const clusters = buildIdentityClusters(activeRows);
+      // Strict: comparar contra todo el sistema requiere 2 de 3 señales — ver
+      // duplicateIdentity.ts. Sin esto, un dato reusado (teléfono/nombre
+      // placeholder) fusionaba identidades no relacionadas en un solo
+      // historial gigante.
+      const clusters = buildIdentityClusters(activeRows, { mode: 'strict' });
       const match = findClusterForRow(clusters, input.seedRowId!);
       if (!match) return { results: [] };
 
@@ -314,7 +318,8 @@ export default createEndpoint({
     const activeRows = allRows.filter(r => !r.deletedAt);
     if (activeRows.length === 0) return { results: [] };
 
-    const clusters = buildIdentityClusters(activeRows);
+    // Strict — ver comentario del modo seed arriba.
+    const clusters = buildIdentityClusters(activeRows, { mode: 'strict' });
 
     const rowProjectCodes = activeRows.map(r => r.projectCode).filter(Boolean) as string[];
     if (input.projectCode) rowProjectCodes.push(input.projectCode);

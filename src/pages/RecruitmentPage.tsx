@@ -61,6 +61,22 @@ const RECRUIT_COLS = [
   { key: 'status',          label: 'Estado',       type: 'select' as const, options: statuses },
 ];
 
+// Las 3 capas de detección de duplicados (ver getBoardDuplicateBadges.ts), expuestas
+// como columnas fijas/filtrables — "Sí" siempre significa "hay señal/hay que revisar".
+const DUP_BADGE_COLS = [
+  { key: '_dupBoard'   as const, label: 'Este filtro',       type: 'select' as const, options: ['Sí', 'No'] },
+  { key: '_dupHistory' as const, label: 'Otros formularios', type: 'select' as const, options: ['Sí', 'No'] },
+  { key: '_dupRisk'    as const, label: 'Elegibilidad',      type: 'select' as const, options: ['Sí', 'No'] },
+];
+
+function dupBadgeValue(rowId: string, key: '_dupBoard' | '_dupHistory' | '_dupRisk', badgeMap: Record<string, RowBadgeInfo>): 'Sí' | 'No' {
+  const b = badgeMap[rowId];
+  if (!b) return 'No';
+  if (key === '_dupBoard')   return b.sameBoardCount > 1 ? 'Sí' : 'No';
+  if (key === '_dupHistory') return b.signals.some(s => s === 'old' || s === 'registered_only') ? 'Sí' : 'No';
+  return b.hasHighRisk ? 'Sí' : 'No';
+}
+
 
 
 // ── CSV Export Helper ─────────────────────────────────────────────────────────
@@ -232,11 +248,20 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
     }
   };
   const nameCol    = useResizableCol('recruit-name-col',    220, 120);
+  const dupBoardColW   = useResizableCol('recruit-col-dupboard',   52, 40);
+  const dupHistoryColW = useResizableCol('recruit-col-duphistory', 52, 40);
+  const dupRiskColW    = useResizableCol('recruit-col-duprisk',    52, 40);
   const emailColW  = useResizableCol('recruit-col-email',   180, 80);
   const phoneColW  = useResizableCol('recruit-col-phone',   130, 80);
   const idNumColW  = useResizableCol('recruit-col-idnum',   120, 80);
   const statusColW = useResizableCol('recruit-col-status',  140, 80);
   const ndaColW    = useResizableCol('recruit-col-nda',      90, 80);
+
+  // Left offsets for the 3 pinned badge columns — contiguous to the right of
+  // "Participante", accounting for whichever of the 3 are currently hidden.
+  const dupBoardLeft   = 35 + nameCol.width;
+  const dupHistoryLeft = dupBoardLeft   + (!hiddenColumns.has('_dupBoard')   ? dupBoardColW.width   : 0);
+  const dupRiskLeft    = dupHistoryLeft + (!hiddenColumns.has('_dupHistory') ? dupHistoryColW.width : 0);
 
   const seenGroupIds = useRef(new Set<string>(['__none__']));
   const groupColIds = groupDynCols.columns.map(c => c.id).join(',');
@@ -291,6 +316,9 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
       } else if (['email', 'phone', 'idNumber', 'status'].includes(sortColumn)) {
         aVal = ((a[sortColumn as keyof Row] as string) || '').toLowerCase();
         bVal = ((b[sortColumn as keyof Row] as string) || '').toLowerCase();
+      } else if (sortColumn === '_dupBoard' || sortColumn === '_dupHistory' || sortColumn === '_dupRisk') {
+        aVal = dupBadgeValue(a.id, sortColumn, badgeMap);
+        bVal = dupBadgeValue(b.id, sortColumn, badgeMap);
       } else {
         const col = dynCols.columns.find(c => c.id === sortColumn);
         const aCell = dynCols.getCellVal(a.id, sortColumn);
@@ -307,7 +335,7 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
       return sortDirection === 'asc' ? cmp : -cmp;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, sortColumn, sortDirection, dynCols.getCellVal, dynCols.columns]);
+  }, [rows, sortColumn, sortDirection, dynCols.getCellVal, dynCols.columns, badgeMap]);
 
   const topLevel    = sortedTopLevel;
   const childrenByParent = useMemo(() => {
@@ -325,8 +353,9 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   const sortedDynCols = [...dynCols.columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0));
   const visibleDynCols = sortedDynCols.filter(c => !hiddenColumns.has(c.id));
   const visibleFixedCount = 5 - ['email', 'phone', 'idNumber', 'status', 'nda'].filter(k => hiddenColumns.has(k)).length;
-  // 2 always-visible (checkbox + name) + visible fixed cols + visible dyn cols + 1 trailing
-  const totalCols = 3 + visibleFixedCount + visibleDynCols.length;
+  const visibleBadgeCount = 3 - ['_dupBoard', '_dupHistory', '_dupRisk'].filter(k => hiddenColumns.has(k)).length;
+  // 2 always-visible (checkbox + name) + visible badge cols + visible fixed cols + visible dyn cols + 1 trailing
+  const totalCols = 3 + visibleBadgeCount + visibleFixedCount + visibleDynCols.length;
 
   // ── Horizontal column virtualization ──────────────────────────────────────
   // ≤ 40 visible dynamic columns → disable virtualization entirely (render all).
@@ -354,6 +383,9 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
 
       // Offset where dynamic columns start (after all fixed/sticky columns)
       let fixedW = 32 + nameCol.width;
+      if (!hiddenColumns.has('_dupBoard'))   fixedW += dupBoardColW.width;
+      if (!hiddenColumns.has('_dupHistory')) fixedW += dupHistoryColW.width;
+      if (!hiddenColumns.has('_dupRisk'))    fixedW += dupRiskColW.width;
       if (!hiddenColumns.has('email'))    fixedW += emailColW.width;
       if (!hiddenColumns.has('phone'))    fixedW += phoneColW.width;
       if (!hiddenColumns.has('idNumber')) fixedW += idNumColW.width;
@@ -396,7 +428,7 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
       if (colVisRafRef.current !== null) { cancelAnimationFrame(colVisRafRef.current); colVisRafRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleDynCols.length, nameCol.width, emailColW.width, phoneColW.width, idNumColW.width, statusColW.width, ndaColW.width, hiddenColumns]);
+  }, [visibleDynCols.length, nameCol.width, dupBoardColW.width, dupHistoryColW.width, dupRiskColW.width, emailColW.width, phoneColW.width, idNumColW.width, statusColW.width, ndaColW.width, hiddenColumns]);
 
   // ── Vertical virtualization: compute which Sin grupo rows are in-viewport ──
   const computeNoneVirtRange = useCallback(() => {
@@ -752,50 +784,6 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
                 <span className="text-sm font-medium cursor-pointer hover:text-primary flex-1 truncate flex items-center gap-1 min-w-0"
                   onClick={() => setEditingName(row.id)}>
                   <span className="truncate" title={row.participantName || row.rowName || ''}>{row.participantName || row.rowName}</span>
-                  {/* Primary badge — resolved by backend, no notes parsing */}
-                  {(badge?.primaryBadge === 'same_client' || badge?.primaryBadge === 'recent') && (
-                    <button
-                      title={badge.primaryBadge === 'same_client' ? '⚠️ Mismo cliente — restricción siempre aplica' : '⚠️ Participó recientemente (< 6 meses)'}
-                      onClick={e => { e.stopPropagation(); onDuplicateClick(row); }}
-                      className="hover:opacity-70 transition-opacity flex-shrink-0">
-                      <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
-                    </button>
-                  )}
-                  {badge?.primaryBadge === 'old' && (
-                    <button
-                      title="Participó en estudios anteriores (hace más de 6 meses)"
-                      onClick={e => { e.stopPropagation(); onDuplicateClick(row); }}
-                      className="hover:opacity-70 transition-opacity flex-shrink-0">
-                      <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                    </button>
-                  )}
-                  {badge?.primaryBadge === 'registered_only' && (
-                    <button
-                      title="Registrado en otro estudio (sin participar)"
-                      onClick={e => { e.stopPropagation(); onDuplicateClick(row); }}
-                      className="hover:opacity-70 transition-opacity flex-shrink-0">
-                      <Copy className="w-3.5 h-3.5 text-blue-500" />
-                    </button>
-                  )}
-                  {badge?.primaryBadge === 'same_board_duplicate' && badge.sameBoardCount > 1 && (
-                    <button
-                      title={`Aparece ×${badge.sameBoardCount} veces en este tablero`}
-                      onClick={e => { e.stopPropagation(); onDuplicateClick(row); }}
-                      className="hover:opacity-70 transition-opacity flex-shrink-0 flex items-center gap-0.5">
-                      <Layers className="w-3.5 h-3.5 text-orange-500" />
-                      <span className="text-[10px] font-bold leading-none text-orange-600">×{badge.sameBoardCount}</span>
-                    </button>
-                  )}
-                  {/* Secondary badge: same_board_duplicate when primary is a cross-project signal */}
-                  {badge?.secondaryBadges?.includes('same_board_duplicate') && badge.sameBoardCount > 1 && (
-                    <button
-                      title={`Aparece ×${badge.sameBoardCount} veces en este tablero`}
-                      onClick={e => { e.stopPropagation(); onDuplicateClick(row); }}
-                      className="hover:opacity-70 transition-opacity flex-shrink-0 flex items-center gap-0.5">
-                      <Layers className="w-3.5 h-3.5 text-orange-500" />
-                      <span className="text-[10px] font-bold leading-none text-orange-600">×{badge.sameBoardCount}</span>
-                    </button>
-                  )}
                 </span>
               )}
               <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -809,6 +797,61 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
               </div>
             </div>
           </td>
+
+          {/* Duplicate/eligibility badge columns — pinned next to name, single source of truth: badgeMap */}
+          {!hiddenColumns.has('_dupBoard') && (
+            <td
+              className={`px-1 py-0 h-9 overflow-hidden text-center group-hover:bg-muted ${selectedIds.has(row.id) ? 'bg-primary/5' : 'bg-card'}`}
+              style={{ position: 'sticky', left: dupBoardLeft, zIndex: 10, borderBottom: cellBorder, borderLeft: '1px solid hsl(var(--border) / 0.4)' }}
+            >
+              {badge && badge.sameBoardCount > 1 && (
+                <button
+                  title={`Aparece ×${badge.sameBoardCount} veces en este tablero`}
+                  onClick={() => onDuplicateClick(row)}
+                  className="hover:opacity-70 transition-opacity inline-flex items-center gap-0.5">
+                  <Layers className="w-3.5 h-3.5 text-orange-500" />
+                  <span className="text-[10px] font-bold leading-none text-orange-600">×{badge.sameBoardCount}</span>
+                </button>
+              )}
+            </td>
+          )}
+          {!hiddenColumns.has('_dupHistory') && (
+            <td
+              className={`px-1 py-0 h-9 overflow-hidden text-center group-hover:bg-muted ${selectedIds.has(row.id) ? 'bg-primary/5' : 'bg-card'}`}
+              style={{ position: 'sticky', left: dupHistoryLeft, zIndex: 10, borderBottom: cellBorder, borderLeft: '1px solid hsl(var(--border) / 0.4)' }}
+            >
+              {badge?.signals.includes('old') ? (
+                <button
+                  title="Participó en estudios anteriores (hace más de 6 meses)"
+                  onClick={() => onDuplicateClick(row)}
+                  className="hover:opacity-70 transition-opacity inline-flex">
+                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              ) : badge?.signals.includes('registered_only') && (
+                <button
+                  title="Registrado en otro estudio (sin participar)"
+                  onClick={() => onDuplicateClick(row)}
+                  className="hover:opacity-70 transition-opacity inline-flex">
+                  <Copy className="w-3.5 h-3.5 text-blue-500" />
+                </button>
+              )}
+            </td>
+          )}
+          {!hiddenColumns.has('_dupRisk') && (
+            <td
+              className={`px-1 py-0 h-9 overflow-hidden text-center group-hover:bg-muted ${selectedIds.has(row.id) ? 'bg-primary/5' : 'bg-card'}`}
+              style={{ position: 'sticky', left: dupRiskLeft, zIndex: 10, borderBottom: cellBorder, borderLeft: '1px solid hsl(var(--border) / 0.4)' }}
+            >
+              {badge?.hasHighRisk && (
+                <button
+                  title={badge.signals.includes('same_client') ? '⚠️ Mismo cliente — restricción siempre aplica' : '⚠️ Participó recientemente (< 6 meses)'}
+                  onClick={() => onDuplicateClick(row)}
+                  className="hover:opacity-70 transition-opacity inline-flex">
+                  <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                </button>
+              )}
+            </td>
+          )}
 
           {/* Inline editable fields: email / phone / idNumber */}
           {(['email', 'phone', 'idNumber'] as const).filter(f => !hiddenColumns.has(f)).map((field) => {
@@ -1049,9 +1092,12 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
           <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', width: 10, height: 10, borderRadius: '50%', background: 'hsl(var(--primary))', border: '2px solid hsl(var(--card))', zIndex: 1 }} />
           <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', width: 10, height: 10, borderRadius: '50%', background: 'hsl(var(--primary))', border: '2px solid hsl(var(--card))', zIndex: 1 }} />
         </div>
-        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + (!hiddenColumns.has('email') ? emailColW.width : 0) + (!hiddenColumns.has('phone') ? phoneColW.width : 0) + (!hiddenColumns.has('idNumber') ? idNumColW.width : 0) + (!hiddenColumns.has('status') ? statusColW.width : 0) + (!hiddenColumns.has('nda') ? ndaColW.width : 0) + visibleDynCols.reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}><colgroup>
+        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + (!hiddenColumns.has('_dupBoard') ? dupBoardColW.width : 0) + (!hiddenColumns.has('_dupHistory') ? dupHistoryColW.width : 0) + (!hiddenColumns.has('_dupRisk') ? dupRiskColW.width : 0) + (!hiddenColumns.has('email') ? emailColW.width : 0) + (!hiddenColumns.has('phone') ? phoneColW.width : 0) + (!hiddenColumns.has('idNumber') ? idNumColW.width : 0) + (!hiddenColumns.has('status') ? statusColW.width : 0) + (!hiddenColumns.has('nda') ? ndaColW.width : 0) + visibleDynCols.reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}><colgroup>
             <col style={{ width: 32 }} />
             <col ref={nameCol.colRef as React.RefObject<HTMLTableColElement>} style={{ width: nameCol.width }} />
+            {!hiddenColumns.has('_dupBoard')   && <col ref={dupBoardColW.colRef as React.RefObject<HTMLTableColElement>} style={{ width: dupBoardColW.width }} />}
+            {!hiddenColumns.has('_dupHistory') && <col ref={dupHistoryColW.colRef as React.RefObject<HTMLTableColElement>} style={{ width: dupHistoryColW.width }} />}
+            {!hiddenColumns.has('_dupRisk')    && <col ref={dupRiskColW.colRef as React.RefObject<HTMLTableColElement>} style={{ width: dupRiskColW.width }} />}
             {!hiddenColumns.has('email')    && <col ref={emailColW.colRef as React.RefObject<HTMLTableColElement>} style={{ width: emailColW.width }} />}
             {!hiddenColumns.has('phone')    && <col ref={phoneColW.colRef as React.RefObject<HTMLTableColElement>} style={{ width: phoneColW.width }} />}
             {!hiddenColumns.has('idNumber') && <col ref={idNumColW.colRef as React.RefObject<HTMLTableColElement>} style={{ width: idNumColW.width }} />}
@@ -1086,6 +1132,27 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
                 <div className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 opacity-0 group-hover/nth:opacity-100 transition-opacity z-10"
                   onMouseDown={e => { e.preventDefault(); e.stopPropagation(); nameCol.startResize(e.clientX); }} />
               </th>
+
+              {/* Duplicate/eligibility badge columns — doubly sticky, pinned next to name. Icon-only header (title = tooltip) since these columns are narrow. */}
+              {([
+                { key: '_dupBoard'   as const, label: 'Este filtro',       icon: Layers,        colW: dupBoardColW,   left: dupBoardLeft },
+                { key: '_dupHistory' as const, label: 'Otros formularios', icon: Clock,         colW: dupHistoryColW, left: dupHistoryLeft },
+                { key: '_dupRisk'    as const, label: 'Elegibilidad',      icon: AlertTriangle, colW: dupRiskColW,    left: dupRiskLeft },
+              ]).filter(col => !hiddenColumns.has(col.key)).map(col => (
+                <th key={col.key}
+                    className="text-center px-1 text-xs font-semibold whitespace-nowrap bg-muted border-b border-border/50 border-l border-border/40 relative group/th select-none"
+                    style={{ position: 'sticky', top: 0, left: col.left, zIndex: 40 }}>
+                  <div className="flex items-center justify-center gap-1 group/hdr" title={col.label}>
+                    <button onClick={() => toggleSort(col.key)} className="flex items-center gap-0.5 hover:bg-muted-foreground/10 transition-colors rounded px-1">
+                      <col.icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      {sortColumn === col.key && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3 text-primary flex-shrink-0" /> : <ChevronDown className="w-3 h-3 text-primary flex-shrink-0" />)}
+                    </button>
+                    <ColumnFilterPopover allValues={colUniqueValues(col.key)} activeValues={columnFilters[col.key] ?? new Set()} onApply={v => setColFilter(col.key, v)} />
+                  </div>
+                  <div className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 opacity-0 group-hover/th:opacity-100 transition-opacity z-10"
+                    onMouseDown={e => { e.preventDefault(); e.stopPropagation(); col.colW.startResize(e.clientX); }} />
+                </th>
+              ))}
 
               {/* Fixed columns */}
               {([
@@ -2183,6 +2250,7 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
 
   const allColumns = useMemo(() => [
     ...RECRUIT_COLS,
+    ...DUP_BADGE_COLS,
     { key: '_group', label: 'Grupo', type: 'select' as const, options: groupNames },
     ...dynCols.columns.map(dynColToFilterCol),
   ], [dynCols.columns, groupNames]);
@@ -2324,10 +2392,17 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
       const val = cellDisplayValue(dynCols.getCellVal(row.id, col.id), col.columnType);
       if (val) dynValues[col.id] = val;
     }
-    return { ...row, _group: groupCol?.columnName ?? 'Sin grupo', ...dynValues };
+    return {
+      ...row,
+      _group: groupCol?.columnName ?? 'Sin grupo',
+      _dupBoard: dupBadgeValue(row.id, '_dupBoard', badgeMap),
+      _dupHistory: dupBadgeValue(row.id, '_dupHistory', badgeMap),
+      _dupRisk: dupBadgeValue(row.id, '_dupRisk', badgeMap),
+      ...dynValues,
+    };
   // getCellVal is stable (useCallback[cellMap]) — changes when cells load/update
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [allBoardRows, groupDynCols.columns, groupDynCols.getCellVal, dynCols.columns, dynCols.getCellVal]);
+  }), [allBoardRows, groupDynCols.columns, groupDynCols.getCellVal, dynCols.columns, dynCols.getCellVal, badgeMap]);
 
   // Filter hook
   const { filteredData, columnFilters, setColFilter, colUniqueValues, advancedFilters, setAdvancedFilters, filterMode, setFilterMode, activeFilterCount, clearAllFilters, applyViewFilters, serializeFilters, hiddenColumns, setHiddenColumns, toggleColumn, sortColumn, sortDirection, toggleSort } = useTableFilters(rowsWithGroup, allColumns);
@@ -2817,6 +2892,7 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
                     onClick={() => {
                       const allKeys = [
                         'email', 'phone', 'idNumber', 'status', 'nda',
+                        '_dupBoard', '_dupHistory', '_dupRisk',
                         ...dynCols.columns.map(c => c.id),
                       ];
                       setHiddenColumns(new Set(allKeys));
@@ -2846,6 +2922,9 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
                   { key: 'idNumber', label: 'ID / Doc' },
                   { key: 'status',   label: 'Estado' },
                   { key: 'nda',      label: 'NDA' },
+                  { key: '_dupBoard',   label: 'Este filtro' },
+                  { key: '_dupHistory', label: 'Otros formularios' },
+                  { key: '_dupRisk',    label: 'Elegibilidad' },
                 ].filter(col => !colSearchText.trim() || col.label.toLowerCase().includes(colSearchText.toLowerCase())).map(col => (
                   <label key={col.key} className="flex items-center gap-2.5 cursor-pointer group">
                     <Checkbox
@@ -3197,7 +3276,12 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
         projectCode={selectedProject ?? ''}
         onRestored={() => silentReload()}
       />
-      <DuplicateSearchDialog open={duplicateSearchOpen} onOpenChange={setDuplicateSearchOpen} />
+      <DuplicateSearchDialog
+        open={duplicateSearchOpen}
+        onOpenChange={setDuplicateSearchOpen}
+        projectCode={selectedProject ?? undefined}
+        boardName={activeBoardName || undefined}
+      />
       {activeBoardId && (
         <SharedViewDialog
           open={shareDialogOpen}

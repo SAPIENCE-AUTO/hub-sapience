@@ -67,82 +67,91 @@ export default createEndpoint({
     );
     if (boardRows.length === 0) return { badges: {} };
 
-    // ── 3. Build identity clusters (union-find with full transitive closure) ─
-    const clusters = buildIdentityClusters(activeRows);
+    // ── 3. Dos cluster sets separados, dos preguntas distintas ──────────────
+    // Capa 1 ("¿cuántas veces se llenó ESTE filtro?"): solo con las filas de
+    // este tablero — población chica, cierre transitivo total (lenient) es
+    // seguro y correcto ahí. Antes se usaba el cluster global de abajo para
+    // esto también, y por eso un dato reusado en OTRO proyecto podía inflar
+    // el conteo "en este tablero" sin que esas filas tuvieran nada que ver
+    // con el tablero actual (confirmado en vivo: un participante con 1 sola
+    // fila real en su tablero mostraba ×26, encadenado por 8 proyectos
+    // ajenos).
+    const localClusters = buildIdentityClusters(boardRows);
+    const rowToLocalCluster = new Map<string, string>();
+    for (const [cid, cluster] of localClusters) {
+      for (const rid of cluster.rowIds) rowToLocalCluster.set(rid, cid);
+    }
 
-    // Build rowId → clusterId lookup
-    const rowToCluster = new Map<string, string>();
-    for (const [cid, cluster] of clusters) {
-      for (const rid of cluster.rowIds) rowToCluster.set(rid, cid);
+    // Capas 2/3 ("¿ha llenado otros formularios?" / "¿es elegible?"): contra
+    // todo el sistema (75k+ filas activas), en modo strict — un solo dato
+    // reusado (teléfono compartido, nombre placeholder) nunca debe fusionar
+    // identidades distintas aquí; hace falta que coincidan 2 de 3 señales.
+    const globalClusters = buildIdentityClusters(activeRows, { mode: 'strict' });
+    const rowToGlobalCluster = new Map<string, string>();
+    for (const [cid, cluster] of globalClusters) {
+      for (const rid of cluster.rowIds) rowToGlobalCluster.set(rid, cid);
     }
 
     const rowById = new Map(activeRows.map(r => [r.id, r]));
 
-    // ── 4. Compute signals per cluster (cached) ─────────────────────────────
-    type ClusterResult = { signalSet: Set<Signal>; sameBoardCount: number };
-    const clusterCache = new Map<string, ClusterResult>();
+    // ── 4. Compute signals (cachea por cluster local y global por separado) ─
+    const localCountCache = new Map<string, number>();
+    const globalSignalCache = new Map<string, Set<Signal>>();
 
     const badges: Record<string, z.infer<typeof RowBadgeSchema>> = {};
 
     for (const boardRow of boardRows) {
-      const clusterId = rowToCluster.get(boardRow.id);
-      if (!clusterId) continue;
-
-      if (clusterCache.has(clusterId)) {
-        const cached = clusterCache.get(clusterId)!;
-        const { signals, primaryBadge, secondaryBadges } = resolveSignals(cached.signalSet);
-        badges[boardRow.id] = {
-          signals, primaryBadge, secondaryBadges,
-          sameBoardCount:       cached.sameBoardCount,
-          hasHighRisk:          primaryBadge === 'same_client' || primaryBadge === 'recent',
-          hasInternalDuplicate: cached.sameBoardCount > 1,
-        };
-        continue;
+      const localId = rowToLocalCluster.get(boardRow.id);
+      let sameBoardCount = 1;
+      if (localId) {
+        sameBoardCount = localCountCache.get(localId) ?? localClusters.get(localId)!.rowIds.length;
+        localCountCache.set(localId, sameBoardCount);
       }
 
-      const cluster = clusters.get(clusterId)!;
-      const peerRows = cluster.rowIds
-        .map(id => rowById.get(id))
-        .filter((r): r is IdentityRow => !!r);
+      const globalId = rowToGlobalCluster.get(boardRow.id);
+      let signalSet: Set<Signal>;
+      if (globalId && globalSignalCache.has(globalId)) {
+        signalSet = new Set(globalSignalCache.get(globalId));
+      } else {
+        signalSet = new Set<Signal>();
+        if (globalId) {
+          const cluster = globalClusters.get(globalId)!;
+          const peerRows = cluster.rowIds
+            .map(id => rowById.get(id))
+            .filter((r): r is IdentityRow => !!r);
 
-      // sameBoardCount: how many rows from this cluster are in the target board
-      const sameBoardCount = peerRows.filter(
-        r => r.projectCode === projectCode && r.boardName === boardName,
-      ).length;
+          for (const peer of peerRows) {
+            if (!peer.projectCode) continue;
 
-      // Cross-project signals
-      const signalSet = new Set<Signal>();
-      for (const peer of peerRows) {
-        if (!peer.projectCode) continue;
+            const isSameBoard = peer.projectCode === projectCode && peer.boardName === boardName;
+            if (isSameBoard) continue;
 
-        const isSameBoard = peer.projectCode === projectCode && peer.boardName === boardName;
-        if (isSameBoard) continue;
+            const isSameProject = peer.projectCode === projectCode;
+            if (isSameProject) continue;
 
-        const isSameProject = peer.projectCode === projectCode;
-        if (isSameProject) continue;
+            const peerProjData  = projectMap.get(peer.projectCode);
+            const peerStartDate = peerProjData?.startDate ? new Date(peerProjData.startDate) : null;
+            if (peerStartDate && peerStartDate > referenceDate) continue;
 
-        const peerProjData  = projectMap.get(peer.projectCode);
-        const peerStartDate = peerProjData?.startDate ? new Date(peerProjData.startDate) : null;
-        if (peerStartDate && peerStartDate > referenceDate) continue;
+            const rawParticipated = peer.status === 'Asistió' || (!!peer.group && String(peer.group).trim() !== '');
+            const isSameClient = !!currentClientNorm && !!peerProjData?.client && normClient(peerProjData.client) === currentClientNorm;
+            const isRecent = !peerStartDate || peerStartDate > sixMonthsAgo;
 
-        const rawParticipated = peer.status === 'Asistió' || (!!peer.group && String(peer.group).trim() !== '');
-        const isSameClient = !!currentClientNorm && !!peerProjData?.client && normClient(peerProjData.client) === currentClientNorm;
-        const isRecent = !peerStartDate || peerStartDate > sixMonthsAgo;
-
-        if (rawParticipated && isSameClient) {
-          signalSet.add('same_client');
-        } else if (rawParticipated && isRecent) {
-          signalSet.add('recent');
-        } else if (rawParticipated && !isRecent) {
-          signalSet.add('old');
-        } else if (!rawParticipated) {
-          signalSet.add('registered_only');
+            if (rawParticipated && isSameClient) {
+              signalSet.add('same_client');
+            } else if (rawParticipated && isRecent) {
+              signalSet.add('recent');
+            } else if (rawParticipated && !isRecent) {
+              signalSet.add('old');
+            } else if (!rawParticipated) {
+              signalSet.add('registered_only');
+            }
+          }
+          globalSignalCache.set(globalId, new Set(signalSet));
         }
       }
 
       if (sameBoardCount > 1) signalSet.add('same_board_duplicate');
-
-      clusterCache.set(clusterId, { signalSet, sameBoardCount });
 
       const { signals, primaryBadge, secondaryBadges } = resolveSignals(signalSet);
       badges[boardRow.id] = {

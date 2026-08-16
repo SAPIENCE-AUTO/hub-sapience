@@ -14,6 +14,8 @@ type HistoryEntry = Result['history'][0];
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  projectCode?: string;
+  boardName?: string;
 }
 
 function MatchedByBadges({ matchedBy }: { matchedBy: string[] }) {
@@ -116,17 +118,20 @@ function EntryCard({ h }: { h: HistoryEntry }) {
   );
 }
 
-export function DuplicateSearchDialog({ open, onOpenChange }: Props) {
+export function DuplicateSearchDialog({ open, onOpenChange, projectCode, boardName }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
+  // Sin projectCode/boardName, el backend nunca puede marcar sameProject/
+  // sameBoard — todo caía en "Otros estudios" con un conteo global sin
+  // aviso, aunque el diálogo se abriera desde un tablero específico.
   const doSearch = useDebouncedCallback(async (q: string) => {
     if (q.trim().length < 2) { setResults([]); setSearched(false); return; }
     setLoading(true);
     try {
-      const data = await searchParticipantHistory({ query: q.trim() });
+      const data = await searchParticipantHistory({ query: q.trim(), projectCode, boardName });
       setResults(data.results);
       setSearched(true);
     } catch { /* ignore */ }
@@ -210,7 +215,10 @@ export function DuplicateSearchDialog({ open, onOpenChange }: Props) {
                         )}
                         {!hasParticipated && r.history.length > 0 && (
                           <Badge variant="outline" className="text-xs gap-1 text-blue-600 border-blue-400/60 bg-blue-500/5">
-                            <Copy className="w-3 h-3" /> {r.history.length} aparición{r.history.length > 1 ? 'es' : ''}
+                            <Copy className="w-3 h-3" />
+                            {sameProjectEntries.length > 0 && otherEntries.length > 0
+                              ? `${sameProjectEntries.length} en este proyecto · ${otherEntries.length} en otros`
+                              : `${r.history.length} aparición${r.history.length > 1 ? 'es' : ''}${otherEntries.length > 0 && sameProjectEntries.length === 0 ? ' en otros proyectos' : ''}`}
                           </Badge>
                         )}
                         {r.history.length === 0 && (
