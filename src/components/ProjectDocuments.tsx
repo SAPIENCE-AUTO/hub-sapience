@@ -51,7 +51,7 @@ function officeAppUrl(name: string, webUrl: string): string | null {
 
 function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string }) {
   const Icon = fileIconFor(file.name);
-  const appUrl = officeAppUrl(file.name, file.webUrl);
+  const appUrl = officeAppUrl(file.name, file.directUrl ?? file.webUrl);
   const [copying, setCopying] = useState(false);
 
   const copyLink = async () => {
