@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback, useContext, createContext } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, useContext, createContext, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from 'zite-auth-sdk';
 import { getTeamMembers, GetTeamMembersOutputType } from 'zite-endpoints-sdk';
@@ -2098,7 +2098,12 @@ function getCellLabel(v: CellVal, _colType?: string): string {
 const SKIP_SKELETON_TYPES = new Set(['Checkbox', 'Rating', 'Botón', 'Status', 'Select', 'Color', 'Fórmula']);
 
 // ── Cell component ────────────────────────────────────────────────────────────
-export function DynamicColumnCells({ rowId, dynCols, asDiv, hiddenColumns, recentColors, selectedIds, onBulkSave, colUniqueValues, visibleColIds }: { rowId: string; dynCols: DynCols; asDiv?: boolean; hiddenColumns?: Set<string>; recentColors?: string[]; selectedIds?: Set<string>; onBulkSave?: (colId: string, value: CellVal, label: string) => void; colUniqueValues?: (key: string) => string[]; visibleColIds?: Set<string> | null }) {
+// Memoizado: en tableros de reclutamiento con muchas columnas dinámicas, esta
+// es la parte más cara de cada fila (docenas de celdas × ~130 filas montadas
+// durante el scroll virtualizado) — sin memo, se recalculan todas en cada
+// frame de scroll aunque su contenido no haya cambiado. Requiere que quien la
+// use pase `onBulkSave` estable (useCallback), o el memo nunca hace bail-out.
+export const DynamicColumnCells = memo(function DynamicColumnCells({ rowId, dynCols, asDiv, hiddenColumns, recentColors, selectedIds, onBulkSave, colUniqueValues, visibleColIds }: { rowId: string; dynCols: DynCols; asDiv?: boolean; hiddenColumns?: Set<string>; recentColors?: string[]; selectedIds?: Set<string>; onBulkSave?: (colId: string, value: CellVal, label: string) => void; colUniqueValues?: (key: string) => string[]; visibleColIds?: Set<string> | null }) {
   const sorted = [...dynCols.columns]
     .sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0))
     .filter(col => !hiddenColumns?.has(col.id));
@@ -2152,4 +2157,4 @@ export function DynamicColumnCells({ rowId, dynCols, asDiv, hiddenColumns, recen
       {asDiv ? <div className="bg-muted/10" /> : <td className="bg-muted/10 border-b border-border/30" />}
     </>
   );
-}
+});

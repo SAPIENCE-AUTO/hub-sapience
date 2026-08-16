@@ -31,8 +31,7 @@ import { GROUP_COLORS, getGroupColor, useResizableCol, dynColToFilterCol, cellDi
 import { InlineInput } from '../components/table/InlineInput';
 import { GroupPicker } from '../components/table/GroupPicker';
 import { GroupSectionHeader } from '../components/table/GroupSectionHeader';
-import { ChildSubTable } from '../components/table/ChildSubTable';
-import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, ChevronUp, FileText, X, CornerDownRight, AlertTriangle, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, FileText, X, AlertTriangle, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList } from 'lucide-react';
 import RecruitmentStatusPanel from '../components/RecruitmentStatusPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
@@ -168,7 +167,7 @@ function exportRecruitmentCsv(
 }
 
 // ── Recruitment Table ─────────────────────────────────────────────────────────
-const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSaveField, onEdit, onDelete, onBulkDelete, onUpdateStatus, onSendNDA, onQuickCreate, onQuickCreateChild, onCreateGroup, dynCols, childDynCols, groupDynCols, childLabel, onChildLabelChange, columnFilters, setColFilter, colUniqueValues, onDuplicateClick, badgeMap, hiddenColumns, onRowsChange, sortColumn, sortDirection, toggleSort, onDuplicateGroup, onGroupStructureChanged, onRefresh, linkedEventsMap, projectCode, recruitmentBoardId, onLinkedEventsRefresh, onCreateEventForGroup, expandedGroups, setExpandedGroups, activeGroupFilter }: {
+const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSaveField, onEdit, onDelete, onBulkDelete, onUpdateStatus, onSendNDA, onQuickCreate, onCreateGroup, dynCols, groupDynCols, columnFilters, setColFilter, colUniqueValues, onDuplicateClick, badgeMap, hiddenColumns, onRowsChange, sortColumn, sortDirection, toggleSort, onDuplicateGroup, onGroupStructureChanged, onRefresh, linkedEventsMap, projectCode, recruitmentBoardId, onLinkedEventsRefresh, onCreateEventForGroup, expandedGroups, setExpandedGroups, activeGroupFilter }: {
   rows: Row[];
   onSaveName: (id: string, name: string) => void;
   onSaveField: (id: string, field: 'email' | 'phone' | 'idNumber', value: string) => void;
@@ -178,10 +177,8 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   onUpdateStatus: (id: string, status: string) => void;
   onSendNDA: (id: string) => void;
   onQuickCreate: (name: string, groupId?: string) => void;
-  onQuickCreateChild: (name: string, parentId: string) => void;
   onCreateGroup: () => void;
-  dynCols: DynCols; childDynCols: DynCols; groupDynCols: DynCols;
-  childLabel: string; onChildLabelChange: (l: string) => void;
+  dynCols: DynCols; groupDynCols: DynCols;
   columnFilters: Record<string, Set<string>>;
   setColFilter: (col: string, vals: Set<string>) => void;
   colUniqueValues: (col: string) => string[];
@@ -205,11 +202,8 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   activeGroupFilter: Set<string> | null;
 }) {
   // ↑ signature unchanged — refactored to single <table> for correct sticky headers
-  const [expandedRows,   setExpandedRows]   = useState<Set<string>>(new Set());
   const [editingName,    setEditingName]    = useState<string | null>(null);
   const [editingField,   setEditingField]   = useState<{ id: string; field: 'email' | 'phone' | 'idNumber' } | null>(null);
-  const [addingChildTo,  setAddingChildTo]  = useState<string | null>(null);
-  const [newChildName,   setNewChildName]   = useState('');
   const [newRowNames,    setNewRowNames]    = useState<Record<string, string>>({});
   const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set());
   const [duplicating,    setDuplicating]    = useState(false);
@@ -274,10 +268,13 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupColIds]);
 
-  const toggleSelect = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // useCallback aquí no es cosmético: DynamicColumnCells está memoizado y su
+  // prop onBulkSave depende de esto — si se recrea en cada render (el patrón
+  // de antes), el memo nunca hace bail-out y se pierde el punto de memoizar.
+  const toggleSelect = useCallback((id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }), []);
   const groups    = groupDynCols.columns;
 
-  const showBulkConfirm = (label: string, applyAll: () => void) => {
+  const showBulkConfirm = useCallback((label: string, applyAll: () => void) => {
     if (selectedIds.size <= 1) return;
     toast(`¿Aplicar a las ${selectedIds.size} filas seleccionadas?`, {
       description: `"${label}"`,
@@ -285,7 +282,32 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
       cancel: { label: 'Solo esta fila', onClick: () => {} },
       duration: 5000,
     });
-  };
+  }, [selectedIds]);
+
+  // Handler estable para DynamicColumnCells.onBulkSave. DynamicColumnCells.onBulkSave
+  // tiene la forma (colId, value, label) => void — no recibe rowId — así que
+  // cada fila necesita su propio wrapper que capture su rowId. Para que ese
+  // wrapper no rompa la memoización (una función nueva cada render invalidaría
+  // el memo de DynamicColumnCells), se cachea uno por fila en un ref y se lee
+  // la versión más reciente de la lógica real vía otro ref, evitando closures
+  // obsoletas (`selectedIds` desactualizado) sin tener que invalidar el cache.
+  const handleBulkSaveDynCol = useCallback((rowId: string, colId: string, value: DynCellValue, label: string) => {
+    showBulkConfirm(label, () => {
+      const ops = [...selectedIds].filter(id => id !== rowId).map(id => ({ rowId: id, colId, value }));
+      if (ops.length > 0) dynCols.batchSetCellVals(ops);
+    });
+  }, [showBulkConfirm, selectedIds, dynCols]);
+  const handleBulkSaveDynColRef = useRef(handleBulkSaveDynCol);
+  handleBulkSaveDynColRef.current = handleBulkSaveDynCol;
+  const bulkSaveHandlersRef = useRef(new Map<string, (colId: string, value: DynCellValue, label: string) => void>());
+  const getBulkSaveHandler = useCallback((rowId: string) => {
+    let fn = bulkSaveHandlersRef.current.get(rowId);
+    if (!fn) {
+      fn = (colId, value, label) => handleBulkSaveDynColRef.current(rowId, colId, value, label);
+      bulkSaveHandlersRef.current.set(rowId, fn);
+    }
+    return fn;
+  }, []);
 
   // Sort rows by column when sortColumn is active
   const recentColors = useMemo(() => {
@@ -338,17 +360,6 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   }, [rows, sortColumn, sortDirection, dynCols.getCellVal, dynCols.columns, badgeMap]);
 
   const topLevel    = sortedTopLevel;
-  const childrenByParent = useMemo(() => {
-    const map = new Map<string, Row[]>();
-    for (const r of rows) {
-      if (!r.parentRowId) continue;
-      const arr = map.get(r.parentRowId) ?? [];
-      arr.push(r);
-      map.set(r.parentRowId, arr);
-    }
-    return map;
-  }, [rows]);
-  const getChildren = (id: string) => childrenByParent.get(id) ?? [];
 
   const sortedDynCols = [...dynCols.columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0));
   const visibleDynCols = sortedDynCols.filter(c => !hiddenColumns.has(c.id));
@@ -358,17 +369,17 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   const totalCols = 3 + visibleBadgeCount + visibleFixedCount + visibleDynCols.length;
 
   // ── Horizontal column virtualization ──────────────────────────────────────
-  // ≤ 40 visible dynamic columns → disable virtualization entirely (render all).
-  // > 40 columns → pixel-based buffer ensures partially-visible columns always
+  // ≤ 30 visible dynamic columns → disable virtualization entirely (render all).
+  // > 30 columns → pixel-based buffer ensures partially-visible columns always
   // render their content. null = "show all" (init state + fallback).
+  // Bajado de 200 a 30: con muchas columnas dinámicas (común en tableros de
+  // reclutamiento), cada fila renderizada de más multiplica el costo por
+  // fila — el umbral anterior dejaba boards típicos sin virtualizar nunca.
   useEffect(() => {
     const container = tableContainerRef.current;
     if (!container) return;
 
-    // With ≤ 100 dynamic columns the rendering cost is negligible, and
-    // column-count-based virtualization causes blank cells for partially-visible
-    // columns. Disable it completely below this threshold.
-    if (visibleDynCols.length <= 200) {
+    if (visibleDynCols.length <= 30) {
       setVisibleDynColIds(null);
       return; // no scroll listener needed
     }
@@ -515,8 +526,6 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   const toggleGroup = (id: string) => {
     setExpandedGroups(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
-  const toggleRow   = (id: string) => setExpandedRows(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
   const moveRowToGroup = (rowId: string, targetGroupId: string) => {
     const currentGroupId = getRowGroupId(rowId);
     if (currentGroupId === targetGroupId) return;
@@ -716,9 +725,6 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   const cellBorder = '1px solid hsl(var(--border) / 0.3)';
 
   const renderRow = (row: Row) => {
-    const children   = getChildren(row.id);
-    const isExpanded = expandedRows.has(row.id);
-    const showNested = isExpanded && (children.length > 0 || addingChildTo === row.id);
     const rowGroupId = getRowGroupId(row.id);
     const rowGroupColorId = rowGroupId ? groups.find(g => g.id === rowGroupId)?.columnType : undefined;
     const rowColor = rowGroupId ? getGroupColor(rowGroupColorId) : undefined;
@@ -768,11 +774,6 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
             style={{ position: 'sticky', left: 35, zIndex: 10, borderBottom: cellBorder }}
           >
             <div className="flex items-center gap-1.5 w-full h-full">
-              <button onClick={() => toggleRow(row.id)} className="text-muted-foreground flex-shrink-0 hover:text-foreground w-4">
-                {(children.length > 0 || isExpanded)
-                  ? (isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />)
-                  : <span className="w-3 inline-block" />}
-              </button>
               {editingName === row.id ? (
                 <InlineInput
                   value={row.participantName ?? row.rowName ?? ''}
@@ -787,11 +788,6 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
                 </span>
               )}
               <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button title={`Agregar ${childLabel}`}
-                  onClick={() => { setAddingChildTo(row.id); setNewChildName(''); setExpandedRows(p => new Set([...p, row.id])); }}
-                  className="text-muted-foreground hover:text-primary p-0.5 rounded hover:bg-primary/10">
-                  <Plus className="w-3 h-3" />
-                </button>
                 <button onClick={() => onEdit(row)} className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted"><Pencil className="w-3 h-3" /></button>
                 <button onClick={() => onDelete(row.id)} className="text-muted-foreground hover:text-destructive p-0.5 rounded hover:bg-destructive/10"><Trash2 className="w-3 h-3" /></button>
               </div>
@@ -923,53 +919,8 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
             colUniqueValues={colUniqueValues}
             selectedIds={selectedIds}
             visibleColIds={visibleDynColIds}
-            onBulkSave={(colId, value, label) => showBulkConfirm(label, () => {
-              const ops = [...selectedIds].filter(id => id !== row.id).map(id => ({ rowId: id, colId, value }));
-              if (ops.length > 0) dynCols.batchSetCellVals(ops);
-            })} />
+            onBulkSave={getBulkSaveHandler(row.id)} />
         </tr>
-
-        {/* Sub-rows — wrapped in a colspan row so the main table stays clean */}
-        {showNested && (
-          <tr>
-            <td colSpan={totalCols} style={{ padding: 0, borderBottom: '1px solid hsl(var(--border) / 0.2)' }}>
-              <ChildSubTable
-                childDynCols={childDynCols} childLabel={childLabel} onLabelChange={onChildLabelChange}
-                addingName={addingChildTo === row.id ? newChildName : ''}
-                onAddingNameChange={v => { setAddingChildTo(row.id); setNewChildName(v); }}
-                onCommit={() => { if (newChildName.trim()) { onQuickCreateChild(newChildName.trim(), row.id); setNewChildName(''); setAddingChildTo(null); } }}
-                onCancel={() => { setAddingChildTo(null); setNewChildName(''); }}
-              >
-                {children.map(child => (
-                  <tr key={child.id} className="hover:bg-muted/20 border-t border-border/20 group/child">
-                    <td className="pl-2 pr-0 py-1.5 w-8">
-                      <Checkbox checked={selectedIds.has(child.id)} onCheckedChange={() => toggleSelect(child.id)} className="h-3.5 w-3.5" />
-                    </td>
-                    <td className="px-3 py-1.5 min-w-[180px]">
-                      <div className="flex items-center gap-1.5">
-                        <CornerDownRight className="w-3 h-3 text-muted-foreground/30 flex-shrink-0" />
-                        {editingName === child.id ? (
-                          <InlineInput value={child.participantName ?? child.rowName ?? ''} className="flex-1"
-                            onSave={val => { if (val.trim()) onSaveName(child.id, val.trim()); setEditingName(null); }}
-                            onCancel={() => setEditingName(null)} />
-                        ) : (
-                          <span className="text-sm cursor-pointer hover:text-primary flex-1 truncate" title={child.participantName || child.rowName || ''} onClick={() => setEditingName(child.id)}>
-                            {child.participantName || child.rowName}
-                          </span>
-                        )}
-                        <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover/child:opacity-100 transition-opacity">
-                          <button onClick={() => onEdit(child)} className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted"><Pencil className="w-3 h-3" /></button>
-                          <button onClick={() => onDelete(child.id)} className="text-muted-foreground hover:text-destructive p-0.5 rounded hover:bg-destructive/10"><Trash2 className="w-3 h-3" /></button>
-                        </div>
-                      </div>
-                    </td>
-                    <DynamicColumnCells rowId={child.id} dynCols={childDynCols} />
-                  </tr>
-                ))}
-              </ChildSubTable>
-            </td>
-          </tr>
-        )}
       </React.Fragment>
     );
   };
@@ -1988,7 +1939,6 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
   const [addingBoard,   setAddingBoard]   = useState(false);
   // renamingBoard/renameValue removed — BoardTabsBar handles rename state internally
   // dragTabIdxRef/dragOverTabIdx removed — BoardTabsBar handles tab drag state internally
-  const [childLabel,    setChildLabel]    = useState('Sub-participante');
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [duplicateHistoryRow, setDuplicateHistoryRow] = useState<Row | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -2047,14 +1997,11 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
         if (!activeBoardId) return;
         const isMainBoard  = bid === activeBoardId;
         const isGroupBoard = bid === `${activeBoardId}::groups`;
-        const isChildBoard = bid === `${activeBoardId}::children`;
 
         if (isMainBoard) {
           dynCols.setLocalCellVal(payload.rowId, payload.columnId, payload.value);
         } else if (isGroupBoard) {
           groupDynCols.setLocalCellVal(payload.rowId, payload.columnId, payload.value);
-        } else if (isChildBoard) {
-          childDynCols.setLocalCellVal(payload.rowId, payload.columnId, payload.value);
         }
       } else if (payload.fieldType === 'fixed' && payload.fields) {
         setRows(prev => prev.map(r =>
@@ -2087,44 +2034,35 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
   const [createEventDialog, setCreateEventDialog] = useState<{ groupId: string; groupName: string } | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['__none__']));
   // ── Stagger column loads to spread the request burst on cold-cache board switch ──
-  // dynCols fires immediately (critical path).
-  // groups start after 250 ms; children after 500 ms.
+  // dynCols fires immediately (critical path). groups start after 250 ms.
   // State is keyed by boardId so switching boards instantly resets enabled to false
   // without needing an extra setState call — avoids stale-closure / flash issues.
   // R2-B: stagger logic keyed on activeBoardId (UUID), not legacy composite
   const [groupColsBoard, setGroupColsBoard] = useState<string | null>(null);
-  const [childColsBoard, setChildColsBoard] = useState<string | null>(null);
   const groupColsEnabled = groupColsBoard === activeBoardId && !!activeBoardId;
-  const childColsEnabled = childColsBoard === activeBoardId && !!activeBoardId;
   useEffect(() => {
-    if (!activeBoardId) { setGroupColsBoard(null); setChildColsBoard(null); return; }
+    if (!activeBoardId) { setGroupColsBoard(null); return; }
 
     // Fast path: if rows are already cached for this board (re-visit or prefetch hit),
-    // enable groups/children immediately — no stagger needed, we want groups ASAP
+    // enable groups immediately — no stagger needed, we want groups ASAP
     // so hasInitiallyLoaded resolves quickly and the table renders without skeleton.
     const rowsCacheKey = `${selectedProject}::uuid::${activeBoardId}`;
     const hasRowsCache = rowsCache.has(rowsCacheKey);
     if (hasRowsCache) {
       setGroupColsBoard(activeBoardId);
-      setChildColsBoard(activeBoardId);
       return;
     }
 
     // Cold start: stagger to spread the request burst
-    const groupsCached   = isBoardCached(`${activeBoardId}::groups`);
-    const childrenCached = isBoardCached(`${activeBoardId}::children`);
-    if (groupsCached)   setGroupColsBoard(activeBoardId);
-    if (childrenCached) setChildColsBoard(activeBoardId);
-    if (groupsCached && childrenCached) return;
-    const t1 = !groupsCached   ? setTimeout(() => setGroupColsBoard(activeBoardId),   250) : undefined;
-    const t2 = !childrenCached ? setTimeout(() => setChildColsBoard(activeBoardId), 500) : undefined;
-    return () => { if (t1) clearTimeout(t1); if (t2) clearTimeout(t2); };
+    const groupsCached = isBoardCached(`${activeBoardId}::groups`);
+    if (groupsCached) { setGroupColsBoard(activeBoardId); return; }
+    const t1 = setTimeout(() => setGroupColsBoard(activeBoardId), 250);
+    return () => clearTimeout(t1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBoardId]);
 
   // R2-B: useDynamicColumns uses UUID (activeBoardId) for all operational columns
   const dynCols      = useDynamicColumns(activeBoardId, rows);
-  const childDynCols = useDynamicColumns(activeBoardId ? `${activeBoardId}::children` : '', undefined, { enabled: childColsEnabled });
   const groupDynCols = useDynamicColumns(activeBoardId ? `${activeBoardId}::groups`   : '', undefined, { enabled: groupColsEnabled });
 
   // ── Prefetch rows of neighboring boards so tab-switching feels instant ─────
@@ -2539,24 +2477,6 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
       const res = await saveRecruitmentRow({ rowName: name, participantName: name, projectCode: selectedProject ?? undefined, boardId: activeBoardId, boardName: activeBoardName, status: 'Pendiente', level: 0 });
       if (res.id) setRows(prev => prev.map(r => r.id === tempId ? { ...r, id: res.id } : r));
       if (groupId && res.id) await groupDynCols.setCellVal(res.id, groupId, { textValue: '1' });
-      if (res.id) {
-        publishRecruitmentRowsChanged({
-          projectCode: selectedProject ?? '',
-          boardId: activeBoardId,
-          rowId: res.id,
-          changeType: 'created',
-        }).catch(() => {});
-      }
-    } catch { toast.error('Error al crear'); setRows(prev => prev.filter(r => r.id !== tempId)); }
-  };
-
-  const quickCreateChild = async (name: string, parentId: string) => {
-    if (!activeBoardId) { toast.error('No hay tablero activo'); return; }
-    const tempId = 'temp-' + Date.now();
-    setRows(prev => [...prev, { id: tempId, rowName: name, participantName: name, boardName: activeBoardName, boardId: activeBoardId, status: 'Pendiente', parentRowId: parentId, level: 1 } as Row]);
-    try {
-      const res = await saveRecruitmentRow({ rowName: name, participantName: name, projectCode: selectedProject ?? undefined, boardId: activeBoardId, boardName: activeBoardName, status: 'Pendiente', parentRowId: parentId, level: 1 });
-      if (res.id) setRows(prev => prev.map(r => r.id === tempId ? { ...r, id: res.id } : r));
       if (res.id) {
         publishRecruitmentRowsChanged({
           projectCode: selectedProject ?? '',
@@ -3128,13 +3048,9 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
             onUpdateStatus={updateStatus}
             onSendNDA={sendNDA}
             onQuickCreate={quickCreate}
-            onQuickCreateChild={quickCreateChild}
             onCreateGroup={createGroup}
             dynCols={dynCols}
-            childDynCols={childDynCols}
             groupDynCols={groupDynCols}
-            childLabel={childLabel}
-            onChildLabelChange={l => { setChildLabel(l); }}
             columnFilters={columnFilters}
             setColFilter={setColFilter}
             colUniqueValues={colUniqueValues}
