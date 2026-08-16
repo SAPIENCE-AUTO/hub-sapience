@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, FileText, RefreshCw, FolderOpen, FileSpreadsheet, Presentation, Image as ImageIcon, File as FileIcon, ChevronDown, MessageSquarePlus, AppWindow, Copy } from 'lucide-react';
+import { ExternalLink, FileText, RefreshCw, FolderOpen, FileSpreadsheet, Presentation, Image as ImageIcon, File as FileIcon, ChevronDown, MessageSquarePlus, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,30 +28,8 @@ function fileIconFor(name: string) {
   return FileIcon;
 }
 
-// Esquema de protocolo que usan los propios botones "Abrir en la app de
-// escritorio" de OneDrive/SharePoint — lanza Word/PowerPoint/Excel de
-// escritorio si está instalado y asociado. Sin esto, `webUrl` normal solo
-// abre Office en el navegador. Sin equivalente para pdf/imágenes/otros.
-//
-// El `webUrl` de Graph trae el nombre del archivo tal cual en el query
-// string (espacios, paréntesis, etc. sin codificar) — al pegarlo crudo
-// después de `ofe|u|`, el sistema operativo corta la URI en el primer
-// espacio y PowerPoint/Word/Excel reciben una URL truncada ("no puede abrir
-// este tipo de archivo", confirmado en vivo con un .pptx con espacios y
-// paréntesis en el nombre). encodeURIComponent dejar toda la URL como un
-// solo token sin espacios sueltos.
-function officeAppUrl(name: string, webUrl: string): string | null {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  const scheme = ['doc', 'docx'].includes(ext) ? 'ms-word'
-    : ['ppt', 'pptx'].includes(ext) ? 'ms-powerpoint'
-    : ['xls', 'xlsx'].includes(ext) ? 'ms-excel'
-    : null;
-  return scheme ? `${scheme}:ofe|u|${encodeURIComponent(webUrl)}` : null;
-}
-
 function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string }) {
   const Icon = fileIconFor(file.name);
-  const appUrl = officeAppUrl(file.name, file.directUrl ?? file.webUrl);
   const [copying, setCopying] = useState(false);
 
   const copyLink = async () => {
@@ -95,11 +73,6 @@ function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string })
         </div>
       </div>
       <div className="flex items-center gap-0.5 flex-shrink-0 opacity-70 group-hover:opacity-100">
-        {appUrl && (
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Abrir en la app de escritorio" onClick={() => { window.location.href = appUrl; }}>
-            <AppWindow className="w-3.5 h-3.5" />
-          </Button>
-        )}
         <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Abrir en el navegador" onClick={() => window.open(file.webUrl, '_blank', 'noopener,noreferrer')}>
           <ExternalLink className="w-3.5 h-3.5" />
         </Button>
