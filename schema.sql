@@ -932,6 +932,15 @@ create index on boards (board_type);
 create index on recruitment_rows (project_code);
 create index on recruitment_rows (phone);
 create index on recruitment_rows (email);
+-- No viene del export de Zite (ahí tampoco existía, Zite nunca lo impidió):
+-- se agregó tras encontrar 4 pares de proyectos duplicados con el mismo
+-- project_code, creados por 3 rutas distintas (diálogo manual, botón "Crear
+-- Proyecto" del deal, aprobación automática en approveDeal.ts) sin que
+-- ninguna verificara si el código ya existía. case-insensitive y con trim
+-- porque los duplicados reales diferían solo en mayúsculas ("Pacífico Day"
+-- vs "Pacifico day"). Parcial (excluye código vacío/NULL) para no bloquear
+-- los pocos proyectos sin código todavía.
+create unique index projects_project_code_uniq on projects (lower(trim(project_code))) where project_code is not null and trim(project_code) <> '';
 create index on projects (project_code);
 create index on tasks (project_code);
 create index on calendar_events (project_code);

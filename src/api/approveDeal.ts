@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import {
   createEndpoint, Deals, Cotizaciones, CotizacionLineItems, Projects, Boards, Tasks,
-  ChatConversations, Messages, Users, ZiteError, CollectionProcesses,
+  ChatConversations, Messages, Users, ZiteError, CollectionProcesses, pool,
 } from '../../server/compat';
 import { parseMembers } from '../lib/chatJson';
 import { publishEvent, safeUserChannel } from '../lib/ably';
+import { assertProjectCodeAvailable } from '../serverUtils/assertProjectCodeAvailable';
 
 const DEFAULT_TASKS = [
   'Go Ahead', 'Reclutamiento', 'Envío de guía de tópicos',
@@ -56,6 +57,7 @@ export default createEndpoint({
     if (shouldCreateProject) {
       // ── 3. Create project ────────────────────────────────────────────────────
       projectCode = deal.dealName ?? 'Proyecto ' + Date.now().toString().slice(-4);
+      await assertProjectCodeAvailable(pool, projectCode);
       const newProject = await Projects.create({
         record: {
           projectCode,

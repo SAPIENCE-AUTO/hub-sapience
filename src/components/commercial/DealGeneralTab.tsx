@@ -91,7 +91,9 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
       });
       toast.success(`Proyecto "${code}" creado exitosamente`);
       setLinkedProject({ id: result.id, projectCode: code });
-    } catch { toast.error('Error al crear el proyecto'); }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al crear el proyecto');
+    }
     setCreatingProject(false);
   };
 

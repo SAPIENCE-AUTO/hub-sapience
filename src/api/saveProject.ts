@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { createEndpoint, Projects, Boards, Tasks, CalendarEvents, RecruitmentRows, CellValues } from '../../server/compat';
+import { createEndpoint, Projects, Boards, Tasks, CalendarEvents, RecruitmentRows, CellValues, pool } from '../../server/compat';
 import { ensureCalendarDefaultColumns } from '../serverUtils/calendarDefaults';
 import { ensureTimelineDefaultColumns } from '../serverUtils/timelineDefaults';
+import { assertProjectCodeAvailable } from '../serverUtils/assertProjectCodeAvailable';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -131,6 +132,7 @@ export default createEndpoint({
     if (asistentes !== undefined) updateFields.asistentes = asistentes;
 
     if (id) {
+      await assertProjectCodeAvailable(pool, projectCode, id);
       await Projects.update({ id, record: updateFields });
 
       // Collect all codes that need cascading
@@ -160,6 +162,7 @@ export default createEndpoint({
     // Sin startDate el proyecto queda sin fecha de inicio hasta que alguien la
     // ponga a mano — se ancla al día de creación por default, tanto aquí como
     // en approveDeal.ts (que crea el Project directo, sin pasar por aquí).
+    await assertProjectCodeAvailable(pool, projectCode);
     const record = await Projects.create({
       record: {
         ...updateFields,

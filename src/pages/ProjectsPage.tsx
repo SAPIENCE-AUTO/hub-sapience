@@ -655,7 +655,9 @@ export default function ProjectsPage() {
         toast.success(editing ? 'Proyecto actualizado' : 'Proyecto creado');
       }
       setOpen(false); load();
-    } catch { toast.error('Error al guardar'); }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al guardar');
+    }
     setSaving(false);
   };
 
