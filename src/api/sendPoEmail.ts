@@ -3,15 +3,6 @@ import { createEndpoint, ZiteError, PurchaseOrders, PoAuditLog } from '../../ser
 import { publishEvent } from '../lib/ably';
 import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 
-function textToHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#2563eb;text-decoration:underline">$1</a>')
-    .replace(/\n/g, '<br>\n');
-}
-
 export default createEndpoint({
   authenticated: true,
   description: 'Send a purchase order to a supplier via Outlook (Microsoft Graph API)',
@@ -47,8 +38,13 @@ export default createEndpoint({
       message: {
         subject: input.subject,
         body: {
+          // input.body ya viene armado como HTML completo por
+          // preparePoEmail.ts (server/templates/correo-orden-compra.html) —
+          // antes se re-escapaba aquí como si fuera texto plano, lo que
+          // convertía las etiquetas HTML en texto visible en vez de
+          // renderizarlas.
           contentType: 'HTML',
-          content: textToHtml(input.body),
+          content: input.body,
         },
         toRecipients: [{ emailAddress: { address: input.recipientEmail } }],
         ...(sendAsEmail ? { from: { emailAddress: { address: sendAsEmail } } } : {}),

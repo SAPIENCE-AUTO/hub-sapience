@@ -1,0 +1,231 @@
+<!--
+  ============================================================================
+  CORREO · ORDEN DE COMPRA AL PROVEEDOR
+  ============================================================================
+  Reemplaza el cuerpo de texto plano que hoy arma preparePoEmail.ts.
+  Conserva toda la información que ya mandaba; solo cambia cómo se presenta.
+
+  MARCADORES
+    {{contactName}}        Elizabeth Campos Linares
+    {{poNumber}}           RI-03412
+    {{projectCode}}        ORO
+    {{totalAmount}}        $800.00   (ya formateado)
+    {{moneda}}             MXN
+    {{paymentTerms}}       Contado / 30 días / …
+    {{serviceDescription}} Cierre de Proyecto — Reclutamiento de 1 participantes
+    {{portalUrl}}          https://…/portal/{token}
+    {{portalPassword}}     8 caracteres
+
+  BLOQUES OPCIONALES
+    Marcados con <!-- SI ... -->. Quítalos cuando el dato venga vacío:
+    condiciones de pago, descripción del servicio y el bloque completo del
+    portal (si el proveedor no tiene token).
+
+  ANTES DE USARLO: SUBE EL LOGO
+    Los clientes de correo bloquean imágenes en base64, así que el logo tiene
+    que vivir en una URL pública. Súbelo a Supabase Storage en un bucket
+    público y reemplaza https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png. Usa el logo BLANCO, va sobre navy.
+
+  ASUNTO — el mismo que ya genera preparePoEmail:
+    Orden de Compra #{{poNumber}} – {{supplierName}} – {{projectCode}}
+
+  QUÉ CAMBIÓ RESPECTO AL TEXTO PLANO
+    · El portal para subir la factura pasó de ser una URL suelta a un botón
+      con su contraseña al lado. Es la acción que necesitas que el proveedor
+      haga, y antes competía con el resto del texto.
+    · Los datos de la orden van en una tabla, no en viñetas. Se comparan
+      contra el PDF de un vistazo.
+    · El aviso de que la dirección no recibe respuestas está al pie, donde se
+      busca, y no en medio del mensaje.
+
+  POR QUÉ ESTÁ ARMADO CON TABLAS
+    Outlook renderiza correo con el motor de Word. Ignora flexbox, grid y las
+    esquinas redondeadas. Tablas con estilos en línea es lo único que se
+    comporta igual en Outlook, Gmail y Apple Mail — y tus proveedores usan de
+    todo.
+  ============================================================================
+-->
+<!DOCTYPE html>
+<html lang="es" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<title>Orden de compra {{poNumber}}</title>
+<!--[if mso]>
+<noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+<![endif]-->
+<style>
+  @media only screen and (max-width:620px) {
+    .caja { width:100% !important; }
+    .pad  { padding-left:24px !important; padding-right:24px !important; }
+    .titulo { font-size:22px !important; }
+    .dato-lbl, .dato-val { display:block !important; width:100% !important; }
+    .dato-val { padding-top:2px !important; padding-bottom:10px !important; }
+  }
+  a { color:#027495; }
+</style>
+</head>
+<body style="margin:0; padding:0; background-color:#EEF2F3;">
+
+<div style="display:none; max-height:0; overflow:hidden; opacity:0; font-size:1px; line-height:1px; color:#EEF2F3;">
+  Orden de compra {{poNumber}} del proyecto {{projectCode}}. El PDF va adjunto.
+</div>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#EEF2F3;">
+  <tr>
+    <td align="center" style="padding:32px 12px;">
+
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="caja"
+             style="width:600px; max-width:600px; background-color:#FFFFFF;">
+
+        <!-- Header navy -->
+        <tr>
+          <td bgcolor="#0F3D4C" class="pad" style="background-color:#0F3D4C; padding:28px 40px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td align="left" valign="middle">
+                  <img src="https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png" alt="Sapience" width="140"
+                       style="display:block; border:0; width:140px; max-width:140px; height:auto;">
+                </td>
+                <td align="right" valign="middle"
+                    style="font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:11px; letter-spacing:0.18em; text-transform:uppercase; font-weight:600; color:#8FB6C0;">
+                  Orden de compra
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Saludo y folio -->
+        <tr>
+          <td class="pad" style="padding:34px 40px 0;">
+            <p style="margin:0 0 18px; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:15px; line-height:1.6; color:#383838;">
+              Estimado/a {{contactName}}:
+            </p>
+            <p class="titulo" style="margin:0 0 6px; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:26px; line-height:1.15; font-weight:700; color:#0F3D4C;">
+              {{poNumber}}
+            </p>
+            <p style="margin:0 0 24px; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#6E8388;">
+              Proyecto {{projectCode}} · El PDF de la orden va adjunto a este correo.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Datos de la orden -->
+        <tr>
+          <td class="pad" style="padding:0 40px 8px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                   style="border-top:2px solid #0F3D4C;">
+
+              <tr>
+                <td class="dato-lbl" width="38%" valign="top"
+                    style="padding:11px 10px 11px 0; border-bottom:1px solid #DDE5E8; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:#6E8388;">
+                  Monto total
+                </td>
+                <td class="dato-val" valign="top"
+                    style="padding:11px 0; border-bottom:1px solid #DDE5E8; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:16px; font-weight:700; color:#0F3D4C;">
+                  {{totalAmount}} {{moneda}}
+                </td>
+              </tr>
+
+              <!-- SI hay condiciones de pago -->
+              <tr>
+                <td class="dato-lbl" valign="top"
+                    style="padding:11px 10px 11px 0; border-bottom:1px solid #DDE5E8; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:#6E8388;">
+                  Condiciones de pago
+                </td>
+                <td class="dato-val" valign="top"
+                    style="padding:11px 0; border-bottom:1px solid #DDE5E8; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; color:#383838;">
+                  {{paymentTerms}}
+                </td>
+              </tr>
+              <!-- /SI -->
+
+              <!-- SI hay descripción del servicio -->
+              <tr>
+                <td class="dato-lbl" valign="top"
+                    style="padding:11px 10px 11px 0; border-bottom:1px solid #DDE5E8; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:#6E8388;">
+                  Servicio
+                </td>
+                <td class="dato-val" valign="top"
+                    style="padding:11px 0; border-bottom:1px solid #DDE5E8; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; line-height:1.55; color:#383838;">
+                  {{serviceDescription}}
+                </td>
+              </tr>
+              <!-- /SI -->
+
+            </table>
+          </td>
+        </tr>
+
+        <!-- SI el proveedor tiene portal · subir factura -->
+        <tr>
+          <td class="pad" style="padding:30px 40px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                   style="background-color:#F2F7F8; border-left:3px solid #027495;">
+              <tr>
+                <td style="padding:22px 24px;">
+                  <p style="margin:0 0 6px; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:15px; font-weight:700; color:#0F3D4C;">
+                    Sube tu factura aquí
+                  </p>
+                  <p style="margin:0 0 18px; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; line-height:1.6; color:#383838;">
+                    Carga el PDF y el XML por este portal. Es la única vía que entra directo a
+                    revisión; por otro medio se retrasa.
+                  </p>
+
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td bgcolor="#027495" align="center" style="background-color:#027495;">
+                        <a href="{{portalUrl}}"
+                           style="display:inline-block; padding:13px 32px; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#FFFFFF; text-decoration:none;">
+                          Subir factura
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <p style="margin:16px 0 0; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; line-height:1.6; color:#383838;">
+                    <span style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:#6E8388;">Contraseña</span>
+                    <span style="font-family:'SF Mono',Consolas,Menlo,monospace; font-size:15px; font-weight:700; color:#0F3D4C; letter-spacing:0.08em;">&nbsp;{{portalPassword}}</span>
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- /SI portal -->
+
+        <!-- Cierre -->
+        <tr>
+          <td class="pad" style="padding:28px 40px 34px;">
+            <p style="margin:0; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; line-height:1.65; color:#383838;">
+              Cualquier duda o aclaración, escribe a
+              <a href="mailto:admin@sapience.com.mx" style="color:#027495; text-decoration:none; font-weight:600;">admin@sapience.com.mx</a>.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Pie -->
+        <tr>
+          <td bgcolor="#F7F9FA" class="pad"
+              style="background-color:#F7F9FA; padding:22px 40px; border-top:1px solid #DDE5E8;">
+            <p style="margin:0 0 6px; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:11px; line-height:1.6; letter-spacing:0.1em; text-transform:uppercase; font-weight:600; color:#0F3D4C;">
+              Departamento de Compras · Sapience
+            </p>
+            <p style="margin:0; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#6E8388;">
+              Este correo se envía desde compras@sapience.com.mx, una dirección que no recibe
+              respuestas. Para cualquier tema escribe a
+              <a href="mailto:admin@sapience.com.mx" style="color:#027495; text-decoration:none;">admin@sapience.com.mx</a>.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
