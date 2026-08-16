@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
 import {
-  Lock, Upload, CheckCircle2, Clock, XCircle, Building2,
+  Upload, CheckCircle2, Clock, XCircle,
   CalendarDays, List, ChevronLeft, ChevronRight, AlertCircle,
   AlertTriangle, FileCheck, FileX, FileClock, Receipt, Search, Paperclip,
   ShoppingCart, FileText, Wallet, Download, ExternalLink, FileWarning, Ban, Mail,
@@ -24,6 +24,10 @@ type PortalData = GetSupplierPortalDataOutputType;
 type PO = PortalData['purchaseOrders'][0];
 type Payment = PortalData['payments'][0];
 type TabId = 'ordenes' | 'facturas' | 'pagos';
+
+// Misma marca/paleta que LoginPage.tsx y el correo de OC
+// (server/templates/correo-orden-compra.html) — navy #0F3D4C, teal #027495.
+const BRAND_LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png';
 
 const PO_STATUS_STYLES: Record<string, string> = {
   'Enviada a aprobación':  'bg-blue-100 text-blue-700 border-blue-200',
@@ -65,27 +69,30 @@ function getToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 function VerifyScreen({ onVerify, error }: { onVerify: (pw: string) => void; error?: string }) {
   const [pw, setPw] = useState('');
   return (
-    <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-sm p-8 space-y-6">
-        <div className="text-center space-y-3">
-          <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto">
-            <Lock className="w-7 h-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">Portal de Proveedores</h1>
-            <p className="text-sm text-muted-foreground mt-1">Ingresa tu clave de acceso para continuar</p>
-          </div>
+    <div className="min-h-screen bg-[#EEF2F3] flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-sm overflow-hidden">
+        <div className="bg-[#0F3D4C] px-8 pt-8 pb-6 text-center">
+          <img src={BRAND_LOGO_URL} alt="Sapience" className="h-8 w-auto mx-auto mb-5" />
+          <h1 className="text-lg font-bold text-white">Portal de Proveedores</h1>
+          <p className="text-sm text-[#8FB6C0] mt-1">Ingresa tu clave de acceso para continuar</p>
         </div>
-        <div className="space-y-2">
-          <Label>Clave de acceso</Label>
-          <Input
-            type="password" value={pw} onChange={e => setPw(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && pw && onVerify(pw)}
-            placeholder="••••••••" autoFocus
-          />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+        <div className="p-8 space-y-6">
+          <div className="space-y-2">
+            <Label>Clave de acceso</Label>
+            <Input
+              type="password" value={pw} onChange={e => setPw(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && pw && onVerify(pw)}
+              placeholder="••••••••" autoFocus
+            />
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+          <Button
+            className="w-full bg-[#0F3D4C] hover:bg-[#0A2F3B] text-white"
+            onClick={() => onVerify(pw)} disabled={!pw}
+          >
+            Acceder
+          </Button>
         </div>
-        <Button className="w-full" onClick={() => onVerify(pw)} disabled={!pw}>Acceder</Button>
       </div>
     </div>
   );
@@ -240,7 +247,7 @@ function PODetailDialog({ po, open, onClose, onUpload }: {
           {canUploadInvoice && po && (
             <Button
               onClick={() => { onClose(); onUpload(po); }}
-              className="gap-1.5"
+              className={po.invoiceStatus === 'Rechazada' ? 'gap-1.5' : 'gap-1.5 bg-[#0F3D4C] hover:bg-[#0A2F3B] text-white'}
               variant={po.invoiceStatus === 'Rechazada' ? 'destructive' : 'default'}
             >
               <Upload className="w-4 h-4" />
@@ -315,9 +322,10 @@ function UploadInvoiceDialog({ po, token, password, onDone, open, onClose }: {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
-          <DialogTitle>
-            {isResubmit ? `Reenviar factura — OC #${po?.poNumber}` : `Subir factura — OC #${po?.poNumber}`}
+        <DialogHeader className="px-6 py-5 shrink-0 bg-[#0F3D4C]">
+          <DialogTitle className="text-white font-semibold">
+            {isResubmit ? 'Reenviar factura' : 'Subir factura'}
+            <span className="ml-2 font-mono font-normal text-sm text-[#8FB6C0]">OC #{po?.poNumber}</span>
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 min-h-0 overflow-y-scroll">
@@ -336,8 +344,8 @@ function UploadInvoiceDialog({ po, token, password, onDone, open, onClose }: {
             <Label>Número de factura <span className="text-destructive">*</span></Label>
             <Input value={form.invoiceNumber} onChange={e => setForm(p => ({ ...p, invoiceNumber: e.target.value }))} placeholder="Ej: A-00123" />
           </div>
-          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Desglose fiscal</p>
+          <div className="space-y-3 rounded-lg border border-[#027495]/15 bg-[#F2F7F8] p-3">
+            <p className="text-[11px] font-semibold text-[#027495] uppercase tracking-wide">Desglose fiscal</p>
             {/* Monto + Moneda */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -370,12 +378,12 @@ function UploadInvoiceDialog({ po, token, password, onDone, open, onClose }: {
                       <button
                         type="button"
                         onClick={() => setForm(p => ({ ...p, ivaMode: 'percent' }))}
-                        className={`px-2.5 py-1 text-xs font-semibold transition-colors ${form.ivaMode === 'percent' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
+                        className={`px-2.5 py-1 text-xs font-semibold transition-colors ${form.ivaMode === 'percent' ? 'bg-[#0F3D4C] text-white' : 'bg-card text-muted-foreground hover:bg-muted'}`}
                       >%</button>
                       <button
                         type="button"
                         onClick={() => setForm(p => ({ ...p, ivaMode: 'amount' }))}
-                        className={`px-2.5 py-1 text-xs font-semibold border-l border-border transition-colors ${form.ivaMode === 'amount' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
+                        className={`px-2.5 py-1 text-xs font-semibold border-l border-border transition-colors ${form.ivaMode === 'amount' ? 'bg-[#0F3D4C] text-white' : 'bg-card text-muted-foreground hover:bg-muted'}`}
                       >$</button>
                     </div>
                     {form.ivaMode === 'percent' ? (
@@ -431,9 +439,9 @@ function UploadInvoiceDialog({ po, token, password, onDone, open, onClose }: {
               </div>
             </div>
             {/* Total */}
-            <div className="flex items-center justify-between rounded-lg bg-primary/5 border border-primary/20 px-3 py-2.5">
-              <span className="text-sm font-semibold">Total de la factura</span>
-              <span className="text-base font-bold text-primary">
+            <div className="flex items-center justify-between rounded-lg bg-[#027495]/8 border border-[#027495]/25 px-3 py-2.5">
+              <span className="text-sm font-semibold text-[#0F3D4C]">Total de la factura</span>
+              <span className="text-base font-bold text-[#0F3D4C]">
                 {cTotal > 0 ? fmtCurrency(cTotal, form.currency) : '—'}
               </span>
             </div>
@@ -456,7 +464,7 @@ function UploadInvoiceDialog({ po, token, password, onDone, open, onClose }: {
         </div>
         <DialogFooter className="px-6 py-4 border-t border-border shrink-0">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={saving} className="gap-2" variant={isResubmit ? 'destructive' : 'default'}>
+          <Button onClick={handleSubmit} disabled={saving} className={isResubmit ? 'gap-2' : 'gap-2 bg-[#0F3D4C] hover:bg-[#0A2F3B] text-white'} variant={isResubmit ? 'destructive' : 'default'}>
             <Upload className="w-4 h-4" />{saving ? 'Enviando...' : isResubmit ? 'Reenviar factura' : 'Enviar factura'}
           </Button>
         </DialogFooter>
@@ -638,7 +646,7 @@ function PendingPOsSection({ pos, onUpload, onSelect }: { pos: PO[]; onUpload: (
                     {po.status && <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${PO_STATUS_STYLES[po.status] ?? 'bg-muted text-muted-foreground border-border'}`}>{po.status}</span>}
                   </td>
                   <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                    <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => onUpload(po)}>
+                    <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs border-[#027495]/30 text-[#027495] hover:bg-[#027495]/5 hover:text-[#027495]" onClick={() => onUpload(po)}>
                       <Upload className="w-3 h-3" /> Subir factura
                     </Button>
                   </td>
@@ -1181,7 +1189,7 @@ interface TabDef {
 
 function TabBar({ tabs, active, onChange }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
   return (
-    <div className="flex gap-1 bg-muted/50 border-b border-border px-4 overflow-x-auto">
+    <div className="flex gap-1 bg-[#0A2F3B] px-4 overflow-x-auto">
       {tabs.map(tab => {
         const isActive = tab.id === active;
         return (
@@ -1190,15 +1198,15 @@ function TabBar({ tabs, active, onChange }: { tabs: TabDef[]; active: TabId; onC
             onClick={() => onChange(tab.id)}
             className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
               isActive
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                ? 'border-[#6FC2DA] text-white'
+                : 'border-transparent text-[#8FB6C0] hover:text-white'
             }`}
           >
             {tab.icon}
             {tab.label}
             {tab.count > 0 && (
               <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${
-                isActive ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                isActive ? 'bg-white/15 text-white' : 'bg-white/10 text-[#8FB6C0]'
               }`}>
                 {tab.count}
               </span>
@@ -1307,14 +1315,13 @@ export default function SupplierPortalPage() {
       <Toaster richColors position="top-right" />
 
       {/* Header */}
-      <header className="bg-card border-b border-border sticky top-0 z-10">
+      <header className="bg-[#0F3D4C] border-b border-[#0A2F3B] sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-            <Building2 className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="font-bold text-base leading-tight">Portal de Proveedores</h1>
-            {data && <p className="text-xs text-muted-foreground">{data.supplier.name}</p>}
+          <img src={BRAND_LOGO_URL} alt="Sapience" className="h-7 w-auto shrink-0" />
+          <div className="w-px h-7 bg-white/15 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="font-bold text-base leading-tight text-white">Portal de Proveedores</h1>
+            {data && <p className="text-xs text-[#8FB6C0] truncate">{data.supplier.name}</p>}
           </div>
         </div>
         <div className="max-w-4xl mx-auto">
