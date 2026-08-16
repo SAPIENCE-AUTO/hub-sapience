@@ -11,6 +11,18 @@
 // (no del INSERT: una fila nueva que no existía en Postgres no tiene nada
 // que proteger).
 //
+// Fase 2 — links: igual que load-zite-to-postgres.ts, rowFromRecord omite los
+// campos link/linkMany (no son columnas escalares directas). El loader inicial
+// resuelve eso con una segunda pasada (applyLinks + createModel().update()) DESPUÉS
+// de que todas las tablas ya tienen sus filas base — este script no la tenía, así
+// que cualquier fila que llegara por un delta (no por la carga histórica completa)
+// se quedaba con su FK en null para siempre. Encontrado en vivo: 24/27 Cotizaciones
+// y 241/260 Cotizacion Line Items del cutover del 14 de agosto quedaron huérfanas
+// (deal_id / cotizacion_id null) — las filas existían completas, solo el link
+// faltaba. Replicado aquí igual que en el loader: primero todas las tablas por
+// columnas escalares, luego todas por links, para no depender del orden en que
+// aparecen en _delta-summary.json.
+//
 // Uso (desde la raíz del repo):
 //   npx tsx --env-file=.env server/scripts/apply-zite-delta.ts
 //   npx tsx --env-file=.env server/scripts/apply-zite-delta.ts --only=Users,Deals
@@ -21,6 +33,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { SCHEMA, type TableDef, type FieldDef } from '../compat/schema-map';
+import { createModel } from '../compat/model';
 import { isExcludedRecord } from './zite-exclusions';
 import { normalizeNumericOverflow } from './zite-normalizations';
 
@@ -167,7 +180,7 @@ async function upsertByPosition(
   await pool.query(sql, values);
 }
 
-async function applyTable(t: TableCtx, deltaFile: string): Promise<{ name: string; applied: number; failed: number }> {
+async function applyTable(t: TableCtx, deltaFile: string): Promise<{ name: string; applied: number; failed: number; records: ZiteRecord[] }> {
   const allRecords: ZiteRecord[] = JSON.parse(await readFile(deltaFile, 'utf8'));
   const records = allRecords.filter((r) => !isExcludedRecord(t.name, r.fields));
   const excludedCount = allRecords.length - records.length;
@@ -179,7 +192,7 @@ async function applyTable(t: TableCtx, deltaFile: string): Promise<{ name: strin
 
   if (DRY_RUN) {
     console.log(`[dry-run] ${t.name}: aplicaría ${records.length} filas (${protectedProps.size ? `protegiendo: ${[...protectedProps].join(', ')}` : 'sin columnas protegidas'})`);
-    return { name: t.name, applied: records.length, failed: 0 };
+    return { name: t.name, applied: records.length, failed: 0, records };
   }
 
   const conflictTarget = t.def.conflictTarget;
@@ -201,7 +214,46 @@ async function applyTable(t: TableCtx, deltaFile: string): Promise<{ name: strin
     }
   }
   console.log(`✅ ${t.name}: ${applied} aplicadas${byPosition ? ` (${byPosition} por posición)` : ''}${failed ? `, ${failed} fallidas` : ''}${protectedProps.size ? ` (protegido: ${[...protectedProps].join(', ')})` : ''}`);
-  return { name: t.name, applied, failed };
+  return { name: t.name, applied, failed, records };
+}
+
+// El pool ya trae query_timeout, pero (ver load-zite-to-postgres.ts) tras un
+// error de conexión una conexión del pool puede quedar zombie sin disparar ese
+// timeout — pool.query() se queda esperando para siempre. Timeout del lado de
+// Node, no depende de que pg reaccione.
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`timeout de ${ms}ms esperando ${label}`)), ms)),
+  ]);
+}
+
+// Segunda pasada: aplica los campos link/linkMany que rowFromRecord omite,
+// igual que la Fase 2 de load-zite-to-postgres.ts. Reusa createModel().update(),
+// que ya sabe traducir un valor de Zite (arreglo de ids) a FK simple o a tabla
+// puente (ver compat/model.ts). Idempotente: se puede volver a correr sin riesgo.
+async function applyLinks(t: TableCtx, records: ZiteRecord[]): Promise<{ updated: number; failed: number }> {
+  const model = createModel(pool, t.modelKey as keyof typeof SCHEMA);
+  let updated = 0, failed = 0, processed = 0;
+  for (const r of records) {
+    if (isExcludedRecord(t.name, r.fields)) continue;
+    const patch: Record<string, unknown> = {};
+    for (const [label, value] of Object.entries(r.fields ?? {})) {
+      const resolved = resolveField(t, label);
+      if (resolved && (resolved[1].kind === 'link' || resolved[1].kind === 'linkMany')) patch[resolved[0]] = value;
+    }
+    processed++;
+    if (records.length > 500 && processed % 500 === 0) console.log(`   ${t.name} (links): ${processed}/${records.length}`);
+    if (!Object.keys(patch).length) continue;
+    try {
+      await withTimeout(model.update({ id: r.id, record: patch }), 20_000, `update de ${t.name} id=${r.id}`);
+      updated++;
+    } catch (err) {
+      failed++;
+      console.error(`❌ ${t.name} (link) id=${r.id}: ${(err as Error).message.split('\n')[0]}`);
+    }
+  }
+  return { updated, failed };
 }
 
 async function main() {
@@ -212,17 +264,43 @@ async function main() {
   const targets = summary.filter((s) => s.deltaCount > 0 && (!ONLY || ONLY.has(s.name)));
   console.log(`${targets.length} tablas con delta para aplicar${DRY_RUN ? ' (DRY RUN, no escribe nada)' : ''}\n`);
 
-  const results = [];
+  console.log('── Fase 1: columnas escalares ──');
+  const tableCtxs: TableCtx[] = [];
+  const applied: { name: string; applied: number; failed: number; records: ZiteRecord[] }[] = [];
   for (const { name } of targets) {
     const modelKey = name.replace(/\s+/g, '');
     const def = (SCHEMA as Record<string, TableDef>)[modelKey];
     if (!def) { console.warn(`[aviso] sin mapeo en SCHEMA: ${name}`); continue; }
+    const t: TableCtx = { name, modelKey, def };
+    tableCtxs.push(t);
     const deltaFile = path.join(DATA_DIR, `${name.replace(/[\\/:*?"<>|]/g, '_')}.delta.json`);
-    results.push(await applyTable({ name, modelKey, def }, deltaFile));
+    applied.push(await applyTable(t, deltaFile));
   }
 
-  console.log('\n── Resumen ──');
-  console.table(results);
+  // Fase 2 — links: solo después de que TODAS las tablas de este delta ya
+  // tienen sus filas base, igual que load-zite-to-postgres.ts. No depende del
+  // orden en _delta-summary.json (ej. Cotizaciones podría procesarse antes de
+  // que Deals termine, si algún día cambia ese orden).
+  const linkResults: { name: string; updated: number; failed: number }[] = [];
+  if (!DRY_RUN) {
+    console.log('\n── Fase 2: links y relaciones N-N ──');
+    for (const t of tableCtxs) {
+      const hasLinks = Object.values(t.def.fields).some((f) => f.kind === 'link' || f.kind === 'linkMany');
+      if (!hasLinks) continue;
+      const found = applied.find((a) => a.name === t.name);
+      if (!found || !found.records.length) continue;
+      const { updated, failed } = await applyLinks(t, found.records);
+      console.log(`✅ ${t.name}: ${updated} filas con links aplicados${failed ? `, ${failed} fallidas` : ''}`);
+      linkResults.push({ name: t.name, updated, failed });
+    }
+  }
+
+  console.log('\n── Resumen (escalares) ──');
+  console.table(applied.map(({ name, applied: a, failed }) => ({ name, applied: a, failed })));
+  if (linkResults.length) {
+    console.log('\n── Resumen (links) ──');
+    console.table(linkResults);
+  }
   await pool.end();
 }
 

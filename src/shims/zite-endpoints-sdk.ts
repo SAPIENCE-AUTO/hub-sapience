@@ -237,6 +237,7 @@ export const getProjectBudget = (input?: any): Promise<any> => call('getProjectB
 export const getProjectCostAnalysis = (input?: any): Promise<any> => call('getProjectCostAnalysis', input);
 export const getProjectDocuments = (input?: any): Promise<any> => call('getProjectDocuments', input);
 export const getProjectForDeal = (input?: any): Promise<any> => call('getProjectForDeal', input);
+export const getProjectTeamsFiles = (input?: any): Promise<any> => call('getProjectTeamsFiles', input);
 export const getProjects = (input?: any): Promise<any> => call('getProjects', input);
 export const getPurchaseOrders = (input?: any): Promise<any> => call('getPurchaseOrders', input);
 export const getRecruitmentDashboard = (input?: any): Promise<any> => call('getRecruitmentDashboard', input);
@@ -447,6 +448,7 @@ export type GetPresenceOutputType = any;
 export type GetProjectBudgetOutputType = any;
 export type GetProjectCostAnalysisOutputType = any;
 export type GetProjectDocumentsOutputType = any;
+export type GetProjectTeamsFilesOutputType = any;
 export type GetProjectsOutputType = any;
 export type GetPurchaseOrdersOutputType = any;
 export type GetRecruitmentDashboardOutputType = any;
