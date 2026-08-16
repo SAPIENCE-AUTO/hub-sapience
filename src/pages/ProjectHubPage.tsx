@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign, CalendarDays, BarChart2 } from 'lucide-react';
+import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
+import { ProjectHubLanding } from '../components/project-hub/ProjectHubLanding';
 import RecruitmentPage from './RecruitmentPage';
 import PMPage from './PMPage';
 import ChatPage from './ChatPage';
@@ -226,83 +227,13 @@ export default function ProjectHubPage() {
           </div>
         ) : (
           <>
-            {activeTab === 'hub' && (
-              <div className="p-6 overflow-y-auto h-full">
-                <p className="text-sm text-muted-foreground mb-4">¿A dónde quieres ir?</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 max-w-3xl">
-                  <button
-                    onClick={() => setActiveTab('reclutamiento')}
-                    className="flex items-center gap-3.5 p-5 rounded-xl border border-border bg-card hover:border-foreground/30 transition-colors text-left"
-                  >
-                    <div className="w-12 h-12 rounded-lg bg-chart-5/10 text-chart-5 flex items-center justify-center flex-shrink-0">
-                      <Users className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <div className="text-base font-medium text-foreground">Reclutamiento</div>
-                      <div className="text-xs text-muted-foreground">Tableros de participantes</div>
-                    </div>
-                  </button>
-
-                  <div className="p-5 rounded-xl border border-border bg-card">
-                    <div className="flex items-center gap-3.5 mb-3">
-                      <div className="w-12 h-12 rounded-lg bg-chart-1/10 text-chart-1 flex items-center justify-center flex-shrink-0">
-                        <Activity className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="text-base font-medium text-foreground">Actividades</div>
-                        <div className="text-xs text-muted-foreground">Sesiones y fases del proyecto</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => goToActividades('calendarios')}
-                        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-                      >
-                        <CalendarDays className="w-3.5 h-3.5" /> Calendario
-                      </button>
-                      <button
-                        onClick={() => goToActividades('timelines')}
-                        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-                      >
-                        <BarChart2 className="w-3.5 h-3.5" /> Timelines
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl">
-                  {canSeeBudget && (
-                    <button
-                      onClick={() => setActiveTab('presupuesto')}
-                      className="flex items-center gap-2.5 p-3.5 rounded-xl border border-border bg-card hover:border-foreground/30 transition-colors text-left"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-chart-4/10 text-chart-4 flex items-center justify-center flex-shrink-0">
-                        <DollarSign className="w-4 h-4" />
-                      </div>
-                      <span className="text-sm font-medium text-foreground">Presupuesto</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setActiveTab('documentos')}
-                    className="flex items-center gap-2.5 p-3.5 rounded-xl border border-border bg-card hover:border-foreground/30 transition-colors text-left"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-chart-2/10 text-chart-2 flex items-center justify-center flex-shrink-0">
-                      <FileText className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm font-medium text-foreground">Documentos</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('chat')}
-                    className="flex items-center gap-2.5 p-3.5 rounded-xl border border-border bg-card hover:border-foreground/30 transition-colors text-left"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-chart-3/10 text-chart-3 flex items-center justify-center flex-shrink-0">
-                      <MessageSquare className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm font-medium text-foreground">Chat</span>
-                  </button>
-                </div>
-              </div>
+            {activeTab === 'hub' && projectId && (
+              <ProjectHubLanding
+                projectCode={projectId}
+                canSeeBudget={canSeeBudget}
+                onOpenTab={setActiveTab}
+                onOpenActividades={goToActividades}
+              />
             )}
             {activeTab === 'reclutamiento' && <RecruitmentPage hasMuestra={hasMuestra} onOpenMuestra={openMuestra} />}
             {activeTab === 'actividades'   && <PMPage initialSection={pmSection} />}

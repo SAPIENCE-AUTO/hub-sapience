@@ -244,6 +244,7 @@ export const getPurchaseOrders = (input?: any): Promise<any> => call('getPurchas
 export const getRecruitmentDashboard = (input?: any): Promise<any> => call('getRecruitmentDashboard', input);
 export const getRecruitmentGroups = (input?: any): Promise<any> => call('getRecruitmentGroups', input);
 export const getRecruitmentRows = (input?: any): Promise<any> => call('getRecruitmentRows', input);
+export const getRecruitmentSummary = (input?: any): Promise<any> => call('getRecruitmentSummary', input);
 export const getReferenceOptions = (input?: any): Promise<any> => call('getReferenceOptions', input);
 export const getRubroAssignments = (input?: any): Promise<any> => call('getRubroAssignments', input);
 export const getSharedViewData = (input?: any): Promise<any> => call('getSharedViewData', input);
