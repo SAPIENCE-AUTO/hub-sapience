@@ -26,8 +26,13 @@ services:
         sync: false
       # Tope de conexiones del pool de este proceso contra el pool_size:15 de
       # Supavisor en modo sesión (aws-0-ca-central-1.pooler.supabase.com:5432).
-      # 6 deja margen para que un rolling deploy solape 2 instancias (6×2=12)
-      # sin acercarse al límite, más scripts de server/scripts/ o el dashboard.
+      # 9 asume que los deploys se hacen de noche, sin usuarios activos: el
+      # traslape de 2 instancias en el rolling deploy (9×2=18) solo dura el
+      # swap del health check (segundos), y a esa hora ninguna de las dos
+      # está realmente exigiendo su tope — el margen real lo da la ausencia
+      # de tráfico, no la aritmética. Si algún día se necesita un deploy de
+      # emergencia en horario con usuarios activos, este colchón es menor que
+      # el que daba 6 — bajarlo temporalmente ese día si aplica.
       - key: PG_POOL_MAX
         sync: false
       - key: SUPABASE_URL
