@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { GetDealsOutputType, saveDeal, deleteDeal, getUsers, GetUsersOutputType, saveProject, approveSelectedCotizaciones, getProjectForDeal } from 'zite-endpoints-sdk';
+import { GetDealsOutputType, saveDeal, deleteDeal, getUsers, GetUsersOutputType, saveProject, getProjectForDeal } from 'zite-endpoints-sdk';
+import { useAuth } from 'zite-auth-sdk';
 import ApprovalReviewDialog from './ApprovalReviewDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,13 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Trash2, FolderPlus, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PHASES, CURRENCIES, getCurrencySymbol, fmtMoneyFull } from './dealUtils';
-import NumericInput from '@/components/NumericInput';
 import ComboboxCreatable from '@/components/ComboboxCreatable';
 
 type Deal = GetDealsOutputType['deals'][0];
 type UserItem = GetUsersOutputType['users'][0];
-const PHASE_KEYS = PHASES.map(p => p.key);
 
 interface Props {
   deal: Deal;
@@ -27,22 +25,36 @@ interface Props {
 const APPROVE_PHASES = ['Cotización enviada', 'Negociación'];
 
 export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClients = [] }: Props) {
+  const { user } = useAuth();
+  const isNew = !deal.id;
+
+  // Al crear, solo se pide lo que de verdad se sabe el día uno (nombre,
+  // cliente, tipo, temática, notas) — precio/impuestos/retenciones/moneda
+  // viven ahora en la pestaña Cotizaciones (se piden cuando ya hay algo que
+  // cotizar, no antes) y la fase es un badge en el header de
+  // DealDetailSheet.tsx, no un campo de este formulario. Un deal nuevo nace
+  // en "Prospecto" sin preguntar.
   const [form, setForm] = useState({
-    dealName: deal.dealName ?? '', phase: deal.phase ?? 'Prospecto',
-    client: deal.client ?? '', projectType: deal.projectType ?? '',
-    tematica: deal.tematica ?? '', proposalDate: (deal.proposalDate ?? '').slice(0, 10),
-    approvalDate: (deal.approvalDate ?? '').slice(0, 10), currency: deal.currency ?? 'MXN 🇲🇽',
-    clientPrice: deal.clientPrice?.toString() ?? '', taxesPct: deal.taxesPct?.toString() ?? '',
-    retencionesPct: deal.retencionesPct?.toString() ?? '',
+    dealName: deal.dealName ?? '',
+    client: deal.client ?? '',
+    projectType: deal.projectType ?? '',
+    tematica: deal.tematica ?? '',
     notes: deal.notes ?? '',
   });
   const [owner, setOwner] = useState((Array.isArray(deal.owner) ? deal.owner[0] : deal.owner) ?? '');
   const [users, setUsers] = useState<UserItem[]>([]);
+
+  // Default a "owner" al usuario actual solo al crear. useAuth() hidrata al
+  // usuario de forma asíncrona (getMe/getUsers), así que si este formulario
+  // monta antes de que resuelva, un default calculado una sola vez en el
+  // useState de arriba se queda en '' para siempre — este efecto lo completa
+  // en cuanto el perfil llega, sin pisar una elección manual ya hecha.
+  useEffect(() => {
+    if (isNew && user?.id) setOwner(prev => prev || user.id);
+  }, [isNew, user?.id]);
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
-  const [pendingApprove, setPendingApprove] = useState<{ dealId: string; updated: Deal } | null>(null);
-  const [approving, setApproving] = useState(false);
   const [approvalReviewOpen, setApprovalReviewOpen] = useState(false);
 
   // Deals no tiene una columna real de vuelta hacia Projects — solo existe
@@ -86,21 +98,9 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
   const handleApprovalSuccess = (res: { projectCode: string; projectId: string; quotedCost: number; notificationsSent: number }) => {
     const today = new Date().toISOString().split('T')[0];
     const updated: Deal = { ...deal, phase: 'Ganado', approvalDate: today, quotedCost: res.quotedCost };
-    setForm(f => ({ ...f, phase: 'Ganado', approvalDate: today }));
     setLinkedProject({ id: res.projectId, projectCode: res.projectCode });
     onSaved(updated);
   };
-
-  // Sync form when deal prop changes from outside
-  useEffect(() => {
-    setForm(f => ({
-      ...f,
-      clientPrice: deal.clientPrice?.toString() ?? f.clientPrice,
-      retencionesPct: deal.retencionesPct?.toString() ?? f.retencionesPct,
-      proposalDate: deal.proposalDate ? deal.proposalDate.slice(0, 10) : f.proposalDate,
-      approvalDate: deal.approvalDate ? deal.approvalDate.slice(0, 10) : f.approvalDate,
-    }));
-  }, [deal.clientPrice, deal.retencionesPct, deal.proposalDate, deal.approvalDate]);
 
   useEffect(() => {
     getUsers({}).then(d => setUsers(d.users));
@@ -113,29 +113,26 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
     setSaving(true);
     try {
       const result = await saveDeal({
-        id: deal.id || undefined, dealName: form.dealName || undefined,
-        phase: form.phase, client: form.client || undefined,
-        projectType: form.projectType || undefined, tematica: form.tematica || undefined,
-        owner: owner ? [owner] : undefined, proposalDate: form.proposalDate || undefined,
-        approvalDate: form.approvalDate || undefined, currency: form.currency,
-        clientPrice: form.clientPrice ? Number(form.clientPrice) : undefined,
-        taxesPct: form.taxesPct ? Number(form.taxesPct) : undefined,
-        retencionesPct: form.retencionesPct ? Number(form.retencionesPct) : undefined,
-        quotedCost: deal.quotedCost ?? undefined,
+        id: deal.id || undefined,
+        dealName: form.dealName || undefined,
+        client: form.client || undefined,
+        projectType: form.projectType || undefined,
+        tematica: form.tematica || undefined,
+        owner: owner ? [owner] : undefined,
         notes: form.notes || undefined,
+        // Solo al crear: la fase nace en Prospecto sin preguntar (en edición
+        // la fase la maneja el badge del header, este form ya no la toca).
+        ...(isNew ? { phase: 'Prospecto' } : {}),
       });
       const updated: Deal = {
-        id: result.id, ...form, owner: owner ? [owner] : undefined,
-        clientPrice: form.clientPrice ? Number(form.clientPrice) : undefined,
-        taxesPct: form.taxesPct ? Number(form.taxesPct) : undefined,
-        retencionesPct: form.retencionesPct ? Number(form.retencionesPct) : undefined,
-        quotedCost: deal.quotedCost ?? undefined,
+        ...deal,
+        id: result.id,
+        ...form,
+        owner: owner ? [owner] : undefined,
+        ...(isNew ? { phase: 'Prospecto' } : {}),
       };
       toast.success('Deal guardado');
       onSaved(updated);
-      if (form.phase === 'Ganado' && result.id) {
-        setPendingApprove({ dealId: result.id, updated });
-      }
     } catch { toast.error('Error al guardar'); }
     setSaving(false);
   };
@@ -148,27 +145,13 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
 
   const userName = (u: UserItem) => [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || u.id;
 
-  const clientPrice = form.clientPrice ? Number(form.clientPrice) : 0;
-  const taxesPct = form.taxesPct ? Number(form.taxesPct) : 0;
-  const retencionesPct = form.retencionesPct ? Number(form.retencionesPct) : 0;
-  const impuestos = clientPrice * taxesPct / 100;
-  const retenciones = clientPrice * retencionesPct / 100;
-  const totalACobrar = clientPrice + impuestos - retenciones;
-  const sym = getCurrencySymbol(form.currency);
-
-  const canApprove = deal.id && APPROVE_PHASES.includes(form.phase);
+  const canApprove = !!deal.id && APPROVE_PHASES.includes(deal.phase ?? '');
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2 space-y-1"><Label>Nombre del deal *</Label>
           <Input value={form.dealName} onChange={sf('dealName')} placeholder="Ej: Proyecto Banco Nacional Q1" />
-        </div>
-        <div className="space-y-1"><Label>Fase</Label>
-          <Select value={form.phase} onValueChange={v => setForm(f => ({ ...f, phase: v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{PHASE_KEYS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-          </Select>
         </div>
         <div className="space-y-1"><Label>Cliente</Label>
           <ComboboxCreatable
@@ -184,86 +167,29 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
         <div className="space-y-1"><Label>Temática</Label>
           <Input value={form.tematica} onChange={sf('tematica')} placeholder="Ej: Banca digital" />
         </div>
-        <div className="space-y-1"><Label>Responsable</Label>
-          <Select value={owner || '__none__'} onValueChange={v => setOwner(v === '__none__' ? '' : v)}>
-            <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-            <SelectContent>{users.map(u => <SelectItem key={u.id} value={u.id}>{userName(u)}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1"><Label>Moneda</Label>
-          <Select value={form.currency} onValueChange={v => setForm(f => ({ ...f, currency: v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{CURRENCIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1"><Label>Precio a cliente</Label>
-          <NumericInput
-            value={clientPrice}
-            onChange={v => setForm(f => ({ ...f, clientPrice: v ? String(v) : '' }))}
-            min={0}
-            formatDisplay={(v) => fmtMoneyFull(v, sym)}
-          />
-        </div>
-        <div className="space-y-1"><Label>Impuestos (%)</Label>
-          <NumericInput
-            value={taxesPct}
-            onChange={v => setForm(f => ({ ...f, taxesPct: v ? String(v) : '' }))}
-            min={0}
-            placeholder="16"
-          />
-        </div>
-        <div className="space-y-1"><Label>Retenciones (%)</Label>
-          <NumericInput
-            value={retencionesPct}
-            onChange={v => setForm(f => ({ ...f, retencionesPct: v ? String(v) : '' }))}
-            min={0}
-            placeholder="0"
-          />
-        </div>
-        <div className="space-y-1"><Label>Fecha envío propuesta</Label>
-          <Input type="date" value={form.proposalDate} onChange={sf('proposalDate')} />
-        </div>
-        <div className="space-y-1"><Label>Fecha aprobación</Label>
-          <Input type="date" value={form.approvalDate} onChange={sf('approvalDate')} />
-        </div>
+        {/* Responsable: se pide en edición, no en creación — nace asignado a
+            quien lo crea (arriba, owner default = user actual) y se puede
+            reasignar después sin que estorbe en el alta. */}
+        {!isNew && (
+          <div className="space-y-1"><Label>Responsable</Label>
+            <Select value={owner || '__none__'} onValueChange={v => setOwner(v === '__none__' ? '' : v)}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+              <SelectContent>{users.map(u => <SelectItem key={u.id} value={u.id}>{userName(u)}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
-
-      {/* Financial summary */}
-      {clientPrice > 0 && (
-        <div className="bg-muted/20 border rounded-lg p-3 space-y-1.5 text-sm">
-          <div className="flex justify-between text-muted-foreground">
-            <span>Precio a cliente</span>
-            <span>{fmtMoneyFull(clientPrice, sym)}</span>
-          </div>
-          {taxesPct > 0 && (
-            <div className="flex justify-between text-muted-foreground">
-              <span>+ Impuestos ({taxesPct}%)</span>
-              <span>{fmtMoneyFull(impuestos, sym)}</span>
-            </div>
-          )}
-          {retencionesPct > 0 && (
-            <div className="flex justify-between text-muted-foreground">
-              <span>− Retenciones ({retencionesPct}%)</span>
-              <span>−{fmtMoneyFull(retenciones, sym)}</span>
-            </div>
-          )}
-          <div className="flex justify-between font-bold text-primary border-t pt-1.5 mt-1">
-            <span>= Total a cobrar</span>
-            <span>{fmtMoneyFull(totalACobrar, sym)}</span>
-          </div>
-        </div>
-      )}
 
       <div className="space-y-1"><Label>Notas</Label>
         <Textarea rows={2} value={form.notes} onChange={sf('notes')} />
       </div>
 
-      {/* ── Approve Deal banner (for Cotización enviada / Negociación) ── */}
+      {/* ── Approve Deal banner (para Cotización enviada / Negociación) ── */}
       {canApprove && (
-        <div className="border rounded-xl p-4 bg-primary/5 border-primary/20">
+        <div className="border rounded-xl p-4 bg-[#027495]/8 border-[#027495]/25">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-primary flex items-center gap-1.5">
+              <p className="text-sm font-semibold text-[#0F3D4C] flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 Listo para aprobar
               </p>
@@ -274,7 +200,7 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
             <Button
               size="sm"
               onClick={() => setApprovalReviewOpen(true)}
-              className="gap-1.5 flex-shrink-0"
+              className="gap-1.5 flex-shrink-0 bg-[#0F3D4C] hover:bg-[#0A2F3B] text-white"
             >
               <CheckCircle2 className="w-4 h-4" />
               Aprobar Deal
@@ -284,7 +210,7 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
       )}
 
       {/* ── Deal ganado + proyecto ya vinculado: confirmación, no botón ── */}
-      {form.phase === 'Ganado' && deal.id && !checkingProject && linkedProject && (
+      {deal.phase === 'Ganado' && deal.id && !checkingProject && linkedProject && (
         <div className="border rounded-xl p-3 bg-muted/20 border-border flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
           <p className="text-sm text-foreground">
@@ -293,8 +219,8 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
         </div>
       )}
 
-      {/* ── Fallback: "Crear Proyecto" when already Ganado but no project linked ── */}
-      {form.phase === 'Ganado' && deal.id && !checkingProject && !linkedProject && (
+      {/* ── Fallback: "Crear Proyecto" cuando ya está Ganado pero sin proyecto vinculado ── */}
+      {deal.phase === 'Ganado' && deal.id && !checkingProject && !linkedProject && (
         <div className="border rounded-xl p-3 bg-muted/20 border-border flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -317,7 +243,7 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
             <Trash2 className="w-3.5 h-3.5" /> Eliminar
           </Button>
         )}
-        <Button onClick={handleSave} disabled={saving} className="ml-auto">{saving ? 'Guardando...' : 'Guardar'}</Button>
+        <Button onClick={handleSave} disabled={saving} className="ml-auto bg-[#0F3D4C] hover:bg-[#0A2F3B] text-white">{saving ? 'Guardando...' : 'Guardar'}</Button>
       </div>
 
       {/* ── Aprobar Deal — review dialog ── */}
@@ -327,37 +253,6 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
         deal={deal}
         onApproved={handleApprovalSuccess}
       />
-
-      {/* Approve included cotizaciones dialog (triggered when manually setting phase to Ganado) */}
-      <AlertDialog open={!!pendingApprove} onOpenChange={o => !o && setPendingApprove(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Aprobar cotizaciones incluidas?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Las cotizaciones marcadas como "Incluida" se marcarán como <strong>Aprobadas</strong> y el costo cotizado del deal se actualizará automáticamente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingApprove(null)}>No por ahora</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={approving}
-              onClick={async () => {
-                if (!pendingApprove) return;
-                setApproving(true);
-                try {
-                  const res = await approveSelectedCotizaciones({ dealId: pendingApprove.dealId });
-                  toast.success(`${res.approvedCount} cotización${res.approvedCount !== 1 ? 'es' : ''} aprobada${res.approvedCount !== 1 ? 's' : ''}`);
-                  onSaved({ ...pendingApprove.updated, quotedCost: res.totalCost });
-                } catch { toast.error('Error al aprobar cotizaciones'); }
-                setApproving(false);
-                setPendingApprove(null);
-              }}
-            >
-              {approving ? 'Aprobando...' : 'Sí, aprobar'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={confirmDel} onOpenChange={setConfirmDel}>
         <AlertDialogContent>

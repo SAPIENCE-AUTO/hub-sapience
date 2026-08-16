@@ -3,11 +3,13 @@ import { getCotizaciones, GetCotizacionesOutputType, deleteCotizacion, saveCotiz
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Trash2, CheckCircle2, Copy, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, Copy, Loader2, ChevronDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { COTIZ_STATUS_COLORS, getCurrencySymbol, fmtMoney, fmtMoneyFull } from './dealUtils';
+import { COTIZ_STATUS_COLORS, CURRENCIES, getCurrencySymbol, fmtMoney, fmtMoneyFull } from './dealUtils';
 import CotizacionModal from './CotizacionModal';
 import NumericInput from '@/components/NumericInput';
 
@@ -20,10 +22,11 @@ interface Props {
   dealQuotedCost?: number;
   dealTaxesPct?: number;
   dealRetencionesPct?: number;
-  onDealFieldUpdated: (fields: { clientPrice?: number; quotedCost?: number }) => void;
+  onDealFieldUpdated: (fields: { clientPrice?: number; quotedCost?: number; taxesPct?: number; retencionesPct?: number; currency?: string }) => void;
 }
 
 export default function CotizacionesTab({ dealId, dealCurrency, dealClientPrice, dealQuotedCost: _dqc, dealTaxesPct, dealRetencionesPct, onDealFieldUpdated }: Props) {
+  const [priceOpen, setPriceOpen] = useState(true);
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -89,6 +92,21 @@ export default function CotizacionesTab({ dealId, dealCurrency, dealClientPrice,
     saveDeal({ id: dealId, clientPrice: val }).catch(() => {});
   };
 
+  const handleCurrencyChange = (val: string) => {
+    onDealFieldUpdated({ currency: val });
+    saveDeal({ id: dealId, currency: val }).catch(() => {});
+  };
+
+  const handleTaxesPctChange = (val: number) => {
+    onDealFieldUpdated({ taxesPct: val });
+    saveDeal({ id: dealId, taxesPct: val }).catch(() => {});
+  };
+
+  const handleRetencionesPctChange = (val: number) => {
+    onDealFieldUpdated({ retencionesPct: val });
+    saveDeal({ id: dealId, retencionesPct: val }).catch(() => {});
+  };
+
   const openView = (c: Cotizacion) => { setEditing(c); setViewOnly(true); setShowModal(true); };
   const openEdit = (c: Cotizacion) => { setEditing(c); setViewOnly(false); setShowModal(true); };
   const openNew = () => { setEditing(null); setViewOnly(false); setShowModal(true); };
@@ -114,63 +132,98 @@ export default function CotizacionesTab({ dealId, dealCurrency, dealClientPrice,
         <Button size="sm" onClick={openNew} className="gap-1.5"><Plus className="w-4 h-4" /> Nueva cotización</Button>
       </div>
 
-      {/* Totals + Precio a cliente */}
-      <div className="border rounded-xl px-4 py-3 bg-primary/5 border-primary/20 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-muted-foreground">
-            Costo total incluido ({included.length} cotizacion{included.length !== 1 ? 'es' : ''})
-          </span>
-          <span className="text-base font-bold" style={{ color: 'hsl(var(--primary))' }}>
-            {fmtMoneyFull(includedTotal, defaultSym)}
-          </span>
-        </div>
-        {includedClientTotal > 0 && (
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-muted-foreground">
-              Costo con mark up
-            </span>
-            <span className="text-base font-bold text-foreground">
-              {fmtMoneyFull(includedClientTotal, defaultSym)}
-            </span>
-          </div>
-        )}
-        <div className="border-t pt-3 flex items-center gap-3">
-          <Label className="text-sm font-semibold whitespace-nowrap">Precio a cliente</Label>
-          <div className="flex items-center gap-1.5 flex-1">
-            <span className="text-sm text-muted-foreground">{defaultSym}</span>
-            <NumericInput
-              value={dealClientPrice ?? 0}
-              onChange={handleClientPriceChange}
-              min={0}
-              className="flex-1"
-              formatDisplay={(v) => fmtMoneyFull(v, defaultSym)}
-            />
-            <span className="text-xs text-muted-foreground">{dealCurrency?.split(' ')[0] ?? ''}</span>
-          </div>
-        </div>
-        {cp > 0 && (
-          <div className="border-t pt-3 space-y-1 text-sm">
-            {(dealTaxesPct ?? 0) > 0 && (
-              <div className="flex justify-between text-muted-foreground">
-                <span>+ Impuestos ({dealTaxesPct}%)</span>
-                <span>{fmtMoneyFull(impuestos, defaultSym)}</span>
+      {/* Totales + Precio a cliente — colapsable: precio/impuestos/retenciones
+          ya no se piden al crear el deal (DealGeneralTab.tsx), se capturan
+          aquí cuando ya hay algo que cotizar. */}
+      <Collapsible open={priceOpen} onOpenChange={setPriceOpen} className="border rounded-xl overflow-hidden border-primary/20">
+        <CollapsibleTrigger asChild>
+          <button className="w-full flex items-center gap-3 px-4 py-3 bg-primary/5 hover:bg-primary/10 transition-colors text-left">
+            <span className="font-semibold text-sm">Precio a cliente</span>
+            {cp > 0 && (
+              <span className="text-sm font-bold ml-auto" style={{ color: 'hsl(var(--primary))' }}>
+                {fmtMoneyFull(totalACobrar, defaultSym)}
+              </span>
+            )}
+            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${priceOpen ? 'rotate-180' : ''} ${cp > 0 ? '' : 'ml-auto'}`} />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="px-4 py-3 space-y-3 border-t border-primary/20">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">
+                Costo total incluido ({included.length} cotizacion{included.length !== 1 ? 'es' : ''})
+              </span>
+              <span className="text-base font-bold" style={{ color: 'hsl(var(--primary))' }}>
+                {fmtMoneyFull(includedTotal, defaultSym)}
+              </span>
+            </div>
+            {includedClientTotal > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Costo con mark up
+                </span>
+                <span className="text-base font-bold text-foreground">
+                  {fmtMoneyFull(includedClientTotal, defaultSym)}
+                </span>
               </div>
             )}
-            {(dealRetencionesPct ?? 0) > 0 && (
-              <div className="flex justify-between text-muted-foreground">
-                <span>− Retenciones ({dealRetencionesPct}%)</span>
-                <span>−{fmtMoneyFull(retenciones, defaultSym)}</span>
+            <div className="border-t pt-3 grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Precio a cliente</Label>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-muted-foreground">{defaultSym}</span>
+                  <NumericInput
+                    value={dealClientPrice ?? 0}
+                    onChange={handleClientPriceChange}
+                    min={0}
+                    className="flex-1"
+                    formatDisplay={(v) => fmtMoneyFull(v, defaultSym)}
+                  />
+                </div>
               </div>
-            )}
-            {((dealTaxesPct ?? 0) > 0 || (dealRetencionesPct ?? 0) > 0) && (
-              <div className="flex justify-between font-bold text-primary border-t pt-1">
-                <span>= Total a cobrar</span>
-                <span>{fmtMoneyFull(totalACobrar, defaultSym)}</span>
+              <div className="space-y-1">
+                <Label className="text-xs">Moneda</Label>
+                <Select value={dealCurrency ?? 'MXN 🇲🇽'} onValueChange={handleCurrencyChange}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{CURRENCIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Impuestos (%)</Label>
+                <NumericInput value={dealTaxesPct ?? 0} onChange={handleTaxesPctChange} min={0} placeholder="16" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Retenciones (%)</Label>
+                <NumericInput value={dealRetencionesPct ?? 0} onChange={handleRetencionesPctChange} min={0} placeholder="0" />
+              </div>
+            </div>
+            {cp > 0 && (
+              <div className="border-t pt-3 space-y-1 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Precio a cliente</span>
+                  <span>{fmtMoneyFull(cp, defaultSym)}</span>
+                </div>
+                {(dealTaxesPct ?? 0) > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>+ Impuestos ({dealTaxesPct}%)</span>
+                    <span>{fmtMoneyFull(impuestos, defaultSym)}</span>
+                  </div>
+                )}
+                {(dealRetencionesPct ?? 0) > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>− Retenciones ({dealRetencionesPct}%)</span>
+                    <span>−{fmtMoneyFull(retenciones, defaultSym)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-primary border-t pt-1">
+                  <span>= Total a cobrar</span>
+                  <span>{fmtMoneyFull(totalACobrar, defaultSym)}</span>
+                </div>
               </div>
             )}
           </div>
-        )}
-      </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       <div className="space-y-2">
         {cotizaciones.map(c => {
