@@ -1391,13 +1391,13 @@ function ParticipationBadge({ h }: { h: HistoryEntry }) {
   }
   if (wl === 'old') {
     return (
-      <Badge className="text-[10px] h-4 px-1.5 font-medium bg-amber-200 text-amber-900 hover:bg-amber-200 border-transparent">
+      <Badge className="text-[10px] h-4 px-1.5 font-medium bg-amber-400 text-amber-950 hover:bg-amber-400 border-transparent">
         Participó hace +6m
       </Badge>
     );
   }
   return (
-    <Badge className="text-[10px] h-4 px-1.5 font-medium bg-blue-200 text-blue-900 hover:bg-blue-200 border-transparent">
+    <Badge className="text-[10px] h-4 px-1.5 font-medium bg-blue-400 text-blue-950 hover:bg-blue-400 border-transparent">
       Solo registrado
     </Badge>
   );
@@ -1407,20 +1407,21 @@ function HistoryEntryCard({ h, isCurrentBoard }: { h: HistoryEntry; isCurrentBoa
   const isCurrentRow = (h as any).isCurrentRow as boolean | undefined;
   const wl = (h as any).warningLevel as string | null | undefined;
   // Franja de color a la izquierda (no borde completo) — el color se lee de
-  // un vistazo sin tener que leer el texto de cada tarjeta.
+  // un vistazo sin tener que leer el texto de cada tarjeta. Fondo sólido de
+  // verdad (no un lavado casi imperceptible) para que el color se sienta.
   const borderCls = wl === 'same_client' || wl === 'recent'
-    ? 'border-l-[3px] border-destructive bg-destructive/5'
+    ? 'border-l-4 border-destructive bg-red-200'
     : isCurrentRow
-    ? 'border-l-[3px] border-primary bg-primary/5'
+    ? 'border-l-4 border-primary bg-primary/15'
     : isCurrentBoard
-    ? 'border-l-[3px] border-muted-foreground/40 bg-muted/30'
+    ? 'border-l-4 border-muted-foreground/50 bg-muted/50'
     : h.sameProject
-    ? 'border-l-[3px] border-orange-500 bg-orange-500/5'
+    ? 'border-l-4 border-orange-500 bg-orange-200'
     : wl === 'old'
-    ? 'border-l-[3px] border-amber-500 bg-amber-500/5'
+    ? 'border-l-4 border-amber-500 bg-amber-200'
     : !wl
-    ? 'border-l-[3px] border-blue-500 bg-blue-500/5'
-    : 'border-l-[3px] border-border bg-muted/30';
+    ? 'border-l-4 border-blue-500 bg-blue-200'
+    : 'border-l-4 border-border bg-muted/30';
 
   return (
     <div className={`rounded-r-md px-3 py-2 ${borderCls}`}>
@@ -1428,7 +1429,7 @@ function HistoryEntryCard({ h, isCurrentBoard }: { h: HistoryEntry; isCurrentBoa
         <div className="min-w-0 flex-1">
           {/* Project + board + current-row badge */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-mono font-bold text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+            <span className="font-mono font-bold text-[11px] bg-white text-foreground px-1.5 py-0.5 rounded shadow-sm">
               {h.projectCode}
             </span>
             {h.boardName && (
@@ -1508,17 +1509,17 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
 
   // Summary banner config
   const bannerConfig = hasSameClient
-    ? { bg: 'bg-destructive/10 border-destructive/30', icon: <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />, text: 'No elegible — mismo cliente', textCls: 'text-destructive font-semibold' }
+    ? { bg: 'bg-red-100 border-destructive/40', icon: <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />, text: 'No elegible — mismo cliente', textCls: 'text-destructive font-semibold' }
     : hasRecentParticip
-    ? { bg: 'bg-destructive/10 border-destructive/30', icon: <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />, text: 'No elegible — participó o está activo hace menos de 6 meses', textCls: 'text-destructive font-semibold' }
+    ? { bg: 'bg-red-100 border-destructive/40', icon: <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />, text: 'No elegible — participó o está activo hace menos de 6 meses', textCls: 'text-destructive font-semibold' }
     : hasOldParticip
-    ? { bg: 'bg-amber-500/10 border-amber-400/30', icon: <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />, text: 'Participó en estudios anteriores (hace más de 6 meses)', textCls: 'text-amber-700 font-medium' }
+    ? { bg: 'bg-amber-100 border-amber-400/50', icon: <Clock className="w-4 h-4 text-amber-700 flex-shrink-0" />, text: 'Participó en estudios anteriores (hace más de 6 meses)', textCls: 'text-amber-800 font-medium' }
     : otherProjectEntries.length > 0
-    ? { bg: 'bg-blue-500/10 border-blue-400/30', icon: <Copy className="w-4 h-4 text-blue-600 flex-shrink-0" />, text: `Registrado en ${totalProjects} estudio${totalProjects !== 1 ? 's' : ''} (sin participar)`, textCls: 'text-blue-700 font-semibold' }
+    ? { bg: 'bg-blue-100 border-blue-400/50', icon: <Copy className="w-4 h-4 text-blue-700 flex-shrink-0" />, text: `Registrado en ${totalProjects} estudio${totalProjects !== 1 ? 's' : ''} (sin participar)`, textCls: 'text-blue-800 font-semibold' }
     : sameProjectOtherBoardEntries.length > 0
-    ? { bg: 'bg-orange-500/10 border-orange-400/30', icon: <Layers className="w-4 h-4 text-orange-600 flex-shrink-0" />, text: 'Aparece en otro tablero de este proyecto', textCls: 'text-orange-700 font-semibold' }
+    ? { bg: 'bg-orange-100 border-orange-400/50', icon: <Layers className="w-4 h-4 text-orange-700 flex-shrink-0" />, text: 'Aparece en otro tablero de este proyecto', textCls: 'text-orange-800 font-semibold' }
     : internalDuplicateCount > 1
-    ? { bg: 'bg-orange-500/10 border-orange-400/30', icon: <Layers className="w-4 h-4 text-orange-600 flex-shrink-0" />, text: `Aparece ${internalDuplicateCount} veces en este mismo tablero`, textCls: 'text-orange-700 font-semibold' }
+    ? { bg: 'bg-orange-100 border-orange-400/50', icon: <Layers className="w-4 h-4 text-orange-700 flex-shrink-0" />, text: `Aparece ${internalDuplicateCount} veces en este mismo tablero`, textCls: 'text-orange-800 font-semibold' }
     : { bg: 'bg-muted border-border', icon: <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />, text: 'Primera vez en este estudio', textCls: 'text-foreground font-semibold' };
 
   const titleCount = !loading && internalDuplicateCount > 1
@@ -1574,7 +1575,7 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />No elegible</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />Participó hace +6m</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />Solo registrado</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-muted-foreground/50 flex-shrink-0" />Este proyecto</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-muted-foreground flex-shrink-0" />Este proyecto</span>
               </div>
 
               {/* ── Summary banner ── */}
