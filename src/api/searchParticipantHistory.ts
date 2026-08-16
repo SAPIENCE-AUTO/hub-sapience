@@ -4,6 +4,7 @@ import {
   buildIdentityClusters, findClusterForRow, aggregateClusterReasons,
   resolveSignals, DuplicateSignalEnum, Signal, IdentityRow,
 } from '../lib/duplicateIdentity';
+import { getGlobalIdentityData } from '../lib/globalIdentityCache';
 
 const normalizeClient = (s?: string) => (s ?? '').toLowerCase().trim();
 
@@ -192,24 +193,6 @@ function buildPersonResult(
   };
 }
 
-// ── Helper: load all active rows paginated ──────────────────────────────────
-async function loadAllActiveRows(): Promise<IdentityRow[]> {
-  const allRows: IdentityRow[] = [];
-  let offset = 0;
-  let hasMore = true;
-  while (hasMore) {
-    const batch = await RecruitmentRows.findAll({
-      limit: 2000,
-      offset,
-      fields: ['id', 'participantName', 'email', 'phone', 'projectCode', 'boardName', 'status', 'group', 'sourceForm', 'deletedAt'],
-    });
-    allRows.push(...batch.records);
-    hasMore = batch.hasMore;
-    offset += batch.records.length;
-  }
-  return allRows.filter(r => !r.deletedAt);
-}
-
 // ── Helper: load project metadata ───────────────────────────────────────────
 async function loadProjectMap(projectCodes: string[]): Promise<Map<string, { client?: string; startDate?: string }>> {
   const projectMap = new Map<string, { client?: string; startDate?: string }>();
@@ -249,24 +232,18 @@ export default createEndpoint({
     // SEED MODE — canonical, complete identity resolution
     // ═══════════════════════════════════════════════════════════════════════
     if (isSeedMode) {
-      const activeRows = await loadAllActiveRows();
+      // Comparte cache con getBoardDuplicateBadges.ts (mismo fetch+clustering
+      // de todo el sistema) — abrir el tablero ya calienta esto, así que el
+      // modal de historial normalmente lo encuentra tibio. Ver globalIdentityCache.ts.
+      const { activeRows, projectMap, globalClusters: clusters } = await getGlobalIdentityData();
       if (activeRows.length === 0) return { results: [] };
 
-      // Strict: comparar contra todo el sistema requiere 2 de 3 señales — ver
-      // duplicateIdentity.ts. Sin esto, un dato reusado (teléfono/nombre
-      // placeholder) fusionaba identidades no relacionadas en un solo
-      // historial gigante.
-      const clusters = buildIdentityClusters(activeRows, { mode: 'strict' });
       const match = findClusterForRow(clusters, input.seedRowId!);
       if (!match) return { results: [] };
 
       const { clusterId, cluster } = match;
       const rowById = new Map(activeRows.map(r => [r.id, r]));
       const personRows = cluster.rowIds.map(id => rowById.get(id)).filter((r): r is IdentityRow => !!r);
-
-      const clusterProjectCodes = personRows.map(r => r.projectCode).filter(Boolean) as string[];
-      if (input.projectCode) clusterProjectCodes.push(input.projectCode);
-      const projectMap = await loadProjectMap(clusterProjectCodes);
 
       const currentProjectStartDate = input.projectCode ? projectMap.get(input.projectCode)?.startDate : undefined;
       const referenceDate = currentProjectStartDate ? new Date(currentProjectStartDate) : new Date();

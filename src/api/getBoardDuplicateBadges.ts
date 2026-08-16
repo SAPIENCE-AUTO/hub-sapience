@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, Projects } from '../../server/compat';
+import { createEndpoint } from '../../server/compat';
 import {
   buildIdentityClusters, resolveSignals, DuplicateSignalEnum,
-  Signal, IdentityRow, IdentityCluster,
+  Signal, IdentityRow,
 } from '../lib/duplicateIdentity';
+import { getGlobalIdentityData } from '../lib/globalIdentityCache';
 
 const normClient = (s?: string) => (s ?? '').toLowerCase().trim();
 
@@ -15,23 +16,6 @@ const RowBadgeSchema = z.object({
   hasHighRisk:          z.boolean(),
   hasInternalDuplicate: z.boolean(),
 });
-
-// ── Cache del clustering global (capas 2/3) ──────────────────────────────────
-// El fetch+clustering de TODO el sistema (~75k+ filas) es lo caro de este
-// endpoint, y el grafo de identidades global casi no cambia minuto a minuto —
-// pero se recalculaba desde cero en cada apertura de CUALQUIER tablero, por
-// CUALQUIER usuario. Un cache corto en memoria (vive mientras viva el proceso
-// de Node) convierte "recalcular todo" en "una vez por TTL para todo el
-// equipo". Nunca se cachea `boardRows`/`localClusters` (capa 1) — esas SÍ
-// deben reflejar siempre el estado actual del tablero que se está abriendo.
-const GLOBAL_CACHE_TTL_MS = 90_000;
-let globalCache: {
-  activeRows: IdentityRow[];
-  projectMap: Map<string, { startDate?: string; client?: string }>;
-  globalClusters: Map<string, IdentityCluster>;
-  rowToGlobalCluster: Map<string, string>;
-  expiresAt: number;
-} | null = null;
 
 export default createEndpoint({
   authenticated: true,
@@ -46,61 +30,12 @@ export default createEndpoint({
   execute: async ({ input }) => {
     const { projectCode, boardName } = input;
 
-    let activeRows: IdentityRow[];
-    let projectMap: Map<string, { startDate?: string; client?: string }>;
-    let globalClusters: Map<string, IdentityCluster>;
-    let rowToGlobalCluster: Map<string, string>;
-
-    if (globalCache && globalCache.expiresAt > Date.now()) {
-      ({ activeRows, projectMap, globalClusters, rowToGlobalCluster } = globalCache);
-    } else {
-      // ── 0. Project metadata ────────────────────────────────────────────────
-      const { records: allProjects } = await Projects.findAll({
-        limit: 500,
-        fields: ['projectCode', 'startDate', 'client'],
-      });
-      projectMap = new Map<string, { startDate?: string; client?: string }>();
-      for (const p of allProjects) {
-        if (p.projectCode) projectMap.set(p.projectCode, { startDate: p.startDate, client: p.client });
-      }
-
-      // ── 1. Fetch ALL active rows (paginated) ───────────────────────────────
-      // 10_000 = MAX_LIMIT del modelo (server/compat/model.ts) — con ~76k
-      // filas en el sistema, esto baja de ~38 round-trips secuenciales (con
-      // el limit de 2000 anterior) a ~8. Medido en vivo: el resto del tiempo
-      // en frío es transferencia de red hacia el Supabase remoto, no falta de
-      // índice ni el patrón de paginación — ni paginar por cursor ni pedir las
-      // páginas en paralelo lo mejoraron de forma medible, así que se dejó la
-      // versión simple. El ahorro real para el usuario viene del cache de
-      // abajo, que hace que solo la PRIMERA apertura en cada ventana de TTL
-      // pague este costo.
-      const allRows: IdentityRow[] = [];
-      let offset = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const batch = await RecruitmentRows.findAll({
-          limit: 10_000,
-          offset,
-          fields: ['id', 'projectCode', 'boardName', 'email', 'participantName', 'phone', 'status', 'group', 'deletedAt'],
-        });
-        allRows.push(...batch.records);
-        hasMore = batch.hasMore;
-        offset += batch.records.length;
-      }
-      activeRows = allRows.filter(r => !r.deletedAt);
-
-      // Capas 2/3 ("¿ha llenado otros formularios?" / "¿es elegible?"): contra
-      // todo el sistema (75k+ filas activas), en modo strict — un solo dato
-      // reusado (teléfono compartido, nombre placeholder) nunca debe fusionar
-      // identidades distintas aquí; hace falta que coincidan 2 de 3 señales.
-      globalClusters = buildIdentityClusters(activeRows, { mode: 'strict' });
-      rowToGlobalCluster = new Map<string, string>();
-      for (const [cid, cluster] of globalClusters) {
-        for (const rid of cluster.rowIds) rowToGlobalCluster.set(rid, cid);
-      }
-
-      globalCache = { activeRows, projectMap, globalClusters, rowToGlobalCluster, expiresAt: Date.now() + GLOBAL_CACHE_TTL_MS };
-    }
+    // Capas 2/3 ("¿ha llenado otros formularios?" / "¿es elegible?"): contra
+    // todo el sistema, en modo strict — un solo dato reusado (teléfono
+    // compartido, nombre placeholder) nunca debe fusionar identidades
+    // distintas aquí; hace falta que coincidan 2 de 3 señales. Compartido con
+    // searchParticipantHistory.ts (modal de historial) — ver globalIdentityCache.ts.
+    const { activeRows, projectMap, globalClusters, rowToGlobalCluster } = await getGlobalIdentityData();
 
     const currentProjData = projectMap.get(projectCode);
     const referenceDate   = currentProjData?.startDate ? new Date(currentProjData.startDate) : new Date();
