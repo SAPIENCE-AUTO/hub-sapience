@@ -1377,27 +1377,27 @@ function ParticipationBadge({ h }: { h: HistoryEntry }) {
   if (wl === 'same_board') return null;
   if (wl === 'same_client') {
     return (
-      <Badge variant="destructive" className="text-[10px] h-4 px-1.5 gap-0.5 font-medium">
-        ⚠️ Mismo cliente{cn ? ` (${cn})` : ''}
+      <Badge variant="destructive" className="text-[10px] h-4 px-1.5 gap-0.5 font-medium border-transparent">
+        Mismo cliente{cn ? ` (${cn})` : ''}
       </Badge>
     );
   }
   if (wl === 'recent') {
     return (
-      <Badge variant="destructive" className="text-[10px] h-4 px-1.5 gap-0.5 font-medium">
-        ⚠️ Activo / reciente
+      <Badge variant="destructive" className="text-[10px] h-4 px-1.5 gap-0.5 font-medium border-transparent">
+        Activo / reciente
       </Badge>
     );
   }
   if (wl === 'old') {
     return (
-      <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-blue-600 border-blue-400/40 bg-blue-500/5">
+      <Badge className="text-[10px] h-4 px-1.5 font-medium bg-amber-200 text-amber-900 hover:bg-amber-200 border-transparent">
         Participó hace +6m
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-[10px] h-4 px-1.5 text-blue-600 border-blue-400/40 bg-blue-500/5">
+    <Badge className="text-[10px] h-4 px-1.5 font-medium bg-blue-200 text-blue-900 hover:bg-blue-200 border-transparent">
       Solo registrado
     </Badge>
   );
@@ -1406,20 +1406,24 @@ function ParticipationBadge({ h }: { h: HistoryEntry }) {
 function HistoryEntryCard({ h, isCurrentBoard }: { h: HistoryEntry; isCurrentBoard?: boolean }) {
   const isCurrentRow = (h as any).isCurrentRow as boolean | undefined;
   const wl = (h as any).warningLevel as string | null | undefined;
+  // Franja de color a la izquierda (no borde completo) — el color se lee de
+  // un vistazo sin tener que leer el texto de cada tarjeta.
   const borderCls = wl === 'same_client' || wl === 'recent'
-    ? 'border-destructive/50 bg-destructive/5'
+    ? 'border-l-[3px] border-destructive bg-destructive/5'
     : isCurrentRow
-    ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/20'
+    ? 'border-l-[3px] border-primary bg-primary/5'
     : isCurrentBoard
-    ? 'border-primary/25 bg-primary/3'
+    ? 'border-l-[3px] border-muted-foreground/40 bg-muted/30'
     : h.sameProject
-    ? 'border-orange-400/40 bg-orange-500/5'
-    : wl === 'old' || !wl
-    ? 'border-blue-400/40 bg-blue-500/5'
-    : 'border-border bg-muted/30';
+    ? 'border-l-[3px] border-orange-500 bg-orange-500/5'
+    : wl === 'old'
+    ? 'border-l-[3px] border-amber-500 bg-amber-500/5'
+    : !wl
+    ? 'border-l-[3px] border-blue-500 bg-blue-500/5'
+    : 'border-l-[3px] border-border bg-muted/30';
 
   return (
-    <div className={`border rounded-lg px-3 py-2.5 ${borderCls}`}>
+    <div className={`rounded-r-md px-3 py-2 ${borderCls}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           {/* Project + board + current-row badge */}
@@ -1483,6 +1487,12 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
   const currentBoardEntries = allEntries.filter(h => h.sameBoard);
   const sameProjectOtherBoardEntries = allEntries.filter(h => h.sameProject && !h.sameBoard);
   const otherProjectEntries = allEntries.filter(h => !h.sameProject && !h.sameBoard);
+  // Otros estudios, separados por severidad — antes eran un solo bucket con
+  // colores mezclados adentro (rojo/ámbar/azul revueltos), que era justo lo
+  // que hacía difícil distinguir "no elegible" de "solo registrado".
+  const otherDisqualifying  = otherProjectEntries.filter(h => (h as any).warningLevel === 'same_client' || (h as any).warningLevel === 'recent');
+  const otherOldParticip    = otherProjectEntries.filter(h => (h as any).warningLevel === 'old');
+  const otherRegisteredOnly = otherProjectEntries.filter(h => !(h as any).warningLevel);
   // Total = all cross-board entries + same-board entries (each row counts separately)
   const totalAppearances = currentBoardEntries.length + sameProjectOtherBoardEntries.length + otherProjectEntries.length;
   // Internal duplicates: same board has MORE than 1 entry
@@ -1491,7 +1501,6 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
   const hasSameClient      = results[0]?.primaryBadge === 'same_client';
   const hasRecentParticip  = results[0]?.primaryBadge === 'recent';
   const hasOldParticip     = results[0]?.primaryBadge === 'old';
-  const hasParticipated    = hasSameClient || hasRecentParticip || hasOldParticip;
   const totalProjects = new Set(allEntries.filter(h => !h.sameBoard).map(h => h.projectCode)).size;
 
   // Identity — use the first result that matches
@@ -1499,11 +1508,11 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
 
   // Summary banner config
   const bannerConfig = hasSameClient
-    ? { bg: 'bg-destructive/10 border-destructive/30', icon: <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />, text: '⚠️ Mismo cliente — restricción siempre aplica', textCls: 'text-destructive font-semibold' }
+    ? { bg: 'bg-destructive/10 border-destructive/30', icon: <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />, text: 'No elegible — mismo cliente', textCls: 'text-destructive font-semibold' }
     : hasRecentParticip
-    ? { bg: 'bg-destructive/10 border-destructive/30', icon: <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />, text: '⚠️ Participó recientemente o está activo en otro proyecto (< 6 meses)', textCls: 'text-destructive font-semibold' }
+    ? { bg: 'bg-destructive/10 border-destructive/30', icon: <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />, text: 'No elegible — participó o está activo hace menos de 6 meses', textCls: 'text-destructive font-semibold' }
     : hasOldParticip
-    ? { bg: 'bg-blue-500/10 border-blue-400/30', icon: <Copy className="w-4 h-4 text-blue-600 flex-shrink-0" />, text: 'Participó en estudios anteriores (hace más de 6 meses)', textCls: 'text-blue-700 font-medium' }
+    ? { bg: 'bg-amber-500/10 border-amber-400/30', icon: <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />, text: 'Participó en estudios anteriores (hace más de 6 meses)', textCls: 'text-amber-700 font-medium' }
     : otherProjectEntries.length > 0
     ? { bg: 'bg-blue-500/10 border-blue-400/30', icon: <Copy className="w-4 h-4 text-blue-600 flex-shrink-0" />, text: `Registrado en ${totalProjects} estudio${totalProjects !== 1 ? 's' : ''} (sin participar)`, textCls: 'text-blue-700 font-semibold' }
     : sameProjectOtherBoardEntries.length > 0
@@ -1525,7 +1534,9 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
           <DialogTitle className="flex items-center gap-2 text-base">
             {hasSameClient || hasRecentParticip
               ? <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />
-              : hasOldParticip || otherProjectEntries.length > 0
+              : hasOldParticip
+              ? <Clock className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              : otherProjectEntries.length > 0
               ? <Copy className="w-4 h-4 text-blue-500 flex-shrink-0" />
               : internalDuplicateCount > 1 || sameProjectOtherBoardEntries.length > 0
               ? <Layers className="w-4 h-4 text-orange-500 flex-shrink-0" />
@@ -1555,6 +1566,16 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
             </div>
           ) : (
             <div className="space-y-3 mt-1 pb-1">
+
+              {/* ── Leyenda de colores — mismo color en la leyenda, el borde de
+                   cada tarjeta y su badge, para que no haga falta leer cada
+                   una para saber qué significa ── */}
+              <div className="flex items-center gap-3 flex-wrap px-2.5 py-1.5 bg-muted/50 rounded-md text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />No elegible</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />Participó hace +6m</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />Solo registrado</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-muted-foreground/50 flex-shrink-0" />Este proyecto</span>
+              </div>
 
               {/* ── Summary banner ── */}
               <div className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 ${bannerConfig.bg}`}>
@@ -1591,12 +1612,27 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
                 />
               )}
 
-              {/* ── Section: Otros proyectos ── */}
-              {otherProjectEntries.length > 0 && (
+              {/* ── Otros estudios, separados por severidad (no un solo bucket
+                   con colores mezclados) ── */}
+              {otherDisqualifying.length > 0 && (
                 <HistorySection
-                  label={`Otros estudios (${otherProjectEntries.length})`}
-                  dotColor={hasParticipated ? 'bg-destructive' : 'bg-yellow-500'}
-                  entries={otherProjectEntries}
+                  label={`Otros estudios · no elegible (${otherDisqualifying.length})`}
+                  dotColor="bg-destructive"
+                  entries={otherDisqualifying}
+                />
+              )}
+              {otherOldParticip.length > 0 && (
+                <HistorySection
+                  label={`Otros estudios · participó hace tiempo (${otherOldParticip.length})`}
+                  dotColor="bg-amber-500"
+                  entries={otherOldParticip}
+                />
+              )}
+              {otherRegisteredOnly.length > 0 && (
+                <HistorySection
+                  label={`Otros estudios · solo registrado (${otherRegisteredOnly.length})`}
+                  dotColor="bg-blue-500"
+                  entries={otherRegisteredOnly}
                 />
               )}
 
