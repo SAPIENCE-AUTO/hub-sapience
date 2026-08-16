@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, FileText, RefreshCw, FolderOpen, FileSpreadsheet, Presentation, Image as ImageIcon, File as FileIcon, ChevronDown, MessageSquarePlus } from 'lucide-react';
+import { ExternalLink, FileText, RefreshCw, FolderOpen, FileSpreadsheet, Presentation, Image as ImageIcon, File as FileIcon, ChevronDown, MessageSquarePlus, AppWindow, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import TeamsChannelDialog from '@/components/TeamsChannelDialog';
-import { getProjectTeamsFiles, GetProjectTeamsFilesOutputType } from 'zite-endpoints-sdk';
+import { getProjectTeamsFiles, getProjectTeamsFileLink, GetProjectTeamsFilesOutputType } from 'zite-endpoints-sdk';
 
 type TeamsFile = GetProjectTeamsFilesOutputType['folders'][0]['files'][0];
 type TeamsFolder = GetProjectTeamsFilesOutputType['folders'][0];
@@ -27,8 +28,38 @@ function fileIconFor(name: string) {
   return FileIcon;
 }
 
-function TeamsFileCard({ file }: { file: TeamsFile }) {
+// Esquema de protocolo que usan los propios botones "Abrir en la app de
+// escritorio" de OneDrive/SharePoint — lanza Word/PowerPoint/Excel de
+// escritorio si está instalado y asociado. Sin esto, `webUrl` normal solo
+// abre Office en el navegador. Sin equivalente para pdf/imágenes/otros.
+function officeAppUrl(name: string, webUrl: string): string | null {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  const scheme = ['doc', 'docx'].includes(ext) ? 'ms-word'
+    : ['ppt', 'pptx'].includes(ext) ? 'ms-powerpoint'
+    : ['xls', 'xlsx'].includes(ext) ? 'ms-excel'
+    : null;
+  return scheme ? `${scheme}:ofe|u|${webUrl}` : null;
+}
+
+function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string }) {
   const Icon = fileIconFor(file.name);
+  const appUrl = officeAppUrl(file.name, file.webUrl);
+  const [copying, setCopying] = useState(false);
+
+  const copyLink = async () => {
+    if (!driveId) return;
+    setCopying(true);
+    try {
+      const res = await getProjectTeamsFileLink({ driveId, itemId: file.id });
+      await navigator.clipboard.writeText(res.url);
+      toast.success(res.scope === 'anonymous' ? 'Link público copiado' : 'Link copiado (solo visible para el equipo de Sapience)');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo generar el link');
+    } finally {
+      setCopying(false);
+    }
+  };
+
   return (
     <div className="flex items-center gap-3 py-3 px-4 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors group">
       <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -39,20 +70,24 @@ function TeamsFileCard({ file }: { file: TeamsFile }) {
           {file.modifiedBy && <span>· {file.modifiedBy}</span>}
         </div>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="gap-1.5 flex-shrink-0 text-primary opacity-70 group-hover:opacity-100"
-        onClick={() => window.open(file.webUrl, '_blank', 'noopener,noreferrer')}
-      >
-        <ExternalLink className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline text-xs">Abrir</span>
-      </Button>
+      <div className="flex items-center gap-0.5 flex-shrink-0 opacity-70 group-hover:opacity-100">
+        {appUrl && (
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Abrir en la app de escritorio" onClick={() => { window.location.href = appUrl; }}>
+            <AppWindow className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Abrir en el navegador" onClick={() => window.open(file.webUrl, '_blank', 'noopener,noreferrer')}>
+          <ExternalLink className="w-3.5 h-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Copiar link para compartir" disabled={copying || !driveId} onClick={copyLink}>
+          <Copy className="w-3.5 h-3.5" />
+        </Button>
+      </div>
     </div>
   );
 }
 
-function TeamsFolderSection({ folder }: { folder: TeamsFolder }) {
+function TeamsFolderSection({ folder, driveId }: { folder: TeamsFolder; driveId?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border rounded-xl overflow-hidden border-[#027495]/25">
@@ -71,7 +106,7 @@ function TeamsFolderSection({ folder }: { folder: TeamsFolder }) {
             <p className="text-xs text-muted-foreground italic px-2 py-1.5">No hay archivos todavía</p>
           ) : (
             <div className="space-y-1.5">
-              {folder.files.map(file => <TeamsFileCard key={file.id} file={file} />)}
+              {folder.files.map(file => <TeamsFileCard key={file.id} file={file} driveId={driveId} />)}
             </div>
           )}
         </div>
@@ -83,6 +118,7 @@ function TeamsFolderSection({ folder }: { folder: TeamsFolder }) {
 export default function ProjectDocuments({ projectCode }: Props) {
   const [teamsLinked, setTeamsLinked] = useState(false);
   const [teamsFolders, setTeamsFolders] = useState<TeamsFolder[]>([]);
+  const [teamsDriveId, setTeamsDriveId] = useState<string | undefined>(undefined);
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [teamsLoading, setTeamsLoading] = useState(true);
   const [teamsDialogOpen, setTeamsDialogOpen] = useState(false);
@@ -93,6 +129,7 @@ export default function ProjectDocuments({ projectCode }: Props) {
       const res = await getProjectTeamsFiles({ projectCode });
       setTeamsLinked(res.linked);
       setTeamsFolders(res.folders);
+      setTeamsDriveId(res.driveId);
       setTeamsError(res.error ?? null);
     } catch {
       setTeamsError('No se pudo consultar Teams');
@@ -142,7 +179,7 @@ export default function ProjectDocuments({ projectCode }: Props) {
         <p className="text-xs text-destructive">No se pudieron leer los archivos de Teams: {teamsError}</p>
       )}
       {teamsLinked && teamsFolders.map(folder => (
-        <TeamsFolderSection key={folder.name} folder={folder} />
+        <TeamsFolderSection key={folder.name} folder={folder} driveId={teamsDriveId} />
       ))}
       {!teamsLinked && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed p-4">

@@ -53,6 +53,7 @@ export default createEndpoint({
   inputSchema: z.object({ projectCode: z.string() }),
   outputSchema: z.object({
     linked: z.boolean(),
+    driveId: z.string().optional(),
     folders: z.array(z.object({ name: z.string(), files: z.array(FileOut) })),
     looseFiles: z.array(FileOut),
     error: z.string().optional(),
@@ -104,7 +105,7 @@ export default createEndpoint({
       for (const f of folders) f.files.sort((a, b) => (b.modifiedAt ?? '').localeCompare(a.modifiedAt ?? ''));
       looseFiles.sort((a, b) => (b.modifiedAt ?? '').localeCompare(a.modifiedAt ?? ''));
 
-      return { linked: true, folders, looseFiles };
+      return { linked: true, driveId, folders, looseFiles };
     } catch (e) {
       return { linked: true, folders: [], looseFiles: [], error: e instanceof Error ? e.message : 'Error consultando Microsoft Graph' };
     }
