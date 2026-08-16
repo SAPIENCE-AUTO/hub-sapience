@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign } from 'lucide-react';
+import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign, CalendarDays, BarChart2 } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
 import RecruitmentPage from './RecruitmentPage';
 import PMPage from './PMPage';
@@ -20,7 +20,8 @@ import { uploadFile } from 'zite-file-upload-sdk';
 import { toast } from 'sonner';
 
 type Project = GetProjectsOutputType['projects'][0];
-type TabId = 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos';
+type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos';
+type PmSection = 'timelines' | 'calendarios';
 
 const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'reclutamiento', label: 'Reclutamiento', icon: Users },
@@ -30,14 +31,31 @@ const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ classNam
   { id: 'documentos',    label: 'Documentos',     icon: FileText },
 ];
 
+// `?tab=` en la URL viene de 3 lugares con vocabularios distintos: los links
+// de este componente (usan los TabId de arriba), el correo de aprobación de
+// deal (approveDeal.ts, manda "presupuesto") y las menciones de tarea/evento
+// en el chat (ChatPage.tsx, mandan "timeline"/"calendar" — nunca fueron un
+// TabId real, así que hoy caen siempre en Reclutamiento por el fallback de
+// "pestaña no encontrada"). Sin `?tab=`, el default es "hub" (la pantalla de
+// aterrizaje) en vez de una sección específica.
+function resolveInitialTab(tabParam: string | null): { tab: TabId; section: PmSection } {
+  if (tabParam === 'timeline') return { tab: 'actividades', section: 'timelines' };
+  if (tabParam === 'calendar') return { tab: 'actividades', section: 'calendarios' };
+  if (tabParam && ALL_TABS.some(t => t.id === tabParam)) {
+    return { tab: tabParam as TabId, section: 'timelines' };
+  }
+  return { tab: 'hub', section: 'timelines' };
+}
+
 export default function ProjectHubPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { selectedProject, setSelectedProject, projects, setProjects, projectsLoading } = useProject();
-  const initialTab = (searchParams.get('tab') ?? 'reclutamiento') as TabId;
+  const { tab: initialTab, section: initialPmSection } = resolveInitialTab(searchParams.get('tab'));
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+  const [pmSection, setPmSection] = useState<PmSection>(initialPmSection);
   const [muestraOpen, setMuestraOpen] = useState(false);
   const [muestraText, setMuestraText] = useState('');
   const [muestraImageUrl, setMuestraImageUrl] = useState('');
@@ -75,12 +93,14 @@ export default function ProjectHubPage() {
 
   const visibleTabs = ALL_TABS.filter(t => t.id !== 'presupuesto' || canSeeBudget);
 
-  // Reset active tab if it's no longer visible
+  // Reset active tab if it's no longer visible (p.ej. se perdió el acceso a Presupuesto)
   useEffect(() => {
-    if (!visibleTabs.find(t => t.id === activeTab)) {
-      setActiveTab('reclutamiento');
+    if (activeTab !== 'hub' && !visibleTabs.find(t => t.id === activeTab)) {
+      setActiveTab('hub');
     }
   }, [canSeeBudget]);
+
+  const goToActividades = (section: PmSection) => { setPmSection(section); setActiveTab('actividades'); };
 
   const openMuestra = () => {
     setMuestraText(currentMuestra);
@@ -140,6 +160,19 @@ export default function ProjectHubPage() {
         </Button>
         <div className="h-4 w-px bg-border flex-shrink-0" />
 
+        {activeTab !== 'hub' && (
+          <>
+            <button
+              onClick={() => setActiveTab('hub')}
+              title="Inicio del proyecto"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0"
+            >
+              <Home className="w-4 h-4" />
+            </button>
+            <div className="h-4 w-px bg-border flex-shrink-0" />
+          </>
+        )}
+
         {projectsLoading ? (
           <div className="flex items-center gap-3">
             <Skeleton className="h-5 w-20" />
@@ -154,8 +187,9 @@ export default function ProjectHubPage() {
               <StatusBadge status={project.status} />
             </div>
 
-            <div className="h-4 w-px bg-border flex-shrink-0 hidden md:block" />
+            {activeTab !== 'hub' && <div className="h-4 w-px bg-border flex-shrink-0 hidden md:block" />}
 
+            {activeTab !== 'hub' && (
             <div className="flex items-center gap-1 flex-wrap">
               {visibleTabs.map(tab => {
                 const Icon = tab.icon;
@@ -176,6 +210,7 @@ export default function ProjectHubPage() {
                 );
               })}
             </div>
+            )}
           </>
         ) : (
           <span className="text-sm text-muted-foreground">Proyecto no encontrado</span>
@@ -191,8 +226,86 @@ export default function ProjectHubPage() {
           </div>
         ) : (
           <>
+            {activeTab === 'hub' && (
+              <div className="p-6 overflow-y-auto h-full">
+                <p className="text-sm text-muted-foreground mb-4">¿A dónde quieres ir?</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 max-w-3xl">
+                  <button
+                    onClick={() => setActiveTab('reclutamiento')}
+                    className="flex items-center gap-3.5 p-5 rounded-xl border border-border bg-card hover:border-foreground/30 transition-colors text-left"
+                  >
+                    <div className="w-12 h-12 rounded-lg bg-chart-5/10 text-chart-5 flex items-center justify-center flex-shrink-0">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="text-base font-medium text-foreground">Reclutamiento</div>
+                      <div className="text-xs text-muted-foreground">Tableros de participantes</div>
+                    </div>
+                  </button>
+
+                  <div className="p-5 rounded-xl border border-border bg-card">
+                    <div className="flex items-center gap-3.5 mb-3">
+                      <div className="w-12 h-12 rounded-lg bg-chart-1/10 text-chart-1 flex items-center justify-center flex-shrink-0">
+                        <Activity className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="text-base font-medium text-foreground">Actividades</div>
+                        <div className="text-xs text-muted-foreground">Sesiones y fases del proyecto</div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => goToActividades('calendarios')}
+                        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                      >
+                        <CalendarDays className="w-3.5 h-3.5" /> Calendario
+                      </button>
+                      <button
+                        onClick={() => goToActividades('timelines')}
+                        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                      >
+                        <BarChart2 className="w-3.5 h-3.5" /> Timelines
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl">
+                  {canSeeBudget && (
+                    <button
+                      onClick={() => setActiveTab('presupuesto')}
+                      className="flex items-center gap-2.5 p-3.5 rounded-xl border border-border bg-card hover:border-foreground/30 transition-colors text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-chart-4/10 text-chart-4 flex items-center justify-center flex-shrink-0">
+                        <DollarSign className="w-4 h-4" />
+                      </div>
+                      <span className="text-sm font-medium text-foreground">Presupuesto</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setActiveTab('documentos')}
+                    className="flex items-center gap-2.5 p-3.5 rounded-xl border border-border bg-card hover:border-foreground/30 transition-colors text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-chart-2/10 text-chart-2 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-medium text-foreground">Documentos</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('chat')}
+                    className="flex items-center gap-2.5 p-3.5 rounded-xl border border-border bg-card hover:border-foreground/30 transition-colors text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-chart-3/10 text-chart-3 flex items-center justify-center flex-shrink-0">
+                      <MessageSquare className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-medium text-foreground">Chat</span>
+                  </button>
+                </div>
+              </div>
+            )}
             {activeTab === 'reclutamiento' && <RecruitmentPage hasMuestra={hasMuestra} onOpenMuestra={openMuestra} />}
-            {activeTab === 'actividades'   && <PMPage />}
+            {activeTab === 'actividades'   && <PMPage initialSection={pmSection} />}
             {activeTab === 'presupuesto'   && (
               <div className="h-full overflow-y-auto">
                 <ProjectBudgetTab projectCode={projectId ?? ''} />

@@ -53,7 +53,7 @@ import { TaskList } from '../components/pm/TaskList';
 import { EventsTable } from '../components/pm/EventsTable';
 
 // ── Main PMPage ───────────────────────────────────────────────────────────────
-export default function PMPage() {
+export default function PMPage({ initialSection = 'timelines' }: { initialSection?: 'timelines' | 'calendarios' } = {}) {
   const { user } = useAuth();
   const { selectedProject, projects } = useProject();
   const presence = useProjectPresence({ projectCode: selectedProject, pageName: 'pm', enabled: !!selectedProject && !!user, user: user ?? undefined });
@@ -1093,7 +1093,7 @@ export default function PMPage() {
   return (
     <div className="flex flex-col h-full">
       {/* ── Top-level section tabs ───────────────────────────────────────────── */}
-      <Tabs defaultValue="timelines" className="flex flex-col flex-1 overflow-hidden">
+      <Tabs defaultValue={initialSection} className="flex flex-col flex-1 overflow-hidden">
         <div className="flex items-center px-4 pt-3 border-b border-border bg-card flex-shrink-0">
           <TabsList className="h-8">
             <TabsTrigger value="timelines" className="gap-1.5 text-xs h-7"><BarChart2 className="w-3.5 h-3.5" /> Timelines</TabsTrigger>
@@ -1374,15 +1374,15 @@ export default function PMPage() {
               </div>
             ) : (
               <div className="p-6">
-                <Tabs defaultValue="calendario">
+                <Tabs defaultValue="lista">
                   {/* Tab bar + Excel button */}
                   {(() => {
                     const calBoard = calBoardExcelStates[activeCalBoardId] ?? {};
                     return (
                       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                         <TabsList className="h-8">
-                          <TabsTrigger value="calendario" className="gap-1.5 text-xs h-7"><CalendarDays className="w-3.5 h-3.5" /> Calendario</TabsTrigger>
                           <TabsTrigger value="lista" className="gap-1.5 text-xs h-7"><List className="w-3.5 h-3.5" /> Lista</TabsTrigger>
+                          <TabsTrigger value="calendario" className="gap-1.5 text-xs h-7"><CalendarDays className="w-3.5 h-3.5" /> Calendario</TabsTrigger>
                         </TabsList>
                         <div className="flex-shrink-0">
                           {calBoard.status === 'Listo' && calBoard.url ? (
