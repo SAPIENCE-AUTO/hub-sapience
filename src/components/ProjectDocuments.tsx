@@ -32,13 +32,21 @@ function fileIconFor(name: string) {
 // escritorio" de OneDrive/SharePoint — lanza Word/PowerPoint/Excel de
 // escritorio si está instalado y asociado. Sin esto, `webUrl` normal solo
 // abre Office en el navegador. Sin equivalente para pdf/imágenes/otros.
+//
+// El `webUrl` de Graph trae el nombre del archivo tal cual en el query
+// string (espacios, paréntesis, etc. sin codificar) — al pegarlo crudo
+// después de `ofe|u|`, el sistema operativo corta la URI en el primer
+// espacio y PowerPoint/Word/Excel reciben una URL truncada ("no puede abrir
+// este tipo de archivo", confirmado en vivo con un .pptx con espacios y
+// paréntesis en el nombre). encodeURIComponent dejar toda la URL como un
+// solo token sin espacios sueltos.
 function officeAppUrl(name: string, webUrl: string): string | null {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   const scheme = ['doc', 'docx'].includes(ext) ? 'ms-word'
     : ['ppt', 'pptx'].includes(ext) ? 'ms-powerpoint'
     : ['xls', 'xlsx'].includes(ext) ? 'ms-excel'
     : null;
-  return scheme ? `${scheme}:ofe|u|${webUrl}` : null;
+  return scheme ? `${scheme}:ofe|u|${encodeURIComponent(webUrl)}` : null;
 }
 
 function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string }) {
@@ -51,7 +59,23 @@ function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string })
     setCopying(true);
     try {
       const res = await getProjectTeamsFileLink({ driveId, itemId: file.id });
-      await navigator.clipboard.writeText(res.url);
+      // Solo texto plano pega la URL cruda en Outlook/Word. Teams copia
+      // también una versión HTML (un <a> con el nombre del archivo como
+      // texto) — es esa versión la que Outlook detecta al pegar y muestra
+      // el nombre en vez del link completo. ClipboardItem con ambos tipos
+      // deja que cada destino elija: Outlook toma el HTML, un campo de
+      // texto plano toma el texto normal.
+      const html = `<a href="${res.url}">${file.name}</a>`;
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Blob([res.url], { type: 'text/plain' }),
+            'text/html': new Blob([html], { type: 'text/html' }),
+          }),
+        ]);
+      } catch {
+        await navigator.clipboard.writeText(res.url);
+      }
       toast.success(res.scope === 'anonymous' ? 'Link público copiado' : 'Link copiado (solo visible para el equipo de Sapience)');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo generar el link');
