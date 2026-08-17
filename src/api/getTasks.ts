@@ -62,11 +62,17 @@ async function fetchTasksDualRead(input: { boardId: string; projectCode?: string
       fields: [...TASK_FIELDS],
     });
     const fallback = q2.records.filter(t => !t.boardId);
-    return dedup(q1.records, fallback);
+    return sortByOrder(dedup(q1.records, fallback));
   }
 
-  return q1.records;
+  return sortByOrder(q1.records);
 }
+
+// `Tasks.findAll` no aplica ORDER BY por default — sin esto, Postgres devuelve
+// las filas en orden físico (no el orden lógico del proyecto), que puede salir
+// invertido respecto al campo `order` que reorderTasks.ts sí mantiene al día.
+const sortByOrder = <T extends { order?: number }>(rows: T[]): T[] =>
+  [...rows].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
 export default createEndpoint({
   authenticated: true,
@@ -97,7 +103,7 @@ export default createEndpoint({
       if (input.projectCode) taskFilters.projectCode = input.projectCode;
       if (input.boardName) taskFilters.boardName = input.boardName;
       const tasksResult = await Tasks.findAll({ filters: taskFilters, limit: 500, fields: [...TASK_FIELDS] });
-      return { tasks: tasksResult.records, calendarEvents: [], boards: [], calendarBoards: [], boardObjects: [], calendarBoardObjects: [] };
+      return { tasks: sortByOrder(tasksResult.records), calendarEvents: [], boards: [], calendarBoards: [], boardObjects: [], calendarBoardObjects: [] };
     }
 
     // ── Fast path: only events ──
@@ -145,7 +151,7 @@ export default createEndpoint({
           if (input.projectCode) taskFilters.projectCode = input.projectCode;
           if (input.boardName) taskFilters.boardName = input.boardName;
           const r = await Tasks.findAll({ filters: taskFilters, limit: 500, fields: [...TASK_FIELDS] });
-          return r.records;
+          return sortByOrder(r.records);
         })();
 
     const [tasks, eventsResult, pmBoardsResult, calBoardsResult] = await Promise.all([
