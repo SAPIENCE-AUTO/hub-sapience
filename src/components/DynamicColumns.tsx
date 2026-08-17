@@ -1430,7 +1430,6 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
   const [coloredOpts, setColoredOpts] = useState<ColoredOption[]>(DEFAULT_COLORED_OPTS);
   const [formulaConfig, setFormulaConfig] = useState<FormulaConfig>(DEFAULT_FORMULA);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
-  const [saving, setSaving] = useState(false);
   const [insertAt, setInsertAt] = useState<number | undefined>(undefined);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropInfo, setDropInfo] = useState<{ id: string; side: 'left' | 'right' } | null>(null);
@@ -1467,9 +1466,8 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
 
   const openInsert = (atIndex: number) => { resetForm(); setInsertAt(atIndex); setOpenAdd(true); };
 
-  const handleAdd = async () => {
-    if (!form.name.trim() || saving) return;
-    setSaving(true);
+  const handleAdd = () => {
+    if (!form.name.trim()) return;
     let optionsJson: string | undefined;
     if (form.type === 'Select' || form.type === 'Status') {
       optionsJson = JSON.stringify(coloredOpts);
@@ -1478,10 +1476,17 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
     } else if (form.type === 'Fórmula') {
       optionsJson = JSON.stringify(formulaConfig);
     }
-    await dynCols.addColumn(form.name.trim(), form.type, optionsJson, insertAt);
+    // addColumn ya actualiza el estado local de forma optimista antes de
+    // devolver la promesa — no hay que esperarla para cerrar el diálogo.
+    // Insertar en medio de un tablero con muchas columnas reordena el resto
+    // en serie (una llamada de red a la vez, para no pegarle al rate limit),
+    // lo que puede tardar varios segundos; bloquear el diálogo hasta que
+    // termine hacía que se sintiera trabado aunque la columna ya existiera
+    // en el tablero de fondo. addColumn ya maneja su propio rollback/toast
+    // de error si el guardado falla.
+    dynCols.addColumn(form.name.trim(), form.type, optionsJson, insertAt).catch(() => {});
     resetForm();
     setOpenAdd(false);
-    setSaving(false);
   };
 
   const handleRename = async () => {
@@ -2013,8 +2018,8 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { resetForm(); setOpenAdd(false); }}>Cancelar</Button>
-            <Button onClick={handleAdd} disabled={saving || !canAdd}>
-              {saving ? 'Creando...' : insertAt !== undefined ? 'Insertar columna' : 'Agregar columna'}
+            <Button onClick={handleAdd} disabled={!canAdd}>
+              {insertAt !== undefined ? 'Insertar columna' : 'Agregar columna'}
             </Button>
           </DialogFooter>
         </DialogContent>
