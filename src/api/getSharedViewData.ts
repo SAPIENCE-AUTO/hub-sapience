@@ -227,9 +227,15 @@ export default createEndpoint({
         }
       }
 
-      // Fallback: if no groups found yet and boardId is UUID, try the legacy
-      // composite boardId (groups may not have been migrated to UUID)
-      if (mergedGroupCols.filter(c => !c.deletedAt).length === 0 && externalView.projectCode && externalView.boardName) {
+      // Fallback: SIEMPRE intentar también el boardId legacy compuesto, no
+      // solo cuando el UUID no trajo nada. Casos reales como NARANJA tienen
+      // grupos repartidos entre los dos: algunos ya migrados a UUID (G3, G4),
+      // otros todavía solo bajo el string legacy (G1, G2, G5, G6) — con el
+      // guard "=== 0" de antes, en cuanto el UUID encontraba AUNQUE FUERA UNO,
+      // el resto de los grupos legacy se perdían en silencio (se colapsaban
+      // a "Sin grupo" más abajo). Mismo patrón sin guard que ya usa el merge
+      // de arriba (UUID vs boardId de la vista externa).
+      if (externalView.projectCode && externalView.boardName) {
         const legacyGroupBoardId = `recruitment-${externalView.projectCode}-${externalView.boardName}::groups`;
         if (legacyGroupBoardId !== `${externalView.boardId}::groups`) {
           const { records: legacyGroupCols } = await BoardColumns.findAll({
