@@ -782,7 +782,12 @@ export function useDynamicColumns(boardId: string, seedRows?: SeedRow[], options
 
     const defaults: Record<string, number> = {};
     for (const col of columns) {
-      const headerWidth = (col.columnName ?? '').length * 8 + 60;
+      // +130 (no +60): el header trae grip + ícono de tipo + botón de orden +
+      // filtro + menú "···" (px-2 + 5 elementos con sus gaps, ~126px reales)
+      // antes de llegar al texto — con +60 el nombre se truncaba incluso en
+      // columnas nuevas con nombres cortos, porque los íconos ya se comían
+      // el ancho calculado.
+      const headerWidth = (col.columnName ?? '').length * 8 + 130;
       const typeMinWidth = TYPE_MIN_WIDTHS[col.columnType ?? ''] ?? 160;
 
       let maxSampleWidth = 0;
