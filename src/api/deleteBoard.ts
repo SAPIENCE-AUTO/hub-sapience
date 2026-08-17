@@ -51,7 +51,18 @@ export default createEndpoint({
       const uuid = input.boardId;
       const boardIdVariants = [uuid, `${uuid}::groups`, `${uuid}::children`];
 
-      // ── 1. Fetch entities by UUID ──────────────────────────────────────
+      // ── 1. Soft-delete the board record FIRST ───────────────────────────
+      // El resto de esta función limpia filas/columnas/celdas en lotes de 5
+      // con pausas entre cada uno — para un tablero grande puede tardar
+      // varios segundos o más. Si el board se marca deletedAt hasta el
+      // final, un reload de la página mientras el cleanup sigue en curso
+      // lo trae de vuelta (el reload lee el board como "activo todavía",
+      // porque técnicamente lo está). Marcarlo primero hace la eliminación
+      // visible/definitiva de inmediato; el resto sigue en segundo plano
+      // sin que nada dependa de leerlo como activo después de este punto.
+      await withRetry(() => Boards.update({ id: uuid, record: { deletedAt: now } }));
+
+      // ── 2. Fetch entities by UUID ──────────────────────────────────────
       const [rowsResult, tasksResult] = await Promise.all([
         RecruitmentRows.findAll({ filters: { boardId: uuid } as any, fields: ['id'], limit: 2000 }),
         Tasks.findAll({ filters: { boardId: uuid } as any, fields: ['id'], limit: 2000 }),
@@ -69,19 +80,19 @@ export default createEndpoint({
       const allColIds = colResults.flatMap(r => r.records.map(c => c.id));
       const allCellIds = cellResults.flatMap(r => r.records.map(c => c.id));
 
-      // ── 2. Soft-delete recruitment rows ────────────────────────────────
+      // ── 3. Soft-delete recruitment rows ────────────────────────────────
       await softDeleteBatch(rowsResult.records.map(r => r.id), id =>
         RecruitmentRows.update({ id, record: { deletedAt: now } })
       );
       await sleep(300);
 
-      // ── 3. Hard-delete tasks ───────────────────────────────────────────
+      // ── 4. Hard-delete tasks ───────────────────────────────────────────
       await softDeleteBatch(tasksResult.records.map(r => r.id), id =>
         Tasks.delete({ id })
       );
       await sleep(300);
 
-      // ── 4. Hard-delete CalendarEvents by boardId UUID ──────────────────
+      // ── 5. Hard-delete CalendarEvents by boardId UUID ──────────────────
       if (input.boardType === 'calendar' || input.boardId.startsWith('cal-')) {
         const { records: calEvents } = await CalendarEvents.findAll({
           filters: { boardId: uuid } as any,
@@ -96,7 +107,7 @@ export default createEndpoint({
         }
       }
 
-      // ── 5. Soft-delete columns ─────────────────────────────────────────
+      // ── 6. Soft-delete columns ─────────────────────────────────────────
       if (allColIds.length > 0) {
         await softDeleteBatch(allColIds, id =>
           BoardColumns.update({ id, record: { deletedAt: now, deletedBy } })
@@ -104,15 +115,12 @@ export default createEndpoint({
         await sleep(500);
       }
 
-      // ── 6. Soft-delete cells ───────────────────────────────────────────
+      // ── 7. Soft-delete cells ────────────────────────────────────────────
       if (allCellIds.length > 0) {
         await softDeleteBatch(allCellIds, id =>
           CellValues.update({ id, record: { deletedAt: now } })
         );
       }
-
-      // ── 7. Soft-delete the board record itself — ONLY this UUID ────────
-      await withRetry(() => Boards.update({ id: uuid, record: { deletedAt: now } }));
 
       return { success: true };
     }
@@ -190,22 +198,33 @@ export default createEndpoint({
     const allColIds = colResults.flatMap(r => r.records.map(c => c.id));
     const allCellIds = cellResults.flatMap(r => r.records.map(c => c.id));
 
-    // ── 4. Soft-delete recruitment rows ─────────────────────────────────
+    // ── 4. Soft-delete the board record FIRST (usa lo ya leído arriba, no
+    // vuelve a consultar) — el resto de esta función limpia filas/columnas/
+    // celdas en lotes de 5 con pausas entre cada uno, que para un tablero
+    // grande puede tardar. Si el board se marca deletedAt hasta el final,
+    // un reload de la página mientras el cleanup sigue en curso lo trae de
+    // vuelta porque técnicamente todavía está activo. Solo se borra el
+    // primer match — previene borrar en masa tableros con el mismo nombre.
+    const activeBoardRecords = boardsResult.records.filter(b => !b.deletedAt);
+    if (activeBoardRecords.length > 0) {
+      await withRetry(() => Boards.update({ id: activeBoardRecords[0].id, record: { deletedAt: now } }));
+    }
+
+    // ── 5. Soft-delete recruitment rows ─────────────────────────────────
     await softDeleteBatch(rowsResult.records.map(r => r.id), id =>
       RecruitmentRows.update({ id, record: { deletedAt: now } })
     );
     await sleep(300);
 
-    // ── 5. Hard-delete tasks ────────────────────────────────────────────
+    // ── 6. Hard-delete tasks ────────────────────────────────────────────
     await softDeleteBatch(tasksResult.records.map(r => r.id), id =>
       Tasks.delete({ id })
     );
     await sleep(300);
 
-    // ── 6. If calendar board, hard-delete CalendarEvents (UUID-safe) ───
+    // ── 7. If calendar board, hard-delete CalendarEvents (UUID-safe) ───
     if (input.boardType === 'calendar' || input.boardId.startsWith('cal-')) {
       // Find exactly which Board UUID matches this legacy deletion
-      const activeBoardRecords = boardsResult.records.filter(b => !b.deletedAt);
       if (activeBoardRecords.length === 1) {
         // Unambiguous — safe to delete CalendarEvents by that board's UUID
         const matchedBoardUUID = activeBoardRecords[0].id;
@@ -226,7 +245,7 @@ export default createEndpoint({
       // 0 matches → skip, nothing to delete
     }
 
-    // ── 7. Soft-delete columns ──────────────────────────────────────────
+    // ── 8. Soft-delete columns ──────────────────────────────────────────
     if (allColIds.length > 0) {
       await softDeleteBatch(allColIds, id =>
         BoardColumns.update({ id, record: { deletedAt: now, deletedBy } })
@@ -234,18 +253,11 @@ export default createEndpoint({
       await sleep(500);
     }
 
-    // ── 8. Soft-delete cells ────────────────────────────────────────────
+    // ── 9. Soft-delete cells ────────────────────────────────────────────
     if (allCellIds.length > 0) {
       await softDeleteBatch(allCellIds, id =>
         CellValues.update({ id, record: { deletedAt: now } })
       );
-    }
-
-    // ── 9. Soft-delete the board record — only ONE if multiple match ────
-    const activeBoardRecords = boardsResult.records.filter(b => !b.deletedAt);
-    if (activeBoardRecords.length > 0) {
-      // Only delete the first match, not all — prevents mass deletion of same-named boards
-      await withRetry(() => Boards.update({ id: activeBoardRecords[0].id, record: { deletedAt: now } }));
     }
 
     return { success: true };
