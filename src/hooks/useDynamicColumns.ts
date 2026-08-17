@@ -623,51 +623,69 @@ export function useDynamicColumns(boardId: string, seedRows?: SeedRow[], options
     setColumns(optimistic);
     colCache.set(boardId, optimistic);
 
-    // 2. Persist in background — returns a promise that resolves with the real column ID
+    // 2. Create the real column FIRST — antes esto resequenciaba las columnas
+    // corridas primero y creaba la nueva al final, dejándola con un id
+    // temporal (sin existir en el servidor) durante todo ese reacomodo en
+    // serie. Cualquier interacción con la columna en esa ventana (escribir
+    // en una celda, renombrarla) apuntaba a un id que el backend no conocía
+    // y se perdía. Crearla primero reduce esa ventana a una sola llamada.
     const savePromise = (async (): Promise<string> => {
+      let realId: string;
       try {
-        for (const c of toShift) {
-          await withColSaveLimit(() =>
-            saveBoardColumn({ id: c.id, columnName: c.columnName ?? '', boardId, columnType: c.columnType ?? '', optionsJson: c.optionsJson, columnOrder: (c.columnOrder ?? 0) + 1 })
-          );
-        }
         const result = await withColSaveLimit(() =>
           saveBoardColumn({ columnName, boardId, columnType, optionsJson, columnOrder: insertAt })
         );
-        const realId = result.id;
-
-        // Swap temp ID → real ID in columns state (preserves list structure, no full re-fetch)
-        setColumns(prev => {
-          const updated = prev.map(c => c.id === tempId ? { ...c, id: realId } : c);
-          colCache.set(boardId, updated);
-          return updated;
-        });
-
-        // Remap any cells assigned to temp column ID → real column ID
-        setCellMap(prev => {
-          let changed = false;
-          const next = new Map<string, DynCell>();
-          for (const [key, cell] of prev) {
-            if (cell.columnId === tempId) {
-              changed = true;
-              const newKey = KEY(cell.rowId!, realId);
-              next.set(newKey, { ...cell, columnId: realId });
-            } else {
-              next.set(key, cell);
-            }
-          }
-          if (changed) cellMapCache.set(boardId, next);
-          return changed ? next : prev;
-        });
-
-        return realId;
+        realId = result.id;
       } catch (err) {
-        // Rollback to pre-add state
+        // Rollback to pre-add state — la columna nunca llegó a existir de verdad
         setColumns(snapshot);
         colCache.set(boardId, snapshot);
         toast.error('Error al crear columna');
         throw err;
       }
+
+      // Swap temp ID → real ID in columns state (preserves list structure, no full re-fetch)
+      setColumns(prev => {
+        const updated = prev.map(c => c.id === tempId ? { ...c, id: realId } : c);
+        colCache.set(boardId, updated);
+        return updated;
+      });
+
+      // Remap any cells assigned to temp column ID → real column ID
+      setCellMap(prev => {
+        let changed = false;
+        const next = new Map<string, DynCell>();
+        for (const [key, cell] of prev) {
+          if (cell.columnId === tempId) {
+            changed = true;
+            const newKey = KEY(cell.rowId!, realId);
+            next.set(newKey, { ...cell, columnId: realId });
+          } else {
+            next.set(key, cell);
+          }
+        }
+        if (changed) cellMapCache.set(boardId, next);
+        return changed ? next : prev;
+      });
+
+      // 3. Reorder the shifted columns afterward, as trailing background
+      // cleanup — the new column already exists and is fully usable at this
+      // point regardless of how long this takes or whether it fails.
+      if (toShift.length > 0) {
+        (async () => {
+          try {
+            for (const c of toShift) {
+              await withColSaveLimit(() =>
+                saveBoardColumn({ id: c.id, columnName: c.columnName ?? '', boardId, columnType: c.columnType ?? '', optionsJson: c.optionsJson, columnOrder: (c.columnOrder ?? 0) + 1 })
+              );
+            }
+          } catch {
+            toast.error('No se pudo reacomodar el resto de las columnas');
+          }
+        })();
+      }
+
+      return realId;
     })();
 
     return savePromise;
