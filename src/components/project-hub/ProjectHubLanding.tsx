@@ -18,10 +18,18 @@ type EventItem = { id: string; eventName?: string; eventDate?: string };
 type FolderItem = { name: string; count: number };
 type MessageItem = { senderName?: string; senderEmail?: string; content?: string };
 
+// timeZone: 'UTC' es a propósito — startDate/endDate son fechas de calendario
+// puras ("2026-05-12"), no un momento con hora. Sin esto, Intl.DateTimeFormat
+// las interpreta como medianoche UTC y las muestra en la zona local del
+// navegador, recorriéndolas un día hacia atrás en cualquier huso al oeste de
+// UTC (confirmado en vivo: "2026-05-12" se mostraba como "11 may" en México).
 const fmtDate = (iso: string) =>
-  new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short' }).format(new Date(iso));
+  new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(iso));
 const fmtDateTime = (iso: string) =>
   new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+
+const fmtRange = (startIso: string, endIso: string) =>
+  startIso === endIso ? fmtDate(startIso) : `${fmtDate(startIso)} – ${fmtDate(endIso)}`;
 
 function cleanPreview(text: string): string {
   const stripped = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[*_~`#]/g, '').trim();
@@ -77,6 +85,23 @@ export function ProjectHubLanding({ projectCode, canSeeBudget, onOpenTab, onOpen
   }, [projectCode]);
 
   const now = Date.now();
+
+  // Líneas verticales de inicio de semana (lunes) dentro del rango del
+  // Gantt — en UTC para no repetir el corrimiento de un día que ya se
+  // encontró en fmtDate (startDate/endDate son fechas de calendario puras).
+  const weekTicks = gantt ? (() => {
+    const ticks: { pct: number; label: string }[] = [];
+    const startMs = gantt.rangeStart.getTime(), endMs = gantt.rangeEnd.getTime(), span = endMs - startMs;
+    if (span <= 0) return ticks;
+    const cur = new Date(startMs);
+    cur.setUTCHours(0, 0, 0, 0);
+    while (cur.getUTCDay() !== 1) cur.setUTCDate(cur.getUTCDate() - 1);
+    while (cur.getTime() <= endMs) {
+      if (cur.getTime() >= startMs) ticks.push({ pct: (cur.getTime() - startMs) / span * 100, label: fmtDate(cur.toISOString()) });
+      cur.setUTCDate(cur.getUTCDate() + 7);
+    }
+    return ticks;
+  })() : [];
 
   return (
     <div className="p-6 overflow-y-auto h-full">
@@ -172,15 +197,36 @@ export function ProjectHubLanding({ projectCode, canSeeBudget, onOpenTab, onOpen
             {gantt === undefined && <div className="h-16" />}
             {gantt === null && <p className="px-3.5 pb-3.5 pt-1 text-xs text-muted-foreground">Aún no hay fechas cargadas en el timeline</p>}
             {gantt && (
-              <div className="px-3.5 pb-3.5 pt-1.5 flex flex-col gap-2 max-h-[180px] overflow-y-auto">
-                {gantt.segments.map((seg, i) => (
-                  <div key={`${seg.name}-${i}`} className="flex items-center gap-2.5">
-                    <span className="text-xs text-muted-foreground w-28 flex-shrink-0 truncate">{seg.name}</span>
-                    <div className="relative flex-1 h-2 rounded-full bg-muted">
-                      <div className={`absolute top-0 h-2 rounded-full ${statusColorClass(seg, now)}`} style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }} />
-                    </div>
+              <div className="px-3.5 pb-3.5 pt-1.5">
+                {/* Regla: inicio de cada semana (lunes), alineada con las líneas verticales de cada fila */}
+                <div className="flex items-center gap-2.5 mb-1">
+                  <div className="w-36 flex-shrink-0" />
+                  <div className="relative flex-1 h-3">
+                    {weekTicks.map((t, i) => (
+                      <span key={i} className="absolute text-[10px] text-muted-foreground/70 whitespace-nowrap"
+                        style={{ left: `${t.pct}%`, transform: t.pct > 90 ? 'translateX(-100%)' : t.pct < 2 ? 'none' : 'translateX(-50%)' }}>
+                        {t.label}
+                      </span>
+                    ))}
                   </div>
-                ))}
+                </div>
+                <div className="flex flex-col gap-1.5 max-h-[190px] overflow-y-auto">
+                  {gantt.segments.map((seg, i) => (
+                    <div key={`${seg.name}-${i}`} className="flex items-center gap-2.5">
+                      <div className="w-36 flex-shrink-0">
+                        <p className="text-xs text-foreground truncate" title={seg.name}>{seg.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{fmtRange(seg.startDate, seg.endDate)}</p>
+                      </div>
+                      <div className="relative flex-1 h-5">
+                        {weekTicks.map((t, i2) => (
+                          <div key={i2} className="absolute top-0 bottom-0 w-px bg-border" style={{ left: `${t.pct}%` }} />
+                        ))}
+                        <div className="absolute top-1/2 -translate-y-1/2 h-2 w-full rounded-full bg-muted" />
+                        <div className={`absolute top-1/2 -translate-y-1/2 h-2 rounded-full ${statusColorClass(seg, now)}`} style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
