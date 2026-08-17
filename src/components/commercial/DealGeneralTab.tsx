@@ -86,7 +86,7 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
         fullName: form.dealName || undefined,
         client: form.client || undefined,
         tematica: form.tematica || undefined,
-        status: 'Activo',
+        status: 'En curso',
         dealVinculado: deal.id,
       });
       toast.success(`Proyecto "${code}" creado exitosamente`);
