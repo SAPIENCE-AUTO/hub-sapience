@@ -207,7 +207,6 @@ function SendEmailDialog({ po, open, onClose, onSent }: { po: PO; open: boolean;
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
-  const [bodyView, setBodyView] = useState<'code' | 'preview'>('preview');
 
   useEffect(() => {
     if (!open) return;
@@ -303,42 +302,15 @@ function SendEmailDialog({ po, open, onClose, onSent }: { po: PO; open: boolean;
 
               {/* Body */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cuerpo del mensaje</Label>
-                  <div className="inline-flex rounded-md border border-border overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setBodyView('preview')}
-                      className={`px-2.5 py-1 text-xs font-medium transition-colors ${bodyView === 'preview' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-                    >
-                      Vista previa
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBodyView('code')}
-                      className={`px-2.5 py-1 text-xs font-medium transition-colors border-l border-border ${bodyView === 'code' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
-                    >
-                      Código
-                    </button>
-                  </div>
-                </div>
-                {bodyView === 'preview' ? (
-                  <iframe
-                    srcDoc={body}
-                    sandbox=""
-                    title="Vista previa del correo"
-                    className="w-full h-[420px] rounded-md border border-border bg-white"
-                  />
-                ) : (
-                  <Textarea
-                    rows={16}
-                    className="resize-y text-sm font-mono leading-relaxed"
-                    value={body}
-                    onChange={e => setBody(e.target.value)}
-                  />
-                )}
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cuerpo del mensaje</Label>
+                <iframe
+                  srcDoc={body}
+                  sandbox=""
+                  title="Vista previa del correo"
+                  className="w-full h-[420px] rounded-md border border-border bg-white"
+                />
                 <p className="text-[10px] text-muted-foreground">
-                  Puedes editar el HTML en "Código" — los cambios se reflejan en la vista previa. El PDF se adjuntará automáticamente si está disponible.
+                  El PDF se adjuntará automáticamente si está disponible.
                 </p>
               </div>
             </>
