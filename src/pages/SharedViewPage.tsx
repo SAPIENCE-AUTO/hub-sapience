@@ -152,19 +152,37 @@ function GroupHeader({
   );
 }
 
+const IDX_COL_WIDTH = 40;
+const NAME_COL_WIDTH = 200;
+
 function TableRow({ row, idx, visibleCols, dynCols }: {
   row: Row; idx: number; visibleCols: string[]; dynCols: DynCol[];
 }) {
   return (
-    <tr className="border-b border-border/50 hover:bg-muted/30 transition-colors h-12">
-      <td className="px-4 text-xs text-muted-foreground/50 tabular-nums w-8 overflow-hidden">{idx}</td>
-      {visibleCols.map(col => (
-        <td key={col} className="px-4 overflow-hidden">
-          <div className="whitespace-normal break-words min-w-[120px]">
-            <CellValue col={col} row={row} dynCols={dynCols} />
-          </div>
-        </td>
-      ))}
+    <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors h-12">
+      <td
+        className="px-4 text-xs text-muted-foreground/50 tabular-nums overflow-hidden bg-card group-hover:bg-muted/30"
+        style={{ position: 'sticky', left: 0, zIndex: 5, width: IDX_COL_WIDTH, minWidth: IDX_COL_WIDTH }}
+      >
+        {idx}
+      </td>
+      {visibleCols.map((col, i) => {
+        // El nombre solo se congela cuando es la primera columna visible —
+        // el offset de `left` asume que va justo después del índice, así que
+        // forzarlo en cualquier otra posición desalinearía la columna al hacer scroll.
+        const isFrozenName = i === 0 && col === 'participantName';
+        return (
+          <td
+            key={col}
+            className={`px-4 overflow-hidden${isFrozenName ? ' bg-card group-hover:bg-muted/30 border-r border-border/40' : ''}`}
+            style={isFrozenName ? { position: 'sticky', left: IDX_COL_WIDTH, zIndex: 5, width: NAME_COL_WIDTH, minWidth: NAME_COL_WIDTH } : undefined}
+          >
+            <div className="whitespace-normal break-words min-w-[120px]">
+              <CellValue col={col} row={row} dynCols={dynCols} />
+            </div>
+          </td>
+        );
+      })}
     </tr>
   );
 }
@@ -291,12 +309,24 @@ export default function SharedViewPage() {
   const tableHeader = (
     <thead>
       <tr className="bg-muted border-b border-border h-11" style={{ position: 'sticky', top: 0, zIndex: 20 }}>
-        <th className="text-left px-4 text-xs font-semibold text-muted-foreground w-8 tabular-nums">#</th>
-        {visibleCols.map(col => (
-          <th key={col} className="text-left px-4 text-xs font-semibold text-muted-foreground whitespace-nowrap">
-            {getColLabel(col)}
-          </th>
-        ))}
+        <th
+          className="text-left px-4 text-xs font-semibold text-muted-foreground tabular-nums bg-muted"
+          style={{ position: 'sticky', top: 0, left: 0, zIndex: 30, width: IDX_COL_WIDTH, minWidth: IDX_COL_WIDTH }}
+        >
+          #
+        </th>
+        {visibleCols.map((col, i) => {
+          const isFrozenName = i === 0 && col === 'participantName';
+          return (
+            <th
+              key={col}
+              className={`text-left px-4 text-xs font-semibold text-muted-foreground whitespace-nowrap${isFrozenName ? ' bg-muted border-r border-border/40' : ''}`}
+              style={isFrozenName ? { position: 'sticky', top: 0, left: IDX_COL_WIDTH, zIndex: 30, width: NAME_COL_WIDTH, minWidth: NAME_COL_WIDTH } : undefined}
+            >
+              {getColLabel(col)}
+            </th>
+          );
+        })}
       </tr>
     </thead>
   );
