@@ -6,13 +6,13 @@ import { saveCellValue, saveTask } from 'zite-endpoints-sdk';
 import { toast } from 'sonner';
 import { type Task, type GanttScale, type BoardGanttGroup } from './pmTypes';
 import { BOARD_GANTT_STATUS_COLORS } from './pmConstants';
-import { fmtDate, fmt } from './pmDateUtils';
+import { fmtDate } from './pmDateUtils';
 import { getGroupColor } from '../table/tableUtils';
 import { type DynCols } from '../DynamicColumns';
 import type { DynColumn } from '../../hooks/useDynamicColumns';
 
 // ── Row height constants ─────────────────────────────────────────────────────
-const PARENT_ROW_H = 52;
+const PARENT_ROW_H = 36;
 const CHILD_ROW_H  = 30;
 const GROUP_H      = 30;
 
@@ -165,12 +165,6 @@ export function GanttView({ tasks, dynCols, childDynCols, groupDynCols, boardId 
 
   const tStart = (t: Task) => localDates.get(t.id)?.start || getDateVal(t.id, startCol) || t.startDate?.split('T')[0] || '';
   const tEnd   = (t: Task) => localDates.get(t.id)?.end   || getDateVal(t.id, endCol)   || t.endDate?.split('T')[0]   || '';
-
-  const fmtRange = (s: string, e: string) => {
-    if (!s || !e) return '';
-    const sd = new Date(s + 'T00:00:00'), ed = new Date(e + 'T00:00:00');
-    return s === e ? fmt(sd) : `${fmt(sd)} – ${fmt(ed)}`;
-  };
 
   const getTaskBarColor = (t: Task, fallback: string) => {
     if (colorMode === 'color') {
@@ -373,11 +367,8 @@ export function GanttView({ tasks, dynCols, childDynCols, groupDynCols, boardId 
             <span className="truncate text-xs text-muted-foreground">{row.task.taskName}</span>
           </div>
         ) : (
-          <div className="flex flex-col justify-center w-full overflow-hidden px-3 py-1">
-            <span className="text-sm font-medium leading-snug line-clamp-2" title={row.task.taskName}>{row.task.taskName}</span>
-            {tStart(row.task) && tEnd(row.task) && (
-              <span className="text-[11px] text-muted-foreground mt-0.5">{fmtRange(tStart(row.task), tEnd(row.task))}</span>
-            )}
+          <div className="flex items-center w-full overflow-hidden px-3">
+            <span className="truncate text-sm font-medium">{row.task.taskName}</span>
           </div>
         )}
       </div>
@@ -557,7 +548,7 @@ export function GanttView({ tasks, dynCols, childDynCols, groupDynCols, boardId 
                         <span className={`text-[9px] leading-none mt-0.5 ${d.isWeekend ? 'text-destructive/60' : 'text-muted-foreground/50'}`}>{d.dayNum}</span>
                       </>
                     ) : (
-                      <span className={`text-[9px] leading-none ${d.isWeekend ? 'text-destructive/60' : 'text-muted-foreground/50'}`}>{d.dayNum}</span>
+                      <span className={`text-[8px] leading-none ${d.isWeekend ? 'text-destructive/60' : 'text-muted-foreground/50'}`}>{d.label}</span>
                     )}
                   </div>
                 ))}
