@@ -239,7 +239,7 @@ function ProjectCard({ p, onEdit, onDelete, onOpen, onOpenTeams }: {
   p: Project; onEdit: () => void; onDelete: () => void; onOpen: () => void;
   onOpenTeams: () => void;
 }) {
-  const barCls = statusBarStyle[p.status ?? ''] ?? 'bg-border';
+  const barCls = statusBarStyle[p.status ?? 'En curso'] ?? 'bg-border';
   return (
     <div onClick={onOpen} className="bg-card border rounded-xl p-5 cursor-pointer hover:shadow-md hover:border-primary/40 transition-all duration-200 flex flex-col gap-3 relative group overflow-hidden">
       <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${barCls}`} />
@@ -302,7 +302,7 @@ function ProjectRow({ p, onOpen, onEdit, onDelete, onSaveField, onOpenTeams }: {
   onSaveField: (p: Project, field: string, value: string) => void;
   onOpenTeams: () => void;
 }) {
-  const barCls = statusBarStyle[p.status ?? ''] ?? 'bg-border';
+  const barCls = statusBarStyle[p.status ?? 'En curso'] ?? 'bg-border';
   return (
     <tr className="group hover:bg-muted/25 border-t border-border/20">
       <td className="px-4 py-2.5 relative">
@@ -701,7 +701,7 @@ export default function ProjectsPage() {
       .filter(p => {
         if (statusFilter === 'all') return true;
         if (!statusF || !('statuses' in statusF)) return true;
-        return ([...statusF.statuses] as string[]).includes(p.status ?? '');
+        return ([...statusF.statuses] as string[]).includes(p.status ?? 'En curso');
       })
       .filter(p => clientFilter === 'all' || p.client === clientFilter)
       .filter(p => !search || [p.projectCode, p.tematica, p.client].some(v => v?.toLowerCase().includes(search.toLowerCase())))
@@ -722,7 +722,7 @@ export default function ProjectsPage() {
       .filter(p => {
         if (key === 'all') return true;
         if (!f || !('statuses' in f)) return true;
-        return ([...f.statuses] as string[]).includes(p.status ?? '');
+        return ([...f.statuses] as string[]).includes(p.status ?? 'En curso');
       }).length;
   };
 
