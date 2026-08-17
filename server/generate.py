@@ -210,6 +210,12 @@ create index on board_columns (column_type);
 create index on cell_values (board_id);
 create index on cell_values (row_id);
 create index on cell_values (board_id, row_id, column_id);
+-- getDashboardData.ts filtra "¿en qué celdas está asignado este usuario?"
+-- (text_value = user.id) para calcular tareas/eventos asignados por columna
+-- dinámica. Sin índice en text_value, Postgres hacía Parallel Seq Scan sobre
+-- las ~2.8M filas de cell_values buscando 0-pocas coincidencias — confirmado
+-- con EXPLAIN ANALYZE: 8.8s de Seq Scan, ~90% del tiempo total del dashboard.
+create index on cell_values (text_value);
 -- Unicidad parcial real de producción (ver comentario de CONFLICT_TARGETS arriba
 -- en este archivo) — no proviene del export de Zite, se agregó directo en
 -- Supabase tras encontrar celdas duplicadas vivas para la misma posición.

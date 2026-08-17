@@ -241,25 +241,29 @@ async function buildDashboard(
   const myCodes = new Set(myProjects.map(p => p.projectCode).filter(Boolean) as string[]);
 
   // ── Phase 2: tasks, events, rows, POs, assigned cells ───────────────────
-  // Fully sequential to avoid bursting the DB rate limit.
-  // Each findAll with large limits internally paginates (e.g. limit:2000 → 4 requests),
-  // so even 2 parallel queries can exceed the 50 req/s ceiling.
+  // Las 5 son independientes entre sí (nada de esta fase depende de otra
+  // hasta después de que las 5 resuelven) — antes iban en serie con 300ms de
+  // sleep entre cada una "para no reventar el rate limit", pero eso sumaba
+  // ~1.2s de espera inventada en cada carga del dashboard, para cualquier
+  // usuario, siempre. Con PG_POOL_MAX=9 (ver render.yaml) sobra margen para
+  // 5 conexiones simultáneas de un solo usuario cargando su dashboard.
   const t2 = Date.now();
   const now = new Date();
   const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  // Small delay between each large sequential query to avoid DB rate limit spikes
-  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-  const { records: allTasks } = await Tasks.findAll({ limit: 1000, fields: ['taskName', 'projectCode', 'status', 'assignedTo', 'endDate', 'boardName', 'parentTaskId', 'boardId'] });
-  await sleep(300);
-  const { records: assignedCells } = await CellValues.findAll({ filters: { textValue: user.id }, limit: 2000, fields: ['rowId', 'boardId'] });
-  await sleep(300);
-  const { records: allEvents } = await CalendarEvents.findAll({ limit: 500, fields: ['eventName', 'projectCode', 'eventDate', 'location', 'calendarName', 'durationHours'] });
-  await sleep(300);
-  const { records: rows } = await RecruitmentRows.findAll({ limit: 2000, fields: ['projectCode', 'status'] });
-  await sleep(300);
-  const { records: pos } = await PurchaseOrders.findAll({ limit: 1000, fields: ['projectCode', 'totalAmount', 'status'] });
+  const [
+    { records: allTasks },
+    { records: assignedCells },
+    { records: allEvents },
+    { records: rows },
+    { records: pos },
+  ] = await Promise.all([
+    Tasks.findAll({ limit: 1000, fields: ['taskName', 'projectCode', 'status', 'assignedTo', 'endDate', 'boardName', 'parentTaskId', 'boardId'] }),
+    CellValues.findAll({ filters: { textValue: user.id }, limit: 2000, fields: ['rowId', 'boardId'] }),
+    CalendarEvents.findAll({ limit: 500, fields: ['eventName', 'projectCode', 'eventDate', 'location', 'calendarName', 'durationHours'] }),
+    RecruitmentRows.findAll({ limit: 2000, fields: ['projectCode', 'status'] }),
+    PurchaseOrders.findAll({ limit: 1000, fields: ['projectCode', 'totalAmount', 'status'] }),
+  ]);
   console.log('[getDashboardData] phase2 done', { ms: Date.now() - t2, tasks: allTasks.length, events: allEvents.length });
 
   const phase2DurationMs = Date.now() - t0;
@@ -373,58 +377,50 @@ async function buildDashboard(
   }
 
   if (allPmBoardIds.length > 0) {
-    // Load BoardColumns sequentially with small delays to avoid rate limits
-    const boardColResults = await limitConcurrency(
+    // Un solo worker por tablero: trae sus BoardColumns y, si tiene columna
+    // "Estado", sus CellValues correspondientes en la misma pasada — antes
+    // eran dos vueltas completas sobre todos los tableros (BoardColumns,
+    // luego CellValues), cada una en serie con 200ms de sleep por tablero.
+    // Concurrencia 4 en vez de 1: con hasta 10 tableros tope y PG_POOL_MAX=9,
+    // deja margen de sobra sin volver a serializar todo.
+    const needsCellValues = dynamicAssignedTaskIds.size > 0;
+    const perBoardResults = await limitConcurrency(
       allPmBoardIds,
-      1,
+      4,
       async (boardId) => {
-        await new Promise(r => setTimeout(r, 200));
-        return BoardColumns.findAll({
+        const cols = await BoardColumns.findAll({
           filters: { boardId } as any,
           limit: 200,
           fields: ['columnName', 'columnType', 'boardId', 'columnOrder', 'optionsJson', 'deletedAt'],
         }).then(r => r.records);
+        const estadoCol = cols.find(c => !c.deletedAt && (c.columnName ?? '').toLowerCase() === 'estado');
+        if (!estadoCol) return { boardId, estadoColId: null, statusOptions: [] as string[], cells: [] as { rowId?: string; textValue?: string }[] };
+
+        let statusOptions: string[] = [];
+        try {
+          const raw = JSON.parse((estadoCol as any).optionsJson ?? '[]');
+          statusOptions = raw
+            .map((o: unknown) => typeof o === 'string' ? o : ((o as Record<string, string>).value ?? (o as Record<string, string>).label ?? ''))
+            .filter(Boolean);
+        } catch { /* ignore parse errors */ }
+
+        const cells = needsCellValues
+          ? await CellValues.findAll({
+              filters: { boardId, columnId: estadoCol.id } as any,
+              limit: 2000,
+              fields: ['rowId', 'textValue'],
+            }).then(r => r.records)
+          : [];
+        return { boardId, estadoColId: estadoCol.id, statusOptions, cells };
       },
     );
 
-    // Map boardId → estadoColumnId + statusOptions
-    const estadoColByBoard = new Map<string, string>();
-    for (let i = 0; i < allPmBoardIds.length; i++) {
-      const boardId = allPmBoardIds[i];
-      const cols = boardColResults[i];
-      const estadoCol = cols.find(c => !c.deletedAt && (c.columnName ?? '').toLowerCase() === 'estado');
-      if (estadoCol) {
-        estadoColByBoard.set(boardId, estadoCol.id);
-        try {
-          const raw = JSON.parse((estadoCol as any).optionsJson ?? '[]');
-          const labels: string[] = raw
-            .map((o: unknown) => typeof o === 'string' ? o : ((o as Record<string, string>).value ?? (o as Record<string, string>).label ?? ''))
-            .filter(Boolean);
-          if (labels.length > 0) statusOptionsByBoard.set(boardId, labels);
-        } catch { /* ignore parse errors */ }
-      }
-    }
-
-    // Load status CellValues sequentially with small delays
-    const dynamicBoardIds = allPmBoardIds.filter(bid => estadoColByBoard.has(bid) && dynamicAssignedTaskIds.size > 0);
-    if (dynamicBoardIds.length > 0) {
-      const statusCellResults = await limitConcurrency(
-        dynamicBoardIds,
-        1,
-        async (boardId) => {
-          await new Promise(r => setTimeout(r, 200));
-          return CellValues.findAll({
-            filters: { boardId, columnId: estadoColByBoard.get(boardId) } as any,
-            limit: 2000,
-            fields: ['rowId', 'textValue'],
-          }).then(r => r.records);
-        },
-      );
-      for (const cells of statusCellResults) {
-        for (const cell of cells) {
-          if (cell.rowId && cell.textValue && dynamicAssignedTaskIds.has(cell.rowId)) {
-            dynamicTaskStatus.set(cell.rowId, cell.textValue);
-          }
+    for (const { boardId, estadoColId, statusOptions, cells } of perBoardResults) {
+      if (!estadoColId) continue;
+      if (statusOptions.length > 0) statusOptionsByBoard.set(boardId, statusOptions);
+      for (const cell of cells) {
+        if (cell.rowId && cell.textValue && dynamicAssignedTaskIds.has(cell.rowId)) {
+          dynamicTaskStatus.set(cell.rowId, cell.textValue);
         }
       }
     }

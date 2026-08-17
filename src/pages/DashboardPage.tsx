@@ -120,7 +120,10 @@ export default function DashboardPage() {
     }
   }, [user?.id, authLoading, isRecruitment]);
 
-  // Fetch invoice data — delayed 3s so it doesn't burst alongside getDashboardData
+  // Fetch invoice data — un pequeño margen (no 3s: getDashboardData ya no
+  // serializa su Fase 2/3 en el backend, así que el burst real es mucho
+  // menor que cuando se puso este retraso) para no arrancar en el mismo
+  // instante que getDashboardData.
   useEffect(() => {
     if (authLoading || !user?.id) return;
     const widgets = user.dashboardWidgets ?? [];
@@ -129,7 +132,7 @@ export default function DashboardPage() {
     setInvoiceLoading(true);
     const timer = setTimeout(() => {
       getInvoiceWidgetData({}).then(setInvoiceData).catch(console.error).finally(() => setInvoiceLoading(false));
-    }, 3000);
+    }, 800);
     return () => clearTimeout(timer);
   }, [user?.id, authLoading]);
 
