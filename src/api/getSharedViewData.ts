@@ -150,6 +150,7 @@ export default createEndpoint({
 
     // ── 4. Load board columns (consulta UUID + legacy, ver resolvedBoard arriba) ──
     let boardColMap: Record<string, string> = {};
+    let columnOrderMap: Record<string, number> = {};
     let allDynColIds: string[] = [];
     if (externalView.boardId) {
       const idsToTry = [...new Set(
@@ -171,7 +172,8 @@ export default createEndpoint({
 
       const activeCols = mergedBoardCols.filter(c => !c.deletedAt && c.columnType !== '__fillout_link__');
       boardColMap = Object.fromEntries(activeCols.map(c => [c.id, c.columnName ?? c.id]));
-      allDynColIds = activeCols.map(c => c.id);
+      columnOrderMap = Object.fromEntries(activeCols.map(c => [c.id, c.columnOrder ?? 0]));
+      allDynColIds = [...activeCols].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0)).map(c => c.id);
     }
 
     // ── 5. Compute visible columns ────────────────────────────────────────
@@ -189,6 +191,20 @@ export default createEndpoint({
         ? JSON.parse(externalView.visibleColumnsJson)
         : ['participantName', 'email', 'phone', 'status'];
     }
+
+    // El orden guardado (visibleColumnsJson, o el propio allDynColIds arriba)
+    // refleja el orden en que se marcaron los checkboxes al crear la vista, no
+    // el orden real de columnas del tablero — se reordena aquí para que la
+    // vista externa siempre calce con lo que ve el equipo interno.
+    const FIXED_ORDER = ['participantName', 'email', 'phone', 'idNumber', 'status'];
+    visibleColumns = [...visibleColumns].sort((a, b) => {
+      const aGroup = FIXED_KEYS.has(a) ? 0 : 1;
+      const bGroup = FIXED_KEYS.has(b) ? 0 : 1;
+      if (aGroup !== bGroup) return aGroup - bGroup;
+      return aGroup === 0
+        ? FIXED_ORDER.indexOf(a) - FIXED_ORDER.indexOf(b)
+        : (columnOrderMap[a] ?? 0) - (columnOrderMap[b] ?? 0);
+    });
 
     const visibleDynIds = visibleColumns.filter(id => !FIXED_KEYS.has(id));
 
