@@ -72,7 +72,10 @@ export default createEndpoint({
     const portalUrl = token ? `${appUrl}/portal/${token}` : '';
     const supplierEmail = supplier?.email ?? '';
     const supplierName = po.supplierName ?? supplier?.supplierName ?? '';
-    const contactName = supplier?.contactName ?? supplierName;
+    // `||`, no `??` — contactName puede venir guardado como '' (no null) para
+    // proveedores sin persona de contacto capturada; con `??` ese '' pasaba
+    // tal cual y el saludo del correo salía "Estimado/a :" vacío.
+    const contactName = supplier?.contactName || supplierName;
     const sendAsEmail = process.env.ZITE_OUTLOOK_SEND_AS_EMAIL?.trim() || undefined;
     const senderName = [context.user!.firstName, context.user!.lastName].filter(Boolean).join(' ') || context.user!.email;
     const senderEmail = sendAsEmail || context.user!.email;
