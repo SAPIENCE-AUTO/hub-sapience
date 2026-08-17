@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, Cotizaciones } from '../../server/compat';
+import { getCotizacionAllowedDealIds } from '../lib/cotizacionAccess';
 
 const CotizOut = z.object({
   id: z.string(),
@@ -11,6 +12,7 @@ const CotizOut = z.object({
   clientPrice: z.number().optional(),
   notes: z.string().optional(),
   included: z.boolean().optional(),
+  restricted: z.boolean().optional(),
 });
 
 export default createEndpoint({
@@ -18,10 +20,20 @@ export default createEndpoint({
   description: 'Get cotizaciones for a deal',
   inputSchema: z.object({ dealId: z.string() }),
   outputSchema: z.object({ cotizaciones: z.array(CotizOut) }),
-  execute: async ({ input }) => {
+  execute: async ({ input, context }) => {
     const result = await Cotizaciones.findAll({
       filters: { deal: { contains: input.dealId } },
     });
+
+    // Restricción puntual (ver src/lib/cotizacionAccess.ts): si el deal
+    // actual no está en su lista permitida, regresa placeholders sin datos
+    // reales — el frontend los pinta como skeleton en vez de la tarjeta real,
+    // sin revelar cuántas cotizaciones hay ni qué contienen.
+    const allowed = getCotizacionAllowedDealIds(context.user?.email);
+    if (allowed && !allowed.has(input.dealId)) {
+      return { cotizaciones: result.records.map(c => ({ id: c.id, restricted: true })) };
+    }
+
     return {
       cotizaciones: result.records.map(c => ({
         id: c.id,

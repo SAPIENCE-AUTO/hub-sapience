@@ -746,6 +746,7 @@ create table cotizaciones (
   client_price                  numeric(14,2),
   notes                         text,
   included                      boolean,
+  created_by_id                 uuid references users(id) on delete set null,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now(),
   constraint cotizaciones_status_chk check ("status" is null or "status" in ('Borrador', 'Enviada', 'Aprobada', 'Rechazada')),

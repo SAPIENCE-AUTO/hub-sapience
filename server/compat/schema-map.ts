@@ -549,6 +549,7 @@ export const SCHEMA: Record<string, TableDef> = {
       clientPrice: { col: 'client_price', kind: 'number' },
       notes: { col: 'notes', kind: 'text' },
       included: { col: 'included', kind: 'boolean' },
+      createdBy: { col: 'created_by_id', kind: 'link', target: 'users' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },

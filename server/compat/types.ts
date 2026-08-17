@@ -487,6 +487,7 @@ export interface CotizacionesRecordType {
   clientPrice?: number;
   notes?: string;
   included?: boolean;
+  createdBy?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

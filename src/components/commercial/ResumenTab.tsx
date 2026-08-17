@@ -47,6 +47,7 @@ export default function ResumenTab({ deal }: { deal: Deal }) {
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cotizaciones</h4>
         <div className="space-y-1.5">
           {cotizaciones.map(c => {
+            if (c.restricted) return <Skeleton key={c.id} className="h-9 w-full rounded-lg" />;
             const color = COTIZ_STATUS_COLORS[c.status ?? ''] ?? 'hsl(var(--muted-foreground))';
             const csym = getCurrencySymbol(c.currency ?? deal.currency);
             return (

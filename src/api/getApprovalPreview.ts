@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, Deals, Cotizaciones, CotizacionLineItems, Users, ZiteError } from '../../server/compat';
+import { getCotizacionAllowedDealIds } from '../lib/cotizacionAccess';
 
 const RUBROS_ORDER = [
   'Reclutamiento e incentivos',
@@ -29,9 +30,17 @@ export default createEndpoint({
     })),
     currency: z.string(),
   }),
-  execute: async ({ input }) => {
+  execute: async ({ input, context }) => {
     const deal = await Deals.findOne({ id: input.dealId });
     if (!deal) throw new ZiteError({ code: 'NOT_FOUND', message: 'Deal no encontrado' });
+
+    // Restricción puntual (ver src/lib/cotizacionAccess.ts) — el preview de
+    // aprobación expone montos y rubros reales de cualquier deal, así que
+    // necesita el mismo candado que getCotizaciones.ts/getCotizacionLineItems.ts.
+    const allowed = getCotizacionAllowedDealIds(context.user?.email);
+    if (allowed && !allowed.has(input.dealId)) {
+      return { rubros: [], currency: (deal.currency ?? 'MXN').replace(/ 🇲🇽| 🇺🇸| 🇪🇺/g, '').trim() };
+    }
 
     // Get included cotizaciones
     const { records: allCots } = await Cotizaciones.findAll({

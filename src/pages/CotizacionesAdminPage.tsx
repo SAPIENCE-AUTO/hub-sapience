@@ -310,13 +310,17 @@ export default function CotizacionesAdminPage() {
                 </tr>
               ) : (
                 filtered.map(c => (
-                  <CotizRow
-                    key={c.id}
-                    cotiz={c}
-                    deals={data?.dealsList ?? []}
-                    onLinked={load}
-                    onToggleIncluded={handleToggleIncluded}
-                  />
+                  c.restricted ? (
+                    <tr key={c.id}><td colSpan={7} className="px-4 py-3"><Skeleton className="h-5 w-full" /></td></tr>
+                  ) : (
+                    <CotizRow
+                      key={c.id}
+                      cotiz={c}
+                      deals={data?.dealsList ?? []}
+                      onLinked={load}
+                      onToggleIncluded={handleToggleIncluded}
+                    />
+                  )
                 ))
               )}
             </tbody>

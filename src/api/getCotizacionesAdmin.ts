@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, Cotizaciones, Deals } from '../../server/compat';
+import { getCotizacionAllowedDealIds } from '../lib/cotizacionAccess';
 
 export default createEndpoint({
   authenticated: true,
@@ -16,10 +17,11 @@ export default createEndpoint({
       included: z.boolean(),
       dealId: z.string().nullable(),
       dealName: z.string().nullable(),
+      restricted: z.boolean().optional(),
     })),
     dealsList: z.array(z.object({ id: z.string(), dealName: z.string() })),
   }),
-  execute: async () => {
+  execute: async ({ context }) => {
     const [{ records: cotizRecords }, { records: dealRecords }] = await Promise.all([
       Cotizaciones.findAll({ limit: 2000 }),
       Deals.findAll({ fields: ['dealName'], limit: 2000 }),
@@ -28,8 +30,20 @@ export default createEndpoint({
     const dealsById: Record<string, string> = {};
     for (const d of dealRecords) dealsById[d.id] = d.dealName ?? '';
 
+    // Restricción puntual (ver src/lib/cotizacionAccess.ts): la tabla
+    // conserva el mismo número de filas para todos — solo cambia si cada
+    // fila trae datos reales o un placeholder que el frontend pinta como
+    // skeleton, así ella no puede inferir nada de lo que falta.
+    const allowed = getCotizacionAllowedDealIds(context.user?.email);
+
     const cotizaciones = cotizRecords.map(c => {
       const dealId = Array.isArray(c.deal) ? (c.deal[0] ?? null) : (c.deal ?? null);
+      if (allowed && !(dealId && allowed.has(dealId))) {
+        return {
+          id: c.id, cotizacionName: '', currency: 'MXN', totalCost: null, clientPrice: null,
+          status: 'Borrador', included: false, dealId: null, dealName: null, restricted: true,
+        };
+      }
       return {
         id: c.id,
         cotizacionName: c.cotizacionName ?? '',

@@ -227,6 +227,7 @@ export default function CotizacionesTab({ dealId, dealCurrency, dealClientPrice,
 
       <div className="space-y-2">
         {cotizaciones.map(c => {
+          if (c.restricted) return <Skeleton key={c.id} className="h-20 w-full rounded-xl" />;
           const color = COTIZ_STATUS_COLORS[c.status ?? ''] ?? 'hsl(var(--muted-foreground))';
           const sym = getCurrencySymbol(c.currency ?? dealCurrency);
           const isApproved = c.status === 'Aprobada';
