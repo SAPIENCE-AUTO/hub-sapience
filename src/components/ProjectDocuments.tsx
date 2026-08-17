@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, FileText, RefreshCw, FolderOpen, FileSpreadsheet, Presentation, Image as ImageIcon, File as FileIcon, ChevronDown, MessageSquarePlus, Copy } from 'lucide-react';
+import { ExternalLink, FileText, RefreshCw, FolderOpen, FileSpreadsheet, Presentation, Image as ImageIcon, File as FileIcon, ChevronDown, MessageSquarePlus, Copy, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,15 +28,33 @@ function fileIconFor(name: string) {
   return FileIcon;
 }
 
+// Genera (o reusa) el link de compartir vía Graph — mismo llamado que ya
+// usaba "Copiar link", ahora también detrás de "Enviar por mail" para que el
+// link que llega al correo sea uno que el destinatario de verdad pueda abrir,
+// no el webUrl interno crudo (ese requiere que ya tenga acceso al item).
+async function getShareUrl(driveId: string, itemId: string): Promise<{ url: string; scope: 'anonymous' | 'organization' }> {
+  return getProjectTeamsFileLink({ driveId, itemId });
+}
+
+// mailto: abre el cliente de correo que el usuario tenga configurado por
+// default (Outlook, en esta organización) con el link ya armado en el
+// cuerpo — el usuario revisa destinatarios y da enviar, la app nunca manda
+// el correo por su cuenta.
+function openMailWithLink(subject: string, bodyLines: string[]) {
+  const params = new URLSearchParams({ subject, body: bodyLines.join('\n') });
+  window.location.href = `mailto:?${params.toString().replace(/\+/g, '%20')}`;
+}
+
 function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string }) {
   const Icon = fileIconFor(file.name);
   const [copying, setCopying] = useState(false);
+  const [mailing, setMailing] = useState(false);
 
   const copyLink = async () => {
     if (!driveId) return;
     setCopying(true);
     try {
-      const res = await getProjectTeamsFileLink({ driveId, itemId: file.id });
+      const res = await getShareUrl(driveId, file.id);
       // Solo texto plano pega la URL cruda en Outlook/Word. Teams copia
       // también una versión HTML (un <a> con el nombre del archivo como
       // texto) — es esa versión la que Outlook detecta al pegar y muestra
@@ -62,6 +80,19 @@ function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string })
     }
   };
 
+  const mailLink = async () => {
+    if (!driveId) return;
+    setMailing(true);
+    try {
+      const res = await getShareUrl(driveId, file.id);
+      openMailWithLink(file.name, [file.name, res.url]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo generar el link');
+    } finally {
+      setMailing(false);
+    }
+  };
+
   return (
     <div className="flex items-center gap-3 py-3 px-4 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors group">
       <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -79,6 +110,9 @@ function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string })
         <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Copiar link para compartir" disabled={copying || !driveId} onClick={copyLink}>
           <Copy className="w-3.5 h-3.5" />
         </Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Enviar por mail" disabled={mailing || !driveId} onClick={mailLink}>
+          <Mail className="w-3.5 h-3.5" />
+        </Button>
       </div>
     </div>
   );
@@ -86,17 +120,64 @@ function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string })
 
 function TeamsFolderSection({ folder, driveId }: { folder: TeamsFolder; driveId?: string }) {
   const [open, setOpen] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [mailing, setMailing] = useState(false);
+
+  const copyLink = async () => {
+    if (!driveId) return;
+    setCopying(true);
+    try {
+      const res = await getShareUrl(driveId, folder.id);
+      await navigator.clipboard.writeText(res.url);
+      toast.success(res.scope === 'anonymous' ? 'Link público copiado' : 'Link copiado (solo visible para el equipo de Sapience)');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo generar el link');
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  const mailLink = async () => {
+    if (!driveId) return;
+    setMailing(true);
+    try {
+      const res = await getShareUrl(driveId, folder.id);
+      openMailWithLink(folder.name, [folder.name, res.url]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo generar el link');
+    } finally {
+      setMailing(false);
+    }
+  };
+
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border rounded-xl overflow-hidden border-[#027495]/25">
-      <CollapsibleTrigger asChild>
-        <button className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-[#0F3D4C] hover:bg-[#0A2F3B] transition-colors text-left">
-          <FolderOpen className="w-4 h-4 text-white/80 flex-shrink-0" />
-          <span className="text-sm font-semibold text-white">{folder.name}</span>
-          <span className="text-xs text-white/60">({folder.files.length})</span>
-          <span className="ml-auto text-[11px] text-white/50 uppercase tracking-wide">Teams</span>
-          <ChevronDown className={`w-4 h-4 text-white/70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-        </button>
-      </CollapsibleTrigger>
+      <div className="flex items-center gap-2.5 px-4 py-2.5 bg-[#0F3D4C] hover:bg-[#0A2F3B] transition-colors">
+        <CollapsibleTrigger asChild>
+          <button className="flex items-center gap-2.5 min-w-0 flex-1 text-left">
+            <FolderOpen className="w-4 h-4 text-white/80 flex-shrink-0" />
+            <span className="text-sm font-semibold text-white truncate">{folder.name}</span>
+            <span className="text-xs text-white/60 flex-shrink-0">({folder.files.length})</span>
+          </button>
+        </CollapsibleTrigger>
+        <span className="text-[11px] text-white/50 uppercase tracking-wide flex-shrink-0 hidden sm:inline">Teams</span>
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-white/70 hover:text-white hover:bg-white/10" title="Abrir carpeta" onClick={() => window.open(folder.webUrl, '_blank', 'noopener,noreferrer')}>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-white/70 hover:text-white hover:bg-white/10" title="Copiar link para compartir" disabled={copying || !driveId} onClick={copyLink}>
+            <Copy className="w-3.5 h-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-white/70 hover:text-white hover:bg-white/10" title="Enviar por mail" disabled={mailing || !driveId} onClick={mailLink}>
+            <Mail className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+        <CollapsibleTrigger asChild>
+          <button className="flex-shrink-0" title={open ? 'Colapsar' : 'Expandir'}>
+            <ChevronDown className={`w-4 h-4 text-white/70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+          </button>
+        </CollapsibleTrigger>
+      </div>
       <CollapsibleContent>
         <div className="p-2">
           {folder.files.length === 0 ? (

@@ -54,7 +54,7 @@ export default createEndpoint({
   outputSchema: z.object({
     linked: z.boolean(),
     driveId: z.string().optional(),
-    folders: z.array(z.object({ name: z.string(), files: z.array(FileOut) })),
+    folders: z.array(z.object({ id: z.string(), name: z.string(), webUrl: z.string(), files: z.array(FileOut) })),
     looseFiles: z.array(FileOut),
     error: z.string().optional(),
   }),
@@ -97,7 +97,7 @@ export default createEndpoint({
       const folders = await Promise.all(
         subfolders.map(async (f) => {
           const children = await listChildren(driveId, f.id);
-          return { name: f.name, files: children.filter((it) => !it.folder).map(toFileOut) };
+          return { id: f.id, name: f.name, webUrl: f.webUrl, files: children.filter((it) => !it.folder).map(toFileOut) };
         }),
       );
 
