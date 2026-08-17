@@ -161,7 +161,7 @@ function TableRow({ row, idx, visibleCols, dynCols }: {
   return (
     <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors h-12">
       <td
-        className="px-4 text-xs text-muted-foreground/50 tabular-nums overflow-hidden bg-card group-hover:bg-muted/30"
+        className="px-4 text-xs text-muted-foreground/50 tabular-nums overflow-hidden bg-card group-hover:bg-[color-mix(in_srgb,hsl(var(--muted))_30%,hsl(var(--card)))]"
         style={{ position: 'sticky', left: 0, zIndex: 5, width: IDX_COL_WIDTH, minWidth: IDX_COL_WIDTH }}
       >
         {idx}
@@ -174,7 +174,7 @@ function TableRow({ row, idx, visibleCols, dynCols }: {
         return (
           <td
             key={col}
-            className={`px-4 overflow-hidden${isFrozenName ? ' bg-card group-hover:bg-muted/30 border-r border-border/40' : ''}`}
+            className={`px-4 overflow-hidden${isFrozenName ? ' bg-card group-hover:bg-[color-mix(in_srgb,hsl(var(--muted))_30%,hsl(var(--card)))] border-r border-border/40' : ''}`}
             style={isFrozenName ? { position: 'sticky', left: IDX_COL_WIDTH, zIndex: 5, width: NAME_COL_WIDTH, minWidth: NAME_COL_WIDTH } : undefined}
           >
             <div className="whitespace-normal break-words min-w-[120px]">

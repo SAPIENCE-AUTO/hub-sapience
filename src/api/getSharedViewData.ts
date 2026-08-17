@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { createEndpoint, SharedViews, RecruitmentRows, BoardColumns, CellValues, CalendarEvents, Boards } from '../../server/compat';
+import { createEndpoint, SharedViews, RecruitmentRows, BoardColumns, CellValues, CalendarEvents } from '../../server/compat';
+import { resolveBoardId } from '../serverUtils/resolveBoardId';
 
 type FilterRule = {
   id: string;
@@ -88,6 +89,20 @@ export default createEndpoint({
     const externalView = await SharedViews.findOne({ filters: { token: input.token } });
     if (!externalView || !externalView.active) return { found: false };
 
+    // board_columns/cell_values pueden tener residuo sin migrar bajo el ID
+    // legacy incluso cuando el board ya tiene UUID real (ver CLAUDE.md §6,
+    // "prefijos recruitment-/cal-/pm-/events- pueden aparecer migrados o no").
+    // resolveBoardId calcula ambas formas sin importar cuál trae guardada la
+    // vista — se usa en todo el endpoint para no perder datos de un lado.
+    const resolvedBoard = externalView.boardId
+      ? await resolveBoardId({
+          boardIdOrKey: externalView.boardId,
+          projectCode: externalView.projectCode ?? undefined,
+          boardName: externalView.boardName ?? undefined,
+          fallbackToLegacy: true,
+        }).catch(() => null)
+      : null;
+
     // ── 2. Try to load the linked internal view for live filters ──────────
     // The internal view has sharedToken = this external view's token
     let filtersData: {
@@ -133,43 +148,20 @@ export default createEndpoint({
     const legacySelectedGroupIds: string[] = filtersData.selectedGroups ?? [];
     const legacyShowNoGroup: boolean = filtersData.showNoGroup ?? true;
 
-    // ── 3b. Resolve board UUID for legacy boardIds ──────────────────────────
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    let resolvedBoardUuid: string | null = null;
-    if (externalView.boardId && !UUID_RE.test(externalView.boardId)) {
-      // Legacy composite boardId — resolve to UUID via Boards table
-      // Use findAll instead of findOne to handle duplicate deleted boards with the same name
-      if (externalView.projectCode && externalView.boardName) {
-        const { records: boardCandidates } = await Boards.findAll({
-          filters: { projectCode: externalView.projectCode, boardName: externalView.boardName },
-          limit: 10,
-        });
-        const activeBoard = boardCandidates.find(b => !b.deletedAt);
-        if (activeBoard) {
-          resolvedBoardUuid = activeBoard.id;
-        }
-      }
-    }
-
-    // ── 4. Load board columns ─────────────────────────────────────────────
+    // ── 4. Load board columns (consulta UUID + legacy, ver resolvedBoard arriba) ──
     let boardColMap: Record<string, string> = {};
     let allDynColIds: string[] = [];
     if (externalView.boardId) {
-      const { records: boardCols } = await BoardColumns.findAll({
-        filters: { boardId: externalView.boardId },
-        limit: 500,
-      });
+      const idsToTry = [...new Set(
+        [externalView.boardId, resolvedBoard?.baseBoardId, resolvedBoard?.legacyBaseId].filter((x): x is string => !!x)
+      )];
 
-      // Also fetch from UUID boardId if it differs (legacy external views store
-      // the composite boardId but columns may only exist under the UUID after migration)
-      let mergedBoardCols = [...boardCols];
-      if (resolvedBoardUuid && resolvedBoardUuid !== externalView.boardId) {
-        const { records: uuidBoardCols } = await BoardColumns.findAll({
-          filters: { boardId: resolvedBoardUuid },
-          limit: 500,
-        });
-        const seenIds = new Set(mergedBoardCols.map(c => c.id));
-        for (const c of uuidBoardCols) {
+      const { records: boardCols } = await BoardColumns.findAll({ filters: { boardId: idsToTry[0] }, limit: 500 });
+      const mergedBoardCols = [...boardCols];
+      const seenIds = new Set(mergedBoardCols.map(c => c.id));
+      for (const bid of idsToTry.slice(1)) {
+        const { records: extra } = await BoardColumns.findAll({ filters: { boardId: bid }, limit: 500 });
+        for (const c of extra) {
           if (!seenIds.has(c.id)) {
             mergedBoardCols.push(c);
             seenIds.add(c.id);
@@ -212,9 +204,9 @@ export default createEndpoint({
       // Also fetch from UUID boardId if it differs (legacy external views store the composite boardId
       // but group columns may only exist under the UUID boardId after migration)
       let mergedGroupCols = [...groupCols];
-      if (resolvedBoardUuid && resolvedBoardUuid !== externalView.boardId) {
+      if (resolvedBoard?.baseBoardId && resolvedBoard.baseBoardId !== externalView.boardId) {
         const { records: uuidGroupCols } = await BoardColumns.findAll({
-          filters: { boardId: `${resolvedBoardUuid}::groups` },
+          filters: { boardId: `${resolvedBoard.baseBoardId}::groups` },
           limit: 500,
         });
         // Merge, deduplicating by id (UUID results fill gaps)
@@ -349,7 +341,7 @@ export default createEndpoint({
     };
 
     // Primary path: query by boardId UUID (matches how internal views work)
-    const effectiveBoardUuid = resolvedBoardUuid ?? (externalView.boardId && UUID_RE.test(externalView.boardId) ? externalView.boardId : null);
+    const effectiveBoardUuid = resolvedBoard?.baseBoardId ?? null;
     if (effectiveBoardUuid) {
       let recOffset = 0;
       let recHasMore = true;
@@ -447,8 +439,8 @@ export default createEndpoint({
 
       // Collect boardIds to search for group cells (legacy + UUID if resolved)
       const groupBoardIds = [`${externalView.boardId}::groups`];
-      if (resolvedBoardUuid && resolvedBoardUuid !== externalView.boardId) {
-        groupBoardIds.push(`${resolvedBoardUuid}::groups`);
+      if (resolvedBoard?.baseBoardId && resolvedBoard.baseBoardId !== externalView.boardId) {
+        groupBoardIds.push(`${resolvedBoard.baseBoardId}::groups`);
       }
       // Also include the legacy composite boardId for group cells (covers
       // boards like NARANJA where groups weren't migrated to UUID)
