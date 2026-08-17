@@ -51,7 +51,7 @@ async function createChannelFolders(teamId: string, channelId: string) {
 
 export default createEndpoint({
   authenticated: true,
-  description: 'Creates a new Teams channel via n8n webhook or links an existing one to a project',
+  description: 'Creates a new Teams channel directly via Microsoft Graph (with its standard folders) or links an existing one to a project',
   inputSchema: z.object({
     projectCode: z.string(),
     mode: z.enum(['create', 'link']),
@@ -72,38 +72,33 @@ export default createEndpoint({
 
     if (input.mode === 'create') {
       if (!input.channelName) throw new Error('channelName is required for create mode');
+      if (!input.teamId) throw new Error('teamId is required for create mode');
 
-      // Use n8n webhook to create the channel (Graph API requires Channel.Create scope not available)
-      const webhookUrl = process.env.ZITE_N8N_TEAMS_WEBHOOK_URL ?? '';
-      if (!webhookUrl) throw new Error('Teams webhook URL not configured');
-
-      const res = await fetch(webhookUrl, {
+      // Creación directa vía Graph — hasta agosto 2026 esto pasaba por un
+      // webhook de n8n porque el registro de la app en Azure no tenía
+      // ChannelSettings.ReadWrite.All. Ya se concedió ese permiso (aplicación,
+      // con consentimiento de admin), así que ya no hace falta el intermediario.
+      const createRes = await graphFetch(`https://graph.microsoft.com/v1.0/teams/${input.teamId}/channels`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          channelName: input.channelName,
-          channelDescription: project.tematica ?? '',
+          displayName: input.channelName,
+          description: project.tematica ?? '',
+          membershipType: 'standard',
         }),
       });
 
-      if (!res.ok) throw new Error(`Webhook responded with ${res.status}`);
-
-      let parsed: unknown = {};
-      try { parsed = await res.json(); } catch { /* not JSON */ }
-      const body = (Array.isArray(parsed) ? parsed[0] : parsed) as { status?: string; channelUrl?: string; channelId?: string };
-
-      console.log('Teams webhook response:', JSON.stringify(body));
-
-      const url = body.status === 'success' ? body.channelUrl : null;
-      if (!url) throw new Error('El webhook no devolvió una URL de canal válida');
-      channelUrl = url;
-
-      // If webhook returns the channel ID, create folders via Graph API
-      if (body.channelId && input.teamId) {
-        createChannelFolders(input.teamId, body.channelId).catch(e =>
-          console.log('createChannelFolders error:', e)
-        );
+      if (!createRes.ok) {
+        const err = await createRes.text();
+        throw new Error(`No se pudo crear el canal en Teams (${createRes.status}): ${err}`);
       }
+
+      const channel = await createRes.json() as { id: string; webUrl?: string };
+      if (!channel.webUrl) throw new Error('Graph no devolvió una URL para el canal creado');
+      channelUrl = channel.webUrl;
+
+      createChannelFolders(input.teamId, channel.id).catch(e =>
+        console.log('createChannelFolders error:', e)
+      );
     } else {
       if (!input.channelUrl) throw new Error('channelUrl is required for link mode');
       channelUrl = input.channelUrl;

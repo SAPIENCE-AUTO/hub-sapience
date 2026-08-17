@@ -68,8 +68,11 @@ services:
         sync: false
       - key: ZITE_N8N_TIMELINE_WEBHOOK_URL
         sync: false
-      - key: ZITE_N8N_TEAMS_WEBHOOK_URL
-        sync: false
+      # ZITE_N8N_TEAMS_WEBHOOK_URL ya no se usa — createTeamsChannel.ts crea
+      # el canal directo vía Graph desde que se concedió el permiso de
+      # aplicación ChannelSettings.ReadWrite.All (agosto 2026). El valor
+      # puede seguir en el dashboard de Render sin problema si no se borra
+      # a mano; esta entrada solo deja de declararlo como necesario aquí.
       - key: STRICT_OUTPUT
         value: "true"
       # Render usa contenedores distintos para build y runtime: el default de

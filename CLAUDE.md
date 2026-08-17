@@ -174,13 +174,21 @@ Configuradas en `zite.config.json`:
 
 ### n8n como capa de automatización
 
-Cinco webhooks de n8n hacen el trabajo pesado fuera de la app:
+Cuatro webhooks de n8n hacen el trabajo pesado fuera de la app:
 
 - `ZITE_N8N_ODC_WEBHOOK_URL` — genera PDFs y envía correos de **Órdenes de Compra**
 - `ZITE_N8N_CALENDAR_WEBHOOK_URL` — genera Excel de calendarios y lo sube a **SharePoint**
 - `ZITE_N8N_TIMELINE_WEBHOOK_URL` — crea/actualiza timelines en Excel
-- `ZITE_N8N_TEAMS_WEBHOOK_URL` — crea canales de Teams
 - `ZITE_N8N_OUTLOOK_WEBHOOK_URL` — crea/actualiza/cancela eventos de Outlook
+
+**`ZITE_N8N_TEAMS_WEBHOOK_URL` ya no se usa** (agosto 2026) — la creación de
+canales de Teams migró a una llamada directa a Microsoft Graph
+(`createTeamsChannel.ts`) en cuanto se concedió el permiso de aplicación
+`ChannelSettings.ReadWrite.All` (antes solo se tenían `Calendars.ReadWrite.All`,
+`Files.ReadWrite.All`, `Group.ReadWrite.All` y `Mail.Send`). De paso se corrigió
+un bug real: el código creaba las 7 carpetas del canal vía Graph **además** de
+lo que ya hacía el flujo de n8n, duplicándolas (14 en vez de 7) — con un solo
+mecanismo de creación, el bug desaparece junto con la dependencia de n8n.
 
 ⚠️ **Los flujos de n8n no están en este export.** Son dependencia externa: si se migra la app,
 hay que exportarlos aparte o reimplementar esa lógica.
