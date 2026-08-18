@@ -367,6 +367,13 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   const visibleBadgeCount = 3 - ['_dupBoard', '_dupHistory', '_dupRisk'].filter(k => hiddenColumns.has(k)).length;
   // 2 always-visible (checkbox + name) + visible badge cols + visible fixed cols + visible dyn cols + 1 trailing
   const totalCols = 3 + visibleBadgeCount + visibleFixedCount + visibleDynCols.length;
+  // Clave por id (no solo .length) para el efecto de virtualización de abajo:
+  // addColumn() muestra la columna nueva primero con un id temporal (temp-col-…)
+  // y lo cambia por el id real unos cientos de ms después, sin que cambie la
+  // CANTIDAD de columnas — con solo .length como dependencia, el Set de
+  // "visibles" se quedaba con el id viejo (temp-col-…) hasta el siguiente
+  // scroll real, y la columna nueva nunca hacía match con su id ya actualizado.
+  const visibleDynColsKey = visibleDynCols.map(c => c.id).join('|');
 
   // ── Horizontal column virtualization ──────────────────────────────────────
   // ≤ 30 visible dynamic columns → disable virtualization entirely (render all).
@@ -439,7 +446,7 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
       if (colVisRafRef.current !== null) { cancelAnimationFrame(colVisRafRef.current); colVisRafRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleDynCols.length, nameCol.width, dupBoardColW.width, dupHistoryColW.width, dupRiskColW.width, emailColW.width, phoneColW.width, idNumColW.width, statusColW.width, ndaColW.width, hiddenColumns]);
+  }, [visibleDynColsKey, nameCol.width, dupBoardColW.width, dupHistoryColW.width, dupRiskColW.width, emailColW.width, phoneColW.width, idNumColW.width, statusColW.width, ndaColW.width, hiddenColumns]);
 
   // ── Vertical virtualization: compute which Sin grupo rows are in-viewport ──
   const computeNoneVirtRange = useCallback(() => {

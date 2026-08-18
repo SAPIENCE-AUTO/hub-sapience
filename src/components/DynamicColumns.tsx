@@ -1487,6 +1487,23 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
     dynCols.addColumn(form.name.trim(), form.type, optionsJson, insertAt).catch(() => {});
     resetForm();
     setOpenAdd(false);
+
+    // Auto-scroll hacia la columna recién creada. En tableros con muchas
+    // columnas (virtualización horizontal activa, ver RecruitmentPage.tsx)
+    // una columna nueva puede caer fuera del área ya renderizada y mostrarse
+    // como un placeholder invisible hasta que alguien scrollee manualmente
+    // hasta ahí — nadie sabía que hacía falta, y parecía que la columna
+    // "no aparecía". El placeholder sí preserva su posición real (ancho de
+    // <colgroup>), así que scrollIntoView funciona aunque todavía no se
+    // haya renderizado el contenido real.
+    requestAnimationFrame(() => {
+      const sorted = [...dynColsRef.current.columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0));
+      const idx = insertAt ?? sorted.length - 1;
+      const target = sorted[idx];
+      if (!target) return;
+      document.querySelector(`[data-dyn-col-id="${target.id}"]`)
+        ?.scrollIntoView({ inline: 'end', block: 'nearest', behavior: 'smooth' });
+    });
   };
 
   const handleRename = async () => {
@@ -2144,18 +2161,26 @@ export const DynamicColumnCells = memo(function DynamicColumnCells({ rowId, dynC
             suggestions={colUniqueValues && ['Texto', 'Email', 'Teléfono'].includes(col.columnType ?? '') ? colUniqueValues(col.id) : undefined}
           />
         );
+        const isCheckbox = col.columnType === 'Checkbox';
+        // El checkbox se envuelve en un contenedor flex propio en vez de
+        // volver flex al <td>/<div> de la celda — hacer flex la celda misma
+        // le quita su comportamiento de table-cell (rompe el ancho compartido
+        // vía <colgroup> en la tabla real).
+        const centeredContent = isCheckbox
+          ? <div className="flex items-center justify-center w-full h-full">{cellContent}</div>
+          : cellContent;
         if (asDiv) {
           return (
             <div key={col.id}
               className={`px-2 py-0 h-9 overflow-hidden border-l border-border/30 flex items-center ${col.columnType === 'Status' ? 'bg-card' : 'bg-accent/5'}`}>
-              {cellContent}
+              {centeredContent}
             </div>
           );
         }
         return (
           <td key={col.id}
             className={`px-2 py-0 h-9 overflow-hidden border-l border-b border-border/30 ${col.columnType === 'Status' ? 'bg-card' : 'bg-accent/5'}`}>
-            {cellContent}
+            {centeredContent}
           </td>
         );
       })}
