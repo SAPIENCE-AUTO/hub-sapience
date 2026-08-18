@@ -663,7 +663,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
             <col style={{ width: 96 }} />
             <col style={{ width: 90 }} />
             <col style={{ width: 44 }} />
-            {dynCols.columns.filter(c => visibleColIds.has(c.id)).map(c => { const w = dynCols.getColWidth(c.id); return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
+            {[...dynCols.columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0)).filter(c => visibleColIds.has(c.id)).map(c => { const w = dynCols.getColWidth(c.id); return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
             <col />
           </colgroup>
           <thead className="bg-muted sticky top-0 z-30">

@@ -603,7 +603,18 @@ export function useDynamicColumns(boardId: string, seedRows?: SeedRow[], options
   const addColumn = (columnName: string, columnType: string, optionsJson?: string, atIndex?: number): Promise<string> => {
     const snapshot = [...columns];
     const sorted = [...columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0));
-    const insertAt = atIndex !== undefined ? atIndex : sorted.length;
+    // `atIndex` es una posición visual (0-based) en la lista ordenada, no un
+    // columnOrder crudo — usarlo directo como columnOrder (o `sorted.length`
+    // para "agregar al final") solo es correcto si los columnOrder existentes
+    // ya son una secuencia contigua 0..N-1. Los tableros de calendario y
+    // timeline se siembran con columnOrder muy separado (500, 1000, 1500...,
+    // ver calendarDefaults.ts/timelineDefaults.ts), así que una columna nueva
+    // con columnOrder=12 terminaba ANTES que las 12 existentes — se veía "al
+    // inicio" en vez de al final. Se calcula el columnOrder real a partir del
+    // vecino anterior en la lista, no del índice ni de `sorted.length`.
+    const index = atIndex !== undefined ? Math.min(Math.max(atIndex, 0), sorted.length) : sorted.length;
+    const prevCol = index > 0 ? sorted[index - 1] : undefined;
+    const insertAt = prevCol ? (prevCol.columnOrder ?? index - 1) + 1 : 0;
     const toShift = sorted.filter(c => (c.columnOrder ?? 0) >= insertAt);
 
     // 1. Build optimistic column list and update state immediately
