@@ -65,7 +65,13 @@ export function ProjectHubLanding({ projectCode, canSeeBudget, onOpenTab, onOpen
     getRecruitmentSummary({ projectCode }).then(setRecruitment).catch(() => setRecruitment({ totalParticipants: 0, boards: [] }));
 
     getTasks({ projectCode, only: 'events' }).then(d => {
-      const sorted = [...(d.calendarEvents ?? [])].sort((a, b) => (a.eventDate ?? '').localeCompare(b.eventDate ?? ''));
+      // El widget del home es un resumen de "qué sigue" — las sesiones
+      // marcadas "[ARCHIVED]" (convención manual del equipo, no un campo del
+      // schema) siguen viviendo en Calendario/Actividades para historial,
+      // pero aquí solo confunden ("52 sesiones" contando cosas archivadas).
+      const sorted = [...(d.calendarEvents ?? [])]
+        .filter(e => !/^\s*\[archived\]/i.test(e.eventName ?? ''))
+        .sort((a, b) => (a.eventDate ?? '').localeCompare(b.eventDate ?? ''));
       setEvents(sorted);
     }).catch(() => setEvents([]));
 

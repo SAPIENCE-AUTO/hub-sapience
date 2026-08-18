@@ -78,6 +78,15 @@ export default createEndpoint({
 
       const groups = activeGroupCols.map(c => ({ name: c.columnName as string, count: tally.get(c.columnName as string) ?? 0 }));
 
+      // El tablero real (RecruitmentPage.tsx) siempre pinta una sección
+      // "Sin grupo" además de los grupos con nombre — se agrega aquí también
+      // para que el conteo del widget coincida con lo que el usuario ve al
+      // entrar al tablero (si no, un board con casi todo sin agrupar se ve
+      // como "solo 2 grupos" cuando en realidad son 3 secciones visibles).
+      const namedTotal = groups.reduce((n, g) => n + g.count, 0);
+      const sinGrupoCount = Math.max(0, activeRowIds.size - namedTotal);
+      if (sinGrupoCount > 0) groups.push({ name: 'Sin grupo', count: sinGrupoCount });
+
       boards.push({ boardName: board.boardName as string, totalParticipants: activeRowIds.size, groups });
       totalParticipants += activeRowIds.size;
     }
