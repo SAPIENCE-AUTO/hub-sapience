@@ -4,6 +4,7 @@ import { useProject } from '../../context/ProjectContext';
 import { GetDashboardDataOutputType } from 'zite-endpoints-sdk';
 import { Search, FolderOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { isActiveProjectStatus } from '../../lib/format';
 
 type Project = GetDashboardDataOutputType['myProjects'][0];
 
@@ -22,7 +23,7 @@ export default function ProjectCards({ projects }: { projects: Project[] }) {
   const [search, setSearch] = useState('');
 
   const filtered = projects.filter(p => {
-    if (tab === 'active' && p.status !== 'En curso') return false;
+    if (tab === 'active' && !isActiveProjectStatus(p.status)) return false;
     if (search) {
       const q = search.toLowerCase();
       return (

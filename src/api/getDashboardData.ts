@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, Projects, Tasks, CalendarEvents, Users, RecruitmentRows, PurchaseOrders, CellValues, BoardColumns, Boards } from '../../server/compat';
+import { isActiveProjectStatus } from '../lib/format';
 
 // ---------------------------------------------------------------------------
 // Module-level inflight deduplication (per user + input)
@@ -494,8 +495,8 @@ async function buildDashboard(
     completedTasks: projectTasks.filter(t => t.status === 'Completada').length,
     totalPOAmount: kpiPOs.reduce((s, p) => s + ((p as any).totalAmount ?? 0), 0),
     activeProjects: isGlobal
-      ? allProjects.filter(p => p.status === 'En curso').length
-      : myProjects.filter(p => p.status === 'En curso').length,
+      ? allProjects.filter(p => isActiveProjectStatus(p.status)).length
+      : myProjects.filter(p => isActiveProjectStatus(p.status)).length,
   };
 
   const msTotal = Date.now() - t0;

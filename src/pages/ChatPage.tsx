@@ -40,6 +40,7 @@ import { PollCard, parsePoll, type PollData } from '@/components/PollCard';
 import { TimelinePreviewDialog } from '@/components/TimelinePreviewDialog';
 import { toast } from 'sonner';
 import { parseReactions, parseAttachments, serializeReactions, serializeAttachments, type Reactions, type Attachment } from '../lib/chatJson';
+import { isActiveProjectStatus } from '../lib/format';
 
 type Message = GetMessagesOutputType['messages'][0];
 type TeamMember = GetTeamMembersOutputType['members'][0];
@@ -2539,8 +2540,8 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
 
   // Derived channel lists
   const projectChannels = useMemo(() => projectChannelsWithStatus.map(p => p.code), [projectChannelsWithStatus]);
-  const activeChannels = useMemo(() => projectChannelsWithStatus.filter(p => p.status === 'En curso').map(p => p.code), [projectChannelsWithStatus]);
-  const archivedChannels = useMemo(() => projectChannelsWithStatus.filter(p => p.status !== 'En curso').map(p => p.code), [projectChannelsWithStatus]);
+  const activeChannels = useMemo(() => projectChannelsWithStatus.filter(p => isActiveProjectStatus(p.status)).map(p => p.code), [projectChannelsWithStatus]);
+  const archivedChannels = useMemo(() => projectChannelsWithStatus.filter(p => !isActiveProjectStatus(p.status)).map(p => p.code), [projectChannelsWithStatus]);
 
   // Sorted purely by lastMessageAt DESC — like WhatsApp.
   // Unread/mention state is visual only (bold, badge) and does NOT affect position.
