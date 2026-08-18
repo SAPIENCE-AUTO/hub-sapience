@@ -331,6 +331,7 @@ export interface BoardsRecordType {
   calendarVersion?: number;
   calendarFileUrl?: string;
   timelineVersion?: number;
+  inviteTemplateJson?: string;
   createdAt?: string;
   updatedAt?: string;
 }

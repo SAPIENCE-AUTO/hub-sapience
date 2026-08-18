@@ -373,6 +373,7 @@ export const SCHEMA: Record<string, TableDef> = {
       calendarVersion: { col: 'calendar_version', kind: 'number' },
       calendarFileUrl: { col: 'calendar_file_url', kind: 'text' },
       timelineVersion: { col: 'timeline_version', kind: 'number' },
+      inviteTemplateJson: { col: 'invite_template_json', kind: 'text' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },

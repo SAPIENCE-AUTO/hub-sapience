@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, CalendarEvents, BoardColumns, CellValues, Boards } from '../../server/compat';
 import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
-
-const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/zite-uploads/branding/sapience-logo.png';
+import { addHours, formatWhenText, buildEmailHtml, parseInviteTemplate, type InviteSection } from '../serverUtils/inviteHtml';
 
 // Parse attendees string into Graph API format
 function parseAttendees(raw?: string): { emailAddress: { address: string }; type: string }[] {
@@ -14,206 +13,8 @@ function parseAttendees(raw?: string): { emailAddress: { address: string }; type
     .map(address => ({ emailAddress: { address }, type: 'required' }));
 }
 
-// Add durationHours to an ISO datetime string
-function addHours(isoDate: string, hours: number): string {
-  const d = new Date(isoDate);
-  d.setMinutes(d.getMinutes() + Math.round(hours * 60));
-  return d.toISOString();
-}
-
-// Format date as "lunes 6 de abril 2026 — 18:00–19:30 hrs (Mexico City)"
-function formatWhenText(startIso: string, durationHours: number): string {
-  const tz = 'America/Mexico_City';
-  const start = new Date(startIso);
-  const end = new Date(addHours(startIso, durationHours));
-
-  const dateOpts: Intl.DateTimeFormatOptions = {
-    timeZone: tz,
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  };
-  const timeOpts: Intl.DateTimeFormatOptions = {
-    timeZone: tz,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  };
-
-  const datePart = new Intl.DateTimeFormat('es-MX', dateOpts).format(start);
-  const startTime = new Intl.DateTimeFormat('es-MX', timeOpts).format(start);
-  const endTime = new Intl.DateTimeFormat('es-MX', timeOpts).format(end);
-
-  return `${datePart} — ${startTime}–${endTime} hrs (Mexico City)`;
-}
-
-// Split start/duration into the two lines shown in the date/time pill
-// (kept separate from formatWhenText: that one stays a single string because
-// replaceTemplatePlaceholders' {{fechahora}} placeholder depends on its shape).
-function formatWhenParts(startIso: string, durationHours: number): { datePart: string; timePart: string } {
-  const tz = 'America/Mexico_City';
-  const start = new Date(startIso);
-  const end = new Date(addHours(startIso, durationHours));
-
-  const datePart = new Intl.DateTimeFormat('es-MX', {
-    timeZone: tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  }).format(start);
-  const timeOpts: Intl.DateTimeFormatOptions = { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false };
-  const startTime = new Intl.DateTimeFormat('es-MX', timeOpts).format(start);
-  const endTime = new Intl.DateTimeFormat('es-MX', timeOpts).format(end);
-
-  return { datePart, timePart: `${startTime} – ${endTime} hrs · Ciudad de México` };
-}
-
-// One info block: orange accent bar + bold teal label + body content
-function section(label: string, contentHtml: string): string {
-  return `
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
-    <tr>
-      <td width="3" style="background:#F1A34F; border-radius:2px;">&nbsp;</td>
-      <td style="width:14px;">&nbsp;</td>
-      <td>
-        <div style="color:#0e4b5a; font-size:17px; font-weight:800;">${label}</div>
-        ${contentHtml}
-      </td>
-    </tr>
-  </table>
-  <div style="height:22px;"></div>`;
-}
-
-// Convert newline-separated text into <li> items
-function toListItems(text: string): string {
-  return text
-    .split(/\n+/)
-    .map(s => s.trim())
-    .filter(Boolean)
-    .map(s => `<li>${s}</li>`)
-    .join('\n');
-}
-
-const FONT = "'Poppins', Arial, Helvetica, sans-serif";
-const BODY_TEXT = (html: string) =>
-  `<div style="color:#374151; font-size:15px; line-height:1.5; padding-top:3px; font-weight:400;">${html}</div>`;
-
-// Build the full HTML email body
-function buildEmailHtml(opts: {
-  subject: string;
-  startIso: string;
-  durationHours: number;
-  dinamica: string;
-  profile: string;
-  descripcion: string;
-  detailsText: string;
-  link: string;
-}): string {
-  const { subject, startIso, durationHours, dinamica, profile, descripcion, detailsText, link } = opts;
-  const { datePart, timePart } = formatWhenParts(startIso, durationHours);
-
-  const dinamicaSection = dinamica ? section('Dinámica', BODY_TEXT(dinamica)) : '';
-  const profileSection = profile ? section('Perfil', BODY_TEXT(profile)) : '';
-  const descripcionSection = descripcion ? section('Descripción', BODY_TEXT(descripcion)) : '';
-
-  const detailsSection = detailsText
-    ? section('Detalles', `<ul style="margin:5px 0 0; padding:0 0 0 16px; color:#374151; font-size:15px; line-height:1.6; font-weight:400;">${toListItems(detailsText)}</ul>`)
-    : '';
-
-  const linkSection = link
-    ? `<tr>
-    <td style="padding:0 40px;">
-      <div style="border-top:1px solid #E9EDF3; line-height:1px;">&nbsp;</div>
-    </td>
-  </tr>
-  <tr>
-    <td style="padding:24px 40px 8px; font-family:${FONT};">
-      <div style="color:#0e4b5a; font-size:17px; font-weight:800;">Link de conexión</div>
-      <div style="color:#374151; font-size:15px; padding-top:4px; word-break:break-word;">
-        <a href="${link}" target="_blank" style="color:#0e4b5a; text-decoration:underline;">${link}</a>
-      </div>
-      <div style="text-align:center; padding:20px 0 8px;">
-        <!--[if mso]>
-        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${link}" style="height:50px; v-text-anchor:middle; width:320px;" arcsize="16%" stroke="f" fillcolor="#F1A34F">
-          <w:anchorlock/>
-          <center style="color:#ffffff; font-family:Arial, sans-serif; font-size:17px; font-weight:700;">Unirse a la reunión &rarr;</center>
-        </v:roundrect>
-        <![endif]-->
-        <!--[if !mso]><!-- -->
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
-          <tr>
-            <td align="center" valign="middle" height="50" style="background:#F1A34F; border-radius:10px;">
-              <a href="${link}" target="_blank" style="display:inline-block; color:#ffffff; text-decoration:none; font-family:${FONT}; font-size:17px; font-weight:700; line-height:50px; padding:0 32px;">Unirse a la reunión &rarr;</a>
-            </td>
-          </tr>
-        </table>
-        <!--<![endif]-->
-      </div>
-      <div style="color:#9ca3af; font-size:13px; text-align:center; padding-top:6px; font-weight:400;">
-        ¿El botón no funciona? Copia este enlace de arriba en tu navegador.
-      </div>
-    </td>
-  </tr>`
-    : '';
-
-  return `<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>${subject}</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
-  </style>
-</head>
-<body style="margin:0; padding:0; background:#eef1f5;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#eef1f5;">
-    <tr>
-      <td align="center" style="padding:32px 16px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px; max-width:100%; background:#ffffff; border-radius:16px; overflow:hidden; border:1px solid #E4E9F0;">
-
-          <tr>
-            <td style="background:#0e4b5a; padding:32px 40px 28px; font-family:${FONT};">
-              <div style="color:#ffffff; font-size:26px; font-weight:700; line-height:1.3;">${subject}</div>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:24px 40px 0; font-family:${FONT};">
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#FDF3E7; border-radius:12px;">
-                <tr>
-                  <td style="padding:18px 20px;">
-                    <div style="color:#7a5a26; font-size:11px; font-weight:600; letter-spacing:.8px; text-transform:uppercase;">${datePart}</div>
-                    <div style="color:#111827; font-size:17px; font-weight:700; padding-top:2px;">${timePart}</div>
-                  </td>
-                </tr>
-              </table>
-              <div style="color:#9ca3af; font-size:12px; padding-top:8px;">UTC&minus;06:00 · Si te conectas desde otra zona horaria, verifica la hora local.</div>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:28px 40px 4px; font-family:${FONT};">
-              ${dinamicaSection}
-              ${profileSection}
-              ${descripcionSection}
-              ${detailsSection}
-            </td>
-          </tr>
-
-          ${linkSection}
-
-          <tr>
-            <td style="background:#F9FAFB; padding:24px 40px; text-align:center; border-top:1px solid #E9EDF3;">
-              <img src="${LOGO_URL}" alt="SAPIENCE — Human Insights Strategy" width="140" style="display:block; margin:0 auto; border:0; outline:none; text-decoration:none;">
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-}
+const normalizeName = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s_-]+/g, '');
+const isLinkColumnName = (name: string) => ['link', 'liga'].includes(normalizeName(name));
 
 // Replace {{placeholder}} tokens in custom HTML with dynamic column values
 // Supports conditional blocks: {{#key}}...{{/key}} — removed if key is empty
@@ -332,19 +133,26 @@ export default createEndpoint({
 
     // Fetch dynamic column data (dinamica, profile, details, link, etc.)
     let boardData: Record<string, string> = {};
+    const valueByColId: Record<string, string> = {};
+    const colNameById = new Map<string, string>();
+    let inviteTemplate: ReturnType<typeof parseInviteTemplate> = null;
     if (resolvedBoardId) {
-      const [colRes, cellRes] = await Promise.all([
+      const [colRes, cellRes, boardRes] = await Promise.all([
         BoardColumns.findAll({ filters: { boardId: resolvedBoardId } as any, limit: 100 }),
         CellValues.findAll({ filters: { boardId: resolvedBoardId, rowId: input.eventId } as any, limit: 200 }),
+        Boards.findOne({ id: resolvedBoardId }).catch(() => null),
       ]);
 
-      const colMap = new Map(colRes.records.map(c => [c.id, (c.columnName ?? c.id).toLowerCase()]));
+      for (const c of colRes.records) colNameById.set(c.id, c.columnName ?? c.id);
       for (const cell of cellRes.records) {
         if (!cell.columnId) continue;
-        const colName = colMap.get(cell.columnId) ?? cell.columnId;
         const value = String(cell.textValue ?? cell.numberValue ?? cell.dateValue ?? '');
-        if (value) boardData[colName] = value;
+        if (!value) continue;
+        valueByColId[cell.columnId] = value;
+        const colName = (colNameById.get(cell.columnId) ?? cell.columnId).toLowerCase();
+        boardData[colName] = value;
       }
+      inviteTemplate = parseInviteTemplate(boardRes?.inviteTemplateJson);
     }
 
     // Helper to find a value in boardData by multiple possible key names
@@ -362,23 +170,45 @@ export default createEndpoint({
     const durationHours = event.durationHours ?? 1;
     const endIso = addHours(startIso, durationHours);
 
-    const dinamica = pick('Dinámica', 'Dinamica', 'dinamica');
-    const profile = pick('Perfil', 'perfil');
-    const descripcion = pick('Descripción', 'descripcion');
-    const detailsText = pick('Detalles adicionales', 'Detalles', 'detalles');
     // Quien captura la columna "Link" del tablero suele escribir solo el
     // dominio (p.ej. "www.youtube.com"), sin protocolo — un <a href> así lo
     // interpreta el navegador como ruta RELATIVA del sitio, no como URL
     // externa, y el botón "Unirse a la reunión" no lleva a ningún lado. Si no
     // trae ya un protocolo (://), se asume https.
-    const rawLink = pick('Link', 'link', 'Liga', 'liga');
-    const link = rawLink && !/^[a-z][a-z0-9+.-]*:\/\//i.test(rawLink) ? `https://${rawLink}` : rawLink;
+    const toAbsoluteLink = (raw: string) => raw && !/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? `https://${raw}` : raw;
     const customHtml = pick('HTML Invite', 'htmlinvite', 'HTML Personalizado', 'htmlpersonalizado');
+
+    // Este tablero de calendario configuró un template de invite propio
+    // (botón "Configurar invitación") — se arma `sections` dinámicamente a
+    // partir de las columnas que eligió, en el orden que eligió, en vez de
+    // los 4 campos fijos de siempre. Sin template configurado, se preserva
+    // exactamente el comportamiento de antes (fallback).
+    let sections: InviteSection[];
+    let link: string;
+    if (inviteTemplate && inviteTemplate.selected.length > 0) {
+      const selectedSet = new Set(inviteTemplate.selected);
+      const orderedIds = inviteTemplate.order.filter(id => selectedSet.has(id));
+      for (const id of inviteTemplate.selected) if (!orderedIds.includes(id)) orderedIds.push(id);
+
+      const linkColId = orderedIds.find(id => isLinkColumnName(colNameById.get(id) ?? ''));
+      sections = orderedIds
+        .filter(id => id !== linkColId)
+        .map(id => ({ label: colNameById.get(id) ?? id, value: valueByColId[id] ?? '' }));
+      link = linkColId ? toAbsoluteLink(valueByColId[linkColId] ?? '') : '';
+    } else {
+      sections = [
+        { label: 'Dinámica', value: pick('Dinámica', 'Dinamica', 'dinamica') },
+        { label: 'Perfil', value: pick('Perfil', 'perfil') },
+        { label: 'Descripción', value: pick('Descripción', 'descripcion') },
+        { label: 'Detalles', value: pick('Detalles adicionales', 'Detalles', 'detalles') },
+      ];
+      link = toAbsoluteLink(pick('Link', 'link', 'Liga', 'liga'));
+    }
 
     const whenText = formatWhenText(startIso, durationHours);
     const subject = event.eventName ?? 'Sesión';
 
-    const inviteBodyHtml = (customHtml ? replaceTemplatePlaceholders(customHtml, boardData, whenText) : null) || buildEmailHtml({ subject, startIso, durationHours, dinamica, profile, descripcion, detailsText, link });
+    const inviteBodyHtml = (customHtml ? replaceTemplatePlaceholders(customHtml, boardData, whenText) : null) || buildEmailHtml({ subject, startIso, durationHours, sections, link });
 
     const attendees = parseAttendees(event.inviteEmails ?? '');
     // Use "Dirección" dynamic column for Outlook location (external-facing address)

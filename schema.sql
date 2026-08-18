@@ -401,6 +401,7 @@ create table boards (
   calendar_version              numeric,
   calendar_file_url             text,
   timeline_version              numeric,
+  invite_template_json          text,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now()
 );

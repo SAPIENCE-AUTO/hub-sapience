@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format, isSameMonth, isSameYear } from 'date-fns';
 import { es } from 'date-fns/locale/es';
 
-import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, Square as Gantt, List, CalendarDays, CornerDownRight, FolderPlus, ZoomIn, ZoomOut, X, GripVertical, ArrowUpDown, Eye, EyeOff, ClipboardCopy, BarChart2, Loader2, ExternalLink, RefreshCw, Copy, ChevronsDownUp, ChevronsUpDown, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, Square as Gantt, List, CalendarDays, CornerDownRight, FolderPlus, ZoomIn, ZoomOut, X, GripVertical, ArrowUpDown, Eye, EyeOff, ClipboardCopy, BarChart2, Loader2, ExternalLink, RefreshCw, Copy, ChevronsDownUp, ChevronsUpDown, Check, Mail } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -38,6 +38,7 @@ import { TimelinePreviewDialog } from '../components/TimelinePreviewDialog';
 import { useDebouncedCallback } from 'use-debounce';
 import WeeklyCalendar, { type CalEventItem } from '../components/WeeklyCalendar';
 import { CalendarExcelDialog } from '../components/CalendarExcelDialog';
+import { InviteTemplateDialog } from '../components/InviteTemplateDialog';
 
 import { Task, CalEvent, GanttScale, BoardGanttGroup, BoardObj } from '../components/pm/pmTypes';
 import { TASK_COLS, EVENT_COLS, BOARD_GANTT_STATUS_COLORS } from '../components/pm/pmConstants';
@@ -110,6 +111,7 @@ export default function PMPage({ initialSection = 'timelines' }: { initialSectio
   const [calBoardExcelStates, setCalBoardExcelStates] = useState<Record<string, { status?: string; url?: string; version?: number }>>({});
   const [calExcelPreview, setCalExcelPreview] = useState<{ open: boolean; fileUrl: string; projectName: string }>({ open: false, fileUrl: '', projectName: '' });
   const [calExcelDialogOpen, setCalExcelDialogOpen] = useState(false);
+  const [inviteTemplateDialogOpen, setInviteTemplateDialogOpen] = useState(false);
   const [outlookSyncing, setOutlookSyncing] = useState(false);
   const [htmlPreviewOpen, setHtmlPreviewOpen] = useState(false);
   const [invitePreviewOpen, setInvitePreviewOpen] = useState(false);
@@ -1384,7 +1386,16 @@ export default function PMPage({ initialSection = 'timelines' }: { initialSectio
                           <TabsTrigger value="lista" className="gap-1.5 text-xs h-7"><List className="w-3.5 h-3.5" /> Lista</TabsTrigger>
                           <TabsTrigger value="calendario" className="gap-1.5 text-xs h-7"><CalendarDays className="w-3.5 h-3.5" /> Calendario</TabsTrigger>
                         </TabsList>
-                        <div className="flex-shrink-0">
+                        <div className="flex-shrink-0 flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 h-8"
+                            onClick={() => setInviteTemplateDialogOpen(true)}
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            Configurar invitación
+                          </Button>
                           {calBoard.status === 'Listo' && calBoard.url ? (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -1917,6 +1928,15 @@ export default function PMPage({ initialSection = 'timelines' }: { initialSectio
           projectFullName={projects.find(p => p.projectCode === selectedProject)?.fullName ?? ''}
           projectTematica={(projects.find(p => p.projectCode === selectedProject) as any)?.tematica ?? ''}
           onSuccess={handleCalExcelSuccess}
+        />
+      )}
+
+      {activeCalBoardId && (
+        <InviteTemplateDialog
+          open={inviteTemplateDialogOpen}
+          onOpenChange={setInviteTemplateDialogOpen}
+          boardId={activeCalBoardId}
+          calendarName={activeCalBoardName}
         />
       )}
     </div>

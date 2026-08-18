@@ -216,6 +216,7 @@ export const getExpenseLineItems = (input?: any): Promise<any> => call('getExpen
 export const getExpenses = (input?: any): Promise<any> => call('getExpenses', input);
 export const getFilloutForms = (input?: any): Promise<any> => call('getFilloutForms', input);
 export const getInternalViews = (input?: any): Promise<any> => call('getInternalViews', input);
+export const getInviteTemplate = (input?: any): Promise<any> => call('getInviteTemplate', input);
 export const getInvoiceWidgetData = (input?: any): Promise<any> => call('getInvoiceWidgetData', input);
 export const getLastAnalysis = (input?: any): Promise<any> => call('getLastAnalysis', input);
 export const getLinkedEventsInfo = (input?: any): Promise<any> => call('getLinkedEventsInfo', input);
@@ -282,6 +283,7 @@ export const parseExcelFile = (input?: any): Promise<any> => call('parseExcelFil
 export const parseOdcCsv = (input?: any): Promise<any> => call('parseOdcCsv', input);
 export const permanentlyDelete = (input?: any): Promise<any> => call('permanentlyDelete', input);
 export const preparePoEmail = (input?: any): Promise<any> => call('preparePoEmail', input);
+export const previewInviteTemplate = (input?: any): Promise<any> => call('previewInviteTemplate', input);
 export const publishDocEvent = (input?: any): Promise<any> => call('publishDocEvent', input);
 export const publishPresenceEvent = (input?: any): Promise<any> => call('publishPresenceEvent', input);
 export const publishRecruitmentGroupsChanged = (input?: any): Promise<any> => call('publishRecruitmentGroupsChanged', input);
@@ -312,6 +314,7 @@ export const saveDealDocument = (input?: any): Promise<any> => call('saveDealDoc
 export const saveDocBlock = (input?: any): Promise<any> => call('saveDocBlock', input);
 export const saveExpense = (input?: any): Promise<any> => call('saveExpense', input);
 export const saveInternalView = (input?: any): Promise<any> => call('saveInternalView', input);
+export const saveInviteTemplate = (input?: any): Promise<any> => call('saveInviteTemplate', input);
 export const saveMigrationLog = (input?: any): Promise<any> => call('saveMigrationLog', input);
 export const saveParticipant = (input?: any): Promise<any> => call('saveParticipant', input);
 export const savePayment = (input?: any): Promise<any> => call('savePayment', input);
