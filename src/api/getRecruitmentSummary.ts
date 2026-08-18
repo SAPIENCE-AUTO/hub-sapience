@@ -55,17 +55,51 @@ export default createEndpoint({
     let totalParticipants = 0;
 
     for (const board of activeBoards) {
-      const groupBoardId = `${board.id}::groups`;
+      const uuidGroupBoardId = `${board.id}::groups`;
+      // Las columnas de grupo (y sus celdas de membresía) de un tablero de
+      // reclutamiento pueden quedar repartidas entre el boardId UUID y el
+      // compuesto legado `recruitment-{projectCode}-{boardName}` — mismo
+      // residuo de la migración a UUID documentado en CLAUDE.md §6
+      // (smartWrite.ts / resolveBoardId.ts). getBoardColumns.ts ya hace este
+      // merge-read para el tablero real (confirmado en vivo: NARANJA tiene
+      // sus 6 grupos repartidos así, 4 solo bajo el id legado) — sin este
+      // merge, el widget veía únicamente los grupos creados después de la
+      // migración y reportaba "2 grupos" cuando el tablero real muestra 6.
+      const legacyGroupBoardId = `recruitment-${input.projectCode}-${board.boardName}::groups`;
+      const groupBoardIdCandidates = [uuidGroupBoardId, legacyGroupBoardId];
 
-      const [{ records: groupCols }, rows, { records: memberCells }] = await Promise.all([
-        BoardColumns.findAll({ filters: { boardId: groupBoardId }, limit: 200, fields: ['columnName', 'deletedAt'] }),
+      const [colResults, rows, cellResults] = await Promise.all([
+        Promise.all(groupBoardIdCandidates.map(bid =>
+          BoardColumns.findAll({ filters: { boardId: bid }, limit: 200, fields: ['columnName', 'deletedAt'] })
+        )),
         fetchAllRows(board.id),
-        CellValues.findAll({ filters: { boardId: groupBoardId, textValue: '1' }, limit: 10_000, fields: ['rowId', 'columnId', 'deletedAt'] }),
+        Promise.all(groupBoardIdCandidates.map(bid =>
+          CellValues.findAll({ filters: { boardId: bid, textValue: '1' }, limit: 10_000, fields: ['rowId', 'columnId', 'deletedAt'] })
+        )),
       ]);
 
-      const activeGroupCols = groupCols.filter(c => !c.deletedAt && c.columnName);
+      const seenColIds = new Set<string>();
+      const activeGroupCols: { id: string; columnName: string }[] = [];
+      for (const { records } of colResults) {
+        for (const c of records) {
+          if (c.deletedAt || !c.columnName || seenColIds.has(c.id)) continue;
+          seenColIds.add(c.id);
+          activeGroupCols.push({ id: c.id, columnName: c.columnName as string });
+        }
+      }
+
+      const seenCellIds = new Set<string>();
+      const memberCells: { id: string; rowId?: string; columnId?: string; deletedAt?: string }[] = [];
+      for (const { records } of cellResults) {
+        for (const cell of records) {
+          if (seenCellIds.has(cell.id)) continue;
+          seenCellIds.add(cell.id);
+          memberCells.push(cell);
+        }
+      }
+
       const activeRowIds = new Set(rows.filter(r => !r.deletedAt).map(r => r.id));
-      const colNameById = new Map(activeGroupCols.map(c => [c.id, c.columnName as string]));
+      const colNameById = new Map(activeGroupCols.map(c => [c.id, c.columnName]));
 
       const tally = new Map<string, number>();
       for (const cell of memberCells) {
@@ -76,16 +110,7 @@ export default createEndpoint({
         tally.set(name, (tally.get(name) ?? 0) + 1);
       }
 
-      const groups = activeGroupCols.map(c => ({ name: c.columnName as string, count: tally.get(c.columnName as string) ?? 0 }));
-
-      // El tablero real (RecruitmentPage.tsx) siempre pinta una sección
-      // "Sin grupo" además de los grupos con nombre — se agrega aquí también
-      // para que el conteo del widget coincida con lo que el usuario ve al
-      // entrar al tablero (si no, un board con casi todo sin agrupar se ve
-      // como "solo 2 grupos" cuando en realidad son 3 secciones visibles).
-      const namedTotal = groups.reduce((n, g) => n + g.count, 0);
-      const sinGrupoCount = Math.max(0, activeRowIds.size - namedTotal);
-      if (sinGrupoCount > 0) groups.push({ name: 'Sin grupo', count: sinGrupoCount });
+      const groups = activeGroupCols.map(c => ({ name: c.columnName, count: tally.get(c.columnName) ?? 0 }));
 
       boards.push({ boardName: board.boardName as string, totalParticipants: activeRowIds.size, groups });
       totalParticipants += activeRowIds.size;
