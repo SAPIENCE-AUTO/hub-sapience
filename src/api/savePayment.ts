@@ -45,14 +45,23 @@ export default createEndpoint({
       }
     }
 
-    const record = {
+    // poId/supplierName/projectCode solo se escriben cuando esta llamada
+    // realmente trae un valor — la mayoría de las llamadas a este endpoint
+    // son actualizaciones parciales (solo status, o solo attachment). Antes
+    // se escribían siempre, así que una actualización parcial sin poId
+    // sobreescribía estos 3 campos a NULL en pagos que ya los tenían
+    // (confirmado en vivo: los 22 pagos tocados el 17-ago quedaron con
+    // po_id/supplier_name/project_code en NULL — "desaparecieron" de
+    // cualquier vista filtrada por proyecto/proveedor y del monto pagado
+    // de su ODC, aunque el pago en sí nunca se borró).
+    const record: Record<string, unknown> = {
       ...rest,
-      poId,
-      supplierName,
-      projectCode,
       type: 'Pago a proveedor' as const,
-      ...(input.attachment !== undefined ? { attachment: input.attachment } : {}),
     };
+    if (poId !== undefined) record.poId = poId;
+    if (supplierName !== undefined) record.supplierName = supplierName;
+    if (projectCode !== undefined) record.projectCode = projectCode;
+    if (input.attachment !== undefined) record.attachment = input.attachment;
 
     // Auto-fill payment date when marking as Realizado
     if (input.status === 'Realizado' && !input.paymentDate) {
