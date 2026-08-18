@@ -543,7 +543,17 @@ export default function PurchasesPage() {
     if (origenFilter) r = r.filter(p => (p.origen ?? 'Sistema') === origenFilter);
     if (search) {
       const q = search.toLowerCase();
-      r = r.filter(p => String(p.poNumber).toLowerCase().includes(q) || p.supplierName?.toLowerCase().includes(q) || p.projectCode?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q));
+      // El número de OC lleva prefijo + ceros a la izquierda (ej. "RI-03293").
+      // Buscar solo dígitos (o el prefijo con el número "natural", sin ceros,
+      // ej. "RI-3293") no hacía match porque el 0 del padding rompe la
+      // substring — se compara también solo-dígitos contra solo-dígitos,
+      // ignorando prefijo y padding.
+      const qDigits = q.replace(/\D/g, '');
+      r = r.filter(p => {
+        const poNumberStr = String(p.poNumber).toLowerCase();
+        const poNumberMatches = poNumberStr.includes(q) || (qDigits.length > 0 && poNumberStr.replace(/\D/g, '').includes(qDigits));
+        return poNumberMatches || p.supplierName?.toLowerCase().includes(q) || p.projectCode?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q);
+      });
     }
     return r;
   }, [pos, search, categoryFilter, projectFilter, origenFilter]);
