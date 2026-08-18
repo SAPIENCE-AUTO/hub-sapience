@@ -26,7 +26,6 @@ import PendingSavesBar from './PendingSavesBar';
 import AvatarCropEditor from './AvatarCropEditor';
 import { useRealtimeUserNotifications, ConversationCreatedPayload } from '../hooks/useRealtimeUserNotifications';
 import { playChatDing, showChatBrowserNotification, shouldPlayDing, unlockAudio } from '../lib/chatNotifications';
-import { isActiveProjectStatus } from '../lib/format';
 import ChatPage from '../pages/ChatPage';
 
 // ── Avatar gradient helpers ───────────────────────────────────────────────────
@@ -408,11 +407,14 @@ export default function Layout() {
     const fetchUnread = async () => {
       if (document.visibilityState !== 'visible') return;
       try {
-        // Fetch conversations alongside the existing projects list for a complete channel set
+        // Fetch conversations alongside the existing projects list for a complete channel set.
+        // Se incluyen TODOS los proyectos, no solo "En curso" — el chat de un
+        // proyecto ya cerrado sigue necesitando badge/preview si alguien
+        // vuelve a escribir ahí (ver commit que quitó el archivado por status).
         const convs = await getChatConversations({}).catch(() => ({ dms: [], groups: [] }));
         const channels = [
           'general',
-          ...projects.filter(p => isActiveProjectStatus(p.status)).map(p => p.projectCode).filter(Boolean) as string[],
+          ...projects.map(p => p.projectCode).filter(Boolean) as string[],
           ...convs.dms.map((d: { id: string }) => d.id),
           ...convs.groups.map((g: { id: string }) => g.id),
         ];

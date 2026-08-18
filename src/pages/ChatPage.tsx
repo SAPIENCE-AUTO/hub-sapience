@@ -40,7 +40,6 @@ import { PollCard, parsePoll, type PollData } from '@/components/PollCard';
 import { TimelinePreviewDialog } from '@/components/TimelinePreviewDialog';
 import { toast } from 'sonner';
 import { parseReactions, parseAttachments, serializeReactions, serializeAttachments, type Reactions, type Attachment } from '../lib/chatJson';
-import { isActiveProjectStatus } from '../lib/format';
 
 type Message = GetMessagesOutputType['messages'][0];
 type TeamMember = GetTeamMembersOutputType['members'][0];
@@ -1563,11 +1562,10 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   const [searching, setSearching] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => cachedTeamMembers ?? []);
-  const [projectChannelsWithStatus, setProjectChannelsWithStatus] = useState<{ code: string; status: string }[]>([]);
+  const [projectChannelCodes, setProjectChannelCodes] = useState<string[]>([]);
   const [channelSearch, setChannelSearch] = useState('');
   const [dmSearch, setDmSearch] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
   const [favoriteChannels, setFavoriteChannels] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('chat-favorite-channels') ?? '[]')); }
     catch { return new Set(); }
@@ -1930,22 +1928,17 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
 
   // Load documents for the active project channel
   useEffect(() => {
-    const codes = projectChannelsWithStatus.map(p => p.code);
-    if (!activeChannel || !codes.includes(activeChannel)) { setProjectDocs([]); return; }
+    if (!activeChannel || !projectChannelCodes.includes(activeChannel)) { setProjectDocs([]); return; }
     getProjectDocuments({ projectCode: activeChannel })
       .then(d => setProjectDocs(d.documents))
       .catch(() => setProjectDocs([]));
-  }, [activeChannel, projectChannelsWithStatus]);
+  }, [activeChannel, projectChannelCodes]);
 
   // Populate project channels from context (already loaded by Layout) — no extra endpoint call needed
   useEffect(() => {
     if (projectOnly) return;
     if (projects.length > 0) {
-      setProjectChannelsWithStatus(
-        projects
-          .filter(p => p.projectCode)
-          .map(p => ({ code: p.projectCode!, status: p.status ?? '' }))
-      );
+      setProjectChannelCodes(projects.map(p => p.projectCode).filter(Boolean) as string[]);
     }
   }, [projectOnly, projects]);
 
@@ -2538,25 +2531,19 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     }).catch(() => {});
   };
 
-  // Derived channel lists
-  const projectChannels = useMemo(() => projectChannelsWithStatus.map(p => p.code), [projectChannelsWithStatus]);
-  const activeChannels = useMemo(() => projectChannelsWithStatus.filter(p => isActiveProjectStatus(p.status)).map(p => p.code), [projectChannelsWithStatus]);
-  const archivedChannels = useMemo(() => projectChannelsWithStatus.filter(p => !isActiveProjectStatus(p.status)).map(p => p.code), [projectChannelsWithStatus]);
+  // Derived channel lists — un solo listado, "archivado" ya no depende del
+  // status del proyecto (un proyecto Finalizado puede seguir necesitando
+  // consulta de chat). Ordenado por lastMessageAt DESC, como WhatsApp:
+  // los canales sin actividad simplemente se hunden, nunca se ocultan.
+  // Unread/mention state es solo visual (negritas, badge) y no afecta la posición.
+  const projectChannels = useMemo(() => projectChannelCodes, [projectChannelCodes]);
 
-  // Sorted purely by lastMessageAt DESC — like WhatsApp.
-  // Unread/mention state is visual only (bold, badge) and does NOT affect position.
-  const sortedGeneralAndActive = useMemo(() => {
-    const all = [{ id: 'general', isProject: false }, ...activeChannels.map(c => ({ id: c, isProject: true }))];
+  const sortedChannels = useMemo(() => {
+    const all = [{ id: 'general' }, ...projectChannels.map(c => ({ id: c }))];
     return [...all].sort((a, b) =>
       (lastMessageAt[b.id] ?? '').localeCompare(lastMessageAt[a.id] ?? '')
     );
-  }, [activeChannels, lastMessageAt]);
-
-  const sortedArchivedChannels = useMemo(() => {
-    return [...archivedChannels].sort((a, b) =>
-      (lastMessageAt[b] ?? '').localeCompare(lastMessageAt[a] ?? '')
-    );
-  }, [archivedChannels, lastMessageAt]);
+  }, [projectChannels, lastMessageAt]);
 
   const visibleMemberEmails = useMemo(() => new Set(teamMembers.map(m => m.email).filter(Boolean) as string[]), [teamMembers]);
 
@@ -2712,8 +2699,8 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                 title="Canales" icon={<Hash className="w-3 h-3 text-muted-foreground" />}
                 onAdd={() => {}} addLabel="Nuevo canal"
                 collapsed={secChannels} onToggle={() => setSecChannels(v => !v)}
-                badgeCount={['general', ...activeChannels, ...archivedChannels].filter(c => (unreadCounts[c] ?? 0) > 0).length}
-                hasMention={['general', ...activeChannels, ...archivedChannels].some(c => (unreadCounts[c] ?? 0) > 0 && mentionedChannels.has(c))}
+                badgeCount={['general', ...projectChannels].filter(c => (unreadCounts[c] ?? 0) > 0).length}
+                hasMention={['general', ...projectChannels].some(c => (unreadCounts[c] ?? 0) > 0 && mentionedChannels.has(c))}
               >
                 <div className="max-h-[40vh] overflow-y-auto">
                 <div className="px-2 space-y-0.5">
@@ -2734,7 +2721,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                   </div>
 
                   {/* General + active project channels — sorted by unread */}
-                  {sortedGeneralAndActive
+                  {sortedChannels
                     .filter(ch => !channelSearch || ch.id.toLowerCase().includes(channelSearch.toLowerCase()))
                     .map(ch => {
                       const hasMention = mentionedChannels.has(ch.id) && ch.id !== activeChannel;
@@ -2769,53 +2756,6 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                         </button>
                       );
                     })}
-
-                  {/* Archived toggle */}
-                  {(() => {
-                    const visibleArchived = sortedArchivedChannels.filter(c => !channelSearch || c.toLowerCase().includes(channelSearch.toLowerCase()));
-                    if (visibleArchived.length === 0) return null;
-                    return (
-                      <>
-                        <button onClick={() => setShowArchived(v => !v)}
-                          className="w-full flex items-center gap-1 px-3 py-1.5 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors rounded-lg hover:bg-muted/50">
-                          {showArchived ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                          <span>Archivados ({archivedChannels.length})</span>
-                        </button>
-                        {showArchived && visibleArchived.map(c => {
-                          const hasMention = mentionedChannels.has(c) && c !== activeChannel;
-                          const isActive = !activeConvId && activeChannel === c;
-                          const isFav = favoriteChannels.has(c);
-                          const unread = !isActive ? (unreadCounts[c] ?? 0) : 0;
-                          return (
-                            <button key={c} onClick={() => switchToChannel(c)}
-                              className={`group/ch w-full text-left px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors ${
-                                isActive ? 'bg-primary/10 text-primary font-semibold' : unread > 0 ? 'text-muted-foreground hover:bg-muted font-semibold' : 'text-muted-foreground/50 hover:bg-muted hover:text-muted-foreground'
-                              }`}>
-                              <Hash className="w-3 h-3 flex-shrink-0 opacity-50 mt-0.5" />
-                              <div className="flex-1 min-w-0 flex flex-col">
-                                <span className="truncate block text-xs italic leading-tight">{c}</span>
-                                {lastMessagePreview[c] && (
-                                  <span className="text-xs text-muted-foreground/60 truncate leading-tight not-italic">
-                                    {lastMessagePreview[c].senderName.split(' ')[0]}: {lastMessagePreview[c].content}
-                                  </span>
-                                )}
-                              </div>
-                              {unread > 0 && (
-                                <span className={`min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1 flex-shrink-0 leading-none ${hasMention ? 'bg-destructive text-destructive-foreground' : 'bg-muted-foreground/50 text-background'}`}>
-                                  {unread > 99 ? '99+' : unread}
-                                </span>
-                              )}
-                              <button
-                                onClick={e => { e.stopPropagation(); toggleFavorite(c); }}
-                                className={`p-0.5 rounded transition-all hover:bg-muted ${isFav ? 'opacity-100 text-amber-400' : 'opacity-0 group-hover/ch:opacity-100 text-muted-foreground/40 hover:text-amber-400'}`}>
-                                <Star className={`w-3 h-3 ${isFav ? 'fill-current' : ''}`} />
-                              </button>
-                            </button>
-                          );
-                        })}
-                      </>
-                    );
-                  })()}
                 </div>
                 </div>
               </SidebarSection>
