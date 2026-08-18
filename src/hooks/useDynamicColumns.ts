@@ -763,6 +763,7 @@ export function useDynamicColumns(boardId: string, seedRows?: SeedRow[], options
       'Checkbox': 70, 'Rating': 100, 'Color': 110, 'Status': 140, 'Select': 140,
       'Fecha': 130, 'Datetime': 160, 'Número': 100, 'Persona': 150, 'Botón': 130,
       'Fórmula': 120, 'Texto': 160, 'Email': 180, 'Teléfono': 140, 'Archivo': 160,
+      'Barra': 130,
     };
 
     // Single pass through cellMap to collect content samples per column (max 20 per col)

@@ -42,7 +42,7 @@ import {
   ChevronDown, ChevronUp, ArrowUpDown, CircleDot, Type, Hash, Calendar as CalendarIcon, Clock, CheckSquare,
   ChevronDownCircle, User, Mail, Phone, Paperclip, MousePointerClick,
   Square as LucideIcon, ArrowLeftFromLine, ArrowRightFromLine, GripVertical,
-  Pipette, Calculator, MapPin, ExternalLink,
+  Pipette, Calculator, MapPin, ExternalLink, GaugeCircle,
 } from 'lucide-react';
 import { executeButtonAction, getStreetViewUrl } from 'zite-endpoints-sdk';
 import { ColumnFilterPopover } from './ColumnFilterPopover';
@@ -121,6 +121,7 @@ const COLUMN_TYPE_ICONS: Record<string, typeof LucideIcon> = {
   'Botón':     MousePointerClick,
   'Color':     Pipette,
   'Fórmula':   Calculator,
+  'Barra':     GaugeCircle,
 };
 
 function ColTypeIcon({ type, className = 'w-3.5 h-3.5' }: { type?: string; className?: string }) {
@@ -144,6 +145,7 @@ const COLUMN_TYPES = [
   { value: 'Archivo',  label: 'Archivo (URL)' },
   { value: 'Rating',   label: 'Rating (1–5)' },
   { value: 'Botón',    label: 'Botón (acción)' },
+  { value: 'Barra',    label: 'Barra de progreso (%)' },
 ];
 
 const BUTTON_ACTIONS = [
@@ -307,6 +309,57 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
           <Star className={`w-3.5 h-3.5 transition-colors ${star <= (hover || value) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30'}`} />
         </button>
       ))}
+    </div>
+  );
+}
+
+// ── Progress bar ──────────────────────────────────────────────────────────────
+// Interpolación roja(0%) → amarilla(50%) → verde(100%), mismos tonos que
+// Tailwind red-500/yellow-500/green-500.
+function progressColor(pct: number): string {
+  const p = Math.max(0, Math.min(100, pct));
+  const red = { r: 239, g: 68, b: 68 };
+  const yellow = { r: 234, g: 179, b: 8 };
+  const green = { r: 34, g: 197, b: 94 };
+  const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
+  const [from, to, t] = p <= 50 ? [red, yellow, p / 50] : [yellow, green, (p - 50) / 50];
+  return `rgb(${lerp(from.r, to.r, t)}, ${lerp(from.g, to.g, t)}, ${lerp(from.b, to.b, t)})`;
+}
+
+function ProgressBarCell({ value, onSave }: { value: CellVal | undefined; onSave: (v: CellVal) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [tempVal, setTempVal] = useState('');
+  const pct = Math.max(0, Math.min(100, value?.numberValue ?? 0));
+
+  const commit = () => {
+    const n = tempVal.trim() === '' ? undefined : Math.max(0, Math.min(100, Number(tempVal)));
+    onSave({ numberValue: n != null && Number.isFinite(n) ? n : undefined });
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus type="number" min={0} max={100} value={tempVal}
+        onChange={e => setTempVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+        className="h-7 w-full min-w-0 text-xs"
+      />
+    );
+  }
+
+  return (
+    <div
+      className="h-full min-w-0 w-full flex items-center gap-1.5 px-1 cursor-text"
+      onClick={() => { setTempVal(value?.numberValue != null ? String(value.numberValue) : ''); setEditing(true); }}
+    >
+      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden min-w-[24px]">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: progressColor(pct) }} />
+      </div>
+      <span className="text-[11px] text-muted-foreground tabular-nums flex-shrink-0">
+        {value?.numberValue != null ? `${pct}%` : ''}
+      </span>
     </div>
   );
 }
@@ -1178,6 +1231,7 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, suggesti
   if (type === 'Botón')    return <ButtonCell col={col} rowId={rowId} />;
   if (type === 'Checkbox') return <Checkbox checked={value?.booleanValue ?? false} onCheckedChange={v => onSave({ booleanValue: !!v })} />;
   if (type === 'Rating')   return <StarRating value={value?.numberValue ?? 0} onChange={n => onSave({ numberValue: n })} />;
+  if (type === 'Barra')    return <ProgressBarCell value={value} onSave={onSave} />;
   if (type === 'Status')   return <StatusCell col={col} value={value} onSave={onSave} />;
   if (type === 'Fecha')    return <DatePickerCell col={col} value={value} onSave={onSave} rowId={rowId} dynCols={dynCols} />;
   if (type === 'Datetime') return <DatetimePickerCell col={col} value={value} onSave={onSave} />;
@@ -2110,14 +2164,14 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
 // ── Bulk edit label helper ────────────────────────────────────────────────────
 function getCellLabel(v: CellVal, _colType?: string): string {
   if (v.booleanValue != null) return v.booleanValue ? 'Activado' : 'Desactivado';
-  if (v.numberValue != null) return String(v.numberValue);
+  if (v.numberValue != null) return _colType === 'Barra' ? `${v.numberValue}%` : String(v.numberValue);
   if (v.dateValue) return v.dateValue.split('T')[0];
   if (v.textValue != null) return v.textValue || '(vacío)';
   return '(vacío)';
 }
 
 // Types that render meaningfully even when empty — skip skeleton for these
-const SKIP_SKELETON_TYPES = new Set(['Checkbox', 'Rating', 'Botón', 'Status', 'Select', 'Color', 'Fórmula']);
+const SKIP_SKELETON_TYPES = new Set(['Checkbox', 'Rating', 'Botón', 'Status', 'Select', 'Color', 'Fórmula', 'Barra']);
 
 // ── Cell component ────────────────────────────────────────────────────────────
 // Memoizado: en tableros de reclutamiento con muchas columnas dinámicas, esta
