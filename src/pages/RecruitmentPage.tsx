@@ -326,6 +326,31 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dynCols.columns, dynCols.getCellVal, rows]);
 
+  // Igual que recentColors arriba, pero para los dos colores (texto/fondo)
+  // de las columnas "Texto con color" — pintar cada celda a mano con el
+  // picker nativo no era práctico para hacerlo seguido, así que se sugieren
+  // hasta 10 de cada uno ya usados en este tablero.
+  const { recentTextColors, recentBgColors } = useMemo(() => {
+    const txtColorCols = dynCols.columns.filter(c => c.columnType === 'TextoColor');
+    if (!txtColorCols.length) return { recentTextColors: [] as string[], recentBgColors: [] as string[] };
+    const seenText = new Set<string>(); const textResult: string[] = [];
+    const seenBg = new Set<string>(); const bgResult: string[] = [];
+    for (const row of rows) {
+      for (const col of txtColorCols) {
+        const fileUrl = dynCols.getCellVal(row.id, col.id)?.fileUrl;
+        if (!fileUrl) continue;
+        try {
+          const meta = JSON.parse(fileUrl);
+          if (meta?.textColor && !seenText.has(meta.textColor) && textResult.length < 10) { seenText.add(meta.textColor); textResult.push(meta.textColor); }
+          if (meta?.bgColor && !seenBg.has(meta.bgColor) && bgResult.length < 10) { seenBg.add(meta.bgColor); bgResult.push(meta.bgColor); }
+        } catch { /* fileUrl inválido para este tipo — se ignora */ }
+      }
+      if (textResult.length >= 10 && bgResult.length >= 10) break;
+    }
+    return { recentTextColors: textResult, recentBgColors: bgResult };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dynCols.columns, dynCols.getCellVal, rows]);
+
   const sortedTopLevel = useMemo(() => {
     const topLevelRows = rows.filter(r => !r.parentRowId);
     if (!sortColumn) return topLevelRows;
@@ -923,6 +948,7 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
 
           {/* Dynamic columns — renders <td> elements (no asDiv) */}
           <DynamicColumnCells rowId={row.id} dynCols={dynCols} hiddenColumns={hiddenColumns} recentColors={recentColors}
+            recentTextColors={recentTextColors} recentBgColors={recentBgColors}
             colUniqueValues={colUniqueValues}
             selectedIds={selectedIds}
             visibleColIds={visibleDynColIds}

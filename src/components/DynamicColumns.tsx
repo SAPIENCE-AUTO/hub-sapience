@@ -386,34 +386,76 @@ function ProgressBarCell({ value, onSave }: { value: CellVal | undefined; onSave
 }
 
 // ── Texto con color ───────────────────────────────────────────────────────────
-// Botón-muestra que abre el selector de color nativo del navegador
-// (input[type=color] libre, no la paleta fija de Status/Select — a
-// propósito, para poder pintar exactamente el tono que se necesite).
-function HexSwatchButton({ label, hex, fallback, onChange }: {
-  label: string; hex?: string; fallback: string; onChange: (hex: string) => void;
+// Botón-muestra circular que abre un popover con hasta 10 colores recientes
+// (ya usados en esta misma columna en el tablero, mismo criterio que
+// recentColors del tipo "Color") + un selector de color libre para
+// cualquier tono nuevo — pintar cada celda a mano con el picker nativo del
+// navegador no era práctico para hacerlo seguido.
+function HexSwatchPicker({ label, hex, fallback, recentColors = [], onChange }: {
+  label: string; hex?: string; fallback: string; recentColors?: string[]; onChange: (hex: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const current = hex || fallback;
+
   return (
-    <button
-      type="button"
-      title={label}
-      onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
-      className="relative w-3.5 h-3.5 rounded-full border border-border/60 shadow-sm flex-shrink-0 hover:scale-110 transition-transform"
-      style={{ backgroundColor: hex || fallback }}
-    >
-      <input
-        ref={inputRef}
-        type="color"
-        className="sr-only"
-        value={hex || fallback}
-        onClick={e => e.stopPropagation()}
-        onChange={e => onChange(e.target.value)}
-      />
-    </button>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={label}
+          onClick={e => e.stopPropagation()}
+          className="relative w-3.5 h-3.5 rounded-full border border-border/60 shadow-sm flex-shrink-0 hover:scale-110 transition-transform"
+          style={{ backgroundColor: current }}
+        />
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-48" align="start" onClick={e => e.stopPropagation()}>
+        <div className="p-2 border-b border-border">
+          <p className="text-xs font-medium text-muted-foreground px-1">{label}</p>
+        </div>
+        <div className="p-3 space-y-3">
+          {recentColors.length > 0 && (
+            <div>
+              <p className="text-[10px] text-muted-foreground mb-1.5">Recientes</p>
+              <div className="flex flex-wrap gap-1.5">
+                {recentColors.map(c => (
+                  <button
+                    key={c} type="button" title={c}
+                    onClick={() => { onChange(c); setOpen(false); }}
+                    className={`w-5 h-5 rounded-full border transition-all hover:scale-110 ${current === c ? 'ring-2 ring-offset-1 ring-foreground scale-110' : 'border-border/50'}`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <input
+              ref={inputRef}
+              type="color"
+              className="sr-only"
+              value={current}
+              onChange={e => onChange(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md border border-border/50 hover:bg-muted transition-colors text-left"
+            >
+              <div className="w-5 h-5 rounded-full border border-border/50 flex-shrink-0" style={{ backgroundColor: current }} />
+              <span className="text-xs text-foreground">Elegir color personalizado</span>
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
-function TextoColorCell({ value, onSave }: { value: CellVal | undefined; onSave: (v: CellVal) => void }) {
+function TextoColorCell({ value, onSave, recentTextColors, recentBgColors }: {
+  value: CellVal | undefined; onSave: (v: CellVal) => void;
+  recentTextColors?: string[]; recentBgColors?: string[];
+}) {
   const [editing, setEditing] = useState(false);
   const [tempVal, setTempVal] = useState('');
   const meta = parseTextoColorMeta(value?.fileUrl);
@@ -453,8 +495,8 @@ function TextoColorCell({ value, onSave }: { value: CellVal | undefined; onSave:
         className="flex items-center gap-1 opacity-0 group-hover/txtcolor:opacity-100 transition-opacity flex-shrink-0"
         onClick={e => e.stopPropagation()}
       >
-        <HexSwatchButton label="Color de texto" hex={meta?.textColor} fallback="#111827" onChange={hex => setColor('textColor', hex)} />
-        <HexSwatchButton label="Color de fondo" hex={meta?.bgColor} fallback="#ffffff" onChange={hex => setColor('bgColor', hex)} />
+        <HexSwatchPicker label="Color de texto" hex={meta?.textColor} fallback="#111827" recentColors={recentTextColors} onChange={hex => setColor('textColor', hex)} />
+        <HexSwatchPicker label="Color de fondo" hex={meta?.bgColor} fallback="#ffffff" recentColors={recentBgColors} onChange={hex => setColor('bgColor', hex)} />
       </div>
     </div>
   );
@@ -1301,9 +1343,9 @@ function FilePreviewDialog({ open, onOpenChange, url, fileName }: {
 }
 
 // ── Generic cell editor ───────────────────────────────────────────────────────
-function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, suggestions }: {
+function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTextColors, recentBgColors, suggestions }: {
   col: DynCol; value: CellVal | undefined; onSave: (v: CellVal) => void;
-  rowId: string; dynCols?: DynCols; recentColors?: string[]; suggestions?: string[];
+  rowId: string; dynCols?: DynCols; recentColors?: string[]; recentTextColors?: string[]; recentBgColors?: string[]; suggestions?: string[];
 }) {
   const [editing, setEditing] = useState(false);
   const [tempVal, setTempVal] = useState('');
@@ -1322,7 +1364,7 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, suggesti
   if (type === 'Checkbox') return <Checkbox checked={value?.booleanValue ?? false} onCheckedChange={v => onSave({ booleanValue: !!v })} />;
   if (type === 'Rating')   return <StarRating value={value?.numberValue ?? 0} onChange={n => onSave({ numberValue: n })} />;
   if (type === 'Barra')    return <ProgressBarCell value={value} onSave={onSave} />;
-  if (type === 'TextoColor') return <TextoColorCell value={value} onSave={onSave} />;
+  if (type === 'TextoColor') return <TextoColorCell value={value} onSave={onSave} recentTextColors={recentTextColors} recentBgColors={recentBgColors} />;
   if (type === 'Status')   return <StatusCell col={col} value={value} onSave={onSave} />;
   if (type === 'Fecha')    return <DatePickerCell col={col} value={value} onSave={onSave} rowId={rowId} dynCols={dynCols} />;
   if (type === 'Datetime') return <DatetimePickerCell col={col} value={value} onSave={onSave} />;
@@ -2272,7 +2314,7 @@ const SKIP_SKELETON_TYPES = new Set(['Checkbox', 'Rating', 'Botón', 'Status', '
 // durante el scroll virtualizado) — sin memo, se recalculan todas en cada
 // frame de scroll aunque su contenido no haya cambiado. Requiere que quien la
 // use pase `onBulkSave` estable (useCallback), o el memo nunca hace bail-out.
-export const DynamicColumnCells = memo(function DynamicColumnCells({ rowId, dynCols, asDiv, hiddenColumns, recentColors, selectedIds, onBulkSave, colUniqueValues, visibleColIds }: { rowId: string; dynCols: DynCols; asDiv?: boolean; hiddenColumns?: Set<string>; recentColors?: string[]; selectedIds?: Set<string>; onBulkSave?: (colId: string, value: CellVal, label: string) => void; colUniqueValues?: (key: string) => string[]; visibleColIds?: Set<string> | null }) {
+export const DynamicColumnCells = memo(function DynamicColumnCells({ rowId, dynCols, asDiv, hiddenColumns, recentColors, recentTextColors, recentBgColors, selectedIds, onBulkSave, colUniqueValues, visibleColIds }: { rowId: string; dynCols: DynCols; asDiv?: boolean; hiddenColumns?: Set<string>; recentColors?: string[]; recentTextColors?: string[]; recentBgColors?: string[]; selectedIds?: Set<string>; onBulkSave?: (colId: string, value: CellVal, label: string) => void; colUniqueValues?: (key: string) => string[]; visibleColIds?: Set<string> | null }) {
   const sorted = [...dynCols.columns]
     .sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0))
     .filter(col => !hiddenColumns?.has(col.id));
@@ -2305,6 +2347,8 @@ export const DynamicColumnCells = memo(function DynamicColumnCells({ rowId, dynC
             rowId={rowId}
             dynCols={dynCols}
             recentColors={recentColors}
+            recentTextColors={recentTextColors}
+            recentBgColors={recentBgColors}
             suggestions={colUniqueValues && ['Texto', 'Email', 'Teléfono'].includes(col.columnType ?? '') ? colUniqueValues(col.id) : undefined}
           />
         );
