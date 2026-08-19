@@ -42,7 +42,7 @@ import {
   ChevronDown, ChevronUp, ArrowUpDown, CircleDot, Type, Hash, Calendar as CalendarIcon, Clock, CheckSquare,
   ChevronDownCircle, User, Mail, Phone, Paperclip, MousePointerClick,
   Square as LucideIcon, ArrowLeftFromLine, ArrowRightFromLine, GripVertical,
-  Pipette, Calculator, MapPin, ExternalLink, GaugeCircle,
+  Pipette, Calculator, MapPin, ExternalLink, GaugeCircle, Highlighter,
 } from 'lucide-react';
 import { executeButtonAction, getStreetViewUrl } from 'zite-endpoints-sdk';
 import { ColumnFilterPopover } from './ColumnFilterPopover';
@@ -104,6 +104,25 @@ function parseColoredOptions(optionsJson?: string | null): ColoredOption[] {
   } catch { return []; }
 }
 
+// ── "Texto con color" cell metadata ───────────────────────────────────────────
+// El color es por CELDA (cada fila puede pintar su nota distinto), no por
+// columna como Status/Select — no cabe en optionsJson (config a nivel
+// columna). Se guarda en `fileUrl`, un campo de CellVal que este tipo de
+// columna no usa para nada más (igual que Rating usa numberValue o Checkbox
+// usa booleanValue) — así `textValue` se queda como texto plano de verdad,
+// sin encodear nada ahí, y sigue funcionando tal cual en búsqueda/filtro/CSV
+// como cualquier columna de Texto normal.
+interface TextoColorMeta { textColor?: string; bgColor?: string; }
+
+function parseTextoColorMeta(fileUrl?: string | null): TextoColorMeta | null {
+  if (!fileUrl) return null;
+  try {
+    const parsed = JSON.parse(fileUrl);
+    if (parsed && typeof parsed === 'object') return parsed as TextoColorMeta;
+    return null;
+  } catch { return null; }
+}
+
 // ── Column type icons ─────────────────────────────────────────────────────────
 const COLUMN_TYPE_ICONS: Record<string, typeof LucideIcon> = {
   'Status':    CircleDot,
@@ -122,6 +141,7 @@ const COLUMN_TYPE_ICONS: Record<string, typeof LucideIcon> = {
   'Color':     Pipette,
   'Fórmula':   Calculator,
   'Barra':     GaugeCircle,
+  'TextoColor': Highlighter,
 };
 
 function ColTypeIcon({ type, className = 'w-3.5 h-3.5' }: { type?: string; className?: string }) {
@@ -146,6 +166,7 @@ const COLUMN_TYPES = [
   { value: 'Rating',   label: 'Rating (1–5)' },
   { value: 'Botón',    label: 'Botón (acción)' },
   { value: 'Barra',    label: 'Barra de progreso (%)' },
+  { value: 'TextoColor', label: 'Texto con color' },
 ];
 
 const BUTTON_ACTIONS = [
@@ -364,6 +385,81 @@ function ProgressBarCell({ value, onSave }: { value: CellVal | undefined; onSave
   );
 }
 
+// ── Texto con color ───────────────────────────────────────────────────────────
+// Botón-muestra que abre el selector de color nativo del navegador
+// (input[type=color] libre, no la paleta fija de Status/Select — a
+// propósito, para poder pintar exactamente el tono que se necesite).
+function HexSwatchButton({ label, hex, fallback, onChange }: {
+  label: string; hex?: string; fallback: string; onChange: (hex: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <button
+      type="button"
+      title={label}
+      onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
+      className="relative w-3.5 h-3.5 rounded-full border border-border/60 shadow-sm flex-shrink-0 hover:scale-110 transition-transform"
+      style={{ backgroundColor: hex || fallback }}
+    >
+      <input
+        ref={inputRef}
+        type="color"
+        className="sr-only"
+        value={hex || fallback}
+        onClick={e => e.stopPropagation()}
+        onChange={e => onChange(e.target.value)}
+      />
+    </button>
+  );
+}
+
+function TextoColorCell({ value, onSave }: { value: CellVal | undefined; onSave: (v: CellVal) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [tempVal, setTempVal] = useState('');
+  const meta = parseTextoColorMeta(value?.fileUrl);
+
+  const commitText = () => {
+    onSave({ textValue: tempVal || undefined, fileUrl: value?.fileUrl });
+    setEditing(false);
+  };
+
+  const setColor = (key: keyof TextoColorMeta, hex: string) => {
+    const next: TextoColorMeta = { ...meta, [key]: hex };
+    onSave({ textValue: value?.textValue, fileUrl: JSON.stringify(next) });
+  };
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus value={tempVal}
+        onChange={e => setTempVal(e.target.value)}
+        onBlur={commitText}
+        onKeyDown={e => { if (e.key === 'Enter') commitText(); if (e.key === 'Escape') setEditing(false); }}
+        className="h-7 w-full min-w-0 text-xs"
+        style={{ color: meta?.textColor }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="h-full min-w-0 w-full flex items-center gap-1.5 px-1 cursor-text group/txtcolor"
+      onClick={() => { setTempVal(value?.textValue ?? ''); setEditing(true); }}
+    >
+      <span className="flex-1 truncate text-xs" style={{ color: meta?.textColor }} title={value?.textValue}>
+        {value?.textValue ?? ''}
+      </span>
+      <div
+        className="flex items-center gap-1 opacity-0 group-hover/txtcolor:opacity-100 transition-opacity flex-shrink-0"
+        onClick={e => e.stopPropagation()}
+      >
+        <HexSwatchButton label="Color de texto" hex={meta?.textColor} fallback="#111827" onChange={hex => setColor('textColor', hex)} />
+        <HexSwatchButton label="Color de fondo" hex={meta?.bgColor} fallback="#ffffff" onChange={hex => setColor('bgColor', hex)} />
+      </div>
+    </div>
+  );
+}
+
 // ── Color picker cell ─────────────────────────────────────────────────────────
 function ColorPickerCell({ value, onSave, recentColors = [] }: {
   value: CellVal | undefined;
@@ -562,56 +658,44 @@ function StatusCell({ col, value, onSave }: { col: DynCol; value: CellVal | unde
 }
 
 // ── Select cell ───────────────────────────────────────────────────────────────
+// Dropdown simple, sin color — a diferencia de Status, que sí codifica cada
+// opción con un color. Antes ambos tipos eran literalmente el mismo mecanismo
+// (mismo dropdown de pastillas de color); se separan para que Select sirva
+// para elegir un valor de una lista fija sin necesidad de codificar por color.
+// parseColoredOptions() sigue leyendo el mismo formato de optionsJson (por
+// compatibilidad con columnas Select ya existentes que sí tenían color
+// guardado) — solo se ignora el campo `color` al mostrarlo.
 function SelectCell({ col, value, onSave }: { col: DynCol; value: CellVal | undefined; onSave: (v: CellVal) => void }) {
   const options = parseColoredOptions(col.optionsJson);
-  const current = options.find(o => o.label === value?.textValue);
-  const colorDef = current ? getColor(current.color) : null;
+  const NONE = '__none__';
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs focus:outline-none hover:opacity-90 active:scale-95 transition-all">
-          {colorDef ? (
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold ${colorDef.bg} ${colorDef.text}`}>
-              {current?.label}<ChevronDown className="w-2.5 h-2.5 opacity-70" />
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs text-muted-foreground border border-dashed border-muted-foreground/30">
-              —<ChevronDown className="w-2.5 h-2.5 opacity-60" />
-            </span>
-          )}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-44 p-1.5">
-        {options.map(opt => {
-          const c = getColor(opt.color);
-          return (
-            <DropdownMenuItem key={opt.label} onClick={() => onSave({ textValue: opt.label })} className="p-0 mb-1 last:mb-0 rounded-md overflow-hidden focus:bg-transparent">
-              <span className={`w-full px-3 py-1 rounded-md text-xs font-semibold cursor-pointer ${c.bg} ${c.text} hover:opacity-90 transition-opacity`}>{opt.label}</span>
-            </DropdownMenuItem>
-          );
-        })}
-        {value?.textValue && (
-          <><div className="my-1 border-t border-border/50" />
-            <DropdownMenuItem onClick={() => onSave({ textValue: undefined })} className="text-xs text-muted-foreground rounded-md">
-              <X className="w-3 h-3 mr-1.5" /> Limpiar
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Select
+      value={value?.textValue ?? NONE}
+      onValueChange={v => onSave({ textValue: v === NONE ? undefined : v })}
+    >
+      <SelectTrigger className="h-7 w-full min-w-0 border-none shadow-none px-1.5 text-xs hover:bg-muted/70 focus:ring-0 data-[placeholder]:text-muted-foreground">
+        <SelectValue placeholder="—" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NONE} className="text-xs text-muted-foreground">— (vacío)</SelectItem>
+        {options.map(opt => (
+          <SelectItem key={opt.label} value={opt.label} className="text-xs">{opt.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
 // ── Colored options form (Status & Select) ────────────────────────────────────
-function ColoredOptionsForm({ options, onChange, title = 'Opciones' }: {
-  options: ColoredOption[]; onChange: (opts: ColoredOption[]) => void; title?: string;
+function ColoredOptionsForm({ options, onChange, title = 'Opciones', showColor = true }: {
+  options: ColoredOption[]; onChange: (opts: ColoredOption[]) => void; title?: string; showColor?: boolean;
 }) {
   const [newLabel, setNewLabel] = useState('');
   const [newColor, setNewColor] = useState('blue');
   const add = () => {
     const label = newLabel.trim();
     if (!label) return;
-    onChange([...options, { label, color: newColor }]);
+    onChange([...options, { label, color: showColor ? newColor : 'gray' }]);
     setNewLabel('');
   };
   const remove = (i: number) => onChange(options.filter((_, idx) => idx !== i));
@@ -625,13 +709,17 @@ function ColoredOptionsForm({ options, onChange, title = 'Opciones' }: {
           const c = getColor(opt.color);
           return (
             <div key={i} className="flex items-center gap-2">
-              <span className={`flex-1 px-2.5 py-1 rounded-md text-xs font-semibold ${c.bg} ${c.text}`}>{opt.label}</span>
-              <div className="flex gap-0.5">
-                {STATUS_COLORS.slice(0, 6).map(sc => (
-                  <button key={sc.value} type="button" title={sc.label} onClick={() => updateColor(i, sc.value)}
-                    className={`w-4 h-4 rounded-full ${sc.bg} transition-all ${opt.color === sc.value ? 'ring-2 ring-offset-1 ring-foreground scale-110' : 'opacity-60 hover:opacity-100'}`} />
-                ))}
-              </div>
+              <span className={showColor
+                ? `flex-1 px-2.5 py-1 rounded-md text-xs font-semibold ${c.bg} ${c.text}`
+                : 'flex-1 px-2.5 py-1 rounded-md text-xs font-medium bg-muted text-foreground'}>{opt.label}</span>
+              {showColor && (
+                <div className="flex gap-0.5">
+                  {STATUS_COLORS.slice(0, 6).map(sc => (
+                    <button key={sc.value} type="button" title={sc.label} onClick={() => updateColor(i, sc.value)}
+                      className={`w-4 h-4 rounded-full ${sc.bg} transition-all ${opt.color === sc.value ? 'ring-2 ring-offset-1 ring-foreground scale-110' : 'opacity-60 hover:opacity-100'}`} />
+                  ))}
+                </div>
+              )}
               <button type="button" onClick={() => remove(i)} className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0">
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -645,15 +733,17 @@ function ColoredOptionsForm({ options, onChange, title = 'Opciones' }: {
           <Label className="text-[10px] text-muted-foreground">Etiqueta</Label>
           <Input placeholder="Ej: En progreso..." value={newLabel} onChange={e => setNewLabel(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} className="h-7 text-xs" />
         </div>
-        <div className="space-y-1">
-          <Label className="text-[10px] text-muted-foreground">Color</Label>
-          <div className="flex gap-1 flex-wrap max-w-[150px]">
-            {STATUS_COLORS.map(c => (
-              <button key={c.value} type="button" title={c.label} onClick={() => setNewColor(c.value)}
-                className={`w-5 h-5 rounded-full ${c.bg} transition-all ${newColor === c.value ? 'ring-2 ring-offset-1 ring-foreground scale-110' : 'opacity-60 hover:opacity-100'}`} />
-            ))}
+        {showColor && (
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">Color</Label>
+            <div className="flex gap-1 flex-wrap max-w-[150px]">
+              {STATUS_COLORS.map(c => (
+                <button key={c.value} type="button" title={c.label} onClick={() => setNewColor(c.value)}
+                  className={`w-5 h-5 rounded-full ${c.bg} transition-all ${newColor === c.value ? 'ring-2 ring-offset-1 ring-foreground scale-110' : 'opacity-60 hover:opacity-100'}`} />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         <Button type="button" size="sm" onClick={add} disabled={!newLabel.trim()} className="h-7 text-xs px-3 flex-shrink-0">
           <Plus className="w-3 h-3" />
         </Button>
@@ -1232,6 +1322,7 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, suggesti
   if (type === 'Checkbox') return <Checkbox checked={value?.booleanValue ?? false} onCheckedChange={v => onSave({ booleanValue: !!v })} />;
   if (type === 'Rating')   return <StarRating value={value?.numberValue ?? 0} onChange={n => onSave({ numberValue: n })} />;
   if (type === 'Barra')    return <ProgressBarCell value={value} onSave={onSave} />;
+  if (type === 'TextoColor') return <TextoColorCell value={value} onSave={onSave} />;
   if (type === 'Status')   return <StatusCell col={col} value={value} onSave={onSave} />;
   if (type === 'Fecha')    return <DatePickerCell col={col} value={value} onSave={onSave} rowId={rowId} dynCols={dynCols} />;
   if (type === 'Datetime') return <DatetimePickerCell col={col} value={value} onSave={onSave} />;
@@ -1487,7 +1578,7 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
   const [insertAt, setInsertAt] = useState<number | undefined>(undefined);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropInfo, setDropInfo] = useState<{ id: string; side: 'left' | 'right' } | null>(null);
-  const [editingOptsCol, setEditingOptsCol] = useState<{ id: string; name: string } | null>(null);
+  const [editingOptsCol, setEditingOptsCol] = useState<{ id: string; name: string; type?: string } | null>(null);
   const [editOpts, setEditOpts] = useState<ColoredOption[]>([]);
   const scrollRafRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -1986,7 +2077,7 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
                   {(col.columnType === 'Status' || col.columnType === 'Select') && (
                     <DropdownMenuItem onClick={() => {
                       setEditOpts(parseColoredOptions(col.optionsJson));
-                      setEditingOptsCol({ id: col.id, name: col.columnName ?? '' });
+                      setEditingOptsCol({ id: col.id, name: col.columnName ?? '', type: col.columnType });
                     }}>
                       <Pencil className="w-3.5 h-3.5 mr-2" /> Editar opciones
                     </DropdownMenuItem>
@@ -2082,7 +2173,8 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
             </div>
             {(form.type === 'Status' || form.type === 'Select') && (
               <ColoredOptionsForm options={coloredOpts} onChange={setColoredOpts}
-                title={form.type === 'Status' ? 'Opciones de Status' : 'Opciones del Select'} />
+                title={form.type === 'Status' ? 'Opciones de Status' : 'Opciones del Select'}
+                showColor={form.type === 'Status'} />
             )}
             {form.type === 'Botón' && <ButtonConfigForm value={btnConfig} onChange={setBtnConfig} />}
             {form.type === 'Fórmula' && <FormulaConfigForm value={formulaConfig} onChange={setFormulaConfig} />}
@@ -2119,6 +2211,7 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
             options={editOpts}
             onChange={setEditOpts}
             title="Opciones"
+            showColor={editingOptsCol?.type === 'Status'}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingOptsCol(null)}>Cancelar</Button>
@@ -2223,17 +2316,23 @@ export const DynamicColumnCells = memo(function DynamicColumnCells({ rowId, dynC
         const centeredContent = isCheckbox
           ? <div className="flex items-center justify-center w-full h-full">{cellContent}</div>
           : cellContent;
+        // El fondo de "Texto con color" es por CELDA (cada fila elige el
+        // suyo), no por tipo de columna como Status — se aplica como style
+        // inline, que gana sobre la clase de fondo por defecto de abajo.
+        const cellBgColor = col.columnType === 'TextoColor' ? parseTextoColorMeta(value?.fileUrl)?.bgColor : undefined;
         if (asDiv) {
           return (
             <div key={col.id}
-              className={`px-2 py-0 h-9 overflow-hidden border-l border-border/30 flex items-center ${col.columnType === 'Status' ? 'bg-card' : 'bg-accent/5'}`}>
+              className={`px-2 py-0 h-9 overflow-hidden border-l border-border/30 flex items-center ${col.columnType === 'Status' ? 'bg-card' : 'bg-accent/5'}`}
+              style={cellBgColor ? { backgroundColor: cellBgColor } : undefined}>
               {centeredContent}
             </div>
           );
         }
         return (
           <td key={col.id}
-            className={`px-2 py-0 h-9 overflow-hidden border-l border-b border-border/30 ${col.columnType === 'Status' ? 'bg-card' : 'bg-accent/5'}`}>
+            className={`px-2 py-0 h-9 overflow-hidden border-l border-b border-border/30 ${col.columnType === 'Status' ? 'bg-card' : 'bg-accent/5'}`}
+            style={cellBgColor ? { backgroundColor: cellBgColor } : undefined}>
             {centeredContent}
           </td>
         );
