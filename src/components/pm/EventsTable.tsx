@@ -663,7 +663,18 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
             <col style={{ width: 96 }} />
             <col style={{ width: 90 }} />
             <col style={{ width: 44 }} />
-            {[...dynCols.columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0)).filter(c => visibleColIds.has(c.id)).map(c => { const w = dynCols.getColWidth(c.id); return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
+            {/* Un <col> por CADA columna dinámica, sin filtrar por visibleColIds —
+                DynamicColumnHeaders/Cells sí renderizan un <th>/<td> placeholder
+                para la columna excluida (Ubicación Interna, duplicada con la
+                columna fija "Ubic. Interna"), no la omiten del todo. Con
+                table-layout:fixed el <colgroup> se empareja con las celdas
+                reales por POSICIÓN — filtrar aquí pero no allá desalineaba un
+                <col> de menos contra una celda de más a partir de esa columna,
+                y la última columna real (la que fuera, o una recién agregada)
+                se quedaba sin ancho declarado y colapsaba a ~30px. La columna
+                excluida sigue ocupando su posición, pero con ancho 0 para no
+                gastar espacio real. */}
+            {[...dynCols.columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0)).map(c => { const w = visibleColIds.has(c.id) ? dynCols.getColWidth(c.id) : 0; return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
             <col />
           </colgroup>
           <thead className="bg-muted sticky top-0 z-30">
