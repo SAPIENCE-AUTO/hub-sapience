@@ -112,7 +112,7 @@ export function InviteTemplateDialog({ open, onOpenChange, boardId, calendarName
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!saving) onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <Mail className="w-4 h-4 text-primary" />
@@ -120,7 +120,7 @@ export function InviteTemplateDialog({ open, onOpenChange, boardId, calendarName
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-[minmax(240px,320px)_1fr] gap-4">
           {/* Left: column picker */}
           <div className="space-y-2 min-w-0">
             <p className="text-xs text-muted-foreground">
@@ -152,7 +152,7 @@ export function InviteTemplateDialog({ open, onOpenChange, boardId, calendarName
                   </span>
                 </button>
 
-                <div className="max-h-[420px] overflow-y-auto divide-y divide-border/50">
+                <div className="max-h-[65vh] overflow-y-auto divide-y divide-border/50">
                   {columns.map((col, index) => (
                     <div key={col.id} className="flex items-center gap-2 px-2 py-2 hover:bg-muted/30 transition-colors">
                       <div className="flex flex-col flex-shrink-0">
@@ -203,7 +203,7 @@ export function InviteTemplateDialog({ open, onOpenChange, boardId, calendarName
               sandbox=""
               srcDoc={previewHtml}
               title="Vista previa del invite"
-              className="w-full h-[460px] rounded-md border border-border bg-white"
+              className="w-full h-[65vh] rounded-md border border-border bg-white"
             />
           </div>
         </div>
