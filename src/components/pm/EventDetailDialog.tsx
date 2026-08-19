@@ -9,6 +9,7 @@ import { saveCalendarEvent, linkGroupToEvent, GetRecruitmentGroupsOutputType } f
 import type { CalEvent } from './pmTypes';
 import type { DynCols } from '../DynamicColumns';
 import { EventFormFields, EventFormValues, EMPTY_EVENT_FORM, PRESET_LOCS } from './EventFormFields';
+import { ObservationRoomPanel } from './ObservationRoomPanel';
 
 type RecGroup = GetRecruitmentGroupsOutputType['groups'][0];
 
@@ -272,6 +273,9 @@ export function EventDetailDialog({
                 )}
               </div>
             </div>
+
+            {/* ── Sala de observación ── */}
+            {editingEvent && <ObservationRoomPanel calendarEventId={editingEvent.id} />}
           </div>
 
           <DialogFooter>

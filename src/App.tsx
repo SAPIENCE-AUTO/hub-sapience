@@ -26,6 +26,7 @@ import DataImportPage from './pages/DataImportPage';
 import ExpensesPage from './pages/ExpensesPage';
 import MigrationRunnerPage from './pages/MigrationRunnerPage';
 import SharpliTestPage from './pages/SharpliTestPage';
+import ObservationRoomPage from './pages/ObservationRoomPage';
 
 // ── Error boundary ────────────────────────────────────────────────────────────
 interface EBState { hasError: boolean; message: string }
@@ -73,6 +74,7 @@ export default function App() {
             <Routes>
               <Route path="/shared/:token" element={<SharedViewPage />} />
               <Route path="/portal/:token" element={<SupplierPortalPage />} />
+              <Route path="/s/:slug" element={<ObservationRoomPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/" element={<Layout />}>
                 <Route index element={null} />

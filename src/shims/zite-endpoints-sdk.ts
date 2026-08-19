@@ -151,6 +151,7 @@ export const cleanupDuplicateCellValues = (input?: any): Promise<any> => call('c
 export const cleanupPJT001 = (input?: any): Promise<any> => call('cleanupPJT001', input);
 export const countFilloutSubmissions = (input?: any): Promise<any> => call('countFilloutSubmissions', input);
 export const createBoardWithTemplate = (input?: any): Promise<any> => call('createBoardWithTemplate', input);
+export const createObservationStream = (input?: any): Promise<any> => call('createObservationStream', input);
 export const createSharedView = (input?: any): Promise<any> => call('createSharedView', input);
 export const createTeamsChannel = (input?: any): Promise<any> => call('createTeamsChannel', input);
 export const deleteBoard = (input?: any): Promise<any> => call('deleteBoard', input);
@@ -164,6 +165,7 @@ export const deleteDealDocument = (input?: any): Promise<any> => call('deleteDea
 export const deleteDocBlock = (input?: any): Promise<any> => call('deleteDocBlock', input);
 export const deleteExpense = (input?: any): Promise<any> => call('deleteExpense', input);
 export const deleteInternalView = (input?: any): Promise<any> => call('deleteInternalView', input);
+export const deleteObservationChatMessage = (input?: any): Promise<any> => call('deleteObservationChatMessage', input);
 export const deleteParticipant = (input?: any): Promise<any> => call('deleteParticipant', input);
 export const deletePayment = (input?: any): Promise<any> => call('deletePayment', input);
 export const deletePoAttachment = (input?: any): Promise<any> => call('deletePoAttachment', input);
@@ -180,6 +182,7 @@ export const duplicateGroup = (input?: any): Promise<any> => call('duplicateGrou
 export const duplicateRows = (input?: any): Promise<any> => call('duplicateRows', input);
 export const executeButtonAction = (input?: any): Promise<any> => call('executeButtonAction', input);
 export const exportConfigBackup = (input?: any): Promise<any> => call('exportConfigBackup', input);
+export const exportObservationAttendance = (input?: any): Promise<any> => call('exportObservationAttendance', input);
 export const filloutNativeWebhook = (input?: any): Promise<any> => call('filloutNativeWebhook', input);
 export const filloutWebhook = (input?: any): Promise<any> => call('filloutWebhook', input);
 export const fixCellData = (input?: any): Promise<any> => call('fixCellData', input);
@@ -225,6 +228,10 @@ export const getMessages = (input?: any): Promise<any> => call('getMessages', in
 export const searchMessages = (input?: any): Promise<any> => call('searchMessages', input);
 export const getMigrationLogs = (input?: any): Promise<any> => call('getMigrationLogs', input);
 export const getMultiProjectCostAnalysis = (input?: any): Promise<any> => call('getMultiProjectCostAnalysis', input);
+export const getObservationChatMessages = (input?: any): Promise<any> => call('getObservationChatMessages', input);
+export const getObservationChatToken = (input?: any): Promise<any> => call('getObservationChatToken', input);
+export const getObservationRoomPublic = (input?: any): Promise<any> => call('getObservationRoomPublic', input);
+export const getObservationSessionDetail = (input?: any): Promise<any> => call('getObservationSessionDetail', input);
 export const getParticipants = (input?: any): Promise<any> => call('getParticipants', input);
 export const getPayments = (input?: any): Promise<any> => call('getPayments', input);
 export const getPettyCashFunds = (input?: any): Promise<any> => call('getPettyCashFunds', input);
@@ -282,6 +289,9 @@ export const normalizeSupplierNames = (input?: any): Promise<any> => call('norma
 export const parseExcelFile = (input?: any): Promise<any> => call('parseExcelFile', input);
 export const parseOdcCsv = (input?: any): Promise<any> => call('parseOdcCsv', input);
 export const permanentlyDelete = (input?: any): Promise<any> => call('permanentlyDelete', input);
+export const postObserverChatMessage = (input?: any): Promise<any> => call('postObserverChatMessage', input);
+export const postObserverHeartbeat = (input?: any): Promise<any> => call('postObserverHeartbeat', input);
+export const postProducerChatMessage = (input?: any): Promise<any> => call('postProducerChatMessage', input);
 export const preparePoEmail = (input?: any): Promise<any> => call('preparePoEmail', input);
 export const previewInviteTemplate = (input?: any): Promise<any> => call('previewInviteTemplate', input);
 export const publishDocEvent = (input?: any): Promise<any> => call('publishDocEvent', input);
@@ -291,6 +301,7 @@ export const publishRecruitmentRowsChanged = (input?: any): Promise<any> => call
 export const publishTyping = (input?: any): Promise<any> => call('publishTyping', input);
 export const purgeDeletedRows = (input?: any): Promise<any> => call('purgeDeletedRows', input);
 export const recalculateDuplicateNotes = (input?: any): Promise<any> => call('recalculateDuplicateNotes', input);
+export const registerObserver = (input?: any): Promise<any> => call('registerObserver', input);
 export const rejectExpense = (input?: any): Promise<any> => call('rejectExpense', input);
 export const rejectPurchaseOrder = (input?: any): Promise<any> => call('rejectPurchaseOrder', input);
 export const renameBoard = (input?: any): Promise<any> => call('renameBoard', input);

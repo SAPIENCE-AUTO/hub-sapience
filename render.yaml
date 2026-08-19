@@ -68,6 +68,14 @@ services:
         sync: false
       - key: ZITE_N8N_TIMELINE_WEBHOOK_URL
         sync: false
+      # Sala de observación — Token ID/Secret de un Access Token de Mux, y el
+      # Webhook Secret del endpoint que apunte a /api/webhooks/mux.
+      - key: ZITE_MUX_TOKEN_ID
+        sync: false
+      - key: ZITE_MUX_TOKEN_SECRET
+        sync: false
+      - key: ZITE_MUX_WEBHOOK_SECRET
+        sync: false
       # ZITE_N8N_TEAMS_WEBHOOK_URL ya no se usa — createTeamsChannel.ts crea
       # el canal directo vía Graph desde que se concedió el permiso de
       # aplicación ChannelSettings.ReadWrite.All (agosto 2026). El valor

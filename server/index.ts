@@ -9,6 +9,8 @@ import { ZiteError } from './compat/errors';
 import { GraphAuthError } from './microsoft/graph';
 import { resolveAuth } from './auth';
 import { uploadApp } from './upload';
+import { muxWebhookApp } from './webhooks/mux';
+import { checkRateLimit, clientIp } from './rateLimit';
 import type { CompiledEndpoint } from './compat/endpoint';
 
 /**
@@ -110,10 +112,31 @@ app.get('/healthz', (c) => c.json({ ok: true }));
 // (que solo entiende JSON) para que /api/upload no caiga ahí.
 app.route('/api', uploadApp);
 
+// Igual razón que uploadApp: el webhook de Mux necesita el body crudo para
+// verificar la firma HMAC, antes de que cualquier c.req.json() lo consuma.
+app.route('/api', muxWebhookApp);
+
+// Límite burdo por IP para los 3 endpoints públicos (sin login) de la Sala de
+// observación — ver server/rateLimit.ts. Están aquí y no dentro de cada
+// endpoint porque es el mismo punto donde ya se resuelve auth para todos.
+const PUBLIC_RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
+  registerObserver: { limit: 5, windowMs: 60_000 },
+  postObserverChatMessage: { limit: 20, windowMs: 60_000 },
+  postObserverHeartbeat: { limit: 10, windowMs: 60_000 },
+};
+
 app.post('/api/:name', async (c) => {
   const name = c.req.param('name');
   const endpoint = ENDPOINTS[name];
   if (!endpoint) return c.json({ message: `Endpoint no montado todavía: ${name}` }, 404);
+
+  const rateLimit = PUBLIC_RATE_LIMITS[name];
+  if (rateLimit) {
+    const ip = clientIp(c.req.header('x-forwarded-for'));
+    if (!checkRateLimit(`${name}:${ip}`, rateLimit.limit, rateLimit.windowMs)) {
+      return c.json({ message: 'Demasiadas peticiones, intenta de nuevo en un momento.' }, 429);
+    }
+  }
 
   // Solo se resuelve auth para endpoints que la piden — un endpoint público
   // (authenticated: false) no debe bloquearse por una sesión de Supabase vieja
