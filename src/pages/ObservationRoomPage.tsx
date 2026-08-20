@@ -5,7 +5,7 @@ import {
   getObservationChatToken, postObserverChatMessage, postObserverHeartbeat,
 } from 'zite-endpoints-sdk';
 import { useObservationChat, type ObservationChatMessage } from '@/hooks/useObservationChat';
-import { Eye, MessageSquare, Play, Pause, Volume2, VolumeX, Maximize, Minimize, HelpCircle, LogOut, Smile } from 'lucide-react';
+import { Eye, MessageSquare, Play, Pause, Volume2, VolumeX, Maximize, Minimize, HelpCircle, LogOut, Smile, Send } from 'lucide-react';
 
 // Carga perezosa — la mayoría de los observadores nunca abre el picker, y
 // esta página pública debe cargar rápido en el primer vistazo (viene de un
@@ -353,10 +353,10 @@ function ObserverChatPanel({
         {messages.map((m) => (
           <div
             key={m.id}
-            className={`text-xs ${m.esPregunta ? 'rounded-r-lg border-l-2 border-[#3FA9C4] bg-[#027495]/[.08] py-1.5 pl-2.5 pr-2' : ''}`}
+            className={`text-sm ${m.esPregunta ? 'rounded-r-lg border-l-2 border-[#3FA9C4] bg-[#027495]/[.08] py-1.5 pl-2.5 pr-2' : ''}`}
           >
             {m.esPregunta && (
-              <div className="mb-0.5 text-[9.5px] font-bold uppercase tracking-[0.1em] text-[#027495]">
+              <div className="mb-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#027495]">
                 Pregunta al moderador
               </div>
             )}
@@ -368,7 +368,7 @@ function ObserverChatPanel({
                 </span>
               )}
             </span>
-            <span className="ml-1 text-[#A9BAC0]">
+            <span className="ml-1 text-[11px] text-[#A9BAC0]">
               {new Date(m.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
             </span>
             <p className="break-words text-[#383838]">{m.body}</p>
@@ -389,13 +389,14 @@ function ObserverChatPanel({
           <HelpCircle className="h-3 w-3" />
           Pregunta para el moderador
         </button>
-        <div ref={emojiRef} className="relative">
+        <div className="flex items-center gap-2">
+          <div ref={emojiRef} className="relative flex-1">
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={isPregunta ? 'Escribe tu pregunta...' : 'Escribe un mensaje...'}
-            className={`w-full rounded-[10px] border-[1.5px] py-2 pl-3 pr-9 text-xs text-[#383838] outline-none transition-colors placeholder:text-[#A9BAC0] focus:ring-[3px] ${
+            className={`w-full rounded-[10px] border-[1.5px] py-2.5 pl-3.5 pr-9 text-sm text-[#383838] outline-none transition-colors placeholder:text-[#A9BAC0] focus:ring-[3px] ${
               isPregunta ? 'border-[#027495] ring-[3px] ring-[#027495]/[.13]' : 'border-[#DDE5E8] focus:border-[#027495] focus:ring-[#027495]/[.13]'
             }`}
           />
@@ -430,6 +431,15 @@ function ObserverChatPanel({
               </Suspense>
             </div>
           )}
+          </div>
+          <button
+            type="submit"
+            disabled={!input.trim() || sending}
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] bg-[#027495] text-white transition-colors hover:enabled:bg-[#025F7A] disabled:cursor-default disabled:bg-[#DDE5E8] disabled:text-[#A9BAC0]"
+            aria-label="Enviar mensaje"
+          >
+            <Send className="h-4 w-4" />
+          </button>
         </div>
       </form>
     </>
