@@ -10,6 +10,7 @@ import { GraphAuthError } from './microsoft/graph';
 import { resolveAuth } from './auth';
 import { uploadApp } from './upload';
 import { muxWebhookApp } from './webhooks/mux';
+import { zoomWebhookApp } from './webhooks/zoom';
 import { checkRateLimit, clientIp } from './rateLimit';
 import type { CompiledEndpoint } from './compat/endpoint';
 
@@ -115,6 +116,7 @@ app.route('/api', uploadApp);
 // Igual razón que uploadApp: el webhook de Mux necesita el body crudo para
 // verificar la firma HMAC, antes de que cualquier c.req.json() lo consuma.
 app.route('/api', muxWebhookApp);
+app.route('/api', zoomWebhookApp);
 
 // Límite burdo por IP para los 3 endpoints públicos (sin login) de la Sala de
 // observación — ver server/rateLimit.ts. Están aquí y no dentro de cada

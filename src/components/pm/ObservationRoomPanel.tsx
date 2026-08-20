@@ -18,6 +18,8 @@ interface ObservationSession {
   muxPlaybackId?: string;
   muxAssetId?: string;
   observationUrl: string;
+  zoomJoinUrl?: string;
+  zoomStartUrl?: string;
 }
 
 interface ConnectedObserver {
@@ -111,9 +113,9 @@ export function ObservationRoomPanel({ calendarEventId }: { calendarEventId: str
   const handleCreate = async () => {
     setCreating(true);
     try {
-      await createObservationStream({ calendarEventId });
+      const res = await createObservationStream({ calendarEventId });
       await load();
-      toast.success('Stream creado ✓');
+      toast.success(res.zoomJoinUrl ? 'Stream y meeting de Zoom creados ✓' : `Stream creado (Zoom: ${res.zoomSkippedReason ?? 'no configurado'})`);
     } catch {
       toast.error('Error al crear el stream');
     }
@@ -215,6 +217,20 @@ export function ObservationRoomPanel({ calendarEventId }: { calendarEventId: str
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
+            {session.zoomJoinUrl ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground w-24 flex-shrink-0">Zoom</span>
+                <code className="flex-1 truncate bg-muted px-1.5 py-0.5 rounded text-[11px]">{session.zoomJoinUrl}</code>
+                <button onClick={() => copy(session.zoomJoinUrl!, 'Link de Zoom')} className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                  <Copy className="w-3 h-3" />
+                </button>
+                <a href={session.zoomJoinUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground/50 italic">Zoom no configurado — solo Mux.</p>
+            )}
           </div>
 
           <div className="border-t border-border/30 pt-2 space-y-1.5">

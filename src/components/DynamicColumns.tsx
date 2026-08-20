@@ -42,7 +42,7 @@ import {
   ChevronDown, ChevronUp, ArrowUpDown, CircleDot, Type, Hash, Calendar as CalendarIcon, Clock, CheckSquare,
   ChevronDownCircle, User, Mail, Phone, Paperclip, MousePointerClick,
   Square as LucideIcon, ArrowLeftFromLine, ArrowRightFromLine, GripVertical,
-  Pipette, Calculator, MapPin, ExternalLink, GaugeCircle, Highlighter,
+  Pipette, Calculator, MapPin, ExternalLink, GaugeCircle, Highlighter, Copy, Link2,
 } from 'lucide-react';
 import { executeButtonAction, getStreetViewUrl } from 'zite-endpoints-sdk';
 import { ColumnFilterPopover } from './ColumnFilterPopover';
@@ -138,6 +138,7 @@ const COLUMN_TYPE_ICONS: Record<string, typeof LucideIcon> = {
   'Archivo':   Paperclip,
   'Rating':    Star,
   'Botón':     MousePointerClick,
+  'Link':      Link2,
   'Color':     Pipette,
   'Fórmula':   Calculator,
   'Barra':     GaugeCircle,
@@ -165,6 +166,7 @@ const COLUMN_TYPES = [
   { value: 'Archivo',  label: 'Archivo (URL)' },
   { value: 'Rating',   label: 'Rating (1–5)' },
   { value: 'Botón',    label: 'Botón (acción)' },
+  { value: 'Link',     label: 'Link (con copiar)' },
   { value: 'Barra',    label: 'Barra de progreso (%)' },
   { value: 'TextoColor', label: 'Texto con color' },
 ];
@@ -175,6 +177,7 @@ const BUTTON_ACTIONS = [
   { value: 'send_email',    label: '📧 Enviar Email' },
   { value: 'duplicate_row', label: '📋 Duplicar Fila' },
   { value: 'webhook',       label: '⚡ Webhook (n8n / Zapier)' },
+  { value: 'create_observation_stream', label: '📡 Crear Sala de observación' },
 ];
 
 const BUTTON_VARIANTS = [
@@ -637,7 +640,7 @@ function FormulaCell({ col, rowId, dynCols }: { col: DynCol; rowId: string; dynC
 }
 
 // ── Button cell ───────────────────────────────────────────────────────────────
-function ButtonCell({ col, rowId }: { col: DynCol; rowId: string }) {
+function ButtonCell({ col, rowId, dynCols }: { col: DynCol; rowId: string; dynCols?: DynCols }) {
   const [loading, setLoading] = useState(false);
   const config = parseButtonConfig(col.optionsJson);
   const label = config.label || col.columnName || 'Ejecutar';
@@ -648,6 +651,11 @@ function ButtonCell({ col, rowId }: { col: DynCol; rowId: string }) {
     try {
       const result = await executeButtonAction({ columnId: col.id, rowId, boardId: col.boardId ?? '' });
       if (result.success) toast.success(result.message); else toast.error(result.message);
+      // Varias acciones (duplicar fila, crear sala de observación) escriben
+      // en otras columnas/filas que este mismo click no refleja solo — sin
+      // esto, el resultado no aparece hasta recargar la página a mano.
+      // softReload (no reload) para no meter skeletons/flicker por un click.
+      dynCols?.softReload?.();
     } catch { toast.error('Error al ejecutar la acción.'); } finally { setLoading(false); }
   };
   return (
@@ -1360,7 +1368,7 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
     }
   }, [editing, type]);
 
-  if (type === 'Botón')    return <ButtonCell col={col} rowId={rowId} />;
+  if (type === 'Botón')    return <ButtonCell col={col} rowId={rowId} dynCols={dynCols} />;
   if (type === 'Checkbox') return <Checkbox checked={value?.booleanValue ?? false} onCheckedChange={v => onSave({ booleanValue: !!v })} />;
   if (type === 'Rating')   return <StarRating value={value?.numberValue ?? 0} onChange={n => onSave({ numberValue: n })} />;
   if (type === 'Barra')    return <ProgressBarCell value={value} onSave={onSave} />;
@@ -1397,7 +1405,8 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
       case 'Número':   return value?.numberValue?.toString() ?? '';
       case 'Fecha':    return value?.dateValue ? value.dateValue.split('T')[0] : '';
       case 'Datetime': return value?.dateValue ? value.dateValue.replace('Z', '').substring(0, 16) : '';
-      case 'Archivo':  return value?.fileUrl ?? value?.textValue ?? '';
+      case 'Archivo':
+      case 'Link':     return value?.fileUrl ?? value?.textValue ?? '';
       default:         return formatAddressText(value?.textValue) || '';
     }
   };
@@ -1407,7 +1416,8 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
       case 'Número':   v.numberValue = tempVal ? Number(tempVal) : undefined; break;
       case 'Fecha':    v.dateValue = tempVal ? tempVal + 'T00:00:00' : undefined; break;
       case 'Datetime': v.dateValue = tempVal ? new Date(tempVal).toISOString() : undefined; break;
-      case 'Archivo':  v.fileUrl = tempVal || undefined; break;
+      case 'Archivo':
+      case 'Link':     v.fileUrl = tempVal || undefined; break;
       default:         v.textValue = tempVal || undefined;
     }
     onSave(v);
@@ -1532,6 +1542,38 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
         </div>
       );
     }
+  }
+
+  if (type === 'Link') {
+    const url = value?.fileUrl ?? value?.textValue ?? '';
+    return (
+      <div className="h-full min-w-0 flex items-center gap-1 px-1 overflow-hidden group/link">
+        {url ? (
+          <>
+            <a href={url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+              className="text-primary hover:underline truncate text-xs flex-1 min-w-0" title={url}>
+              {url}
+            </a>
+            <button
+              onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(url); toast.success('Link copiado'); }}
+              className="flex-shrink-0 text-muted-foreground hover:text-foreground p-0.5 rounded"
+              title="Copiar link"
+            >
+              <Copy className="w-3 h-3" />
+            </button>
+          </>
+        ) : (
+          <span className="text-muted-foreground/25 select-none flex-1 text-xs">—</span>
+        )}
+        <button
+          onClick={() => { setTempVal(url); setEditing(true); }}
+          className="flex-shrink-0 opacity-0 group-hover/link:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded"
+          title="Editar link"
+        >
+          <Pencil className="w-3 h-3" />
+        </button>
+      </div>
+    );
   }
 
   return (

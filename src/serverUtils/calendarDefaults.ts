@@ -13,7 +13,19 @@ export const CAL_DEFAULT_COLUMNS = [
   { columnName: 'Ubicación Interna',      columnType: 'Select',   columnOrder: 9000, optionsJson: JSON.stringify(['Online', 'Sala 5-A', 'Sala 5-B', 'Sala 5-C', 'Sala 6-A', 'Sala 6-B', 'Sala 6-D', 'Sala 6-F', 'Sala 6-G', 'Sala 6-H', 'Otro']) },
   { columnName: 'Link',                   columnType: 'Texto',    columnOrder: 11000 },
   { columnName: 'Dirección',              columnType: 'Texto',    columnOrder: 12000 },
+  // Sala de observación (Mux/Zoom) — un botón que crea el stream + el meeting
+  // de Zoom y llena las dos columnas de link de al lado. Ver executeButtonAction.ts,
+  // acción 'create_observation_stream'.
+  { columnName: 'Crear stream',           columnType: 'Botón',    columnOrder: 13000, optionsJson: JSON.stringify({ action: 'create_observation_stream', label: 'Crear stream', variant: 'default' }) },
+  { columnName: 'Link Zoom',              columnType: 'Link',     columnOrder: 14000 },
+  { columnName: 'Link de observación',    columnType: 'Link',     columnOrder: 15000 },
 ] as const;
+
+// Nombres exactos de las columnas de arriba — executeButtonAction.ts las busca
+// por nombre dentro del mismo tablero para saber dónde escribir cada link.
+// Si cambias estos nombres aquí, cámbialos también ahí.
+export const OBSERVATION_ZOOM_LINK_COLUMN = 'Link Zoom';
+export const OBSERVATION_ROOM_LINK_COLUMN = 'Link de observación';
 
 /**
  * Ensure a calendar board has its 12 default columns.

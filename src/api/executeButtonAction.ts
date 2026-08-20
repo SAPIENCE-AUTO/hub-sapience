@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { createEndpoint, BoardColumns, RecruitmentRows } from '../../server/compat';
 import { resolveWriteBoardId, smartWriteCellValue } from '../serverUtils/smartWrite';
+import { provisionObservationSession } from '../serverUtils/provisionObservationSession';
+import { OBSERVATION_ZOOM_LINK_COLUMN, OBSERVATION_ROOM_LINK_COLUMN } from '../serverUtils/calendarDefaults';
 
 export default createEndpoint({
   authenticated: true,
@@ -106,6 +108,44 @@ export default createEndpoint({
       await RecruitmentRows.create({ record: { ...rest, rowName: dupName } });
 
       return { success: true, message: 'Fila duplicada correctamente.' };
+    }
+
+    // ── create_observation_stream ────────────────────────────
+    // Solo aplica a tableros de calendario: rowId ES el id del evento
+    // (ver src/api/saveCalendarEvent.ts — cell_values de un tablero de
+    // calendario usan rowId = calendar_events.id directamente).
+    if (action === 'create_observation_stream') {
+      const result = await provisionObservationSession(rowId);
+
+      const appUrl = (process.env.ZITE_APP_URL ?? '').split(',')[0]?.trim() || 'http://localhost:5173';
+      const observationUrl = `${appUrl}/s/${result.slug}`;
+
+      // Las columnas de link viven en el MISMO tablero que el botón que se
+      // acaba de apretar — se buscan por nombre ahí, no en boardId/resolvedBoardId
+      // (que puede venir en formato legacy) para no arrastrar la ambigüedad UUID/legacy.
+      const { records: siblingColumns } = await BoardColumns.findAll({ filters: { boardId: col.boardId ?? boardId } });
+      const zoomCol = siblingColumns.find((c) => c.columnName === OBSERVATION_ZOOM_LINK_COLUMN);
+      const linkCol = siblingColumns.find((c) => c.columnName === OBSERVATION_ROOM_LINK_COLUMN);
+
+      if (linkCol) {
+        await smartWriteCellValue({
+          uuidBoardId: resolvedBoardId, legacyBoardId, rowId, columnId: linkCol.id,
+          values: { fileUrl: observationUrl }, isEmpty: false,
+        });
+      }
+      if (zoomCol && result.zoomJoinUrl) {
+        await smartWriteCellValue({
+          uuidBoardId: resolvedBoardId, legacyBoardId, rowId, columnId: zoomCol.id,
+          values: { fileUrl: result.zoomJoinUrl }, isEmpty: false,
+        });
+      }
+
+      return {
+        success: true,
+        message: result.zoomJoinUrl
+          ? 'Stream y meeting de Zoom creados.'
+          : `Stream creado (Zoom: ${result.zoomSkippedReason ?? 'no configurado'}).`,
+      };
     }
 
     // ── webhook ───────────────────────────────────────────────

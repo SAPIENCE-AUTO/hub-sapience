@@ -76,6 +76,21 @@ services:
         sync: false
       - key: ZITE_MUX_WEBHOOK_SECRET
         sync: false
+      # Sala de observación — app Server-to-Server OAuth de Zoom. HOST_EMAILS
+      # es una lista separada por comas — una sesión activa por correo a la
+      # vez (ver provisionObservationSession.ts, pickFreeZoomHost).
+      - key: ZITE_ZOOM_ACCOUNT_ID
+        sync: false
+      - key: ZITE_ZOOM_CLIENT_ID
+        sync: false
+      - key: ZITE_ZOOM_CLIENT_SECRET
+        sync: false
+      - key: ZITE_ZOOM_HOST_EMAILS
+        sync: false
+      # Secret Token de Event Subscriptions de esa misma app — verifica los
+      # webhooks entrantes de Zoom (meeting.chat_message_sent).
+      - key: ZITE_ZOOM_WEBHOOK_SECRET_TOKEN
+        sync: false
       # ZITE_N8N_TEAMS_WEBHOOK_URL ya no se usa — createTeamsChannel.ts crea
       # el canal directo vía Graph desde que se concedió el permiso de
       # aplicación ChannelSettings.ReadWrite.All (agosto 2026). El valor
