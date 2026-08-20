@@ -105,6 +105,13 @@ export async function createZoomMeeting(params: {
       topic: params.topic,
       type: 2, // scheduled
       start_time: params.startTimeIso,
+      // Sin esto, Zoom interpreta start_time con la zona horaria default de
+      // la cuenta en vez de respetar el "Z" — un evento a las 18:00 UTC
+      // terminaba agendado a las 00:00 UTC del día siguiente (6h de más,
+      // exactamente el offset de Ciudad de México). startTimeIso ya viene en
+      // UTC (ver provisionObservationSession.ts), así que timezone debe ser
+      // 'UTC' explícito para que Zoom no reinterprete los dígitos.
+      timezone: 'UTC',
       duration: params.durationMinutes,
       settings: {
         join_before_host: true,

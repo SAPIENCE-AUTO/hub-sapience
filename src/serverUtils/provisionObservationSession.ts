@@ -115,6 +115,11 @@ export async function provisionObservationSession(calendarEventId: string): Prom
   if (!playbackId) throw new Error('Mux no devolvió un playback id para el live stream.');
 
   const slug = `${slugify(event.event_name || 'sesion')}-${randomBytes(4).toString('hex')}`;
+  // Zoom exige page_url al conectar el live stream (la URL donde se ve la
+  // transmisión) — usamos nuestra propia sala de observación, ya que es
+  // justo eso.
+  const appUrl = (process.env.ZITE_APP_URL ?? '').split(',')[0]?.trim() || 'http://localhost:5173';
+  const observationUrl = `${appUrl}/s/${slug}`;
 
   let zoomJoinUrl: string | undefined;
   let zoomStartUrl: string | undefined;
@@ -146,7 +151,7 @@ export async function provisionObservationSession(calendarEventId: string): Prom
           startTimeIso: startTime.toISOString(),
           durationMinutes,
         });
-        await setZoomLiveStream(meeting.id, { streamUrl: MUX_SERVER_URL, streamKey: stream.stream_key });
+        await setZoomLiveStream(meeting.id, { streamUrl: MUX_SERVER_URL, streamKey: stream.stream_key, pageUrl: observationUrl });
         zoomJoinUrl = meeting.join_url;
         zoomStartUrl = meeting.start_url;
         zoomMeetingId = meeting.id;
