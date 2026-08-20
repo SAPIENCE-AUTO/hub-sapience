@@ -268,8 +268,14 @@ export function ObservationRoomPanel({ calendarEventId }: { calendarEventId: str
             <div ref={listRef} className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
               {messages.length === 0 && <p className="text-[11px] text-muted-foreground/50 italic">Sin mensajes aún.</p>}
               {messages.map((m) => (
-                <div key={m.id} className="group flex items-start gap-1.5 text-[11px]">
+                <div
+                  key={m.id}
+                  className={`group flex items-start gap-1.5 text-[11px] ${m.esPregunta ? 'border-l-2 border-primary/60 bg-primary/5 rounded-r px-1.5 py-1 -mx-1.5' : ''}`}
+                >
                   <div className="flex-1 min-w-0">
+                    {m.esPregunta && (
+                      <div className="text-[9px] font-bold uppercase tracking-wide text-primary mb-0.5">Pregunta al moderador</div>
+                    )}
                     <span className={`font-medium ${m.esProductor ? 'text-amber-600 dark:text-amber-400' : ''}`}>{m.nombre || 'Observador'}</span>
                     <span className="text-muted-foreground ml-1">
                       {new Date(m.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}

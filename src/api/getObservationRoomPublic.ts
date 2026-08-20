@@ -11,6 +11,10 @@ import { createEndpoint, pool } from '../../server/compat';
  * cinturón sobre los tirantes del `outputSchema`: revienta en vez de filtrar
  * si algún día alguien reintroduce el spread.
  */
+// Ventana de "conectado ahorita" — mismo criterio que
+// getObservationSessionDetail.ts (ONLINE_WINDOW_MS).
+const ONLINE_WINDOW_MS = 90_000;
+
 const outputSchema = z.object({
   found: z.boolean(),
   slug: z.string().optional(),
@@ -18,6 +22,7 @@ const outputSchema = z.object({
   cliente: z.string().optional(),
   estado: z.string().optional(),
   muxPlaybackId: z.string().optional(),
+  observadoresOnline: z.number().optional(),
 });
 
 export default createEndpoint({
@@ -27,13 +32,21 @@ export default createEndpoint({
   outputSchema,
   execute: async ({ input }) => {
     const result = await pool.query(
-      `select slug, nombre, cliente, estado, mux_playback_id from observation_sessions where slug = $1`,
+      `select id, slug, nombre, cliente, estado, mux_playback_id from observation_sessions where slug = $1`,
       [input.slug],
     );
     const row = result.rows[0];
     // Slug inexistente o sesión aún en 'borrador': mismo resultado, la página
     // pública no distingue el motivo (ver CLAUDE (1).md, "Registro").
     if (!row || row.estado === 'borrador') return { found: false };
+
+    // Solo un conteo — nunca nombre/email de otros observadores — para el
+    // "N observando" del encabezado de la sala pública.
+    const onlineResult = await pool.query(
+      `select count(distinct observer_id) as n from observer_heartbeats
+       where session_id = $1 and ts > now() - interval '${ONLINE_WINDOW_MS} milliseconds'`,
+      [row.id],
+    );
 
     const publicResult = {
       found: true,
@@ -42,6 +55,7 @@ export default createEndpoint({
       cliente: (row.cliente ?? undefined) as string | undefined,
       estado: row.estado as string,
       muxPlaybackId: (row.mux_playback_id ?? undefined) as string | undefined,
+      observadoresOnline: Number(onlineResult.rows[0]?.n ?? 0),
     };
 
     if ('muxStreamKey' in publicResult || 'mux_stream_key' in publicResult) {

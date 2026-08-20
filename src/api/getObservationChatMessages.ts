@@ -10,6 +10,7 @@ export default createEndpoint({
       id: z.string(),
       nombre: z.string().optional(),
       esProductor: z.boolean(),
+      esPregunta: z.boolean(),
       body: z.string(),
       createdAt: z.string(),
     })),
@@ -25,8 +26,8 @@ export default createEndpoint({
     if (!sessionId) return { messages: [] };
 
     const result = await pool.query(
-      `select id, nombre_cache, es_productor, body, created_at from (
-         select c.id, c.body, c.es_productor, c.created_at,
+      `select id, nombre_cache, es_productor, es_pregunta, body, created_at from (
+         select c.id, c.body, c.es_productor, c.es_pregunta, c.created_at,
                 case when c.es_productor then 'Productor' else o.nombre end as nombre_cache
          from observation_chat c
          left join observers o on o.id = c.observer_id
@@ -42,6 +43,7 @@ export default createEndpoint({
         id: r.id,
         nombre: r.nombre_cache ?? undefined,
         esProductor: r.es_productor,
+        esPregunta: r.es_pregunta,
         body: r.body,
         createdAt: r.created_at,
       })),

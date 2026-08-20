@@ -4,6 +4,7 @@ export type ObservationChatMessage = {
   id: string;
   nombre?: string;
   esProductor: boolean;
+  esPregunta: boolean;
   body: string;
   createdAt: string;
 };

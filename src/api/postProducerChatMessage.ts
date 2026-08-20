@@ -21,7 +21,7 @@ export default createEndpoint({
     );
     const message = inserted.rows[0];
     await publishEvent(`observation:${sessionId}`, 'chat.message', {
-      id: message.id, nombre: 'Productor', esProductor: true, body: input.body, createdAt: message.created_at,
+      id: message.id, nombre: 'Productor', esProductor: true, esPregunta: false, body: input.body, createdAt: message.created_at,
     });
     return { id: message.id };
   },

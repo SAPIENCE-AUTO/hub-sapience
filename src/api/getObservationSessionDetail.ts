@@ -36,6 +36,7 @@ export default createEndpoint({
       id: z.string(),
       nombre: z.string().optional(),
       esProductor: z.boolean(),
+      esPregunta: z.boolean(),
       body: z.string(),
       createdAt: z.string(),
     })),
@@ -59,8 +60,8 @@ export default createEndpoint({
         [s.id],
       ),
       pool.query(
-        `select id, observer_id, nombre_cache, es_productor, body, created_at from (
-           select c.id, c.body, c.es_productor, c.created_at,
+        `select id, observer_id, nombre_cache, es_productor, es_pregunta, body, created_at from (
+           select c.id, c.body, c.es_productor, c.es_pregunta, c.created_at,
                   case when c.es_productor then 'Productor' else o.nombre end as nombre_cache,
                   c.observer_id
            from observation_chat c
@@ -87,6 +88,7 @@ export default createEndpoint({
       id: c.id,
       nombre: c.nombre_cache ?? undefined,
       esProductor: c.es_productor,
+      esPregunta: c.es_pregunta,
       body: c.body,
       createdAt: c.created_at,
     }));
