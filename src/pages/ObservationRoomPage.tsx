@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { X, MessageCircle } from 'lucide-react';
 import {
   getObservationRoomPublic, registerObserver, getObservationChatMessages,
   getObservationChatToken, postObserverChatMessage, postObserverHeartbeat,
@@ -52,11 +51,6 @@ export default function ObservationRoomPage() {
   const [form, setForm] = useState<RegisterFormValues>({ nombre: '', apellido: '', email: '' });
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState('');
-  // El video es el protagonista siempre — en pantallas angostas el chat
-  // arranca colapsado para no tapar la mayor parte del video; en pantallas
-  // con más espacio (tablet/desktop) arranca abierto porque el overlay de
-  // 360px deja ver casi todo el video de cualquier forma.
-  const [chatOpen, setChatOpen] = useState(() => window.innerWidth >= 768);
 
   useEffect(() => {
     const raw = localStorage.getItem(storageKey(slug));
@@ -136,7 +130,7 @@ export default function ObservationRoomPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-black">
+    <div className="flex min-h-screen flex-col bg-[#F2F7F8]">
       <header className="flex flex-shrink-0 items-center justify-between gap-3 bg-[#0F3D4C] px-4 py-2.5 md:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <img src={LOGO_URL} alt="Sapience" className="hidden h-4 w-auto flex-shrink-0 sm:block" />
@@ -150,32 +144,28 @@ export default function ObservationRoomPage() {
         </button>
       </header>
 
-      {/* El video ocupa TODO el espacio disponible en los tres tamaños —
-          es el protagonista. El chat es un overlay translúcido que se
-          puede colapsar, nunca le quita espacio al video empujándolo. */}
-      <div className="relative min-h-0 flex-1 bg-[#0A2F3B]">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <RoomStage session={session} />
+      {/* Video protagonista pero acotado (no pantalla completa) — 16:9 real,
+          centrado, con un tope de ancho para que no se sienta gigante en
+          monitores grandes. Chat como columna angosta fija al lado, no un
+          overlay: siempre visible, sin colapsar. */}
+      <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-3 p-3 md:flex-row md:items-start md:justify-center md:gap-4 md:p-4">
+        <div className="flex w-full flex-col overflow-hidden rounded-xl bg-white shadow-sm md:max-w-4xl">
+          <div className="flex flex-shrink-0 items-center justify-between border-b border-[#DDE5E8] px-3 py-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#6E8388]">Transmisión</span>
+            {session.estado && (
+              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${estadoBadge[session.estado] ?? 'bg-[#F2F7F8] text-[#0F3D4C]'}`}>
+                {estadoLabel[session.estado] ?? session.estado}
+              </span>
+            )}
+          </div>
+          <div className="flex aspect-video w-full items-center justify-center bg-[#0A2F3B]">
+            <RoomStage session={session} />
+          </div>
         </div>
 
-        {session.estado && (
-          <span
-            className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-md md:left-4 md:top-4 ${estadoBadge[session.estado] ?? 'bg-white text-[#0F3D4C]'}`}
-          >
-            {estadoLabel[session.estado] ?? session.estado}
-          </span>
-        )}
-
-        <div
-          className={`absolute inset-y-0 right-0 flex w-full max-w-[360px] flex-col border-l border-white/10 bg-white/90 shadow-2xl backdrop-blur-md transition-transform duration-300 ${
-            chatOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          <div className="flex flex-shrink-0 items-center justify-between border-b border-[#DDE5E8]/70 px-3 py-2.5">
+        <div className="flex min-h-[320px] flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm md:w-[340px] md:flex-none md:self-stretch">
+          <div className="flex-shrink-0 border-b border-[#DDE5E8] px-3 py-2">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#027495]">Chat</span>
-            <button onClick={() => setChatOpen(false)} className="text-[#6E8388] hover:text-[#0F3D4C]">
-              <X className="h-4 w-4" />
-            </button>
           </div>
           <ObserverChatPanel
             slug={slug}
@@ -183,16 +173,6 @@ export default function ObservationRoomPage() {
             onSessionState={(estado) => setSession((prev) => (prev ? { ...prev, estado: estado as PublicSession['estado'] } : prev))}
           />
         </div>
-
-        {!chatOpen && (
-          <button
-            onClick={() => setChatOpen(true)}
-            className="absolute bottom-4 right-4 flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px] font-semibold text-[#0F3D4C] shadow-lg hover:bg-[#F2F7F8] md:bottom-6 md:right-6"
-          >
-            <MessageCircle className="h-4 w-4 text-[#027495]" />
-            Chat
-          </button>
-        )}
       </div>
     </div>
   );
