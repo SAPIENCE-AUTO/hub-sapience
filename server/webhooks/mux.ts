@@ -16,7 +16,7 @@ export const muxWebhookApp = new Hono();
 
 interface MuxEvent {
   type: string;
-  data: { id: string; live_stream_id?: string };
+  data: { id: string; live_stream_id?: string; playback_ids?: Array<{ id: string; policy: string }> };
 }
 
 muxWebhookApp.post('/webhooks/mux', async (c) => {
@@ -65,10 +65,14 @@ muxWebhookApp.post('/webhooks/mux', async (c) => {
         break;
       }
       case 'video.asset.ready': {
+        // `mux_asset_id` (el recurso) no sirve para reproducir — mux-player
+        // necesita el playback_id del asset, un recurso distinto. Sin esto
+        // guardado, la sesión "terminada" nunca puede ofrecer la grabación.
         if (event.data.live_stream_id) {
+          const playbackId = event.data.playback_ids?.[0]?.id ?? null;
           await pool.query(
-            `update observation_sessions set mux_asset_id = $1, updated_at = now() where mux_live_stream_id = $2`,
-            [event.data.id, event.data.live_stream_id],
+            `update observation_sessions set mux_asset_id = $1, mux_asset_playback_id = $2, updated_at = now() where mux_live_stream_id = $3`,
+            [event.data.id, playbackId, event.data.live_stream_id],
           );
         }
         break;

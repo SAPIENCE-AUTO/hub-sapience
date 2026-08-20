@@ -22,6 +22,7 @@ const outputSchema = z.object({
   cliente: z.string().optional(),
   estado: z.string().optional(),
   muxPlaybackId: z.string().optional(),
+  muxAssetPlaybackId: z.string().optional(),
   observadoresOnline: z.number().optional(),
 });
 
@@ -32,7 +33,7 @@ export default createEndpoint({
   outputSchema,
   execute: async ({ input }) => {
     const result = await pool.query(
-      `select id, slug, nombre, cliente, estado, mux_playback_id from observation_sessions where slug = $1`,
+      `select id, slug, nombre, cliente, estado, mux_playback_id, mux_asset_playback_id from observation_sessions where slug = $1`,
       [input.slug],
     );
     const row = result.rows[0];
@@ -55,6 +56,7 @@ export default createEndpoint({
       cliente: (row.cliente ?? undefined) as string | undefined,
       estado: row.estado as string,
       muxPlaybackId: (row.mux_playback_id ?? undefined) as string | undefined,
+      muxAssetPlaybackId: (row.mux_asset_playback_id ?? undefined) as string | undefined,
       observadoresOnline: Number(onlineResult.rows[0]?.n ?? 0),
     };
 

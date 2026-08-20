@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   getObservationRoomPublic, registerObserver, getObservationChatMessages,
   getObservationChatToken, postObserverChatMessage, postObserverHeartbeat,
 } from 'zite-endpoints-sdk';
 import { useObservationChat, type ObservationChatMessage } from '@/hooks/useObservationChat';
-import { Eye, MessageSquare, Play, Pause, Volume2, VolumeX, Maximize, Minimize, HelpCircle } from 'lucide-react';
+import { Eye, MessageSquare, Play, Pause, Volume2, VolumeX, Maximize, Minimize, HelpCircle, LogOut, Smile } from 'lucide-react';
+
+// Carga perezosa — la mayoría de los observadores nunca abre el picker, y
+// esta página pública debe cargar rápido en el primer vistazo (viene de un
+// link de correo, no de una sesión ya autenticada en el Hub).
+const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import '@mux/mux-player';
 
 const CHAT_WIDTH_MIN = 260;
@@ -25,6 +30,7 @@ interface PublicSession {
   cliente?: string;
   estado?: 'borrador' | 'esperando' | 'vivo' | 'terminada';
   muxPlaybackId?: string;
+  muxAssetPlaybackId?: string;
   observadoresOnline?: number;
 }
 
@@ -117,16 +123,18 @@ export default function ObservationRoomPage() {
   // en cuanto pasaba a "vivo" (solo servía para detectar el arranque) —
   // pero el conteo de "N observando" del encabezado también depende de
   // este mismo fetch, así que se quedaba congelado en lo que decía al
-  // cargar la página durante TODA la sesión en vivo. Solo se detiene en
-  // "terminada", el único estado que ya no cambia.
+  // cargar la página durante TODA la sesión en vivo. Se detiene solo una
+  // vez "terminada" Y con la grabación ya lista — el asset de Mux tarda
+  // unos minutos en procesarse después de que el live stream se apaga, así
+  // que hay que seguir insistiendo un rato más incluso después de "terminada".
   useEffect(() => {
-    if (session?.estado === 'terminada') return;
+    if (session?.estado === 'terminada' && session?.muxAssetPlaybackId) return;
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') load();
     }, 15_000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.estado, slug]);
+  }, [session?.estado, session?.muxAssetPlaybackId, slug]);
 
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
@@ -178,7 +186,7 @@ export default function ObservationRoomPage() {
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#0A1418]">
       <header className="flex flex-shrink-0 items-center gap-3 bg-[#0F3D4C] px-3 py-2.5 md:px-6">
-        <img src={LOGO_URL} alt="Sapience" className="hidden h-4 w-auto flex-shrink-0 sm:block" />
+        <img src={LOGO_URL} alt="Sapience" className="hidden h-6 w-auto flex-shrink-0 sm:block" />
         <div className="min-w-0 border-l border-white/15 pl-3 sm:pl-3">
           <h1 className="truncate text-sm font-semibold text-white">{session.nombre}</h1>
           {session.cliente && <p className="truncate text-[11px] text-[#8FB6C0]">{session.cliente}</p>}
@@ -210,8 +218,13 @@ export default function ObservationRoomPage() {
           )}
         </button>
 
-        <button onClick={handleNotMe} className="hidden flex-shrink-0 text-[11px] text-[#8FB6C0] hover:text-white sm:block">
-          no soy {observer.nombre}
+        <button
+          onClick={handleNotMe}
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-white/10"
+          title={`Salir y dejar de ser ${observer.nombre}`}
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Salir</span>
         </button>
       </header>
 
@@ -277,7 +290,19 @@ function ObserverChatPanel({
   const [input, setInput] = useState('');
   const [isPregunta, setIsPregunta] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showEmoji) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) setShowEmoji(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [showEmoji]);
   // El chat nunca se desmonta al plegarse (ver comentario en el componente
   // padre) — este ref evita que el closure de onMessage, creado una sola vez
   // por useObservationChat, quede pegado al valor de chatOpen del primer render.
@@ -364,14 +389,48 @@ function ObserverChatPanel({
           <HelpCircle className="h-3 w-3" />
           Pregunta para el moderador
         </button>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={isPregunta ? 'Escribe tu pregunta...' : 'Escribe un mensaje...'}
-          className={`w-full rounded-[10px] border-[1.5px] px-3 py-2 text-xs text-[#383838] outline-none transition-colors placeholder:text-[#A9BAC0] focus:ring-[3px] ${
-            isPregunta ? 'border-[#027495] ring-[3px] ring-[#027495]/[.13]' : 'border-[#DDE5E8] focus:border-[#027495] focus:ring-[#027495]/[.13]'
-          }`}
-        />
+        <div ref={emojiRef} className="relative">
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={isPregunta ? 'Escribe tu pregunta...' : 'Escribe un mensaje...'}
+            className={`w-full rounded-[10px] border-[1.5px] py-2 pl-3 pr-9 text-xs text-[#383838] outline-none transition-colors placeholder:text-[#A9BAC0] focus:ring-[3px] ${
+              isPregunta ? 'border-[#027495] ring-[3px] ring-[#027495]/[.13]' : 'border-[#DDE5E8] focus:border-[#027495] focus:ring-[#027495]/[.13]'
+            }`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowEmoji((v) => !v)}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#A9BAC0] hover:text-[#027495]"
+            aria-label="Insertar emoji"
+          >
+            <Smile className="h-4 w-4" />
+          </button>
+          {showEmoji && (
+            <div className="absolute bottom-full right-0 mb-2 overflow-hidden rounded-lg shadow-lg">
+              <Suspense
+                fallback={
+                  <div className="flex h-[350px] w-[280px] items-center justify-center bg-white text-xs text-[#A9BAC0]">
+                    Cargando…
+                  </div>
+                }
+              >
+                <EmojiPicker
+                  onEmojiClick={(emojiData) => {
+                    setInput((v) => v + emojiData.emoji);
+                    inputRef.current?.focus();
+                  }}
+                  width={280}
+                  height={350}
+                  skinTonesDisabled
+                  previewConfig={{ showPreview: false }}
+                  lazyLoadEmojis
+                />
+              </Suspense>
+            </div>
+          )}
+        </div>
       </form>
     </>
   );
@@ -446,11 +505,37 @@ function VideoStage({ session }: { session: PublicSession }) {
   }, []);
 
   if (!isLive) {
-    // Cubre tanto "esperando" como "terminada" (y cualquier otro caso sin
-    // playback listo): sin esto, un observador que abre el link al día
-    // siguiente de que la sesión terminó se queda viendo un player muerto.
-    const message = session.estado === 'terminada' ? 'Esta sesión ya terminó' : 'La sesión aún no comienza';
-    return <p className="px-6 text-center text-sm text-[#8FB6C0]">{message}</p>;
+    if (session.estado === 'terminada') {
+      // El asset grabado tarda unos minutos en procesarse después de que el
+      // live stream se apaga (ver el poll en el componente padre, que sigue
+      // insistiendo hasta que `muxAssetPlaybackId` llega) — mientras tanto
+      // no hay nada que reproducir, solo el aviso.
+      if (session.muxAssetPlaybackId) {
+        return (
+          <div
+            className="overflow-hidden rounded-xl bg-black shadow-[0_8px_40px_rgba(0,0,0,0.5)]"
+            style={{ width: 'min(100%, calc(100cqh * 16 / 9))', aspectRatio: '16 / 9' }}
+          >
+            {/* @ts-expect-error -- web component de @mux/mux-player, sin tipos de React/JSX */}
+            <mux-player
+              playback-id={session.muxAssetPlaybackId}
+              stream-type="on-demand"
+              controls
+              style={{ width: '100%', height: '100%', '--media-object-fit': 'contain' }}
+            />
+          </div>
+        );
+      }
+      return (
+        <p className="px-6 text-center text-sm text-[#8FB6C0]">
+          Esta sesión ya terminó. La grabación estará disponible en unos minutos.
+        </p>
+      );
+    }
+    // Cubre "esperando" (y cualquier otro caso sin playback listo): sin
+    // esto, un observador que abre el link antes de que empiece se queda
+    // viendo un player muerto.
+    return <p className="px-6 text-center text-sm text-[#8FB6C0]">La sesión aún no comienza</p>;
   }
 
   const togglePlay = () => {
