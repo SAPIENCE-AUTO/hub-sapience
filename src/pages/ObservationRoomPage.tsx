@@ -112,10 +112,15 @@ export default function ObservationRoomPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [slug]);
 
-  // Poll cada 15s mientras "esperando" — mismo patrón que el resto del Hub
-  // (setInterval + guard de visibilidad; ver SupplierInvoicesPage.tsx).
+  // Poll cada 15s mientras la sesión siga activa (patrón: setInterval +
+  // guard de visibilidad; ver SupplierInvoicesPage.tsx). Antes se detenía
+  // en cuanto pasaba a "vivo" (solo servía para detectar el arranque) —
+  // pero el conteo de "N observando" del encabezado también depende de
+  // este mismo fetch, así que se quedaba congelado en lo que decía al
+  // cargar la página durante TODA la sesión en vivo. Solo se detiene en
+  // "terminada", el único estado que ya no cambia.
   useEffect(() => {
-    if (session?.estado !== 'esperando') return;
+    if (session?.estado === 'terminada') return;
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') load();
     }, 15_000);
@@ -228,7 +233,7 @@ export default function ObservationRoomPage() {
         )}
 
         <div
-          className={`${chatOpen ? 'flex' : 'hidden'} max-h-[42vh] w-full flex-shrink-0 flex-col overflow-hidden border-t border-[#DDE5E8] bg-[#F2F7F8] md:max-h-none md:w-[var(--chat-w)] md:flex-none md:self-stretch md:border-l md:border-t-0`}
+          className={`${chatOpen ? 'flex' : 'hidden'} mb-8 max-h-[40vh] w-full flex-shrink-0 flex-col overflow-hidden rounded-b-xl border-t border-[#DDE5E8] bg-[#F2F7F8] md:max-h-none md:w-[var(--chat-w)] md:flex-none md:self-stretch md:border-l md:border-t-0`}
           style={{ '--chat-w': `${chatWidth}px` } as CSSProperties}
         >
           <div className="flex flex-shrink-0 items-center justify-between border-b border-[#DDE5E8] px-3 py-2">
@@ -345,7 +350,10 @@ function ObserverChatPanel({
           </div>
         ))}
       </div>
-      <form onSubmit={handleSend} className="flex-shrink-0 border-t border-[#DDE5E8] p-2.5">
+      <form
+        onSubmit={handleSend}
+        className="flex-shrink-0 border-t border-[#DDE5E8] px-3.5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3.5"
+      >
         <button
           type="button"
           onClick={() => setIsPregunta((v) => !v)}
@@ -405,7 +413,6 @@ function VideoStage({ session }: { session: PublicSession }) {
   useEffect(() => {
     const el = playerRef.current;
     if (!el || !isLive) return;
-    el.controls = false; // oculta la barra nativa — se maneja todo con los botones de abajo
     // "playing" (no "play") es la señal de que en verdad hay cuadro en
     // pantalla — mux-player dispara "play" al INTENTAR reproducir, incluso
     // si el stream está caído y va a tronar en seguida, lo que dejaba los
@@ -471,14 +478,31 @@ function VideoStage({ session }: { session: PublicSession }) {
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(window.matchMedia && !window.matchMedia('(hover: hover)').matches)}
     >
-      {/* @ts-expect-error -- web component de @mux/mux-player, sin tipos de React/JSX */}
+      {/*
+        @ts-expect-error -- web component de @mux/mux-player, sin tipos de React/JSX
+        `--controls: none` apaga TODA la barra propia de mux-player (no solo
+        el atributo `controls` nativo, que no la cubre) — sin esto, sus
+        botones de play/volumen se veían encimados con los nuestros.
+      */}
       <mux-player
         ref={playerRef}
         playback-id={session.muxPlaybackId}
         stream-type="live"
         autoplay muted
-        style={{ width: '100%', height: '100%', '--media-object-fit': 'contain' }}
+        style={{ width: '100%', height: '100%', '--media-object-fit': 'contain', '--controls': 'none' }}
       />
+
+      {paused && (
+        <button
+          onClick={togglePlay}
+          className="absolute inset-0 flex items-center justify-center"
+          aria-label="Reproducir"
+        >
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-[#027495]">
+            <Play className="h-7 w-7 translate-x-0.5" />
+          </span>
+        </button>
+      )}
 
       <div
         className={`absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/75 to-transparent px-3 pb-2.5 pt-8 transition-opacity duration-200 ${controlsVisible ? 'opacity-100' : 'opacity-0'}`}
