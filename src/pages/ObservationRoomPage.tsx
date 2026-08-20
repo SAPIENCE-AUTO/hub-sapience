@@ -9,8 +9,16 @@ import { Eye, MessageSquare, Play, Pause, Volume2, VolumeX, Maximize, Minimize, 
 
 // Carga perezosa — la mayoría de los observadores nunca abre el picker, y
 // esta página pública debe cargar rápido en el primer vistazo (viene de un
-// link de correo, no de una sesión ya autenticada en el Hub).
-const EmojiPicker = lazy(() => import('emoji-picker-react'));
+// link de correo, no de una sesión ya autenticada en el Hub). El set de
+// datos de emoji-mart también se carga junto con el componente, no en el
+// bundle principal.
+const EmojiPicker = lazy(async () => {
+  const [{ default: Picker }, { default: data }] = await Promise.all([
+    import('@emoji-mart/react'),
+    import('@emoji-mart/data'),
+  ]);
+  return { default: (props: Record<string, unknown>) => <Picker data={data} {...props} /> };
+});
 import '@mux/mux-player';
 
 const CHAT_WIDTH_MIN = 260;
@@ -334,6 +342,7 @@ function ObserverChatPanel({
     if (!body || sending) return;
     setSending(true);
     setInput('');
+    setShowEmoji(false); // si se manda con Enter (no con clic) nunca se dispara el "clic afuera" que lo cierra
     const esPregunta = isPregunta;
     setIsPregunta(false); // el marcado es por mensaje, no queda pegado para el siguiente
     try {
@@ -418,15 +427,15 @@ function ObserverChatPanel({
                 }
               >
                 <EmojiPicker
-                  onEmojiClick={(emojiData) => {
-                    setInput((v) => v + emojiData.emoji);
+                  onEmojiSelect={(emoji: { native: string }) => {
+                    setInput((v) => v + emoji.native);
                     inputRef.current?.focus();
                   }}
-                  width={280}
-                  height={350}
-                  skinTonesDisabled
-                  previewConfig={{ showPreview: false }}
-                  lazyLoadEmojis
+                  theme="light"
+                  previewPosition="none"
+                  skinTonePosition="none"
+                  perLine={6}
+                  maxFrequentRows={1}
                 />
               </Suspense>
             </div>
