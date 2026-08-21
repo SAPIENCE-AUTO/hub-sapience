@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, CalendarEvents, BoardColumns, CellValues, Boards } from '../../server/compat';
 import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 import { addHours, formatWhenText, buildEmailHtml, parseInviteTemplate, type InviteSection } from '../serverUtils/inviteHtml';
+import { OBSERVATION_ROOM_LINK_COLUMN } from '../serverUtils/calendarDefaults';
 
 // Parse attendees string into Graph API format
 function parseAttendees(raw?: string): { emailAddress: { address: string }; type: string }[] {
@@ -14,7 +15,11 @@ function parseAttendees(raw?: string): { emailAddress: { address: string }; type
 }
 
 const normalizeName = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s_-]+/g, '');
-const isLinkColumnName = (name: string) => ['link', 'liga'].includes(normalizeName(name));
+// La columna del link de la Sala de observacion cuenta como columna de link
+// igual que "Link"/"Liga": si alguien la selecciona en un invite
+// personalizado, se vuelve el boton en vez de aparecer como una seccion de
+// texto mas.
+const isLinkColumnName = (name: string) => ['link', 'liga', normalizeName(OBSERVATION_ROOM_LINK_COLUMN)].includes(normalizeName(name));
 
 // Replace {{placeholder}} tokens in custom HTML with dynamic column values
 // Supports conditional blocks: {{#key}}...{{/key}} — removed if key is empty
@@ -146,7 +151,10 @@ export default createEndpoint({
       for (const c of colRes.records) colNameById.set(c.id, c.columnName ?? c.id);
       for (const cell of cellRes.records) {
         if (!cell.columnId) continue;
-        const value = String(cell.textValue ?? cell.numberValue ?? cell.dateValue ?? '');
+        // El tipo de columna "Link" (Link Zoom / Link de observacion) guarda
+        // su valor en fileUrl, no en textValue - sin esto, pick() los ve
+        // siempre vacios y el boton del invite nunca los encuentra.
+        const value = String(cell.fileUrl ?? cell.textValue ?? cell.numberValue ?? cell.dateValue ?? '');
         if (!value) continue;
         valueByColId[cell.columnId] = value;
         const colName = (colNameById.get(cell.columnId) ?? cell.columnId).toLowerCase();
@@ -202,7 +210,11 @@ export default createEndpoint({
         { label: 'Descripción', value: pick('Descripción', 'descripcion') },
         { label: 'Detalles', value: pick('Detalles adicionales', 'Detalles', 'detalles') },
       ];
-      link = toAbsoluteLink(pick('Link', 'link', 'Liga', 'liga'));
+      // Si el tablero tiene la columna de la Sala de observacion (la crea el
+      // flujo de "Crear stream"), el boton del invite apunta ahi antes que a
+      // un "Link"/"Liga" generico - es la sala con marca de Sapience, no el
+      // link crudo de Zoom.
+      link = toAbsoluteLink(pick(OBSERVATION_ROOM_LINK_COLUMN, 'Link', 'link', 'Liga', 'liga'));
     }
 
     const whenText = formatWhenText(startIso, durationHours);
