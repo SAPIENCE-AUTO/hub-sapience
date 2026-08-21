@@ -5,7 +5,7 @@ import {
   getObservationChatToken, postObserverChatMessage, postObserverHeartbeat,
 } from 'zite-endpoints-sdk';
 import { useObservationChat, type ObservationChatMessage } from '@/hooks/useObservationChat';
-import { Eye, MessageSquare, Play, Pause, Volume2, VolumeX, Maximize, Minimize, HelpCircle, LogOut, Smile, Send } from 'lucide-react';
+import { Eye, MessageSquare, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Pointer, LogOut, Smile, Send } from 'lucide-react';
 
 // Carga perezosa — la mayoría de los observadores nunca abre el picker, y
 // esta página pública debe cargar rápido en el primer vistazo (viene de un
@@ -388,16 +388,21 @@ function ObserverChatPanel({
         onSubmit={handleSend}
         className="flex-shrink-0 border-t border-[#DDE5E8] px-3.5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3.5"
       >
-        <button
-          type="button"
-          onClick={() => setIsPregunta((v) => !v)}
-          className={`mb-1.5 flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-semibold transition-colors ${
-            isPregunta ? 'bg-[#027495] text-white' : 'bg-[#DDE5E8]/70 text-[#6E8388] hover:bg-[#DDE5E8]'
-          }`}
-        >
-          <HelpCircle className="h-3 w-3" />
-          Pregunta para el moderador
-        </button>
+        <div className="mb-2">
+          <p className="mb-1 text-[10px] leading-tight text-[#A9BAC0]">
+            Activa el botón para enviar una pregunta puntual al moderador
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsPregunta((v) => !v)}
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-semibold transition-colors ${
+              isPregunta ? 'bg-[#027495] text-white' : 'bg-[#DDE5E8]/70 text-[#6E8388] hover:bg-[#DDE5E8]'
+            }`}
+          >
+            <Pointer className="h-3 w-3" />
+            Pregunta para el moderador
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <div ref={emojiRef} className="relative flex-1">
           <input
