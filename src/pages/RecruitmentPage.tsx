@@ -285,7 +285,10 @@ async function exportRecruitmentExcel(
   const groupWord = exportedGroupCount === 1 ? 'grupo' : 'grupos';
   const participantWord = exportedParticipants === 1 ? 'participante' : 'participantes';
   const subCell = ws.getCell(2, 3);
-  subCell.value = `Exportado el ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })} \u00B7 ${exportedParticipants} ${participantWord}${exportedGroupCount > 0 ? ` \u00B7 ${exportedGroupCount} ${groupWord}` : ''}`;
+  const nowRT = new Date();
+  const fechaRT = nowRT.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Mexico_City' });
+  const horaRT  = nowRT.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Mexico_City' });
+  subCell.value = `Actualizado el ${fechaRT} a las ${horaRT} \u00B7 ${exportedParticipants} ${participantWord}${exportedGroupCount > 0 ? ` \u00B7 ${exportedGroupCount} ${groupWord}` : ''}`;
   subCell.font = { size: 10.5, color: { argb: 'FF6B7280' } };
   ws.getRow(1).height = 30;
   ws.getRow(2).height = 18;

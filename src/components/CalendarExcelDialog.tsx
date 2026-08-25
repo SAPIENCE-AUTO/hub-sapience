@@ -242,7 +242,9 @@ function CalendarPreviewPane({ calendarTitle, eventCount, groupCount, groups, co
   calendarTitle: string; eventCount: number; groupCount: number; version: string;
   groups: PreviewGroup[]; columns: PreviewColumn[];
 }) {
-  const fecha = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+  const now = new Date();
+  const fecha = now.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Mexico_City' });
+  const hora = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Mexico_City' });
   const font = "'Aptos', 'Calibri', 'Segoe UI', Arial, sans-serif";
 
   if (columns.length === 0) {
@@ -264,7 +266,7 @@ function CalendarPreviewPane({ calendarTitle, eventCount, groupCount, groups, co
               <div>
                 <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0F3D4C' }}>Calendario de Actividades — {calendarTitle}</p>
                 <p style={{ margin: '2px 0 0', fontSize: 11, color: '#6B7280' }}>
-                  Exportado el {fecha} · {eventCount} actividad{eventCount === 1 ? '' : 'es'}{groupCount > 0 ? ` · ${groupCount} grupo${groupCount === 1 ? '' : 's'}` : ''} · v{version}
+                  Actualizado el {fecha} a las {hora} · {eventCount} actividad{eventCount === 1 ? '' : 'es'}{groupCount > 0 ? ` · ${groupCount} grupo${groupCount === 1 ? '' : 's'}` : ''} · v{version}
                 </p>
               </div>
             </div>

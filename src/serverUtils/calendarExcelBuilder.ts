@@ -100,8 +100,11 @@ export async function buildCalendarExcelBuffer(input: BuildCalendarExcelInput): 
   ws.getCell(1, 3).font = { name: FONT_NAME, bold: true, size: 15, color: { argb: 'FF0F3D4C' } };
   const actWord = totalActivities === 1 ? 'actividad' : 'actividades';
   const grpWord = namedGroupCount === 1 ? 'grupo' : 'grupos';
+  const now = new Date();
+  const fechaStr = now.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Mexico_City' });
+  const horaStr  = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Mexico_City' });
   ws.getCell(2, 3).value =
-    `Exportado el ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}` +
+    `Actualizado el ${fechaStr} a las ${horaStr}` +
     ` · ${totalActivities} ${actWord}${namedGroupCount > 0 ? ` · ${namedGroupCount} ${grpWord}` : ''} · v${input.version}`;
   ws.getCell(2, 3).font = { name: FONT_NAME, size: 10.5, color: { argb: 'FF6B7280' } };
   ws.getRow(1).height = 30;
