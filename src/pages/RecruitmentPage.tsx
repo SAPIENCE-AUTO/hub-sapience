@@ -309,9 +309,11 @@ async function exportRecruitmentExcel(
   });
   headerRow.height = 20;
   ws.views = [{ state: 'frozen', ySplit: HEADER_ROW }];
-  headers.forEach((h, i) => { ws.getColumn(i + 1).width = Math.min(38, Math.max(14, h.length + 6)); });
 
   const cellBorder = { style: 'hair' as const, color: { argb: 'FFE5E7EB' } };
+  // Ancho por columna en base al contenido real (no solo el encabezado) — así la
+  // columna de Participante alcanza para el nombre completo en vez de truncarlo.
+  const colMaxLen = headers.map(h => h.length);
 
   let r = HEADER_ROW + 1;
   let totalRows = 0;
@@ -350,12 +352,14 @@ async function exportRecruitmentExcel(
         cell.value = v;
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${tint}` } };
         cell.border = { top: cellBorder, left: cellBorder, bottom: cellBorder, right: cellBorder };
-        if (i === 0) cell.font = { bold: true };
+        cell.font = i === 0 ? { bold: true, size: 9 } : { size: 9 };
+        colMaxLen[i] = Math.max(colMaxLen[i], String(v).length);
       });
       r++;
       totalRows++;
     }
   }
+  headers.forEach((h, i) => { ws.getColumn(i + 1).width = Math.min(48, Math.max(14, colMaxLen[i] + 4)); });
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
