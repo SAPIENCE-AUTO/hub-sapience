@@ -191,7 +191,7 @@ function hslToHex([h, s, l]: [number, number, number]): string {
   const a = sN * Math.min(lN, 1 - lN);
   const f = (n: number) => lN - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
   const toHex = (x: number) => Math.round(255 * x).toString(16).padStart(2, '0');
-  return `${toHex(f(0))}${toHex(f(4))}${toHex(f(8))}`.toUpperCase();
+  return `${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`.toUpperCase();
 }
 
 function groupHex(colorId?: string | null): string {
