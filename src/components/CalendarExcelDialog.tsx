@@ -119,7 +119,13 @@ export function CalendarExcelDialog({ open, onOpenChange, projectCode, calendarN
         overrideVersion:   versionInput.trim() || undefined,
       });
       if (res.calendarStatus === 'Listo') {
-        toast.success(`✅ Calendario V${res.version} listo — ${res.eventCount} evento${res.eventCount !== 1 ? 's' : ''}`);
+        if (res.excelBase64) {
+          const a = document.createElement('a');
+          a.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${res.excelBase64}`;
+          a.download = `${previewName}.xlsx`;
+          a.click();
+        }
+        toast.success(`✅ Calendario V${res.version} listo — ${res.eventCount} evento${res.eventCount !== 1 ? 's' : ''}${res.fileUrl ? ' · subido a SharePoint' : ''}`);
         onSuccess({ status: res.calendarStatus, fileUrl: res.fileUrl, eventCount: res.eventCount, version: res.version });
         onOpenChange(false);
       } else {
