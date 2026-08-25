@@ -3,6 +3,15 @@ import { createEndpoint, CalendarEvents, Projects, BoardColumns, CellValues, Boa
 import { graphFetch } from '../../server/microsoft/graph';
 import { buildCalendarExcelBuffer } from '../serverUtils/calendarExcelBuilder';
 
+const MESES_ABREV = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+/** Formato pedido para el Excel de calendario: "31 - ago - 2026". */
+function formatFechaExcel(date: Date, timeZone = 'America/Mexico_City'): string {
+  const iso = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+  const [y, m, d] = iso.split('-');
+  return `${d} - ${MESES_ABREV[Number(m) - 1]} - ${y}`;
+}
+
 // El link de Teams ya trae todo lo que Graph necesita para resolver drive/carpeta —
 // mismo parseo que ya usa getProjectTeamsFiles.ts (formato confirmado en vivo):
 //   https://teams.microsoft.com/l/channel/{channelId}/{nombre}?groupId={teamId}&tenantId=...
@@ -245,7 +254,7 @@ export default createEndpoint({
     // ── Build flat row ─────────────────────────────────────────────────────
     function buildRow(ev: typeof events[0]): Record<string, string | number> {
       const eventDate = ev.eventDate ? new Date(ev.eventDate) : null;
-      const fecha     = eventDate ? eventDate.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }) : '';
+      const fecha     = eventDate ? formatFechaExcel(eventDate) : '';
       const hora_mx   = eventDate
         ? eventDate.toLocaleTimeString('es-MX', {
             hour: '2-digit', minute: '2-digit', hour12: false,
@@ -276,13 +285,13 @@ export default createEndpoint({
             if (rawDate) {
               const d = new Date(rawDate);
               val = isFecha
-                ? d.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+                ? formatFechaExcel(d)
                 : d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Mexico_City' });
             }
           } else if (cell.textValue) {
             val = cell.textValue;
           } else if (cell.dateValue) {
-            val = new Date(cell.dateValue).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+            val = formatFechaExcel(new Date(cell.dateValue));
           } else if (cell.numberValue != null) {
             val = cell.numberValue;
           }

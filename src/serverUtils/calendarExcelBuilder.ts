@@ -6,6 +6,7 @@ import ExcelJS from 'exceljs';
 // compartido para ~40 líneas de constantes.
 const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/zite-uploads/branding/sapience-logo.png';
 const LOGO_ASPECT = 816 / 203;
+const FONT_NAME = 'Aptos';
 
 const GROUP_COLOR_HSL: Record<string, [number, number, number]> = {
   'red-1': [4, 85, 65], 'red-2': [4, 85, 55], 'red-3': [4, 82, 45], 'red-4': [4, 78, 37], 'red-5': [4, 72, 28],
@@ -28,12 +29,6 @@ function hslToHex([h, s, l]: [number, number, number]): string {
 
 function groupHex(colorId?: string | null): string {
   return colorId && GROUP_COLOR_HSL[colorId] ? hslToHex(GROUP_COLOR_HSL[colorId]) : DEFAULT_GROUP_HEX;
-}
-
-function tintHex(hex: string, amount: number): string {
-  const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
-  const mix = (c: number) => Math.round(c * amount + 255 * (1 - amount));
-  return [mix(r), mix(g), mix(b)].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
 function contrastText(hex: string): string {
@@ -94,7 +89,7 @@ export async function buildCalendarExcelBuffer(input: BuildCalendarExcelInput): 
     if (resp.ok) {
       const buf = Buffer.from(await resp.arrayBuffer());
       const imgId = wb.addImage({ buffer: buf, extension: 'png' });
-      ws.addImage(imgId, { tl: { col: 0.15, row: 0.12 }, ext: { width: 220, height: 220 / LOGO_ASPECT } });
+      ws.addImage(imgId, { tl: { col: 0.3, row: 0.12 }, ext: { width: 220, height: 220 / LOGO_ASPECT } });
     }
   } catch { /* sin logo si falla la descarga — no bloquea el export */ }
 
@@ -102,13 +97,13 @@ export async function buildCalendarExcelBuffer(input: BuildCalendarExcelInput): 
   ws.mergeCells(1, 3, 1, colCount);
   ws.mergeCells(2, 3, 2, colCount);
   ws.getCell(1, 3).value = `Calendario de Actividades — ${input.calendarTitle}`;
-  ws.getCell(1, 3).font = { bold: true, size: 15, color: { argb: 'FF0F3D4C' } };
+  ws.getCell(1, 3).font = { name: FONT_NAME, bold: true, size: 15, color: { argb: 'FF0F3D4C' } };
   const actWord = totalActivities === 1 ? 'actividad' : 'actividades';
   const grpWord = namedGroupCount === 1 ? 'grupo' : 'grupos';
   ws.getCell(2, 3).value =
     `Exportado el ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}` +
     ` · ${totalActivities} ${actWord}${namedGroupCount > 0 ? ` · ${namedGroupCount} ${grpWord}` : ''} · v${input.version}`;
-  ws.getCell(2, 3).font = { size: 10.5, color: { argb: 'FF6B7280' } };
+  ws.getCell(2, 3).font = { name: FONT_NAME, size: 10.5, color: { argb: 'FF6B7280' } };
   ws.getRow(1).height = 30;
   ws.getRow(2).height = 18;
   ws.getRow(3).height = 12;
@@ -123,7 +118,7 @@ export async function buildCalendarExcelBuffer(input: BuildCalendarExcelInput): 
   input.columns.forEach((c, i) => {
     const cell = headerRow.getCell(i + 1);
     cell.value = c.title;
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.font = { name: FONT_NAME, bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F3D4C' } };
     cell.alignment = { vertical: 'middle' };
   });
@@ -150,8 +145,8 @@ export async function buildCalendarExcelBuffer(input: BuildCalendarExcelInput): 
     const activityLabel = group.rows.length === 1 ? 'actividad' : 'actividades';
     sectionRow.getCell(1).value = {
       richText: [
-        { font: { bold: true, size: 11, color: { argb: `FF${contrast}` } }, text: `●  ${group.groupName}` },
-        { font: { size: 10, color: { argb: `FF${contrast}` } }, text: `   ·  ${group.rows.length} ${activityLabel}` },
+        { font: { name: FONT_NAME, bold: true, size: 11, color: { argb: `FF${contrast}` } }, text: `●  ${group.groupName}` },
+        { font: { name: FONT_NAME, size: 10, color: { argb: `FF${contrast}` } }, text: `   ·  ${group.rows.length} ${activityLabel}` },
       ],
     };
     sectionRow.getCell(1).alignment = { vertical: 'middle' };
@@ -161,7 +156,6 @@ export async function buildCalendarExcelBuffer(input: BuildCalendarExcelInput): 
     sectionRow.height = 20;
     r++;
 
-    const tint = tintHex(hex, 0.16);
     for (const row of group.rows) {
       const dataRow = ws.getRow(r);
       const statusVal = statusColIndex >= 0 ? row[input.columns[statusColIndex].key] : undefined;
@@ -174,11 +168,11 @@ export async function buildCalendarExcelBuffer(input: BuildCalendarExcelInput): 
         cell.border = { top: cellBorder, left: cellBorder, bottom: cellBorder, right: cellBorder };
         cell.alignment = { wrapText: true, vertical: 'middle', horizontal: c.align === 'center' ? 'center' : 'left' };
 
-        const baseFont = i === titleColIndex ? { bold: true, size: 9 } : { size: 9 };
+        const baseFont = i === titleColIndex ? { name: FONT_NAME, bold: true, size: 9 } : { name: FONT_NAME, size: 9 };
         cell.font = isDone ? { ...baseFont, color: { argb: 'FF94A3B8' } } : baseFont;
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${tint}` } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
 
-        // La celda de Status se pinta con su propio código de color, encima del tinte del grupo.
+        // La celda de Status se pinta con su propio código de color; el resto de la fila queda en blanco.
         if (i === statusColIndex && typeof v === 'string' && STATUS_STYLES[v]) {
           cell.font = { ...baseFont, bold: true, color: { argb: STATUS_STYLES[v].text } };
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_STYLES[v].bg } };
@@ -209,6 +203,9 @@ export async function buildCalendarExcelBuffer(input: BuildCalendarExcelInput): 
   }
 
   input.columns.forEach((c, i) => { ws.getColumn(i + 1).width = Math.min(48, Math.max(14, colMaxLen[i] + 4)); });
+  // Piso extra en la columna 1 para que el logo (220px) siempre tenga aire dentro del
+  // bloque A+B del masthead, incluso cuando el contenido real de "Dinámica" es corto.
+  ws.getColumn(1).width = Math.max(ws.getColumn(1).width ?? 14, 26);
 
   const buf = await wb.xlsx.writeBuffer();
   return Buffer.from(buf);
