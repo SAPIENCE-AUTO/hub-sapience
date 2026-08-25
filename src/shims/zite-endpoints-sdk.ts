@@ -202,6 +202,7 @@ export const getCRMItems = (input?: any): Promise<any> => call('getCRMItems', in
 export const getCalendarBoardStatus = (input?: any): Promise<any> => call('getCalendarBoardStatus', input);
 export const getCalendarEventById = (input?: any): Promise<any> => call('getCalendarEventById', input);
 export const getCalendarExcelColumns = (input?: any): Promise<any> => call('getCalendarExcelColumns', input);
+export const getCalendarExcelPreview = (input?: any): Promise<any> => call('getCalendarExcelPreview', input);
 export const getCellValues = (input?: any): Promise<any> => call('getCellValues', input);
 export const getChatConversations = (input?: any): Promise<any> => call('getChatConversations', input);
 export const getCommercialViews = (input?: any): Promise<any> => call('getCommercialViews', input);

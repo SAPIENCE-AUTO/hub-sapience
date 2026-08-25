@@ -1,16 +1,8 @@
 import { z } from 'zod';
-import { createEndpoint, CalendarEvents, Projects, BoardColumns, CellValues, Boards, Documents } from '../../server/compat';
+import { createEndpoint, Boards, Documents } from '../../server/compat';
 import { graphFetch } from '../../server/microsoft/graph';
 import { buildCalendarExcelBuffer } from '../serverUtils/calendarExcelBuilder';
-
-const MESES_ABREV = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-
-/** Formato pedido para el Excel de calendario: "31 - ago - 2026". */
-function formatFechaExcel(date: Date, timeZone = 'America/Mexico_City'): string {
-  const iso = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
-  const [y, m, d] = iso.split('-');
-  return `${d} - ${MESES_ABREV[Number(m) - 1]} - ${y}`;
-}
+import { fetchCalendarExcelData } from '../serverUtils/calendarExcelData';
 
 // El link de Teams ya trae todo lo que Graph necesita para resolver drive/carpeta —
 // mismo parseo que ya usa getProjectTeamsFiles.ts (formato confirmado en vivo):
@@ -73,50 +65,6 @@ async function uploadCalendarExcelToSharePoint(channelUrl: string, filename: str
   return uploaded.webUrl;
 }
 
-function toKey(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_]/g, '');
-}
-
-function mapColType(type: string | null | undefined): string {
-  switch (type) {
-    case 'Status':        return 'status';
-    case 'Fecha':         return 'date';
-    case 'Datetime':      return 'datetime';
-    case 'Persona':       return 'people';
-    case 'Color':         return 'color_picker';
-    case 'Texto':         return 'text';
-    case 'Número':        return 'numbers';
-    case 'Número entero': return 'numbers';
-    case 'Select':        return 'dropdown';
-    default:              return (type ?? 'text').toLowerCase();
-  }
-}
-
-function colDefaults(type: string): { width: number; align: string } {
-  switch (type) {
-    case 'date': case 'datetime': case 'time': return { width: 12, align: 'center' };
-    case 'numbers': case 'number':              return { width: 10, align: 'center' };
-    case 'status': case 'dropdown':             return { width: 14, align: 'center' };
-    case 'people':                              return { width: 14, align: 'left'   };
-    default:                                    return { width: 20, align: 'left'   };
-  }
-}
-
-const FIXED_DEFS = [
-  { id: 'dinamica',    key: 'dinamica',    title: 'Dinámica',    type: 'text',   width: 20, align: 'left'   },
-  { id: 'fecha',       key: 'fecha',       title: 'Fecha',       type: 'date',   width: 12, align: 'center' },
-  { id: 'hora_mx',     key: 'hora_mx',     title: 'Hora (MX)',   type: 'time',   width: 11, align: 'center' },
-  { id: 'duracion',    key: 'duracion',    title: 'Duración',    type: 'number', width: 10, align: 'center' },
-  { id: 'moderador',   key: 'moderador',   title: 'Moderador',   type: 'text',   width: 14, align: 'left'   },
-  { id: 'descripcion', key: 'descripcion', title: 'Descripción', type: 'text',   width: 30, align: 'left'   },
-] as const;
-
-type ColDef = { id: string; key: string; title: string; type: string; width: number; align: string; optionsJson?: string | null };
-
 export default createEndpoint({
   authenticated: true,
   description: 'Genera el Excel de calendario (masthead, grupos con color, dropdown de Status) en el backend y lo sube a SharePoint vía Graph — ya no depende de n8n',
@@ -137,93 +85,18 @@ export default createEndpoint({
     excelBase64: z.string().optional(),
   }),
   execute: async ({ input }) => {
-    // ── Resolve board UUID ─────────────────────────────────────────────────
-    let resolvedBoardId: string;
-    let boardResult: any = null;
-
-    if (input.boardId) {
-      // UUID-first: use boardId exclusively for ALL queries
-      resolvedBoardId = input.boardId;
-      boardResult = await Boards.findOne({ id: input.boardId });
-    } else {
-      // Legacy fallback — require calendarName, check for ambiguity
-      if (!input.calendarName) throw new Error('Either boardId or calendarName is required.');
-      const boardsResult = await Boards.findAll({
-        filters: { boardName: input.calendarName, projectCode: input.projectCode, boardType: 'calendar' } as any,
-        limit: 10,
-      });
-      const activeBoards = boardsResult.records.filter(b => !b.deletedAt);
-      if (activeBoards.length > 1) {
-        throw new Error(`Ambiguity: ${activeBoards.length} calendars named "${input.calendarName}" exist for project ${input.projectCode}. Pass boardId to disambiguate.`);
-      }
-      if (activeBoards.length === 1) {
-        resolvedBoardId = activeBoards[0].id;
-        boardResult = activeBoards[0];
-      } else {
-        // 0 matches — use legacy composite as last resort
-        resolvedBoardId = `cal-${input.projectCode}-${input.calendarName}`;
-        boardResult = null;
-      }
-    }
-
-    const groupBoardId = `${resolvedBoardId}::groups`;
-
-    // ── Fetch events: UUID-first, no dual-path when boardId exists ─────────
-    const eventsFilter: Record<string, string> = input.boardId
-      ? { boardId: input.boardId }
-      : { projectCode: input.projectCode, calendarName: input.calendarName! };
-
-    const [eventsResult, projectResult, colRes, cellRes, groupColRes, groupCellRes] = await Promise.all([
-      CalendarEvents.findAll({ filters: eventsFilter as any, limit: 500 }),
-      Projects.findOne({ filters: { projectCode: input.projectCode } }),
-      BoardColumns.findAll({ filters: { boardId: resolvedBoardId } as any, limit: 200 }),
-      CellValues.findAll({ filters: { boardId: resolvedBoardId } as any, limit: 2000 }),
-      BoardColumns.findAll({ filters: { boardId: groupBoardId } as any, limit: 100 }),
-      CellValues.findAll({ filters: { boardId: groupBoardId } as any, limit: 2000 }),
-    ]);
-
-    const events = eventsResult.records;
+    const { boardResult, projectResult, calendarTitle, allDefs, groups, eventCount } = await fetchCalendarExcelData({
+      projectCode: input.projectCode,
+      calendarName: input.calendarName,
+      boardId: input.boardId,
+    });
 
     // ── Version counter ────────────────────────────────────────────────────
     const newVersion = (boardResult?.calendarVersion ?? 0) + 1;
     const versionStr = input.overrideVersion ?? String(newVersion);
+    const calendarLabel = boardResult?.boardName ?? input.calendarName ?? 'Calendar';
 
-    // ── Active columns & cells ─────────────────────────────────────────────
-    const activeCols  = colRes.records.filter(c => !c.deletedAt);
-    const activeCells = cellRes.records.filter(c => !c.deletedAt);
-
-    const cellsByEventCol = new Map<string, Map<string, typeof activeCells[0]>>();
-    for (const cell of activeCells) {
-      if (!cell.rowId || !cell.columnId) continue;
-      if (!cellsByEventCol.has(cell.rowId)) cellsByEventCol.set(cell.rowId, new Map());
-      cellsByEventCol.get(cell.rowId)!.set(cell.columnId, cell);
-    }
-
-    const deduped = new Map<string, typeof activeCols[0]>();
-    for (const col of activeCols) {
-      deduped.set((col.columnName ?? col.id).toLowerCase().trim(), col);
-    }
-
-    // ── Build all column defs ──────────────────────────────────────────────
-    const fixedColDefs: ColDef[] = FIXED_DEFS.map(fd => ({ ...fd }));
-
-    const dynColDefs: ColDef[] = [];
-    for (const [, col] of deduped) {
-      const key  = toKey(col.columnName ?? col.id);
-      const type = mapColType(col.columnType);
-      const title = col.columnName ?? col.id;
-      if (title === 'Ubicación Interna' || title === 'Ubicación (interna)') continue;
-      if (type === 'datetime') {
-        dynColDefs.push({ id: `${col.id}__fecha`, key: `${key}_fecha`, title: 'Fecha', type: 'date', width: 12, align: 'center' });
-        dynColDefs.push({ id: `${col.id}__hora`,  key: `${key}_hora`,  title: 'Hora',  type: 'time', width: 11, align: 'center' });
-      } else {
-        const def = colDefaults(type);
-        dynColDefs.push({ id: col.id, key, title, type, ...def, optionsJson: col.optionsJson ?? null });
-      }
-    }
-
-    const allDefs: ColDef[] = [...fixedColDefs, ...dynColDefs];
-
+    // ── Orden + selección de columnas (decisión del diálogo, no del fetch) ──
     if (input.columnOrder && input.columnOrder.length > 0) {
       const orderMap = new Map(input.columnOrder.map((id, i) => [id, i]));
       allDefs.sort((a, b) => {
@@ -232,104 +105,8 @@ export default createEndpoint({
         return ai - bi;
       });
     }
-
-    // ── Selection ──────────────────────────────────────────────────────────
     const selectedSet = input.selectedColumnIds ? new Set(input.selectedColumnIds) : null;
     const isSelected  = (id: string) => !selectedSet || selectedSet.has(id);
-
-    const sortedDynDefs = allDefs.filter(d => dynColDefs.some(dd => dd.id === d.id));
-
-    // ── Group membership ───────────────────────────────────────────────────
-    const activeGroupCols  = groupColRes.records.filter(c => !c.deletedAt);
-    const activeGroupCells = groupCellRes.records.filter(c => !c.deletedAt);
-    activeGroupCols.sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0));
-
-    const eventGroupMap = new Map<string, string>();
-    for (const cell of activeGroupCells) {
-      if (cell.textValue === '1' && cell.rowId && cell.columnId) {
-        if (!eventGroupMap.has(cell.rowId)) eventGroupMap.set(cell.rowId, cell.columnId);
-      }
-    }
-
-    // ── Build flat row ─────────────────────────────────────────────────────
-    function buildRow(ev: typeof events[0]): Record<string, string | number> {
-      const eventDate = ev.eventDate ? new Date(ev.eventDate) : null;
-      const fecha     = eventDate ? formatFechaExcel(eventDate) : '';
-      const hora_mx   = eventDate
-        ? eventDate.toLocaleTimeString('es-MX', {
-            hour: '2-digit', minute: '2-digit', hour12: false,
-            timeZone: 'America/Mexico_City',
-          })
-        : '';
-
-      const row: Record<string, string | number> = {
-        rowId:       ev.id,
-        dinamica:    ev.eventName ?? '',
-        fecha,
-        hora_mx,
-        duracion:    ev.durationHours ?? '',
-        moderador:   ev.attendees ?? '',
-        descripcion: ev.notes ?? '',
-      };
-
-      const eventCells = cellsByEventCol.get(ev.id);
-      for (const dyn of sortedDynDefs) {
-        const isFecha   = dyn.id.endsWith('__fecha');
-        const isHora    = dyn.id.endsWith('__hora');
-        const realColId = (isFecha || isHora) ? dyn.id.replace(/__fecha$|__hora$/, '') : dyn.id;
-        const cell      = eventCells?.get(realColId);
-        let val: string | number = '';
-        if (cell) {
-          if (isFecha || isHora) {
-            const rawDate = cell.dateValue;
-            if (rawDate) {
-              const d = new Date(rawDate);
-              val = isFecha
-                ? formatFechaExcel(d)
-                : d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Mexico_City' });
-            }
-          } else if (cell.textValue) {
-            val = cell.textValue;
-          } else if (cell.dateValue) {
-            val = formatFechaExcel(new Date(cell.dateValue));
-          } else if (cell.numberValue != null) {
-            val = cell.numberValue;
-          }
-        }
-        row[dyn.key] = val;
-      }
-
-      return row;
-    }
-
-    // ── Bucket events into groups ──────────────────────────────────────────
-    const topLevelEvents = events.filter(e => !e.parentEventId);
-    const groupBuckets   = new Map<string, typeof events>();
-    for (const g of activeGroupCols) groupBuckets.set(g.id, []);
-    const ungrouped: typeof events = [];
-
-    for (const e of topLevelEvents) {
-      const gid = eventGroupMap.get(e.id);
-      if (gid && groupBuckets.has(gid)) groupBuckets.get(gid)!.push(e);
-      else ungrouped.push(e);
-    }
-
-    const groups: { groupId: string; groupName: string; rows: Record<string, string | number>[] }[] = [];
-    for (const g of activeGroupCols) {
-      groups.push({
-        groupId:   g.id,
-        groupName: g.columnName ?? 'Sin nombre',
-        rows:      (groupBuckets.get(g.id) ?? []).map(buildRow),
-      });
-    }
-    if (ungrouped.length > 0 || groups.length === 0) {
-      groups.push({ groupId: 'ungrouped', groupName: 'Sin grupo', rows: ungrouped.map(buildRow) });
-    }
-
-    // ── Título + fecha (se conservan aunque ya no se manden a n8n) ──────────
-    const calendarLabel = boardResult?.boardName ?? input.calendarName ?? 'Calendar';
-    const tematica     = (projectResult as any)?.tematica ?? '';
-    const calendarTitle = tematica ? `${tematica} - ${calendarLabel}` : calendarLabel;
 
     // ── Construir el .xlsx con el diseño nuevo (masthead, grupos con su color
     // real, dropdown + código de color en Status) — 100% en el backend, ya sin
@@ -338,18 +115,11 @@ export default createEndpoint({
       .filter(d => isSelected(d.id))
       .map(d => ({ key: d.key, title: d.title, type: d.type, align: d.align, optionsJson: d.optionsJson ?? null }));
 
-    const excelGroups = groups.map(g => ({
-      groupId: g.groupId,
-      groupName: g.groupName,
-      colorId: g.groupId === 'ungrouped' ? null : (activeGroupCols.find(c => c.id === g.groupId)?.columnType ?? null),
-      rows: g.rows,
-    }));
-
     const excelBuffer = await buildCalendarExcelBuffer({
       calendarTitle,
       version: versionStr,
       columns: visibleColumns,
-      groups: excelGroups,
+      groups,
     });
     const excelBase64 = excelBuffer.toString('base64');
 
@@ -401,6 +171,6 @@ export default createEndpoint({
       } catch { /* best-effort */ }
     }
 
-    return { success: true, eventCount: events.length, calendarStatus: 'Listo', fileUrl: resolvedFileUrl, version: versionStr, excelBase64 };
+    return { success: true, eventCount, calendarStatus: 'Listo', fileUrl: resolvedFileUrl, version: versionStr, excelBase64 };
   },
 });
