@@ -40,6 +40,7 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
     projectType: deal.projectType ?? '',
     tematica: deal.tematica ?? '',
     notes: deal.notes ?? '',
+    approvalDate: deal.approvalDate ? deal.approvalDate.slice(0, 10) : '',
   });
   const [owner, setOwner] = useState((Array.isArray(deal.owner) ? deal.owner[0] : deal.owner) ?? '');
   const [users, setUsers] = useState<UserItem[]>([]);
@@ -122,6 +123,7 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
         tematica: form.tematica || undefined,
         owner: owner ? [owner] : undefined,
         notes: form.notes || undefined,
+        approvalDate: form.approvalDate || undefined,
         // Solo al crear: la fase nace en Prospecto sin preguntar (en edición
         // la fase la maneja el badge del header, este form ya no la toca).
         ...(isNew ? { phase: 'Prospecto' } : {}),
@@ -178,6 +180,11 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
               <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
               <SelectContent>{users.map(u => <SelectItem key={u.id} value={u.id}>{userName(u)}</SelectItem>)}</SelectContent>
             </Select>
+          </div>
+        )}
+        {!isNew && (
+          <div className="space-y-1"><Label>Fecha de aprobación</Label>
+            <Input type="date" value={form.approvalDate} onChange={sf('approvalDate')} />
           </div>
         )}
       </div>

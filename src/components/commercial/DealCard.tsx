@@ -43,10 +43,10 @@ export default function DealCard({ deal, onClick, onDragStart }: Props) {
           </div>
         ) : <span />}
 
-        {deal.proposalDate && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        {(deal.approvalDate || deal.proposalDate) && (
+          <div className={`flex items-center gap-1 text-xs ${deal.approvalDate ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
             <Calendar className="w-3 h-3" />
-            {(() => { const [y,m,d] = deal.proposalDate!.slice(0,10).split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }); })()}
+            {(() => { const raw = deal.approvalDate || deal.proposalDate!; const [y,m,d] = raw.slice(0,10).split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }); })()}
           </div>
         )}
       </div>
