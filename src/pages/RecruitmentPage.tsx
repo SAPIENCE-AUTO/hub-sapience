@@ -234,47 +234,13 @@ async function exportRecruitmentExcel(
   const visibleDyn = [...dynCols.columns]
     .sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0))
     .filter(c => !hiddenColumns.has(c.id));
-  const headers = [...fixedCols.map(c => c.label), 'Grupo', ...visibleDyn.map(c => c.columnName ?? '')];
+  // Sin columna "Grupo": el grupo ya se ve en la fila de secci\u00F3n de cada bloque \u2014 como
+  // columna aparte solo repet\u00EDa el mismo dato en cada fila ("se est\u00E1 colando").
+  const headers = [...fixedCols.map(c => c.label), ...visibleDyn.map(c => c.columnName ?? '')];
   const colCount = headers.length;
 
-  // \u2500\u2500 Encabezado: logo + t\u00EDtulo \u2500\u2500
-  try {
-    const resp = await fetch(RECRUITMENT_LOGO_URL);
-    if (resp.ok) {
-      const buf = await resp.arrayBuffer();
-      const imgId = wb.addImage({ buffer: buf, extension: 'png' });
-      ws.addImage(imgId, { tl: { col: 0.15, row: 0.1 }, ext: { width: 130, height: 39 } });
-    }
-  } catch { /* sin logo si falla la descarga \u2014 no bloquea el export */ }
-
-  ws.mergeCells(1, 1, 3, 2);
-  ws.mergeCells(1, 3, 1, colCount);
-  ws.mergeCells(2, 3, 2, colCount);
-  const titleCell = ws.getCell(1, 3);
-  titleCell.value = `Tablero de Reclutamiento \u2014 ${boardName}`;
-  titleCell.font = { bold: true, size: 14, color: { argb: 'FF0F3D4C' } };
-  const subCell = ws.getCell(2, 3);
-  subCell.value = `Exportado el ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}`;
-  subCell.font = { italic: true, size: 10, color: { argb: 'FF6B7280' } };
-  ws.getRow(1).height = 24;
-  ws.getRow(2).height = 16;
-  ws.getRow(3).height = 8;
-
-  // \u2500\u2500 Encabezado de columnas \u2500\u2500
-  const HEADER_ROW = 4;
-  const headerRow = ws.getRow(HEADER_ROW);
-  headers.forEach((h, i) => {
-    const cell = headerRow.getCell(i + 1);
-    cell.value = h;
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F3D4C' } };
-    cell.alignment = { vertical: 'middle' };
-  });
-  headerRow.height = 20;
-  ws.views = [{ state: 'frozen', ySplit: HEADER_ROW }];
-  headers.forEach((h, i) => { ws.getColumn(i + 1).width = Math.min(38, Math.max(14, h.length + 6)); });
-
-  // \u2500\u2500 Filas agrupadas \u2500\u2500
+  // \u2500\u2500 Filas agrupadas (se calculan antes del encabezado para poder mostrar
+  // el total real de participantes/grupos exportados en el subt\u00EDtulo) \u2500\u2500
   const topLevel = rows.filter(r => !r.parentRowId);
   const rowGroupMap = new Map<string, { groupId: string; groupName: string; colorId?: string }>();
   for (const row of topLevel) {
@@ -291,22 +257,84 @@ async function exportRecruitmentExcel(
     { key: NO_GROUP_KEY, name: 'Sin grupo', colorId: undefined as string | undefined },
   ].filter(g => includeGroupKeys.has(g.key));
 
+  const rowsByGroup = new Map(orderedGroups.map(g => [
+    g.key,
+    topLevel.filter(row => (rowGroupMap.get(row.id)?.groupId ?? NO_GROUP_KEY) === g.key),
+  ]));
+  const exportedParticipants = [...rowsByGroup.values()].reduce((n, rs) => n + rs.length, 0);
+  const exportedGroupCount = orderedGroups.filter(g => g.key !== NO_GROUP_KEY && (rowsByGroup.get(g.key)?.length ?? 0) > 0).length;
+
+  // \u2500\u2500 Encabezado: logo (proporci\u00F3n real, 816\u00D7203) + t\u00EDtulo \u2500\u2500
+  const LOGO_ASPECT = 816 / 203;
+  const LOGO_WIDTH = 220;
+  try {
+    const resp = await fetch(RECRUITMENT_LOGO_URL);
+    if (resp.ok) {
+      const buf = await resp.arrayBuffer();
+      const imgId = wb.addImage({ buffer: buf, extension: 'png' });
+      ws.addImage(imgId, { tl: { col: 0.15, row: 0.12 }, ext: { width: LOGO_WIDTH, height: LOGO_WIDTH / LOGO_ASPECT } });
+    }
+  } catch { /* sin logo si falla la descarga \u2014 no bloquea el export */ }
+
+  ws.mergeCells(1, 1, 3, 2);
+  ws.mergeCells(1, 3, 1, colCount);
+  ws.mergeCells(2, 3, 2, colCount);
+  const titleCell = ws.getCell(1, 3);
+  titleCell.value = `Tablero de Reclutamiento \u2014 ${boardName}`;
+  titleCell.font = { bold: true, size: 15, color: { argb: 'FF0F3D4C' } };
+  const groupWord = exportedGroupCount === 1 ? 'grupo' : 'grupos';
+  const participantWord = exportedParticipants === 1 ? 'participante' : 'participantes';
+  const subCell = ws.getCell(2, 3);
+  subCell.value = `Exportado el ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })} \u00B7 ${exportedParticipants} ${participantWord}${exportedGroupCount > 0 ? ` \u00B7 ${exportedGroupCount} ${groupWord}` : ''}`;
+  subCell.font = { size: 10.5, color: { argb: 'FF6B7280' } };
+  ws.getRow(1).height = 30;
+  ws.getRow(2).height = 18;
+  ws.getRow(3).height = 12;
+
+  // \u2500\u2500 L\u00EDnea de acento \u2014 separa el masthead del resto, como un membrete \u2500\u2500
+  const RULE_ROW = 4;
+  ws.mergeCells(RULE_ROW, 1, RULE_ROW, colCount);
+  ws.getCell(RULE_ROW, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F3D4C' } };
+  ws.getRow(RULE_ROW).height = 4;
+
+  // \u2500\u2500 Encabezado de columnas \u2500\u2500
+  const HEADER_ROW = 5;
+  const headerRow = ws.getRow(HEADER_ROW);
+  headers.forEach((h, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = h;
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F3D4C' } };
+    cell.alignment = { vertical: 'middle' };
+  });
+  headerRow.height = 20;
+  ws.views = [{ state: 'frozen', ySplit: HEADER_ROW }];
+  headers.forEach((h, i) => { ws.getColumn(i + 1).width = Math.min(38, Math.max(14, h.length + 6)); });
+
+  const cellBorder = { style: 'hair' as const, color: { argb: 'FFE5E7EB' } };
+
   let r = HEADER_ROW + 1;
   let totalRows = 0;
   for (const group of orderedGroups) {
-    const groupRows = topLevel.filter(row => (rowGroupMap.get(row.id)?.groupId ?? NO_GROUP_KEY) === group.key);
+    const groupRows = rowsByGroup.get(group.key) ?? [];
     if (groupRows.length === 0) continue;
 
     const hex = groupHex(group.colorId);
+    const contrast = contrastText(hex);
     const sectionRow = ws.getRow(r);
     ws.mergeCells(r, 1, r, colCount);
-    sectionRow.getCell(1).value = `${group.name} (${groupRows.length})`;
+    const participantLabel = groupRows.length === 1 ? 'participante' : 'participantes';
+    sectionRow.getCell(1).value = {
+      richText: [
+        { font: { bold: true, size: 11, color: { argb: `FF${contrast}` } }, text: `\u25CF  ${group.name}` },
+        { font: { size: 10, color: { argb: `FF${contrast}` } }, text: `   \u00B7  ${groupRows.length} ${participantLabel}` },
+      ],
+    };
+    sectionRow.getCell(1).alignment = { vertical: 'middle' };
     for (let c = 1; c <= colCount; c++) {
-      const cell = sectionRow.getCell(c);
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${hex}` } };
-      cell.font = { bold: true, color: { argb: `FF${contrastText(hex)}` } };
+      ws.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${hex}` } };
     }
-    sectionRow.height = 18;
+    sectionRow.height = 20;
     r++;
 
     const tint = tintHex(hex, 0.16);
@@ -316,12 +344,13 @@ async function exportRecruitmentExcel(
         c.key === 'participantName' ? (row.participantName || row.rowName || '') : ((row as Record<string, unknown>)[c.key] as string) ?? ''
       );
       const dynVals = visibleDyn.map(c => cellDisplayValue(dynCols.getCellVal(row.id, c.id), c.columnType) ?? '');
-      const values = [...fixedVals, group.name, ...dynVals];
+      const values = [...fixedVals, ...dynVals];
       values.forEach((v, i) => {
         const cell = dataRow.getCell(i + 1);
         cell.value = v;
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${tint}` } };
-        cell.border = { bottom: { style: 'hair', color: { argb: 'FFE5E7EB' } } };
+        cell.border = { top: cellBorder, left: cellBorder, bottom: cellBorder, right: cellBorder };
+        if (i === 0) cell.font = { bold: true };
       });
       r++;
       totalRows++;
