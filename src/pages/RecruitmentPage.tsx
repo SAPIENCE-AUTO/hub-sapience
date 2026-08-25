@@ -31,6 +31,7 @@ import { GROUP_COLORS, getGroupColor, useResizableCol, dynColToFilterCol, cellDi
 import { InlineInput } from '../components/table/InlineInput';
 import { GroupPicker } from '../components/table/GroupPicker';
 import { GroupSectionHeader } from '../components/table/GroupSectionHeader';
+import { ExportRecruitmentGroupsDialog, NO_GROUP_KEY, type ExportGroupOption } from '../components/ExportRecruitmentGroupsDialog';
 import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, FileText, X, AlertTriangle, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList } from 'lucide-react';
 import RecruitmentStatusPanel from '../components/RecruitmentStatusPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -164,6 +165,178 @@ function exportRecruitmentCsv(
   a.download = `reclutamiento-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// \u2500\u2500 Excel "bonito" Export Helper \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Sapience logo reutilizado tal cual del template de invites (src/serverUtils/inviteHtml.ts)
+// \u2014 no se importa ese archivo directo para no arrastrar nada server-only al bundle del cliente.
+const RECRUITMENT_LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/zite-uploads/branding/sapience-logo.png';
+
+// Mismos valores HSL que src/index.css (--group-*) y src/components/table/tableUtils.ts
+// (GROUP_COLORS) \u2014 se duplican aqu\u00ED como tuplas num\u00E9ricas porque las variables CSS no son
+// resolubles fuera del DOM (ExcelJS arma el archivo en memoria, sin estilos computados).
+const GROUP_COLOR_HSL: Record<string, [number, number, number]> = {
+  'red-1': [4, 85, 65], 'red-2': [4, 85, 55], 'red-3': [4, 82, 45], 'red-4': [4, 78, 37], 'red-5': [4, 72, 28],
+  'orange-1': [25, 90, 65], 'orange-2': [25, 88, 55], 'orange-3': [25, 85, 45], 'orange-4': [25, 82, 37], 'orange-5': [25, 78, 28],
+  'yellow-1': [47, 95, 62], 'yellow-2': [47, 92, 52], 'yellow-3': [47, 88, 43], 'yellow-4': [47, 84, 35], 'yellow-5': [47, 78, 27],
+  'green-1': [142, 52, 60], 'green-2': [142, 56, 50], 'green-3': [142, 58, 40], 'green-4': [142, 56, 32], 'green-5': [142, 52, 24],
+  'blue-1': [215, 82, 68], 'blue-2': [215, 80, 58], 'blue-3': [215, 78, 48], 'blue-4': [215, 76, 38], 'blue-5': [215, 72, 29],
+  'purple-1': [265, 68, 68], 'purple-2': [265, 70, 58], 'purple-3': [265, 68, 48], 'purple-4': [265, 65, 38], 'purple-5': [265, 62, 29],
+};
+const DEFAULT_GROUP_HEX = '94A3B8'; // slate-400 \u2014 grupo sin color asignado o "Sin grupo"
+
+function hslToHex([h, s, l]: [number, number, number]): string {
+  const sN = s / 100, lN = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sN * Math.min(lN, 1 - lN);
+  const f = (n: number) => lN - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toHex = (x: number) => Math.round(255 * x).toString(16).padStart(2, '0');
+  return `${toHex(f(0))}${toHex(f(4))}${toHex(f(8))}`.toUpperCase();
+}
+
+function groupHex(colorId?: string | null): string {
+  return colorId && GROUP_COLOR_HSL[colorId] ? hslToHex(GROUP_COLOR_HSL[colorId]) : DEFAULT_GROUP_HEX;
+}
+
+// Mezcla el color del grupo con blanco \u2014 igual efecto que el `color-mix(... 12%, card)`
+// que ya usa GroupSectionHeader.tsx en pantalla, aqu\u00ED manual porque exceljs pide ARGB.
+function tintHex(hex: string, amount: number): string {
+  const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+  const mix = (c: number) => Math.round(c * amount + 255 * (1 - amount));
+  return [mix(r), mix(g), mix(b)].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+function contrastText(hex: string): string {
+  const r = parseInt(hex.slice(0, 2), 16) / 255, g = parseInt(hex.slice(2, 4), 16) / 255, b = parseInt(hex.slice(4, 6), 16) / 255;
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.6 ? '1F2937' : 'FFFFFF';
+}
+
+async function exportRecruitmentExcel(
+  rows: Row[],
+  hiddenColumns: Set<string>,
+  dynCols: DynCols,
+  groupDynCols: DynCols,
+  boardName: string,
+  includeGroupKeys: Set<string>,
+): Promise<number> {
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Hub Sapience';
+  wb.created = new Date();
+  const ws = wb.addWorksheet((boardName || 'Reclutamiento').slice(0, 31));
+
+  const fixedCols: { key: string; label: string }[] = [{ key: 'participantName', label: 'Participante' }];
+  if (!hiddenColumns.has('email')) fixedCols.push({ key: 'email', label: 'Email' });
+  if (!hiddenColumns.has('phone')) fixedCols.push({ key: 'phone', label: 'Tel\u00E9fono' });
+  if (!hiddenColumns.has('idNumber')) fixedCols.push({ key: 'idNumber', label: 'ID / Doc' });
+  if (!hiddenColumns.has('status')) fixedCols.push({ key: 'status', label: 'Estado' });
+  const visibleDyn = [...dynCols.columns]
+    .sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0))
+    .filter(c => !hiddenColumns.has(c.id));
+  const headers = [...fixedCols.map(c => c.label), 'Grupo', ...visibleDyn.map(c => c.columnName ?? '')];
+  const colCount = headers.length;
+
+  // \u2500\u2500 Encabezado: logo + t\u00EDtulo \u2500\u2500
+  try {
+    const resp = await fetch(RECRUITMENT_LOGO_URL);
+    if (resp.ok) {
+      const buf = await resp.arrayBuffer();
+      const imgId = wb.addImage({ buffer: buf, extension: 'png' });
+      ws.addImage(imgId, { tl: { col: 0.15, row: 0.1 }, ext: { width: 130, height: 39 } });
+    }
+  } catch { /* sin logo si falla la descarga \u2014 no bloquea el export */ }
+
+  ws.mergeCells(1, 1, 3, 2);
+  ws.mergeCells(1, 3, 1, colCount);
+  ws.mergeCells(2, 3, 2, colCount);
+  const titleCell = ws.getCell(1, 3);
+  titleCell.value = `Tablero de Reclutamiento \u2014 ${boardName}`;
+  titleCell.font = { bold: true, size: 14, color: { argb: 'FF0F3D4C' } };
+  const subCell = ws.getCell(2, 3);
+  subCell.value = `Exportado el ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+  subCell.font = { italic: true, size: 10, color: { argb: 'FF6B7280' } };
+  ws.getRow(1).height = 24;
+  ws.getRow(2).height = 16;
+  ws.getRow(3).height = 8;
+
+  // \u2500\u2500 Encabezado de columnas \u2500\u2500
+  const HEADER_ROW = 4;
+  const headerRow = ws.getRow(HEADER_ROW);
+  headers.forEach((h, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = h;
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F3D4C' } };
+    cell.alignment = { vertical: 'middle' };
+  });
+  headerRow.height = 20;
+  ws.views = [{ state: 'frozen', ySplit: HEADER_ROW }];
+  headers.forEach((h, i) => { ws.getColumn(i + 1).width = Math.min(38, Math.max(14, h.length + 6)); });
+
+  // \u2500\u2500 Filas agrupadas \u2500\u2500
+  const topLevel = rows.filter(r => !r.parentRowId);
+  const rowGroupMap = new Map<string, { groupId: string; groupName: string; colorId?: string }>();
+  for (const row of topLevel) {
+    for (const g of groupDynCols.columns) {
+      if (groupDynCols.getCellVal(row.id, g.id)?.textValue === '1') {
+        rowGroupMap.set(row.id, { groupId: g.id, groupName: g.columnName ?? 'Sin nombre', colorId: g.columnType ?? undefined });
+        break;
+      }
+    }
+  }
+
+  const orderedGroups = [
+    ...groupDynCols.columns.map(g => ({ key: g.id, name: g.columnName ?? 'Sin nombre', colorId: g.columnType ?? undefined })),
+    { key: NO_GROUP_KEY, name: 'Sin grupo', colorId: undefined as string | undefined },
+  ].filter(g => includeGroupKeys.has(g.key));
+
+  let r = HEADER_ROW + 1;
+  let totalRows = 0;
+  for (const group of orderedGroups) {
+    const groupRows = topLevel.filter(row => (rowGroupMap.get(row.id)?.groupId ?? NO_GROUP_KEY) === group.key);
+    if (groupRows.length === 0) continue;
+
+    const hex = groupHex(group.colorId);
+    const sectionRow = ws.getRow(r);
+    ws.mergeCells(r, 1, r, colCount);
+    sectionRow.getCell(1).value = `${group.name} (${groupRows.length})`;
+    for (let c = 1; c <= colCount; c++) {
+      const cell = sectionRow.getCell(c);
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${hex}` } };
+      cell.font = { bold: true, color: { argb: `FF${contrastText(hex)}` } };
+    }
+    sectionRow.height = 18;
+    r++;
+
+    const tint = tintHex(hex, 0.16);
+    for (const row of groupRows) {
+      const dataRow = ws.getRow(r);
+      const fixedVals = fixedCols.map(c =>
+        c.key === 'participantName' ? (row.participantName || row.rowName || '') : ((row as Record<string, unknown>)[c.key] as string) ?? ''
+      );
+      const dynVals = visibleDyn.map(c => cellDisplayValue(dynCols.getCellVal(row.id, c.id), c.columnType) ?? '');
+      const values = [...fixedVals, group.name, ...dynVals];
+      values.forEach((v, i) => {
+        const cell = dataRow.getCell(i + 1);
+        cell.value = v;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${tint}` } };
+        cell.border = { bottom: { style: 'hair', color: { argb: 'FFE5E7EB' } } };
+      });
+      r++;
+      totalRows++;
+    }
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reclutamiento-${(boardName || 'tablero').replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return totalRows;
 }
 
 // ── Recruitment Table ─────────────────────────────────────────────────────────
@@ -2021,6 +2194,8 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
   const [trashOpen, setTrashOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [exportExcelDialogOpen, setExportExcelDialogOpen] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [statusPanelOpen, setStatusPanelOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(() => localStorage.getItem('recruit-compact') === '1');
   const toggleCompact = () => setCompactMode(prev => { const next = !prev; localStorage.setItem('recruit-compact', next ? '1' : '0'); return next; });
@@ -2480,6 +2655,35 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
       [r.participantName, r.email, r.phone, r.idNumber, r.notes].some(v => v?.toLowerCase().includes(q))
     );
   }, [allBoardRows, filteredData, filterSearch, activeFilterCount]);
+
+  const exportGroupOptions = useMemo<ExportGroupOption[]>(() => {
+    const topLevel = boardRows.filter(r => !r.parentRowId);
+    const counts = new Map<string, number>();
+    for (const row of topLevel) {
+      let key: string = NO_GROUP_KEY;
+      for (const g of groupDynCols.columns) {
+        if (groupDynCols.getCellVal(row.id, g.id)?.textValue === '1') { key = g.id; break; }
+      }
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const opts: ExportGroupOption[] = groupDynCols.columns.map(g => ({
+      key: g.id, name: g.columnName ?? 'Sin nombre', colorId: g.columnType ?? undefined, count: counts.get(g.id) ?? 0,
+    }));
+    const noGroupCount = counts.get(NO_GROUP_KEY) ?? 0;
+    if (noGroupCount > 0) opts.push({ key: NO_GROUP_KEY, name: 'Sin grupo', count: noGroupCount });
+    return opts;
+  }, [boardRows, groupDynCols.columns, groupDynCols.getCellVal]);
+
+  const handleExportExcel = async (selectedGroupKeys: Set<string>) => {
+    setExportingExcel(true);
+    try {
+      const n = await exportRecruitmentExcel(boardRows, hiddenColumns, dynCols, groupDynCols, activeBoardName, selectedGroupKeys);
+      toast.success(`${n} filas exportadas a Excel`);
+    } catch {
+      toast.error('Error al generar el Excel');
+    }
+    setExportingExcel(false);
+  };
 
   const totalActiveFilters = activeFilterCount + (filterSearch ? 1 : 0);
   const handleClearAll = () => { clearAllFilters(); setFilterSearch(''); setActiveView(null); };
@@ -3033,6 +3237,11 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
             <Download className="w-3.5 h-3.5" /> Exportar CSV
           </Button>
         )}
+        {activeBoardId && boardRows.length > 0 && (
+          <Button size="sm" variant="outline" className="gap-1.5 h-8" disabled={exportingExcel} onClick={() => setExportExcelDialogOpen(true)}>
+            <Download className="w-3.5 h-3.5" /> {exportingExcel ? 'Generando...' : 'Exportar Excel'}
+          </Button>
+        )}
         <div className="ml-auto">
           <Button
             size="sm"
@@ -3282,6 +3491,13 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
       {duplicateHistoryRow && (
         <DuplicateHistoryModal row={duplicateHistoryRow} onClose={() => setDuplicateHistoryRow(null)} currentClient={projects.find(p => p.projectCode === duplicateHistoryRow.projectCode)?.client} />
       )}
+      <ExportRecruitmentGroupsDialog
+        open={exportExcelDialogOpen}
+        onOpenChange={setExportExcelDialogOpen}
+        groups={exportGroupOptions}
+        onConfirm={handleExportExcel}
+      />
+
       <ExcelImportDialog
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
