@@ -236,8 +236,37 @@ export function CalendarExcelDialog({ open, onOpenChange, projectCode, calendarN
   );
 }
 
+// Excel mide el ancho de columna en "caracteres del 0 en la fuente default", no en px —
+// esta es la conversión aproximada que ya usa el mundo real (≈7px por unidad + relleno)
+// para que el preview se sienta del ancho real y no uno inventado.
+function excelUnitsToPx(units: number): number {
+  return Math.round(units * 7 + 5);
+}
+
+// Mismo cálculo que calendarExcelBuilder.ts: ancho = máximo(encabezado, contenido real)
+// con piso 14 / tope 48, y la primera columna visible con piso extra de 26 para el logo.
+function computeColumnWidthsPx(columns: PreviewColumn[], groups: PreviewGroup[]): Record<string, number> {
+  const maxLen = new Map(columns.map(c => [c.id, c.title.length]));
+  for (const g of groups) {
+    for (const row of g.rows) {
+      for (const c of columns) {
+        const len = String(row[c.key] ?? '').length;
+        if (len > (maxLen.get(c.id) ?? 0)) maxLen.set(c.id, len);
+      }
+    }
+  }
+  const result: Record<string, number> = {};
+  columns.forEach((c, i) => {
+    let units = Math.min(48, Math.max(14, (maxLen.get(c.id) ?? 14) + 4));
+    if (i === 0) units = Math.max(units, 26);
+    result[c.id] = excelUnitsToPx(units);
+  });
+  return result;
+}
+
 // ── Preview en vivo — replica visual del .xlsx real (mismo masthead, secciones
-// de grupo con su color real, texto envuelto, dropdown/código de color en Status). ──
+// de grupo con su color real, texto envuelto, dropdown/código de color en Status,
+// y ahora también el ancho real de cada columna — no uno parejo/inventado). ──
 function CalendarPreviewPane({ calendarTitle, eventCount, groupCount, groups, columns, version }: {
   calendarTitle: string; eventCount: number; groupCount: number; version: string;
   groups: PreviewGroup[]; columns: PreviewColumn[];
@@ -251,9 +280,12 @@ function CalendarPreviewPane({ calendarTitle, eventCount, groupCount, groups, co
     return <div className="p-10 text-center text-sm text-muted-foreground">Selecciona al menos una columna para ver el preview.</div>;
   }
 
+  const widthsPx = computeColumnWidthsPx(columns, groups);
+  const totalWidth = columns.reduce((n, c) => n + widthsPx[c.id], 0);
+
   return (
-    <table style={{ fontFamily: font, borderCollapse: 'collapse', width: '100%', minWidth: 640 }}>
-      <colgroup>{columns.map(c => <col key={c.id} style={{ minWidth: 130 }} />)}</colgroup>
+    <table style={{ fontFamily: font, borderCollapse: 'collapse', width: totalWidth, tableLayout: 'fixed' }}>
+      <colgroup>{columns.map(c => <col key={c.id} style={{ width: widthsPx[c.id] }} />)}</colgroup>
       <tbody>
         <tr>
           <td colSpan={columns.length} style={{ padding: '14px 18px' }}>
