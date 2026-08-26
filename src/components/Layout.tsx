@@ -8,7 +8,7 @@ import {
   FolderKanban, ChevronDown, ChevronRight, Search,
   Plus, X, TrendingUp, Building2, DollarSign, LayoutGrid,
   FileText, ShoppingCart, Truck, FileSpreadsheet,
-  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, FlaskConical,
+  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, FlaskConical, ListTodo,
 } from 'lucide-react';
 import { useProject } from '../context/ProjectContext';
 import { useAuth } from 'zite-auth-sdk';
@@ -79,6 +79,15 @@ export interface NavSection {
 const ALL_ROLES = ['Owner', 'Socio', 'Head', 'Líder', 'Coordinador', 'Analista'];
 
 export const NAV_SECTIONS: NavSection[] = [
+  {
+    id: 'personal',
+    label: 'Personal',
+    icon: ListTodo,
+    roles: ALL_ROLES,
+    items: [
+      { to: '/mis-pendientes', icon: ListTodo, label: 'Mis Pendientes' },
+    ],
+  },
   {
     id: 'comercial',
     label: 'Comercial',

@@ -166,6 +166,7 @@ export const deleteDocBlock = (input?: any): Promise<any> => call('deleteDocBloc
 export const deleteExpense = (input?: any): Promise<any> => call('deleteExpense', input);
 export const deleteInternalView = (input?: any): Promise<any> => call('deleteInternalView', input);
 export const deleteObservationChatMessage = (input?: any): Promise<any> => call('deleteObservationChatMessage', input);
+export const deleteMisPendiente = (input?: any): Promise<any> => call('deleteMisPendiente', input);
 export const deleteParticipant = (input?: any): Promise<any> => call('deleteParticipant', input);
 export const deletePayment = (input?: any): Promise<any> => call('deletePayment', input);
 export const deletePoAttachment = (input?: any): Promise<any> => call('deletePoAttachment', input);
@@ -227,6 +228,7 @@ export const getLinkedEventsInfo = (input?: any): Promise<any> => call('getLinke
 export const getLinkedParticipants = (input?: any): Promise<any> => call('getLinkedParticipants', input);
 export const getMessages = (input?: any): Promise<any> => call('getMessages', input);
 export const searchMessages = (input?: any): Promise<any> => call('searchMessages', input);
+export const getMisPendientes = (input?: any): Promise<any> => call('getMisPendientes', input);
 export const getMigrationLogs = (input?: any): Promise<any> => call('getMigrationLogs', input);
 export const getMultiProjectCostAnalysis = (input?: any): Promise<any> => call('getMultiProjectCostAnalysis', input);
 export const getObservationChatMessages = (input?: any): Promise<any> => call('getObservationChatMessages', input);
@@ -328,6 +330,7 @@ export const saveExpense = (input?: any): Promise<any> => call('saveExpense', in
 export const saveInternalView = (input?: any): Promise<any> => call('saveInternalView', input);
 export const saveInviteTemplate = (input?: any): Promise<any> => call('saveInviteTemplate', input);
 export const saveMigrationLog = (input?: any): Promise<any> => call('saveMigrationLog', input);
+export const saveMisPendiente = (input?: any): Promise<any> => call('saveMisPendiente', input);
 export const saveParticipant = (input?: any): Promise<any> => call('saveParticipant', input);
 export const savePayment = (input?: any): Promise<any> => call('savePayment', input);
 export const savePettyCashFund = (input?: any): Promise<any> => call('savePettyCashFund', input);

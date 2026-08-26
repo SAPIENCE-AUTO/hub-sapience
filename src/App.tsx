@@ -4,6 +4,7 @@ import { ProjectProvider } from './context/ProjectContext';
 import { TeamMembersProvider } from './components/DynamicColumns';
 import Layout from './components/Layout';
 import DashboardPage from './pages/DashboardPage';
+import MisPendientesPage from './pages/MisPendientesPage';
 import CommercialPage from './pages/CommercialPage';
 import CotizacionesPage from './pages/CotizacionesPage';
 import AdminPage from './pages/AdminPage';
@@ -79,6 +80,7 @@ export default function App() {
               <Route path="/" element={<Layout />}>
                 <Route index element={null} />
                 <Route path="dashboard" element={<DashboardPage />} />
+                <Route path="mis-pendientes" element={<MisPendientesPage />} />
 
                 <Route path="comercial/crm"       element={<CommercialPage />} />
                 <Route path="comercial/dashboard" element={<CommercialDashboardPage />} />
