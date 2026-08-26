@@ -15,6 +15,7 @@ export default createEndpoint({
       area: z.string(),
       status: z.string(),
       fuente: z.string(),
+      proyectoCode: z.string().nullable(),
       correoAsunto: z.string().nullable(),
       correoRemitente: z.string().nullable(),
       correoRecibidoAt: z.string().nullable(),
@@ -26,7 +27,7 @@ export default createEndpoint({
   }),
   execute: async ({ context }) => {
     const { rows } = await pool.query(
-      `select id, titulo, notas, area, status, fuente, correo_asunto, correo_remitente,
+      `select id, titulo, notas, area, status, fuente, proyecto_code, correo_asunto, correo_remitente,
               correo_recibido_at, fecha_limite, completed_at, created_at, updated_at
          from pendientes_personales
         where user_id = $1
@@ -43,6 +44,7 @@ export default createEndpoint({
         area: r.area,
         status: r.status,
         fuente: r.fuente,
+        proyectoCode: r.proyecto_code,
         correoAsunto: r.correo_asunto,
         correoRemitente: r.correo_remitente,
         correoRecibidoAt: r.correo_recibido_at ? new Date(r.correo_recibido_at).toISOString() : null,
