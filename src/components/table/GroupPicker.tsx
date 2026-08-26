@@ -26,11 +26,15 @@ export function GroupPicker({ rowId, groups, groupDynCols }: Props) {
       <DropdownMenuTrigger asChild>
         <button
           title={currentGroup ? `Grupo: ${currentGroup.columnName}` : 'Asignar grupo'}
-          className={`w-3 h-3 rounded-full flex-shrink-0 transition-transform hover:scale-125 border ${
-            currentGroup ? 'border-transparent' : 'border-dashed border-muted-foreground/40'
-          }`}
-          style={color ? { backgroundColor: color } : {}}
-        />
+          className="group w-5 h-5 -m-1 flex-shrink-0 flex items-center justify-center rounded hover:bg-muted-foreground/15 transition-colors"
+        >
+          <span
+            className={`w-3 h-3 rounded-full flex-shrink-0 transition-transform group-hover:scale-125 border ${
+              currentGroup ? 'border-transparent' : 'border-dashed border-muted-foreground/40'
+            }`}
+            style={color ? { backgroundColor: color } : {}}
+          />
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-44 p-1">
         <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-2 py-1">Asignar a grupo</p>
