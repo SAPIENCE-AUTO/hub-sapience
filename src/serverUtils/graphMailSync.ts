@@ -16,10 +16,13 @@ interface GraphMessage {
  * (permiso aún no propagado, buzón no encontrado, etc.) no debe tumbar
  * getMisPendientes — el usuario sigue viendo sus pendientes manuales igual. */
 export async function syncFlaggedEmails(userId: string, userEmail: string): Promise<number> {
+  // Sin $orderby: combinarlo con $filter sobre flag/flagStatus dispara
+  // "InefficientFilter" (400) en Graph — el filtro y el orden tienen que
+  // ser sobre la misma propiedad. Se ordena aquí mismo en JS en su lugar.
   const url =
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userEmail)}/messages` +
     `?$filter=${encodeURIComponent("flag/flagStatus eq 'flagged'")}` +
-    `&$select=id,subject,from,receivedDateTime&$orderby=receivedDateTime desc&$top=50`;
+    `&$select=id,subject,from,receivedDateTime&$top=50`;
 
   const res = await graphFetch(url);
   if (!res.ok) {
@@ -27,7 +30,8 @@ export async function syncFlaggedEmails(userId: string, userEmail: string): Prom
     return 0;
   }
   const body = await res.json() as { value?: GraphMessage[] };
-  const messages = body.value ?? [];
+  const messages = (body.value ?? []).sort((a, b) =>
+    (b.receivedDateTime ?? '').localeCompare(a.receivedDateTime ?? ''));
   if (messages.length === 0) return 0;
 
   let imported = 0;
