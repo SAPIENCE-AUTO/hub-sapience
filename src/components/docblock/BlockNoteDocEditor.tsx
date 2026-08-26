@@ -24,6 +24,11 @@ interface Props {
   dealId?: string;
   blockId?: string;
   onMetaChange?: (authorName: string, updatedAt: string) => void;
+  /** false para documentos privados de un solo usuario (ej. notas de un
+   *  pendiente personal) — apaga por completo el canal de tiempo real
+   *  (SSE, heartbeats, locks por bloque). Default true: preserva el
+   *  comportamiento de siempre para minutas y demás documentos compartidos. */
+  collaborative?: boolean;
 }
 
 interface Resolved {
@@ -36,7 +41,7 @@ interface Resolved {
  * (prop blockId) — ver plan de migración. Solo uno de los dos props debe
  * pasarse.
  */
-export default function BlockNoteDocEditor({ dealId, blockId, onMetaChange }: Props) {
+export default function BlockNoteDocEditor({ dealId, blockId, onMetaChange, collaborative = true }: Props) {
   const { user } = useAuth();
   const [resolved, setResolved] = useState<Resolved | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,6 +115,7 @@ export default function BlockNoteDocEditor({ dealId, blockId, onMetaChange }: Pr
       lastEditedAt={lastEditedAt}
       showOwnMetaLine={!onMetaChange}
       onMeta={reportMeta}
+      collaborative={collaborative}
     />
   );
 }
@@ -121,9 +127,10 @@ interface InnerProps {
   lastEditedAt?: string;
   showOwnMetaLine: boolean;
   onMeta: (authorName?: string, updatedAt?: string) => void;
+  collaborative: boolean;
 }
 
-function DocEditorInner({ blockDbId, initialDoc, lastEditedBy, lastEditedAt, showOwnMetaLine, onMeta }: InnerProps) {
+function DocEditorInner({ blockDbId, initialDoc, lastEditedBy, lastEditedAt, showOwnMetaLine, onMeta, collaborative }: InnerProps) {
   const { user } = useAuth();
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [uploading, setUploading] = useState(false);
@@ -172,7 +179,7 @@ function DocEditorInner({ blockDbId, initialDoc, lastEditedBy, lastEditedAt, sho
     onRemoteBlockUpdate: handleRemoteBlockUpdate,
     myUser: user ? { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName } : undefined,
     onReloadDocument: reloadDocument,
-    enabled: !!user,
+    enabled: collaborative && !!user,
   });
 
   // ── Autosave debounced ────────────────────────────────────────────────────
@@ -213,7 +220,12 @@ function DocEditorInner({ blockDbId, initialDoc, lastEditedBy, lastEditedAt, sho
   }, [editor, debouncedSave]);
 
   // ── El lock de bloque sigue al cursor (reemplaza onFocusBlock/onBlurBlock por-ParagraphEditor) ──
+  // Nota: acquireBlockLock/releaseBlockLock no se apagan solos con
+  // collab.enabled=false (siguen llamando a publishDocEvent) — para un
+  // documento no-colaborativo hay que saltarse el efecto entero, si no
+  // se sigue pagando una llamada de red por cada cambio de cursor.
   useEffect(() => {
+    if (!collaborative) return;
     return editor.onSelectionChange(() => {
       let id: string;
       try { id = editor.getTextCursorPosition().block.id; } catch { return; }
@@ -229,7 +241,7 @@ function DocEditorInner({ blockDbId, initialDoc, lastEditedBy, lastEditedAt, sho
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor]);
+  }, [editor, collaborative]);
 
   let relTime = '';
   try { if (lastEditedAt) relTime = formatDistanceToNow(new Date(lastEditedAt), { addSuffix: true, locale: es }); } catch { /* skip */ }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMisPendientes, saveMisPendiente, deleteMisPendiente, getPendienteCorreoBody } from 'zite-endpoints-sdk';
+import { getMisPendientes, saveMisPendiente, deleteMisPendiente, getPendienteCorreoBody, ensurePendienteNotasBlock } from 'zite-endpoints-sdk';
 import { useProject } from '../context/ProjectContext';
 import { useDynamicColumns } from '../hooks/useDynamicColumns';
 import { DynamicColumnHeaders, DynamicColumnCells } from '../components/DynamicColumns';
@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
+import BlockNoteDocEditor from '@/components/docblock/BlockNoteDocEditor';
 import SearchableSelect from '@/components/SearchableSelect';
 import { Plus, Trash2, Mail, ListTodo, FolderKanban, ChevronsDownUp, ChevronsUpDown, X, EyeOff, Eye, Loader2, AlertCircle, NotebookPen } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 interface Pendiente {
   id: string;
   titulo: string;
-  notas: string | null;
+  notasBlockId: string | null;
   status: string;
   fuente: string;
   proyectoCode: string | null;
@@ -133,7 +133,7 @@ export default function MisPendientesPage() {
       const res = await saveMisPendiente({ titulo });
       if (groupId) await groupDynCols.setCellVal(res.id, groupId, { textValue: '1' });
       setItems(prev => [{
-        id: res.id, titulo, notas: null, status: 'Pendiente', fuente: 'manual', proyectoCode: null,
+        id: res.id, titulo, notasBlockId: null, status: 'Pendiente', fuente: 'manual', proyectoCode: null,
         correoAsunto: null, correoRemitente: null, correoRecibidoAt: null, fechaLimite: null,
         completedAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }, ...prev]);
@@ -158,7 +158,9 @@ export default function MisPendientesPage() {
   };
   const updateProyecto = (item: Pendiente, proyectoCode: string) => patch(item, { proyectoCode: proyectoCode || null }, { proyectoCode });
   const updateFecha = (item: Pendiente, fechaLimite: string) => patch(item, { fechaLimite: fechaLimite || null }, { fechaLimite });
-  const updateNotas = (item: Pendiente, notas: string) => patch(item, { notas: notas || null }, { notas });
+
+  const onNotasBlockCreated = (itemId: string, blockId: string) =>
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, notasBlockId: blockId } : i));
 
   const handleDelete = async (id: string) => {
     setItems(prev => prev.filter(i => i.id !== id));
@@ -232,7 +234,7 @@ export default function MisPendientesPage() {
                 <Mail className="w-3 h-3" />
               </span>
             )}
-            <button onClick={() => setDetailItem(item)} title="Ver notas / correo" className={`p-0.5 rounded hover:bg-primary/10 flex-shrink-0 transition-opacity ${item.notas ? 'text-primary opacity-100' : 'text-muted-foreground/50 opacity-0 group-hover:opacity-100'}`}>
+            <button onClick={() => setDetailItem(item)} title="Ver notas / correo" className={`p-0.5 rounded hover:bg-primary/10 flex-shrink-0 transition-opacity ${item.notasBlockId ? 'text-primary opacity-100' : 'text-muted-foreground/50 opacity-0 group-hover:opacity-100'}`}>
               <Eye className="w-3 h-3" />
             </button>
             <button onClick={() => handleDelete(item.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive p-0.5 rounded hover:bg-destructive/10 flex-shrink-0 transition-opacity">
@@ -421,7 +423,7 @@ export default function MisPendientesPage() {
       <PendienteDetailDialog
         item={detailItem}
         onOpenChange={open => { if (!open) setDetailItem(null); }}
-        onSaveNotas={notas => { if (detailItem) updateNotas(detailItem, notas); }}
+        onNotasBlockCreated={onNotasBlockCreated}
       />
     </div>
   );
@@ -436,19 +438,18 @@ interface CorreoBodyState {
 
 const EMAIL_IFRAME_BASE_STYLE = `body{margin:0;padding:14px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;font-size:13px;line-height:1.55;color:#1a1a1a;word-wrap:break-word;} img{max-width:100%;height:auto;} a{color:#027495;} table{max-width:100%;}`;
 
-function PendienteDetailDialog({ item, onOpenChange, onSaveNotas }: {
+function PendienteDetailDialog({ item, onOpenChange, onNotasBlockCreated }: {
   item: Pendiente | null;
   onOpenChange: (open: boolean) => void;
-  onSaveNotas: (notas: string) => void;
+  onNotasBlockCreated: (itemId: string, blockId: string) => void;
 }) {
-  const [notasDraft, setNotasDraft] = useState('');
+  const [notasBlockId, setNotasBlockId] = useState<string | null>(null);
   const [correo, setCorreo] = useState<CorreoBodyState | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeHeight, setIframeHeight] = useState(120);
 
   useEffect(() => {
     if (!item) return;
-    setNotasDraft(item.notas ?? '');
     setCorreo(null);
     setIframeHeight(120);
     if (item.fuente === 'correo') {
@@ -456,6 +457,18 @@ function PendienteDetailDialog({ item, onOpenChange, onSaveNotas }: {
       getPendienteCorreoBody({ id: item.id })
         .then(res => setCorreo({ loading: false, available: res.available, errorMessage: res.errorMessage, bodyHtml: res.bodyHtml }))
         .catch(() => setCorreo({ loading: false, available: false, errorMessage: 'No se pudo cargar el correo.', bodyHtml: null }));
+    }
+
+    // Notas = editor de bloques (mismo motor que las minutas), pero privado —
+    // se monta con collaborative=false. El bloque en document_blocks se crea
+    // la primera vez que se abren las notas de este pendiente.
+    if (item.notasBlockId) {
+      setNotasBlockId(item.notasBlockId);
+    } else {
+      setNotasBlockId(null);
+      ensurePendienteNotasBlock({ id: item.id })
+        .then(res => { setNotasBlockId(res.blockId); onNotasBlockCreated(item.id, res.blockId); })
+        .catch(() => toast.error('Error al preparar las notas'));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id]);
@@ -537,14 +550,17 @@ function PendienteDetailDialog({ item, onOpenChange, onSaveNotas }: {
               <NotebookPen className="w-3.5 h-3.5 text-muted-foreground" />
               <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Notas</p>
             </div>
-            <Textarea
-              value={notasDraft}
-              onChange={e => setNotasDraft(e.target.value)}
-              onBlur={() => { if (notasDraft !== (item.notas ?? '')) onSaveNotas(notasDraft); }}
-              placeholder="Agrega notas o contexto sobre este pendiente..."
-              rows={5}
-              className="text-sm resize-none"
-            />
+            <div className="rounded-lg border border-border overflow-hidden" style={{ height: 340 }}>
+              {notasBlockId ? (
+                <BlockNoteDocEditor blockId={notasBlockId} collaborative={false} />
+              ) : (
+                <div className="p-4 space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-4/5" />
+                  <Skeleton className="h-4 w-3/5" />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>

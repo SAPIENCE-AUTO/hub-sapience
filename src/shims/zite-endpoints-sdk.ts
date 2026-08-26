@@ -181,6 +181,7 @@ export const duplicateBoard = (input?: any): Promise<any> => call('duplicateBoar
 export const duplicateCotizacion = (input?: any): Promise<any> => call('duplicateCotizacion', input);
 export const duplicateGroup = (input?: any): Promise<any> => call('duplicateGroup', input);
 export const duplicateRows = (input?: any): Promise<any> => call('duplicateRows', input);
+export const ensurePendienteNotasBlock = (input?: any): Promise<any> => call('ensurePendienteNotasBlock', input);
 export const executeButtonAction = (input?: any): Promise<any> => call('executeButtonAction', input);
 export const exportConfigBackup = (input?: any): Promise<any> => call('exportConfigBackup', input);
 export const exportObservationAttendance = (input?: any): Promise<any> => call('exportObservationAttendance', input);

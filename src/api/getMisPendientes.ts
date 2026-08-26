@@ -37,7 +37,7 @@ export default createEndpoint({
     items: z.array(z.object({
       id: z.string(),
       titulo: z.string(),
-      notas: z.string().nullable(),
+      notasBlockId: z.string().nullable(),
       status: z.string(),
       fuente: z.string(),
       proyectoCode: z.string().nullable(),
@@ -67,7 +67,7 @@ export default createEndpoint({
     const [boardId, { rows }] = await Promise.all([
       ensurePendientesBoard(userId),
       pool.query(
-        `select id, titulo, notas, status, fuente, proyecto_code, correo_asunto, correo_remitente,
+        `select id, titulo, notas_block_id, status, fuente, proyecto_code, correo_asunto, correo_remitente,
                 correo_recibido_at, fecha_limite, completed_at, created_at, updated_at
            from pendientes_personales
           where user_id = $1
@@ -83,7 +83,7 @@ export default createEndpoint({
       items: rows.map(r => ({
         id: r.id,
         titulo: r.titulo,
-        notas: r.notas,
+        notasBlockId: r.notas_block_id,
         status: r.status,
         fuente: r.fuente,
         proyectoCode: r.proyecto_code,

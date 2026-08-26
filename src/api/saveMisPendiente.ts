@@ -8,7 +8,6 @@ export default createEndpoint({
   inputSchema: z.object({
     id: z.string().optional(),
     titulo: z.string().optional(),
-    notas: z.string().optional(),
     status: z.enum(['Pendiente', 'En curso', 'Resuelto']).optional(),
     fechaLimite: z.string().optional(),
     proyectoCode: z.string().optional(),
@@ -27,7 +26,6 @@ export default createEndpoint({
       const push = (col: string, val: unknown) => { vals.push(val); sets.push(`${col} = $${vals.length}`); };
 
       if (input.titulo !== undefined) push('titulo', input.titulo);
-      if (input.notas !== undefined) push('notas', input.notas || null);
       if (input.fechaLimite !== undefined) push('fecha_limite', input.fechaLimite || null);
       if (input.proyectoCode !== undefined) push('proyecto_code', input.proyectoCode || null);
       if (input.status !== undefined) {
