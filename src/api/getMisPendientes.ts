@@ -32,12 +32,11 @@ export default createEndpoint({
   description: 'Lista los pendientes personales del usuario logueado (su parking lot) y el board id real para sus grupos/áreas',
   inputSchema: z.object({}),
   outputSchema: z.object({
-    groupBoardId: z.string(),
+    boardId: z.string(),
     emailsImported: z.number(),
     items: z.array(z.object({
       id: z.string(),
       titulo: z.string(),
-      notas: z.string().nullable(),
       status: z.string(),
       fuente: z.string(),
       proyectoCode: z.string().nullable(),
@@ -64,10 +63,10 @@ export default createEndpoint({
       console.log('[getMisPendientes] syncFlaggedEmails falló:', err);
     }
 
-    const [groupBoardId, { rows }] = await Promise.all([
+    const [boardId, { rows }] = await Promise.all([
       ensurePendientesBoard(userId),
       pool.query(
-        `select id, titulo, notas, status, fuente, proyecto_code, correo_asunto, correo_remitente,
+        `select id, titulo, status, fuente, proyecto_code, correo_asunto, correo_remitente,
                 correo_recibido_at, fecha_limite, completed_at, created_at, updated_at
            from pendientes_personales
           where user_id = $1
@@ -78,12 +77,11 @@ export default createEndpoint({
     ]);
 
     return {
-      groupBoardId,
+      boardId,
       emailsImported,
       items: rows.map(r => ({
         id: r.id,
         titulo: r.titulo,
-        notas: r.notas,
         status: r.status,
         fuente: r.fuente,
         proyectoCode: r.proyecto_code,

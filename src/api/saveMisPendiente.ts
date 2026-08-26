@@ -7,7 +7,6 @@ export default createEndpoint({
   inputSchema: z.object({
     id: z.string().optional(),
     titulo: z.string().optional(),
-    notas: z.string().optional(),
     status: z.enum(['Pendiente', 'En curso', 'Resuelto']).optional(),
     fechaLimite: z.string().optional(),
     proyectoCode: z.string().optional(),
@@ -26,7 +25,6 @@ export default createEndpoint({
       const push = (col: string, val: unknown) => { vals.push(val); sets.push(`${col} = $${vals.length}`); };
 
       if (input.titulo !== undefined) push('titulo', input.titulo);
-      if (input.notas !== undefined) push('notas', input.notas || null);
       if (input.fechaLimite !== undefined) push('fecha_limite', input.fechaLimite || null);
       if (input.proyectoCode !== undefined) push('proyecto_code', input.proyectoCode || null);
       if (input.status !== undefined) {
@@ -43,10 +41,10 @@ export default createEndpoint({
     if (!input.titulo?.trim()) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Título requerido' });
 
     const { rows } = await pool.query(
-      `insert into pendientes_personales (user_id, titulo, notas, status, fuente, fecha_limite, proyecto_code)
-       values ($1, $2, $3, 'Pendiente', 'manual', $4, $5)
+      `insert into pendientes_personales (user_id, titulo, status, fuente, fecha_limite, proyecto_code)
+       values ($1, $2, 'Pendiente', 'manual', $3, $4)
        returning id`,
-      [userId, input.titulo.trim(), input.notas || null, input.fechaLimite || null, input.proyectoCode || null],
+      [userId, input.titulo.trim(), input.fechaLimite || null, input.proyectoCode || null],
     );
     return { id: rows[0].id };
   },
