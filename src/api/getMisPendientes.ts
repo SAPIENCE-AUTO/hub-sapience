@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, pool, Boards } from '../../server/compat';
+import { syncFlaggedEmails } from '../serverUtils/graphMailSync';
 
 // pendientes_personales no vive en Zite (ver server/scripts/add-personal-pendientes-table.ts)
 // así que este endpoint le habla con pool.query crudo, no con un modelo generado.
@@ -32,6 +33,7 @@ export default createEndpoint({
   inputSchema: z.object({}),
   outputSchema: z.object({
     groupBoardId: z.string(),
+    emailsImported: z.number(),
     items: z.array(z.object({
       id: z.string(),
       titulo: z.string(),
@@ -50,6 +52,18 @@ export default createEndpoint({
   }),
   execute: async ({ context }) => {
     const userId = context.user!.id;
+    const userEmail = context.user!.email;
+
+    // Best-effort: si Graph falla (permiso sin propagar, buzón no encontrado,
+    // rate limit, etc.) no debe tumbar el endpoint — el usuario sigue viendo
+    // sus pendientes manuales igual.
+    let emailsImported = 0;
+    try {
+      emailsImported = await syncFlaggedEmails(userId, userEmail);
+    } catch (err) {
+      console.log('[getMisPendientes] syncFlaggedEmails falló:', err);
+    }
+
     const [groupBoardId, { rows }] = await Promise.all([
       ensurePendientesBoard(userId),
       pool.query(
@@ -65,6 +79,7 @@ export default createEndpoint({
 
     return {
       groupBoardId,
+      emailsImported,
       items: rows.map(r => ({
         id: r.id,
         titulo: r.titulo,

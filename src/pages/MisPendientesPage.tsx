@@ -67,10 +67,19 @@ export default function MisPendientesPage() {
   const [projectFilter, setProjectFilter] = useState('');
   const [groupFilter, setGroupFilter] = useState<Set<string>>(new Set()); // vacío = todos
 
-  const load = () => {
-    getMisPendientes({}).then(res => { setItems(res.items); setGroupBoardId(res.groupBoardId); }).catch(() => toast.error('Error al cargar tus pendientes')).finally(() => setLoading(false));
+  const [syncing, setSyncing] = useState(false);
+  const load = (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setSyncing(true);
+    getMisPendientes({})
+      .then(res => {
+        setItems(res.items);
+        setGroupBoardId(res.groupBoardId);
+        if (res.emailsImported > 0) toast.success(`📧 ${res.emailsImported} correo${res.emailsImported === 1 ? '' : 's'} marcado${res.emailsImported === 1 ? '' : 's'} importado${res.emailsImported === 1 ? '' : 's'} como pendiente`);
+      })
+      .catch(() => toast.error('Error al cargar tus pendientes'))
+      .finally(() => { setLoading(false); setSyncing(false); });
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load({ silent: true }); }, []);
 
   const projectOptions = useMemo(() => [
     { value: '', label: 'Sin proyecto' },
@@ -182,9 +191,14 @@ export default function MisPendientesPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><ListTodo className="w-6 h-6 text-primary" /> Mis Pendientes</h1>
-        <p className="text-sm text-muted-foreground mt-1">Tu parking lot personal — lo que anotas tú, y lo que marques en tu correo.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><ListTodo className="w-6 h-6 text-primary" /> Mis Pendientes</h1>
+          <p className="text-sm text-muted-foreground mt-1">Tu parking lot personal — lo que anotas tú, y lo que marques en tu correo.</p>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => load()} disabled={syncing} className="gap-1.5 flex-shrink-0 mt-1">
+          <Mail className={`w-3.5 h-3.5 ${syncing ? 'animate-pulse' : ''}`} /> {syncing ? 'Sincronizando...' : 'Sincronizar correo'}
+        </Button>
       </div>
 
       {/* Quick add */}
