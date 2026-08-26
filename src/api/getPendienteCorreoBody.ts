@@ -12,7 +12,8 @@ export default createEndpoint({
     subject: z.string().nullable(),
     from: z.string().nullable(),
     receivedAt: z.string().nullable(),
-    bodyText: z.string().nullable(),
+    bodyHtml: z.string().nullable(),
+    bodyIsHtml: z.boolean(),
   }),
   execute: async ({ input, context }) => {
     const userId = context.user!.id;
@@ -27,12 +28,17 @@ export default createEndpoint({
     if (rows.length === 0) throw new ZiteError({ code: 'NOT_FOUND', message: 'Pendiente no encontrado' });
     const row = rows[0];
     if (!row.correo_message_id) {
-      return { available: false, errorMessage: 'Este pendiente no viene de un correo.', subject: null, from: null, receivedAt: null, bodyText: null };
+      return { available: false, errorMessage: 'Este pendiente no viene de un correo.', subject: null, from: null, receivedAt: null, bodyHtml: null, bodyIsHtml: false };
     }
 
     try {
+      // Sin Prefer de content-type: Graph regresa el HTML original del correo
+      // (con su formato real) en vez de la versión aplanada a texto plano.
+      // El HTML se renderiza del lado del cliente dentro de un <iframe sandbox>
+      // sin allow-scripts — aísla cualquier script/handler embebido sin
+      // necesitar una librería de sanitización (no hay ninguna en el repo).
       const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userEmail)}/messages/${encodeURIComponent(row.correo_message_id)}?$select=subject,from,receivedDateTime,body`;
-      const res = await graphFetch(url, { headers: { Prefer: 'outlook.body-content-type="text"' } });
+      const res = await graphFetch(url);
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
         return {
@@ -43,17 +49,19 @@ export default createEndpoint({
           subject: row.correo_asunto,
           from: row.correo_remitente,
           receivedAt: row.correo_recibido_at ? new Date(row.correo_recibido_at).toISOString() : null,
-          bodyText: null,
+          bodyHtml: null,
+          bodyIsHtml: false,
         };
       }
-      const msg = await res.json() as { subject?: string; from?: { emailAddress?: { address?: string; name?: string } }; receivedDateTime?: string; body?: { content?: string } };
+      const msg = await res.json() as { subject?: string; from?: { emailAddress?: { address?: string; name?: string } }; receivedDateTime?: string; body?: { content?: string; contentType?: string } };
       return {
         available: true,
         errorMessage: null,
         subject: msg.subject ?? row.correo_asunto,
         from: msg.from?.emailAddress?.address ?? row.correo_remitente,
         receivedAt: msg.receivedDateTime ?? (row.correo_recibido_at ? new Date(row.correo_recibido_at).toISOString() : null),
-        bodyText: msg.body?.content ?? null,
+        bodyHtml: msg.body?.content ?? null,
+        bodyIsHtml: msg.body?.contentType === 'html',
       };
     } catch (err) {
       return {
@@ -62,7 +70,8 @@ export default createEndpoint({
         subject: row.correo_asunto,
         from: row.correo_remitente,
         receivedAt: row.correo_recibido_at ? new Date(row.correo_recibido_at).toISOString() : null,
-        bodyText: null,
+        bodyHtml: null,
+        bodyIsHtml: false,
       };
     }
   },
