@@ -2,23 +2,25 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMisPendientes, saveMisPendiente, deleteMisPendiente } from 'zite-endpoints-sdk';
 import { useProject } from '../context/ProjectContext';
+import { useDynamicColumns } from '../hooks/useDynamicColumns';
+import { GroupPicker } from '../components/table/GroupPicker';
+import { GroupSectionHeader } from '../components/table/GroupSectionHeader';
+import { getGroupColor } from '../components/table/tableUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import ComboboxCreatable from '@/components/ComboboxCreatable';
 import SearchableSelect from '@/components/SearchableSelect';
-import { getGroupColor, GROUP_COLORS } from '../components/table/tableUtils';
-import { Plus, Trash2, Mail, PenLine, ListTodo, CalendarClock, ChevronDown, ChevronRight, FolderKanban, X } from 'lucide-react';
+import { Plus, Trash2, Mail, PenLine, ListTodo, CalendarClock, FolderKanban, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Pendiente {
   id: string;
   titulo: string;
   notas: string | null;
-  area: string;
   status: string;
   fuente: string;
   proyectoCode: string | null;
@@ -28,17 +30,7 @@ interface Pendiente {
   createdAt: string;
 }
 
-const DEFAULT_AREAS = ['Comercial', 'Admin', 'Proyectos', 'Postventa', 'Cobranza'];
-const SIN_CLASIFICAR = 'Sin clasificar';
-
-// Color determinístico por área (mismo hash para el mismo texto siempre) — reusa
-// la paleta de colores de grupo que ya usa Reclutamiento/Calendario, para que
-// "Mis Pendientes" se sienta parte de la misma app, no un feature aparte.
-function areaColorId(area: string): string {
-  let hash = 0;
-  for (let i = 0; i < area.length; i++) hash = (hash * 31 + area.charCodeAt(i)) >>> 0;
-  return GROUP_COLORS[hash % GROUP_COLORS.length].id;
-}
+const COLOR_FAMILIES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'];
 
 function isOverdue(fechaLimite: string | null): boolean {
   if (!fechaLimite) return false;
@@ -51,27 +43,34 @@ export default function MisPendientesPage() {
   const [items, setItems] = useState<Pendiente[]>([]);
   const [loading, setLoading] = useState(true);
   const [showResolved, setShowResolved] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [dragGroupId, setDragGroupId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [groupBoardId, setGroupBoardId] = useState('');
+
+  // Grupos = "áreas" — mismo motor de grupos que ya usan Reclutamiento/Calendario
+  // (BoardColumns + CellValues). getBoardColumns.ts solo resuelve boardIds que
+  // sean o un prefijo legacy reconocido o el UUID real de una fila en Boards —
+  // un string inventado cae en "formato desconocido" y siempre devuelve vacío.
+  // Por eso groupBoardId viene del backend (getMisPendientes crea/reusa una
+  // fila real en Boards por usuario), no se construye aquí.
+  const groupDynCols = useDynamicColumns(groupBoardId ? `${groupBoardId}::groups` : '', undefined, { enabled: !!groupBoardId });
 
   // Quick-add
   const [newTitulo, setNewTitulo] = useState('');
-  const [newArea, setNewArea] = useState('');
+  const [newGroupId, setNewGroupId] = useState<string | null>(null);
   const [newProyecto, setNewProyecto] = useState('');
   const [newFecha, setNewFecha] = useState('');
   const [adding, setAdding] = useState(false);
 
   // Filtros
   const [projectFilter, setProjectFilter] = useState('');
-  const [areaFilter, setAreaFilter] = useState<Set<string>>(new Set());
+  const [groupFilter, setGroupFilter] = useState<Set<string>>(new Set()); // vacío = todos
 
   const load = () => {
-    getMisPendientes({}).then(res => setItems(res.items)).catch(() => toast.error('Error al cargar tus pendientes')).finally(() => setLoading(false));
+    getMisPendientes({}).then(res => { setItems(res.items); setGroupBoardId(res.groupBoardId); }).catch(() => toast.error('Error al cargar tus pendientes')).finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
-
-  const knownAreas = useMemo(() => {
-    const fromItems = items.map(i => i.area).filter(a => a && a !== SIN_CLASIFICAR);
-    return [...new Set([...DEFAULT_AREAS, ...fromItems])];
-  }, [items]);
 
   const projectOptions = useMemo(() => [
     { value: '', label: 'Sin proyecto' },
@@ -88,17 +87,29 @@ export default function MisPendientesPage() {
     ...projectOptions.slice(1).filter(o => items.some(i => i.proyectoCode === o.value)),
   ], [projectOptions, items]);
 
+  const createGroup = async () => {
+    const n = groupDynCols.columns.length;
+    const family = COLOR_FAMILIES[n % COLOR_FAMILIES.length];
+    const shade = Math.floor(n / COLOR_FAMILIES.length) % 5 + 1;
+    try {
+      await groupDynCols.addColumn(`Área ${n + 1}`, `${family}-${shade}`);
+    } catch {
+      toast.error('Error al crear el área');
+    }
+  };
+
   const handleAdd = async () => {
     if (!newTitulo.trim()) return;
     setAdding(true);
     try {
-      const res = await saveMisPendiente({ titulo: newTitulo.trim(), area: newArea || undefined, proyectoCode: newProyecto || undefined, fechaLimite: newFecha || undefined });
+      const res = await saveMisPendiente({ titulo: newTitulo.trim(), proyectoCode: newProyecto || undefined, fechaLimite: newFecha || undefined });
+      if (newGroupId) await groupDynCols.setCellVal(res.id, newGroupId, { textValue: '1' });
       setItems(prev => [{
-        id: res.id, titulo: newTitulo.trim(), notas: null, area: newArea || SIN_CLASIFICAR, proyectoCode: newProyecto || null,
+        id: res.id, titulo: newTitulo.trim(), notas: null, proyectoCode: newProyecto || null,
         status: 'Pendiente', fuente: 'manual', correoAsunto: null, correoRemitente: null,
         fechaLimite: newFecha || null, createdAt: new Date().toISOString(),
       }, ...prev]);
-      setNewTitulo(''); setNewArea(''); setNewProyecto(''); setNewFecha('');
+      setNewTitulo(''); setNewGroupId(null); setNewProyecto(''); setNewFecha('');
     } catch {
       toast.error('Error al guardar el pendiente');
     } finally {
@@ -120,7 +131,6 @@ export default function MisPendientesPage() {
     const nextStatus = item.status === 'Resuelto' ? 'Pendiente' : 'Resuelto';
     patch(item, { status: nextStatus }, { status: nextStatus });
   };
-  const updateArea = (item: Pendiente, area: string) => patch(item, { area }, { area });
   const updateProyecto = (item: Pendiente, proyectoCode: string) => patch(item, { proyectoCode: proyectoCode || null }, { proyectoCode });
   const updateNotas = (item: Pendiente, notas: string) => patch(item, { notas }, { notas });
 
@@ -129,34 +139,52 @@ export default function MisPendientesPage() {
     try { await deleteMisPendiente({ id }); } catch { toast.error('Error al borrar'); load(); }
   };
 
-  const toggleAreaFilter = (area: string) => setAreaFilter(prev => {
+  const toggleGroupFilter = (groupId: string) => setGroupFilter(prev => {
     const n = new Set(prev);
-    n.has(area) ? n.delete(area) : n.add(area);
+    n.has(groupId) ? n.delete(groupId) : n.add(groupId);
     return n;
   });
 
+  const groupOf = (rowId: string): string | null =>
+    groupDynCols.columns.find(g => groupDynCols.getCellVal(rowId, g.id)?.textValue === '1')?.id ?? null;
+
   const filtered = items.filter(i =>
     (!projectFilter || i.proyectoCode === projectFilter) &&
-    (areaFilter.size === 0 || areaFilter.has(i.area))
+    (groupFilter.size === 0 || groupFilter.has(groupOf(i.id) ?? '__none__'))
   );
   const active = filtered.filter(i => i.status !== 'Resuelto');
   const resolved = filtered.filter(i => i.status === 'Resuelto');
 
-  const areasInPlay = useMemo(() => {
-    const set = new Set(active.map(i => i.area));
-    // Áreas conocidas primero (orden estable), luego cualquier otra en uso, "Sin clasificar" al final.
-    const ordered = [...knownAreas.filter(a => set.has(a)), ...[...set].filter(a => a !== SIN_CLASIFICAR && !knownAreas.includes(a))];
-    if (set.has(SIN_CLASIFICAR)) ordered.push(SIN_CLASIFICAR);
-    return ordered;
-  }, [active, knownAreas]);
+  const sections = useMemo(() => {
+    const byGroup = new Map<string, Pendiente[]>();
+    for (const g of groupDynCols.columns) byGroup.set(g.id, []);
+    const none: Pendiente[] = [];
+    for (const row of active) {
+      const gid = groupOf(row.id);
+      if (gid && byGroup.has(gid)) byGroup.get(gid)!.push(row);
+      else none.push(row);
+    }
+    const result = groupDynCols.columns.map(g => ({ id: g.id, name: g.columnName ?? 'Sin nombre', colorId: g.columnType, rows: byGroup.get(g.id) ?? [], isNone: false }));
+    if (none.length > 0 || result.length === 0) result.push({ id: '__none__', name: 'Sin área', colorId: undefined, rows: none, isNone: true });
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, groupDynCols.columns, groupDynCols.getCellVal]);
 
-  const hasActiveFilters = !!projectFilter || areaFilter.size > 0;
+  const handleDrop = (targetId: string) => {
+    if (dragGroupId && dragGroupId !== targetId && targetId !== '__none__') {
+      groupDynCols.reorderColumns(dragGroupId, targetId, 'left').catch(() => toast.error('Error al reordenar'));
+    }
+    setDragGroupId(null); setDragOverId(null);
+  };
+
+  const hasActiveFilters = !!projectFilter || groupFilter.size > 0;
+  const ready = !loading && groupDynCols.hasInitiallyLoaded;
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-5">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2"><ListTodo className="w-6 h-6 text-primary" /> Mis Pendientes</h1>
-        <p className="text-sm text-muted-foreground mt-1">Tu parking lot personal — lo que anotas tú, y (pronto) lo que marques en tu correo.</p>
+        <p className="text-sm text-muted-foreground mt-1">Tu parking lot personal — lo que anotas tú, y lo que marques en tu correo.</p>
       </div>
 
       {/* Quick add */}
@@ -174,40 +202,62 @@ export default function MisPendientesPage() {
           </Button>
         </div>
         <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border/50">
-          <div className="w-36"><ComboboxCreatable value={newArea} onChange={setNewArea} options={knownAreas} placeholder="Área..." className="h-8 text-xs" /></div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="inline-flex items-center gap-1.5 text-xs h-8 px-2.5 rounded-md border border-border hover:bg-muted transition-colors">
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-dashed border-muted-foreground/40" style={newGroupId ? { backgroundColor: getGroupColor(groupDynCols.columns.find(g => g.id === newGroupId)?.columnType), border: 'none' } : undefined} />
+                {newGroupId ? groupDynCols.columns.find(g => g.id === newGroupId)?.columnName : 'Sin área'}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-44 p-1">
+              <DropdownMenuItem onClick={() => setNewGroupId(null)} className="text-xs gap-2">
+                <div className="w-3 h-3 rounded-full border border-dashed border-muted-foreground/40 flex-shrink-0" /> Sin área
+              </DropdownMenuItem>
+              {groupDynCols.columns.length > 0 && <div className="my-1 border-t border-border/30" />}
+              {groupDynCols.columns.map(g => (
+                <DropdownMenuItem key={g.id} onClick={() => setNewGroupId(g.id)} className="text-xs gap-2">
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getGroupColor(g.columnType) }} />
+                  <span className="truncate">{g.columnName}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <div className="w-56"><SearchableSelect value={newProyecto} onChange={setNewProyecto} options={projectOptions} placeholder="Sin proyecto" className="min-w-0 w-56" /></div>
           <Input type="date" value={newFecha} onChange={e => setNewFecha(e.target.value)} className="h-8 text-xs w-36" />
         </div>
       </div>
 
-      {/* Filtros */}
-      {items.length > 0 && (
+      {/* Filtros + gestión de áreas */}
+      {ready && (
         <div className="flex items-center gap-2 flex-wrap">
           <SearchableSelect value={projectFilter} onChange={setProjectFilter} options={projectFilterOptions} placeholder="Todos los proyectos" />
-          {areasInPlay.map(area => {
-            const on = areaFilter.has(area);
-            const color = area === SIN_CLASIFICAR ? 'hsl(var(--muted-foreground))' : getGroupColor(areaColorId(area));
+          {groupDynCols.columns.map(g => {
+            const on = groupFilter.has(g.id);
+            const color = getGroupColor(g.columnType);
             return (
               <button
-                key={area}
-                onClick={() => toggleAreaFilter(area)}
+                key={g.id}
+                onClick={() => toggleGroupFilter(g.id)}
                 className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-all ${on ? 'border-transparent text-white font-medium' : 'border-border text-muted-foreground hover:bg-muted'}`}
                 style={on ? { backgroundColor: color } : undefined}
               >
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: on ? '#fff' : color }} />
-                {area}
+                {g.columnName}
               </button>
             );
           })}
+          <button onClick={createGroup} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-full px-2.5 py-1 transition-colors">
+            <Plus className="w-3 h-3" /> Área
+          </button>
           {hasActiveFilters && (
-            <button onClick={() => { setProjectFilter(''); setAreaFilter(new Set()); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-1.5">
+            <button onClick={() => { setProjectFilter(''); setGroupFilter(new Set()); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-1.5">
               <X className="w-3 h-3" /> Limpiar
             </button>
           )}
         </div>
       )}
 
-      {loading ? (
+      {!ready ? (
         <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}</div>
       ) : items.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
@@ -215,43 +265,53 @@ export default function MisPendientesPage() {
           <p className="text-sm">Sin pendientes por ahora.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {active.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">{hasActiveFilters ? 'Nada con ese filtro.' : 'Todo resuelto — buen trabajo.'}</p>
           )}
-          {areasInPlay.map(area => {
-            const rows = active.filter(i => i.area === area);
-            if (rows.length === 0) return null;
-            const color = area === SIN_CLASIFICAR ? 'hsl(var(--muted-foreground))' : getGroupColor(areaColorId(area));
+          {sections.map(section => {
+            if (section.rows.length === 0) return null;
+            const isExpanded = !collapsed.has(section.id);
             return (
-              <div key={area} className="space-y-1.5">
-                <div className="flex items-center gap-2 px-1">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                  <span className="text-xs font-bold uppercase tracking-wide" style={{ color }}>{area}</span>
-                  <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">{rows.length}</span>
-                </div>
-                <div className="space-y-1.5">
-                  {rows.map(item => (
-                    <PendienteRow key={item.id} item={item} color={color} areas={knownAreas} projectOptions={projectOptions} projectLabel={projectLabel}
-                      onToggle={() => toggleStatus(item)} onArea={a => updateArea(item, a)} onProyecto={p => updateProyecto(item, p)} onNotas={n => updateNotas(item, n)}
-                      onDelete={() => handleDelete(item.id)} onOpenProject={() => item.proyectoCode && navigate(`/operacion/proyectos/${encodeURIComponent(item.proyectoCode)}`)} />
-                  ))}
-                </div>
+              <div key={section.id} className="rounded-lg border border-border/60 overflow-hidden">
+                <GroupSectionHeader
+                  groupId={section.id}
+                  name={section.name}
+                  colorId={section.colorId}
+                  itemCount={section.rows.length}
+                  isExpanded={isExpanded}
+                  isNone={section.isNone}
+                  onToggle={() => setCollapsed(prev => { const n = new Set(prev); isExpanded ? n.add(section.id) : n.delete(section.id); return n; })}
+                  groupDynCols={groupDynCols}
+                  onDragStart={id => setDragGroupId(id)}
+                  onDragOver={(_e, id) => setDragOverId(id)}
+                  onDragEnd={() => { setDragGroupId(null); setDragOverId(null); }}
+                  onDrop={(_e, id) => handleDrop(id)}
+                  isDragOver={dragOverId === section.id}
+                />
+                {isExpanded && (
+                  <div className="p-1.5 space-y-1.5 bg-background">
+                    {section.rows.map(item => (
+                      <PendienteRow key={item.id} item={item} groups={groupDynCols.columns} groupDynCols={groupDynCols} projectOptions={projectOptions} projectLabel={projectLabel}
+                        onToggle={() => toggleStatus(item)} onProyecto={p => updateProyecto(item, p)} onNotas={n => updateNotas(item, n)}
+                        onDelete={() => handleDelete(item.id)} onOpenProject={() => item.proyectoCode && navigate(`/operacion/proyectos/${encodeURIComponent(item.proyectoCode)}`)} />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
 
           {resolved.length > 0 && (
             <div className="pt-2">
-              <button onClick={() => setShowResolved(v => !v)} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
-                {showResolved ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                Resueltos ({resolved.length})
+              <button onClick={() => setShowResolved(v => !v)} className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+                {showResolved ? '▾' : '▸'} Resueltos ({resolved.length})
               </button>
               {showResolved && (
                 <div className="space-y-1.5 mt-2">
                   {resolved.map(item => (
-                    <PendienteRow key={item.id} item={item} color={item.area === SIN_CLASIFICAR ? 'hsl(var(--muted-foreground))' : getGroupColor(areaColorId(item.area))} areas={knownAreas} projectOptions={projectOptions} projectLabel={projectLabel}
-                      onToggle={() => toggleStatus(item)} onArea={a => updateArea(item, a)} onProyecto={p => updateProyecto(item, p)} onNotas={n => updateNotas(item, n)}
+                    <PendienteRow key={item.id} item={item} groups={groupDynCols.columns} groupDynCols={groupDynCols} projectOptions={projectOptions} projectLabel={projectLabel}
+                      onToggle={() => toggleStatus(item)} onProyecto={p => updateProyecto(item, p)} onNotas={n => updateNotas(item, n)}
                       onDelete={() => handleDelete(item.id)} onOpenProject={() => item.proyectoCode && navigate(`/operacion/proyectos/${encodeURIComponent(item.proyectoCode)}`)} />
                   ))}
                 </div>
@@ -264,20 +324,19 @@ export default function MisPendientesPage() {
   );
 }
 
-function PendienteRow({ item, color, areas, projectOptions, projectLabel, onToggle, onArea, onProyecto, onNotas, onDelete, onOpenProject }: {
-  item: Pendiente; color: string; areas: string[]; projectOptions: { value: string; label: string; sub?: string }[]; projectLabel: (code: string) => string;
-  onToggle: () => void; onArea: (a: string) => void; onProyecto: (p: string) => void; onNotas: (n: string) => void; onDelete: () => void; onOpenProject: () => void;
+function PendienteRow({ item, groups, groupDynCols, projectOptions, projectLabel, onToggle, onProyecto, onNotas, onDelete, onOpenProject }: {
+  item: Pendiente; groups: ReturnType<typeof useDynamicColumns>['columns']; groupDynCols: ReturnType<typeof useDynamicColumns>;
+  projectOptions: { value: string; label: string; sub?: string }[]; projectLabel: (code: string) => string;
+  onToggle: () => void; onProyecto: (p: string) => void; onNotas: (n: string) => void; onDelete: () => void; onOpenProject: () => void;
 }) {
   const [notasDraft, setNotasDraft] = useState(item.notas ?? '');
   const done = item.status === 'Resuelto';
   const overdue = !done && isOverdue(item.fechaLimite);
 
   return (
-    <div
-      className={`flex items-start gap-3 rounded-lg px-3 py-2.5 bg-card border transition-opacity ${done ? 'opacity-55 border-border' : 'border-border/70'}`}
-      style={done ? undefined : { borderLeftColor: color, borderLeftWidth: 3 }}
-    >
+    <div className={`flex items-start gap-3 rounded-lg px-3 py-2.5 bg-card border border-border/70 transition-opacity ${done ? 'opacity-55' : ''}`}>
       <Checkbox checked={done} onCheckedChange={onToggle} className="mt-0.5 flex-shrink-0" />
+      <div className="mt-0.5"><GroupPicker rowId={item.id} groups={groups} groupDynCols={groupDynCols} /></div>
 
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
@@ -291,15 +350,6 @@ function PendienteRow({ item, color, areas, projectOptions, projectLabel, onTogg
         {item.correoAsunto && <p className="text-xs text-muted-foreground truncate">📧 {item.correoAsunto}</p>}
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} title="Cambiar área" />
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-2" align="start">
-              <ComboboxCreatable value={item.area} onChange={onArea} options={areas} placeholder="Área..." />
-            </PopoverContent>
-          </Popover>
-
           {item.proyectoCode ? (
             <button onClick={onOpenProject} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline truncate max-w-[200px]" title="Ir al proyecto">
               <FolderKanban className="w-3 h-3 flex-shrink-0" /> {projectLabel(item.proyectoCode)}
