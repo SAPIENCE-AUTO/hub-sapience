@@ -30,6 +30,13 @@ interface Props {
   onDragEnd?: () => void;
   onDrop?: (e: React.DragEvent, groupId: string) => void;
   isDragOver?: boolean;
+  /** Cuando isDragOver es true, en qué mitad de la fila está el cursor —
+   *  dibuja una línea arriba ('left') o abajo ('right') marcando dónde va a
+   *  quedar el grupo arrastrado al soltar. Sin esto, soltar sobre la mitad
+   *  "equivocada" del vecino inmediato no mueve nada (es un no-op válido:
+   *  "insertar antes de X" cuando ya estaba antes de X) y el usuario no
+   *  tiene forma de saber por qué. */
+  insertSide?: 'left' | 'right' | null;
   onDuplicateGroup?: () => void;
   onGroupStructureChanged?: () => void;
   linkedEventInfo?: { eventName?: string; eventDate?: string; durationHours?: number; location?: string };
@@ -48,7 +55,7 @@ interface Props {
 export function GroupSectionHeader({
   groupId, name, colorId, optionsJson, itemCount, isExpanded, isNone,
   onToggle, groupDynCols, colSpan, itemIds, selectedIds, onToggleSelectAll,
-  onDragStart, onDragOver, onDragEnd, onDrop, isDragOver, onDuplicateGroup, onGroupStructureChanged,
+  onDragStart, onDragOver, onDragEnd, onDrop, isDragOver, insertSide, onDuplicateGroup, onGroupStructureChanged,
   linkedEventInfo, projectCode, onLinkEvent, onUnlinkEvent, onCreateEventForGroup,
   onSendTimeline, onPreviewTimeline, timelineStatus, timelineUrl, timelineLoading,
   showPublicName = false,
@@ -399,6 +406,18 @@ export function GroupSectionHeader({
             <div style={{ position: 'sticky', left: 0, width: 'fit-content', maxWidth: '100vw' }}>
               {inner}
             </div>
+            {isDragOver && insertSide && (
+              <div
+                aria-hidden="true"
+                style={{
+                  position: 'absolute', left: 0, right: 0,
+                  top: insertSide === 'left' ? 0 : undefined,
+                  bottom: insertSide === 'right' ? 0 : undefined,
+                  height: 3, background: 'hsl(var(--primary))',
+                  boxShadow: '0 0 6px hsl(var(--primary) / 0.7)', zIndex: 25, pointerEvents: 'none',
+                }}
+              />
+            )}
           </td>
         </tr>
         {linkDialog}

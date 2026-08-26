@@ -52,6 +52,7 @@ export default function MisPendientesPage() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['__none__']));
   const [dragGroupId, setDragGroupId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropSide, setDropSide] = useState<'left' | 'right' | null>(null);
   const [newTaskNames, setNewTaskNames] = useState<Record<string, string>>({});
   const [detailItem, setDetailItem] = useState<Pendiente | null>(null);
 
@@ -200,11 +201,9 @@ export default function MisPendientesPage() {
 
   const handleGroupDrop = async (e: React.DragEvent, targetGroupId: string) => {
     e.preventDefault();
-    if (!dragGroupId || dragGroupId === targetGroupId || targetGroupId === '__none__') { setDragGroupId(null); setDropTargetId(null); return; }
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const side = e.clientY < rect.top + rect.height / 2 ? 'left' : 'right';
-    try { await groupDynCols.reorderColumns(dragGroupId, targetGroupId, side); } catch { toast.error('Error al reordenar'); }
-    setDragGroupId(null); setDropTargetId(null);
+    if (!dragGroupId || dragGroupId === targetGroupId || targetGroupId === '__none__') { setDragGroupId(null); setDropTargetId(null); setDropSide(null); return; }
+    try { await groupDynCols.reorderColumns(dragGroupId, targetGroupId, dropSide ?? 'right'); } catch { toast.error('Error al reordenar'); }
+    setDragGroupId(null); setDropTargetId(null); setDropSide(null);
   };
 
   const hasActiveFilters = !!projectFilter || groupFilter.size > 0;
@@ -364,10 +363,15 @@ export default function MisPendientesPage() {
                       groupDynCols={groupDynCols}
                       colSpan={totalCols}
                       onDragStart={id => setDragGroupId(id)}
-                      onDragOver={(_e, id) => setDropTargetId(id)}
-                      onDragEnd={() => { setDragGroupId(null); setDropTargetId(null); }}
+                      onDragOver={(e, id) => {
+                        setDropTargetId(id);
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        setDropSide(e.clientY < rect.top + rect.height / 2 ? 'left' : 'right');
+                      }}
+                      onDragEnd={() => { setDragGroupId(null); setDropTargetId(null); setDropSide(null); }}
                       onDrop={handleGroupDrop}
                       isDragOver={dropTargetId === g.id && dragGroupId !== g.id}
+                      insertSide={dropTargetId === g.id && dragGroupId !== g.id ? dropSide : null}
                     />
                     {isExpanded && (
                       <>
