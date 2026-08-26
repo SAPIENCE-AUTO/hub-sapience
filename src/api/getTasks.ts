@@ -107,11 +107,18 @@ export default createEndpoint({
     }
 
     // ── Fast path: only events ──
+    // sorts por createdAt: a diferencia de Tasks (que sí tiene un `order`
+    // manual mantenido por reorderTasks.ts), CalendarEvents nunca tuvo un
+    // campo de orden propio — sin ORDER BY explícito, Postgres devuelve las
+    // filas en su orden físico interno, que una UPDATE puede reacomodar
+    // (mueve la fila a otra página del heap si ya no cabe en la original).
+    // Eso hacía que editar un evento lo "saltara" de lugar en la lista.
     if (input.only === 'events') {
       const eventsResult = await CalendarEvents.findAll({
         filters: input.projectCode ? { projectCode: input.projectCode } : {},
         limit: 500,
         fields: [...EVENT_FIELDS],
+        sorts: [{ field: 'createdAt', direction: 'asc' }],
       });
       return {
         tasks: [],
@@ -160,6 +167,7 @@ export default createEndpoint({
         filters: input.projectCode ? { projectCode: input.projectCode } : {},
         limit: 500,
         fields: [...EVENT_FIELDS],
+        sorts: [{ field: 'createdAt', direction: 'asc' }],
       }),
       Boards.findAll({
         filters: {
