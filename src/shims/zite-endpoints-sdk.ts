@@ -237,6 +237,7 @@ export const getObservationRoomPublic = (input?: any): Promise<any> => call('get
 export const getObservationSessionDetail = (input?: any): Promise<any> => call('getObservationSessionDetail', input);
 export const getParticipants = (input?: any): Promise<any> => call('getParticipants', input);
 export const getPayments = (input?: any): Promise<any> => call('getPayments', input);
+export const getPendienteCorreoBody = (input?: any): Promise<any> => call('getPendienteCorreoBody', input);
 export const getPettyCashFunds = (input?: any): Promise<any> => call('getPettyCashFunds', input);
 export const getPoAttachments = (input?: any): Promise<any> => call('getPoAttachments', input);
 export const getPoAuditLog = (input?: any): Promise<any> => call('getPoAuditLog', input);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMisPendientes, saveMisPendiente, deleteMisPendiente } from 'zite-endpoints-sdk';
+import { getMisPendientes, saveMisPendiente, deleteMisPendiente, getPendienteCorreoBody } from 'zite-endpoints-sdk';
 import { useProject } from '../context/ProjectContext';
 import { useDynamicColumns } from '../hooks/useDynamicColumns';
 import { DynamicColumnHeaders, DynamicColumnCells } from '../components/DynamicColumns';
@@ -11,13 +11,16 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import SearchableSelect from '@/components/SearchableSelect';
-import { Plus, Trash2, Mail, ListTodo, FolderKanban, ChevronsDownUp, ChevronsUpDown, X, EyeOff, Eye } from 'lucide-react';
+import { Plus, Trash2, Mail, ListTodo, FolderKanban, ChevronsDownUp, ChevronsUpDown, X, EyeOff, Eye, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Pendiente {
   id: string;
   titulo: string;
+  notas: string | null;
   status: string;
   fuente: string;
   proyectoCode: string | null;
@@ -50,6 +53,7 @@ export default function MisPendientesPage() {
   const [dragGroupId, setDragGroupId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [newTaskNames, setNewTaskNames] = useState<Record<string, string>>({});
+  const [detailItem, setDetailItem] = useState<Pendiente | null>(null);
 
   // Filtros
   const [projectFilter, setProjectFilter] = useState('');
@@ -118,7 +122,7 @@ export default function MisPendientesPage() {
       const res = await saveMisPendiente({ titulo });
       if (groupId) await groupDynCols.setCellVal(res.id, groupId, { textValue: '1' });
       setItems(prev => [{
-        id: res.id, titulo, status: 'Pendiente', fuente: 'manual', proyectoCode: null,
+        id: res.id, titulo, notas: null, status: 'Pendiente', fuente: 'manual', proyectoCode: null,
         correoAsunto: null, correoRemitente: null, correoRecibidoAt: null, fechaLimite: null,
         completedAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }, ...prev]);
@@ -143,6 +147,7 @@ export default function MisPendientesPage() {
   };
   const updateProyecto = (item: Pendiente, proyectoCode: string) => patch(item, { proyectoCode: proyectoCode || null }, { proyectoCode });
   const updateFecha = (item: Pendiente, fechaLimite: string) => patch(item, { fechaLimite: fechaLimite || null }, { fechaLimite });
+  const updateNotas = (item: Pendiente, notas: string) => patch(item, { notas: notas || null }, { notas });
 
   const handleDelete = async (id: string) => {
     setItems(prev => prev.filter(i => i.id !== id));
@@ -218,6 +223,9 @@ export default function MisPendientesPage() {
                 <Mail className="w-3 h-3" />
               </span>
             )}
+            <button onClick={() => setDetailItem(item)} title="Ver notas / correo" className={`p-0.5 rounded hover:bg-primary/10 flex-shrink-0 transition-opacity ${item.notas ? 'text-primary opacity-100' : 'text-muted-foreground/50 opacity-0 group-hover:opacity-100'}`}>
+              <Eye className="w-3 h-3" />
+            </button>
             <button onClick={() => handleDelete(item.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive p-0.5 rounded hover:bg-destructive/10 flex-shrink-0 transition-opacity">
               <Trash2 className="w-3 h-3" />
             </button>
@@ -395,6 +403,88 @@ export default function MisPendientesPage() {
           </table>
         </div>
       )}
+
+      <PendienteDetailDialog
+        item={detailItem}
+        onOpenChange={open => { if (!open) setDetailItem(null); }}
+        onSaveNotas={notas => { if (detailItem) updateNotas(detailItem, notas); }}
+      />
     </div>
+  );
+}
+
+function PendienteDetailDialog({ item, onOpenChange, onSaveNotas }: {
+  item: Pendiente | null;
+  onOpenChange: (open: boolean) => void;
+  onSaveNotas: (notas: string) => void;
+}) {
+  const [notasDraft, setNotasDraft] = useState('');
+  const [correo, setCorreo] = useState<{ loading: boolean; available: boolean; errorMessage: string | null; bodyText: string | null } | null>(null);
+
+  useEffect(() => {
+    if (!item) return;
+    setNotasDraft(item.notas ?? '');
+    setCorreo(null);
+    if (item.fuente === 'correo') {
+      setCorreo({ loading: true, available: false, errorMessage: null, bodyText: null });
+      getPendienteCorreoBody({ id: item.id })
+        .then(res => setCorreo({ loading: false, available: res.available, errorMessage: res.errorMessage, bodyText: res.bodyText }))
+        .catch(() => setCorreo({ loading: false, available: false, errorMessage: 'No se pudo cargar el correo.', bodyText: null }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id]);
+
+  if (!item) return null;
+
+  return (
+    <Dialog open={!!item} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="pr-6">{item.titulo}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {item.fuente === 'correo' && (
+            <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Mail className="w-3.5 h-3.5" /> Correo original
+              </div>
+              <div className="text-xs text-muted-foreground space-y-0.5">
+                {item.correoAsunto && <p><span className="text-muted-foreground/70">Asunto:</span> {item.correoAsunto}</p>}
+                {item.correoRemitente && <p><span className="text-muted-foreground/70">De:</span> {item.correoRemitente}</p>}
+              </div>
+              {correo?.loading && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando contenido...
+                </div>
+              )}
+              {correo && !correo.loading && !correo.available && (
+                <div className="flex items-start gap-1.5 text-xs text-muted-foreground/80 bg-background/60 rounded-md p-2 border border-border/40">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <span>{correo.errorMessage ?? 'No se pudo cargar el contenido del correo.'}</span>
+                </div>
+              )}
+              {correo?.available && correo.bodyText && (
+                <div className="text-xs text-foreground bg-background rounded-md p-2.5 border border-border/40 max-h-64 overflow-y-auto whitespace-pre-wrap">
+                  {correo.bodyText}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Notas</label>
+            <Textarea
+              value={notasDraft}
+              onChange={e => setNotasDraft(e.target.value)}
+              onBlur={() => { if (notasDraft !== (item.notas ?? '')) onSaveNotas(notasDraft); }}
+              placeholder="Agrega notas o contexto sobre este pendiente..."
+              rows={6}
+              className="text-sm"
+            />
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
