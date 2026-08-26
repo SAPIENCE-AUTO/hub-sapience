@@ -79,6 +79,16 @@ export default function MisPendientesPage() {
   };
   useEffect(() => { load({ silent: true }); }, []);
 
+  // Refresco automático silencioso mientras la página sigue abierta — no es
+  // push real (eso necesitaría suscripciones/webhooks de Graph), pero cubre
+  // el caso real de "lo flageé hace un rato, ¿ya debería estar aquí?" sin
+  // que el usuario tenga que recargar o darle a "Sincronizar correo".
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const interval = setInterval(() => load({ silent: true }), 150_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const projectOptions = useMemo(() => [
     { value: '', label: 'Sin proyecto' },
     ...projects.map(p => ({ value: p.projectCode ?? '', label: p.fullName || p.projectCode || '', sub: p.client ?? undefined })),

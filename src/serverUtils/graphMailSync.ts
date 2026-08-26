@@ -48,3 +48,20 @@ export async function syncFlaggedEmails(userId: string, userEmail: string): Prom
   }
   return imported;
 }
+
+/** Refleja en el correo real de Outlook el estado que se marcó en el Hub —
+ * "Resuelto" pone el flag como completado (✓), cualquier otro estado lo
+ * regresa a marcado (🚩). Best-effort: si Graph falla, quien llama debe
+ * atraparlo — nunca debe tumbar el guardado en la base, que es lo que
+ * importa de verdad. */
+export async function setEmailFlagStatus(userEmail: string, messageId: string, flagStatus: 'complete' | 'flagged'): Promise<void> {
+  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userEmail)}/messages/${encodeURIComponent(messageId)}`;
+  const res = await graphFetch(url, {
+    method: 'PATCH',
+    body: JSON.stringify({ flag: { flagStatus } }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Graph respondió ${res.status} al actualizar el flag: ${detail.slice(0, 300)}`);
+  }
+}

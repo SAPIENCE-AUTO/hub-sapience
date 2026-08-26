@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
+import { setEmailFlagStatus } from '../serverUtils/graphMailSync';
 
 export default createEndpoint({
   authenticated: true,
@@ -18,7 +19,7 @@ export default createEndpoint({
 
     if (input.id) {
       // Ownership check — nadie edita el pendiente de alguien más aunque adivine el id.
-      const existing = await pool.query(`select id from pendientes_personales where id = $1 and user_id = $2`, [input.id, userId]);
+      const existing = await pool.query(`select id, fuente, correo_message_id from pendientes_personales where id = $1 and user_id = $2`, [input.id, userId]);
       if (existing.rowCount === 0) throw new ZiteError({ code: 'NOT_FOUND', message: 'Pendiente no encontrado' });
 
       const sets: string[] = [];
@@ -37,6 +38,19 @@ export default createEndpoint({
 
       vals.push(input.id);
       await pool.query(`update pendientes_personales set ${sets.join(', ')} where id = $${vals.length}`, vals);
+
+      // Refleja el estado en el correo real de Outlook — best-effort, nunca
+      // debe tumbar el guardado (Graph puede fallar, o el policy de Exchange
+      // aún no estar propagado para este usuario).
+      const row = existing.rows[0];
+      if (input.status !== undefined && row.fuente === 'correo' && row.correo_message_id) {
+        try {
+          await setEmailFlagStatus(context.user!.email, row.correo_message_id, input.status === 'Resuelto' ? 'complete' : 'flagged');
+        } catch (err) {
+          console.log('[saveMisPendiente] no se pudo actualizar el flag en Outlook:', err);
+        }
+      }
+
       return { id: input.id };
     }
 
