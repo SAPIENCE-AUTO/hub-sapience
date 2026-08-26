@@ -465,12 +465,11 @@ function PendienteDetailDialog({ item, onOpenChange, onSaveNotas }: {
 
   return (
     <Dialog open={!!item} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
-        <DialogHeader className="flex-row items-start justify-between gap-3 space-y-0 px-6 py-4 border-b flex-shrink-0">
-          <DialogTitle className="text-base leading-snug text-left pr-2">{item.titulo}</DialogTitle>
-          <span className={`inline-flex items-center flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-            done ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-          }`}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden [&_.lucide-x]:text-white/80 [&_.lucide-x]:hover:text-white">
+        <DialogHeader className="flex-row items-start justify-between gap-3 space-y-0 px-6 py-4 flex-shrink-0 bg-gradient-to-br from-[#14495A] via-[#0F3D4C] to-[#0A2F3B] text-white">
+          <DialogTitle className="text-base leading-snug text-left pr-2 text-white">{item.titulo}</DialogTitle>
+          <span className="inline-flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap bg-white/15 text-white border border-white/25">
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${done ? 'bg-emerald-400' : 'bg-amber-400'}`} />
             {done ? 'Resuelto' : 'Pendiente'}
           </span>
         </DialogHeader>
