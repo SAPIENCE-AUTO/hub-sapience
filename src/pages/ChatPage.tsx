@@ -25,6 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription,
   AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -974,7 +975,7 @@ function CreateTaskFromMessageDialog({
 }
 
 // ── Single message ────────────────────────────────────────────────────────────
-const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, onPin, onReact, onCreateTask, onVote, parentMsg, senderPhotoUrl, onDocClick, nameMap, activeChannel, isActiveActions, onActivate }: {
+const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, onPin, onReact, onCreateTask, onVote, parentMsg, senderPhotoUrl, onDocClick, nameMap, activeChannel, isActiveActions, onActivate, replyCount, onOpenThread }: {
   msg: Message; isOwn: boolean; myEmail: string;
   onReply: (m: Message) => void; onPin: (id: string) => void;
   onReact: (id: string, emoji: string) => void; onCreateTask: (m: Message) => void;
@@ -984,6 +985,8 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
   activeChannel?: string;
   isActiveActions?: boolean;
   onActivate?: (id: string) => void;
+  replyCount?: number;
+  onOpenThread?: (id: string) => void;
 }) {
   const quotedMessage = parentMsg ? { senderName: parentMsg.senderName ?? undefined, content: parentMsg.content ?? undefined } : undefined;
   const navigate = useNavigate();
@@ -1121,6 +1124,15 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
           </div>
         )}
         <ReactionBar reactions={reactions} myEmail={myEmail} msgId={msg.id} onToggle={onReact} nameMap={nameMap} />
+        {!!replyCount && (
+          <button
+            onClick={e => { e.stopPropagation(); onOpenThread?.(msg.id); }}
+            className={`flex items-center gap-1.5 mt-0.5 px-1.5 py-1 rounded-md text-xs text-primary hover:bg-primary/10 transition-colors ${isOwn ? 'self-end' : 'self-start'}`}
+          >
+            <Reply className="w-3 h-3" />
+            {replyCount} {replyCount === 1 ? 'respuesta' : 'respuestas'}
+          </button>
+        )}
       </div>
       <div className={`absolute top-1 ${isOwn ? 'left-4' : 'right-4'} ${emojiPopoverOpen || isActiveActions ? 'flex' : 'hidden group-hover:flex'} items-center gap-0.5 bg-card border border-border rounded-lg shadow-sm px-1 py-0.5 z-10`}>
         <Popover open={emojiPopoverOpen} onOpenChange={o => { setEmojiPopoverOpen(o); if (!o) setShowMoreEmojis(false); }}>
@@ -1784,6 +1796,9 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   const [activeConvId, setActiveConvId] = useState<string | null>(null); // id for DM/group
   const [activeConvLabel, setActiveConvLabel] = useState<string>('');
   const [allMessages, setAllMessages] = useState<Message[]>([]);
+  const [threadRootId, setThreadRootId] = useState<string | null>(null);
+  const [threadInput, setThreadInput] = useState('');
+  const [threadSending, setThreadSending] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -2509,6 +2524,23 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     allMessages.forEach(m => map.set(m.id, m));
     return map;
   }, [allMessages]);
+  // Conteo de respuestas por mensaje raíz, calculado sobre lo ya cargado en
+  // cliente (allMessages) — no hay endpoint aparte para esto, las respuestas
+  // ya llegan junto con el resto de mensajes del canal vía parentMessageId.
+  const replyCountsByParent = useMemo(() => {
+    const map = new Map<string, number>();
+    allMessages.forEach(m => {
+      if (m.parentMessageId) map.set(m.parentMessageId, (map.get(m.parentMessageId) ?? 0) + 1);
+    });
+    return map;
+  }, [allMessages]);
+  const threadRoot = threadRootId ? messagesById.get(threadRootId) ?? null : null;
+  const threadReplies = useMemo(() => {
+    if (!threadRootId) return [];
+    return allMessages
+      .filter(m => m.parentMessageId === threadRootId)
+      .sort((a, b) => new Date(a.sentAt ?? 0).getTime() - new Date(b.sentAt ?? 0).getTime());
+  }, [allMessages, threadRootId]);
   // La búsqueda ya no filtra inline el hilo activo — tiene su propio panel
   // (searchResultsByChannel más abajo), así que el hilo normal siempre
   // renderiza topMessages tal cual, búsqueda abierta o no.
@@ -2716,6 +2748,37 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     } catch { toast.error('Error al enviar'); setInput(content); setPendingAttachments(atts); }
     setSending(false);
     // ── Fase B Etapa 1 (P5): quick-refresh conditional on Ably ──────────────
+    scheduleOptimisticSafetyRefresh(effectiveChannel);
+  };
+
+  // Composer del panel de hilo: mismo canal que el mensaje raíz (el hilo es
+  // una vista aparte del mismo canal, no un canal distinto), parentMessageId
+  // fijo al mensaje raíz en vez de replyingTo — la respuesta sigue apareciendo
+  // inline en el canal, igual que hoy, además de en el panel.
+  const handleThreadSend = async () => {
+    const content = threadInput.trim();
+    if (!content || !threadRootId) return;
+    setThreadInput('');
+    setThreadSending(true);
+
+    const optimisticMsg: Message = {
+      id: `optimistic-${Date.now()}`,
+      channel: effectiveChannel,
+      content,
+      senderEmail: myEmail,
+      senderName: myName || myEmail.split('@')[0],
+      sentAt: new Date().toISOString(),
+      parentMessageId: threadRootId,
+      pinned: false,
+      reactions: undefined,
+    };
+    setAllMessages(prev => { const next = [...prev, optimisticMsg]; cacheMessages(effectiveChannel, next); return next; });
+
+    try {
+      const sent = await sendMessage({ channel: effectiveChannel, content, parentMessageId: threadRootId });
+      stampRealMessageId(effectiveChannel, optimisticMsg.id, sent.id);
+    } catch { toast.error('Error al enviar'); setThreadInput(content); }
+    setThreadSending(false);
     scheduleOptimisticSafetyRefresh(effectiveChannel);
   };
 
@@ -3071,6 +3134,47 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
         fileUrl={docPreview.fileUrl}
         projectName={docPreview.docName}
       />
+      <Sheet open={!!threadRootId} onOpenChange={v => { if (!v) { setThreadRootId(null); setThreadInput(''); } }}>
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+          <SheetHeader className="px-4 py-3 border-b border-border">
+            <SheetTitle className="text-sm">Hilo</SheetTitle>
+          </SheetHeader>
+          {threadRoot && (
+            <div className="flex-1 overflow-y-auto">
+              <MessageItem msg={threadRoot} isOwn={threadRoot.senderEmail === myEmail} myEmail={myEmail}
+                onReply={setReplyingTo} onPin={handlePin} onReact={handleReact} onCreateTask={setTaskMessage} onVote={handleVote}
+                senderPhotoUrl={threadRoot.senderEmail ? photoMap[threadRoot.senderEmail] : undefined}
+                nameMap={nameMap} onDocClick={handleDocClick} />
+              <div className="flex items-center gap-3 px-5 py-2">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground bg-background px-2">
+                  {threadReplies.length} {threadReplies.length === 1 ? 'respuesta' : 'respuestas'}
+                </span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              {threadReplies.map(msg => (
+                <MessageItem key={msg.id} msg={msg} isOwn={msg.senderEmail === myEmail} myEmail={myEmail}
+                  onReply={setReplyingTo} onPin={handlePin} onReact={handleReact} onCreateTask={setTaskMessage} onVote={handleVote}
+                  senderPhotoUrl={msg.senderEmail ? photoMap[msg.senderEmail] : undefined}
+                  nameMap={nameMap} onDocClick={handleDocClick} />
+              ))}
+            </div>
+          )}
+          <div className="border-t border-border p-3 flex items-end gap-2">
+            <textarea
+              value={threadInput}
+              onChange={e => setThreadInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleThreadSend(); } }}
+              placeholder="Responder en el hilo..."
+              rows={1}
+              className="flex-1 bg-muted rounded-lg px-3 py-2 text-sm outline-none resize-none leading-relaxed min-h-[36px] max-h-[120px] placeholder:text-muted-foreground"
+            />
+            <Button size="sm" onClick={handleThreadSend} disabled={threadSending || !threadInput.trim()} className="h-9 w-9 p-0 flex-shrink-0">
+              <Send className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Sidebar */}
       {!projectOnly && (
@@ -3659,7 +3763,9 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                       nameMap={nameMap}
                       isActiveActions={activeMsgId === msg.id}
                       onActivate={handleActivateMessage}
-                      onDocClick={handleDocClick} />
+                      onDocClick={handleDocClick}
+                      replyCount={replyCountsByParent.get(msg.id)}
+                      onOpenThread={setThreadRootId} />
                   );
                 })}
               </div>
