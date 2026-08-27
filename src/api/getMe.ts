@@ -21,6 +21,7 @@ export default createEndpoint({
     maxApprovalAmount: z.number().optional(),
     visiblePages: z.array(z.string()).optional(),
     dashboardWidgets: z.array(z.string()).optional(),
+    homePage: z.string().optional(),
   }),
   execute: async ({ context }) => ({ ...context.user! }) as any,
 });

@@ -20,13 +20,26 @@ const supabase = MOCK_MODE
   ? null
   : createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!);
 
+// home_page no está en Users.fields (schema-map.ts es generado por
+// generate.py a partir del export de Zite, que nunca tuvo este campo — no
+// se edita a mano). Se lee aparte con una consulta cruda y se mezcla al
+// AuthUser, igual que pendientes_personales/document_blocks en otros
+// endpoints de esta app.
+async function withHomePage(user: AuthUser): Promise<AuthUser> {
+  const { rows } = await pool.query<{ home_page: string | null }>(
+    'select home_page from users where id = $1',
+    [user.id],
+  );
+  return { ...user, homePage: rows[0]?.home_page ?? undefined };
+}
+
 let mockUser: AuthUser | null = null;
 async function loadMockUser(): Promise<AuthUser> {
   if (mockUser) return mockUser;
   const { records } = await Users.findAll({ filters: { email: MOCK_USER_EMAIL }, limit: 1 });
   const user = records[0];
   if (!user) throw new Error(`MOCK_USER_EMAIL '${MOCK_USER_EMAIL}' no existe en la tabla users`);
-  return (mockUser = user as unknown as AuthUser);
+  return (mockUser = await withHomePage(user as unknown as AuthUser));
 }
 
 // Cache de verificación: pocas docenas de usuarios, tokens de ~1h de vida.
@@ -67,5 +80,5 @@ export async function resolveAuth(authHeader: string | undefined): Promise<AuthR
   if (!rows[0]) return { user: null, notProvisioned: true };
 
   const appUser = await Users.findOne({ id: rows[0].id });
-  return { user: appUser as unknown as AuthUser, notProvisioned: false };
+  return { user: await withHomePage(appUser as unknown as AuthUser), notProvisioned: false };
 }

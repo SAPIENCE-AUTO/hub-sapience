@@ -497,6 +497,7 @@ export default function Layout() {
     .flatMap(s => s.items.filter(i => canSeeItem(i, user) && checkPageVisible(i.to)));
 
   const firstVisibleRoute =
+    (user?.homePage && checkPageVisible(user.homePage)) ? user.homePage :
     checkPageVisible('/dashboard') ? '/dashboard' :
     checkPageVisible('/chat')      ? '/chat' :
     allNavItems[0]?.to             ?? '/dashboard';

@@ -45,6 +45,8 @@ export interface AuthUser {
   accessOtros?: string;
   maxApprovalAmount?: number;
   costCenters?: string[];
+  /** Ruta a la que redirige "/" para este usuario en vez del default global. */
+  homePage?: string;
   [k: string]: unknown;
 }
 

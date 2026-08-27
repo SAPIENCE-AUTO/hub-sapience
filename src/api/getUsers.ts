@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, ZiteError, Users } from '../../server/compat';
+import { createEndpoint, ZiteError, Users, pool } from '../../server/compat';
 
 const TEST_EMAILS = ['antonio.velasco@agcmx.com', 'sergiovelascor@yahoo.com'];
 
@@ -28,6 +28,7 @@ export default createEndpoint({
       dashboardWidgets: z.array(z.string()).optional(),
       hiddenFromChat: z.boolean().optional(),
       cotizacionRubros: z.array(z.string()).optional(),
+      homePage: z.string().optional(),
     })),
   }),
   execute: async ({ context }) => {
@@ -42,6 +43,12 @@ export default createEndpoint({
     if (!isAdmin) throw new ZiteError({ code: 'FORBIDDEN', message: 'No tienes permisos para ver usuarios' });
 
     const { records } = await Users.findAll({ limit: 500 });
+
+    // home_page no está en Users.fields (schema-map.ts es generado, ver
+    // server/auth.ts para el porqué) — se trae aparte en una sola consulta
+    // cruda para todos los usuarios, en vez de un findOne por fila.
+    const { rows: homePageRows } = await pool.query<{ id: string; home_page: string | null }>('select id, home_page from users');
+    const homePageById = new Map(homePageRows.map(r => [r.id, r.home_page]));
 
     const isTestUser = TEST_EMAILS.includes(u.email ?? '');
 
@@ -68,6 +75,7 @@ export default createEndpoint({
           dashboardWidgets: r.dashboardWidgets ?? [],
           hiddenFromChat: r.hiddenFromChat ?? false,
           cotizacionRubros: (r as any).cotizacionRubros ?? [],
+          homePage: homePageById.get(r.id) ?? undefined,
         })),
     };
   },
