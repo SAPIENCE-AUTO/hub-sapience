@@ -798,6 +798,7 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
   const quotedMessage = parentMsg ? { senderName: parentMsg.senderName ?? undefined, content: parentMsg.content ?? undefined } : undefined;
   const navigate = useNavigate();
   const [emojiPopoverOpen, setEmojiPopoverOpen] = useState(false);
+  const [showMoreEmojis, setShowMoreEmojis] = useState(false);
   const time = msg.sentAt ? new Date(msg.sentAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : '';
   const reactions = parseReactions(msg.reactions);
   const attachments = parseAttachments(msg.attachments);
@@ -862,7 +863,7 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
                   parts.push(
                     <button key={`task${m.index}`}
                       onClick={() => activeChannel && navigate(`/operacion/proyectos/${activeChannel}?tab=timeline`)}
-                      className={`text-[11px] px-1.5 py-0.5 rounded-md font-semibold cursor-pointer inline-flex items-center gap-0.5 transition-colors ${isOwn ? 'bg-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/30' : 'bg-chart-3/12 text-chart-3 hover:bg-chart-3/20'}`}>
+                      className={`text-xs px-1.5 py-0.5 rounded-md font-semibold cursor-pointer inline-flex items-center gap-0.5 transition-colors ${isOwn ? 'bg-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/30' : 'bg-chart-3/12 text-chart-3 hover:bg-chart-3/20'}`}>
                       ✅ {taskName}
                     </button>
                   );
@@ -879,9 +880,15 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
                   last = m.index + m[0].length;
                 } else if (m[0].startsWith('[@')) {
                   const personName = m[8];
+                  const personEmail = m[9];
+                  const isMe = !isOwn && !!personEmail && !!myEmail && personEmail.toLowerCase() === myEmail.toLowerCase();
                   parts.push(
                     <span key={`person${m.index}`}
-                      className={`text-[11px] px-1.5 py-0.5 rounded-md font-semibold inline-flex items-center gap-0.5 ${isOwn ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-destructive/15 text-destructive'}`}>
+                      className={`text-xs px-1.5 py-0.5 rounded-md font-semibold inline-flex items-center gap-0.5 ${
+                        isOwn ? 'bg-primary-foreground/20 text-primary-foreground' :
+                        isMe ? 'bg-indigo-500 text-white ring-2 ring-indigo-500/25' :
+                        'bg-indigo-500/12 text-indigo-600'
+                      }`}>
                       @{personName}
                     </span>
                   );
@@ -926,16 +933,36 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
         <ReactionBar reactions={reactions} myEmail={myEmail} msgId={msg.id} onToggle={onReact} nameMap={nameMap} />
       </div>
       <div className={`absolute top-1 ${isOwn ? 'left-4' : 'right-4'} ${emojiPopoverOpen || isActiveActions ? 'flex' : 'hidden group-hover:flex'} items-center gap-0.5 bg-card border border-border rounded-lg shadow-sm px-1 py-0.5 z-10`}>
-        <Popover open={emojiPopoverOpen} onOpenChange={setEmojiPopoverOpen}>
+        <Popover open={emojiPopoverOpen} onOpenChange={o => { setEmojiPopoverOpen(o); if (!o) setShowMoreEmojis(false); }}>
           <PopoverTrigger asChild>
             <button className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground">
               <Smile className="w-3.5 h-3.5" />
             </button>
           </PopoverTrigger>
-          <PopoverContent side="top" className="w-auto p-1 flex gap-0.5">
-            {QUICK_EMOJIS.map(e => (
-              <button key={e} onClick={() => onReact(msg.id, e)} className="text-base hover:scale-125 transition-transform p-1 rounded hover:bg-muted">{e}</button>
-            ))}
+          <PopoverContent side="top" className={showMoreEmojis ? 'w-64 p-2.5' : 'w-auto p-1'}>
+            {showMoreEmojis ? (
+              Object.entries(EMOJI_CATEGORIES).map(([cat, emojis]) => (
+                <div key={cat} className="mb-2 last:mb-0">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">{cat}</p>
+                  <div className="grid grid-cols-8 gap-0">
+                    {emojis.map(e => (
+                      <button key={e} onClick={() => { onReact(msg.id, e); setEmojiPopoverOpen(false); setShowMoreEmojis(false); }}
+                        className="text-base p-1 rounded hover:bg-muted transition-all hover:scale-110 text-center">{e}</button>
+                    ))}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="flex gap-0.5">
+                {QUICK_EMOJIS.map(e => (
+                  <button key={e} onClick={() => onReact(msg.id, e)} className="text-base hover:scale-125 transition-transform p-1 rounded hover:bg-muted">{e}</button>
+                ))}
+                <button onClick={() => setShowMoreEmojis(true)} title="Más emojis"
+                  className="text-muted-foreground hover:text-foreground hover:bg-muted transition-colors p-1 rounded flex items-center justify-center">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </PopoverContent>
         </Popover>
         <button onClick={() => onReply(msg)} title="Responder" className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground">
