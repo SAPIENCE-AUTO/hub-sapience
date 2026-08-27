@@ -6,6 +6,7 @@ import { useDynamicColumns } from '../hooks/useDynamicColumns';
 import { DynamicColumnHeaders, DynamicColumnCells } from '../components/DynamicColumns';
 import { GroupPicker } from '../components/table/GroupPicker';
 import { GroupSectionHeader } from '../components/table/GroupSectionHeader';
+import { InlineInput } from '../components/table/InlineInput';
 import { getGroupColor, useResizableCol } from '../components/table/tableUtils';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -55,6 +56,7 @@ export default function MisPendientesPage() {
   const [dropSide, setDropSide] = useState<'left' | 'right' | null>(null);
   const [newTaskNames, setNewTaskNames] = useState<Record<string, string>>({});
   const [detailItem, setDetailItem] = useState<Pendiente | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
 
   // Filtros
   const [projectFilter, setProjectFilter] = useState('');
@@ -158,6 +160,11 @@ export default function MisPendientesPage() {
   };
   const updateProyecto = (item: Pendiente, proyectoCode: string) => patch(item, { proyectoCode: proyectoCode || null }, { proyectoCode });
   const updateFecha = (item: Pendiente, fechaLimite: string) => patch(item, { fechaLimite: fechaLimite || null }, { fechaLimite });
+  const updateTitulo = (item: Pendiente, titulo: string) => {
+    const trimmed = titulo.trim();
+    if (trimmed && trimmed !== item.titulo) patch(item, { titulo: trimmed }, { titulo: trimmed });
+    setEditingTitleId(null);
+  };
 
   const onNotasBlockCreated = (itemId: string, blockId: string) =>
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, notasBlockId: blockId } : i));
@@ -228,7 +235,16 @@ export default function MisPendientesPage() {
         </td>
         <td className="px-2 py-0 h-9 overflow-hidden group-hover:bg-muted border-r border-border/40 bg-card" style={{ position: 'sticky', left: 40, zIndex: 10, borderBottom: cellBorder }}>
           <div className="flex items-center gap-1.5 w-full h-full">
-            <span className={`text-sm flex-1 truncate ${done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{item.titulo}</span>
+            {editingTitleId === item.id ? (
+              <InlineInput value={item.titulo} onSave={v => updateTitulo(item, v)} onCancel={() => setEditingTitleId(null)} className="flex-1" />
+            ) : (
+              <span
+                onClick={() => setEditingTitleId(item.id)}
+                className={`text-sm flex-1 truncate cursor-text hover:opacity-70 transition-opacity ${done ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+              >
+                {item.titulo}
+              </span>
+            )}
             {item.fuente === 'correo' && (
               <span title={[item.correoAsunto, item.correoRemitente].filter(Boolean).join(' — ')} className="text-muted-foreground/50 flex-shrink-0">
                 <Mail className="w-3 h-3" />
