@@ -498,7 +498,7 @@ function PendienteDetailDialog({ item, onOpenChange, onNotasBlockCreated }: {
 
   return (
     <Dialog open={!!item} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden [&_.lucide-x]:text-white/80 [&_.lucide-x]:hover:text-white">
+      <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col gap-0 p-0 overflow-hidden [&_.lucide-x]:text-white/80 [&_.lucide-x]:hover:text-white">
         <DialogHeader className="flex-row items-start justify-between gap-3 space-y-0 px-6 py-4 flex-shrink-0 bg-gradient-to-br from-[#14495A] via-[#0F3D4C] to-[#0A2F3B] text-white">
           <DialogTitle className="text-base leading-snug text-left pr-2 text-white">{item.titulo}</DialogTitle>
           <span className="inline-flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap bg-white/15 text-white border border-white/25">
@@ -566,7 +566,7 @@ function PendienteDetailDialog({ item, onOpenChange, onNotasBlockCreated }: {
               <NotebookPen className="w-3.5 h-3.5 text-muted-foreground" />
               <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Notas</p>
             </div>
-            <div className="rounded-lg border border-border overflow-hidden" style={{ height: 340 }}>
+            <div className="rounded-lg border border-border overflow-hidden" style={{ height: 'min(65vh, 620px)' }}>
               {notasBlockId ? (
                 <BlockNoteDocEditor blockId={notasBlockId} collaborative={false} />
               ) : (
