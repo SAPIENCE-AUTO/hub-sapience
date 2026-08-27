@@ -1078,7 +1078,7 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
                   parts.push(
                     <span key={`person${m.index}`}
                       className={`text-xs px-1.5 py-0.5 rounded-md font-semibold inline-flex items-center gap-0.5 ${
-                        isOwn ? 'bg-primary-foreground/20 text-primary-foreground' :
+                        isOwn ? 'bg-secondary text-secondary-foreground' :
                         isMe ? 'bg-indigo-500 text-white ring-2 ring-indigo-500/25' :
                         'bg-indigo-500/12 text-indigo-600'
                       }`}>
@@ -1397,15 +1397,19 @@ function ChatInput({
     setTimeout(() => {
       const pos = textareaRef.current?.selectionStart ?? v.length;
       const upTo = v.slice(0, pos);
-      const tm = upTo.match(/\+(\w*)$/);
+      // [\wÀ-ÿ] en vez de \w a secas — \w es solo ASCII, así que cualquier
+      // nombre con acento (Verónica, José, Íñigo...) rompía el match a medio
+      // escribir y cerraba el menú de golpe. À-ÿ cubre el bloque Latin-1
+      // Supplement (á é í ó ú ñ Ñ Á É Í Ó Ú ü Ü, etc.)
+      const tm = upTo.match(/\+([\wÀ-ÿ]*)$/);
       if (tm) { setTaskQuery(tm[1].toLowerCase()); setTaskQueryIdx(0); } else setTaskQuery(null);
-      const m = upTo.match(/@(\w*)$/);
+      const m = upTo.match(/@([\wÀ-ÿ]*)$/);
       if (m) { setMentionQuery(m[1].toLowerCase()); setMentionIdx(0); } else setMentionQuery(null);
-      const pm = upTo.match(/#([\w-]*)$/);
+      const pm = upTo.match(/#([\wÀ-ÿ-]*)$/);
       if (pm) { setProjectQuery(pm[1].toLowerCase()); setProjectQueryIdx(0); } else setProjectQuery(null);
-      const em = upTo.match(/!(\w*)$/);
+      const em = upTo.match(/!([\wÀ-ÿ]*)$/);
       if (em) { setEventQuery(em[1].toLowerCase()); setEventQueryIdx(0); } else setEventQuery(null);
-      const gm = upTo.match(/\/(\w*)$/);
+      const gm = upTo.match(/\/([\wÀ-ÿ]*)$/);
       if (gm) { setGroupQuery(gm[1].toLowerCase()); setGroupQueryIdx(0); } else setGroupQuery(null);
       const docm = upTo.match(/\$([^\s]*)$/);
       if (docm) { setDocQuery(docm[1].toLowerCase()); setDocQueryIdx(0); } else setDocQuery(null);
