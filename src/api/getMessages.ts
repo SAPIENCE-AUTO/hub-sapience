@@ -26,6 +26,8 @@ export default createEndpoint({
     since: z.string().optional(),
     /** Cursor: trae los mensajes más viejos que esta fecha (para "cargar mensajes anteriores"). */
     before: z.string().optional(),
+    /** Salto a un mensaje (desde búsqueda entre canales): trae mitad antes y mitad después de este sentAt. */
+    around: z.string().optional(),
   }),
   outputSchema: z.object({
     messages: z.array(z.object({
@@ -73,6 +75,28 @@ export default createEndpoint({
     }
 
     const limit = input.limit ?? 60;
+
+    // "Saltar a un mensaje" (desde búsqueda entre canales): la mitad de vuelta
+    // atrás y la mitad hacia adelante del sentAt destino, mismo truco desc/asc
+    // + limit en SQL que el modo `before` de abajo.
+    if (input.around) {
+      const half = Math.max(1, Math.floor(limit / 2));
+      const around = new Date(input.around);
+      const [{ records: beforeRecords, hasMore: hasMoreOlder }, { records: afterRecords }] = await Promise.all([
+        Messages.findAll({
+          filters: { channel: input.channel, sentAt: { lt: around } },
+          sorts: [{ field: 'sentAt', direction: 'desc' }],
+          limit: half,
+        }),
+        Messages.findAll({
+          filters: { channel: input.channel, sentAt: { gte: around } },
+          sorts: [{ field: 'sentAt', direction: 'asc' }],
+          limit: half,
+        }),
+      ]);
+      const merged = [...beforeRecords, ...afterRecords].map(sanitize).sort(byDateAsc);
+      return { messages: merged, hasMoreOlder };
+    }
 
     // "Cargar mensajes anteriores": trae el bloque justo antes del más viejo
     // ya cargado en el cliente. Se pide sorts desc + limit para que Postgres

@@ -997,7 +997,7 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
   const urls = !isSticker && msg.content && msg.content.trim() !== ' ' ? extractPlainUrls(msg.content) : [];
 
   return (
-    <div className={`group flex gap-3 px-4 py-1 hover:bg-muted/20 relative ${isOwn ? 'flex-row-reverse' : ''}`} onClick={() => onActivate?.(msg.id)}>
+    <div id={`msg-${msg.id}`} className={`group flex gap-3 px-4 py-1 hover:bg-muted/20 relative transition-colors ${isOwn ? 'flex-row-reverse' : ''}`} onClick={() => onActivate?.(msg.id)}>
       {!isOwn && <Avatar name={msg.senderName ?? undefined} email={msg.senderEmail ?? undefined} photoUrl={senderPhotoUrl} />}
       <div className={`flex flex-col max-w-[85%] md:max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
         {quotedMessage && (
@@ -2509,41 +2509,24 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     allMessages.forEach(m => map.set(m.id, m));
     return map;
   }, [allMessages]);
-  const filteredTopMessages = useMemo(() => {
-    if (!searchQuery.trim()) return topMessages;
-    if (searchResults !== null) {
-      // El backend devuelve más reciente primero (orden natural de resultados
-      // de búsqueda); se reordena ascendente para que groupedMessages (que
-      // asume orden cronológico normal) no necesite un camino aparte.
-      return [...searchResults].sort((a, b) => new Date(a.sentAt ?? 0).getTime() - new Date(b.sentAt ?? 0).getTime());
-    }
-    // Mientras la búsqueda real al servidor está en camino (debounce/en
-    // vuelo), se muestra el filtro local sobre lo ya cargado como vista
-    // previa instantánea, para que la caja no se sienta como que no responde.
-    const q = searchQuery.toLowerCase();
-    return topMessages.filter(m => m.content?.toLowerCase().includes(q) || m.senderName?.toLowerCase().includes(q));
-  }, [topMessages, searchQuery, searchResults]);
+  // La búsqueda ya no filtra inline el hilo activo — tiene su propio panel
+  // (searchResultsByChannel más abajo), así que el hilo normal siempre
+  // renderiza topMessages tal cual, búsqueda abierta o no.
+  const filteredTopMessages = topMessages;
 
-  const debouncedSearch = useDebouncedCallback(async (query: string, channel: string) => {
+  // Busca en TODOS los canales/DMs/grupos a los que el usuario tiene acceso,
+  // no solo el activo — searchMessages.ts ya soporta channels: string[].
+  const debouncedSearch = useDebouncedCallback(async (query: string, channels: string[]) => {
     setSearching(true);
     try {
-      const d = await searchMessages({ query, channels: [channel], limit: 100 });
+      const d = await searchMessages({ query, channels, limit: 100 });
       setSearchResults(d.results ?? []);
     } catch {
-      setSearchResults(null); // falla la búsqueda real → se queda con el filtro local de vista previa
+      setSearchResults(null);
     }
     setSearching(false);
   }, 350);
 
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults(null);
-      setSearching(false);
-      return;
-    }
-    debouncedSearch(searchQuery.trim(), effectiveChannel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, effectiveChannel]);
   const groupedMessages = useMemo(() => {
     const groups: { date: string; messages: Message[] }[] = [];
     filteredTopMessages.forEach(msg => {
@@ -2863,6 +2846,17 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   // Unread/mention state es solo visual (negritas, badge) y no afecta la posición.
   const projectChannels = useMemo(() => projectChannelCodes, [projectChannelCodes]);
 
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    const allChannels = ['general', ...projectChannels, ...dms.map(d => d.id), ...groups.map(g => g.id)];
+    debouncedSearch(searchQuery.trim(), allChannels);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, projectChannels, dms, groups]);
+
   const sortedChannels = useMemo(() => {
     const all = [{ id: 'general' }, ...projectChannels.map(c => ({ id: c }))];
     return [...all].sort((a, b) =>
@@ -2934,6 +2928,62 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     const otherEmail = dm.members.find(e => e !== myEmail) ?? '';
     const member = teamMembers.find(m => m.email === otherEmail);
     return member ? `${member.firstName ?? ''} ${member.lastName ?? ''}`.trim() || otherEmail : otherEmail;
+  };
+
+  const getChannelLabel = useCallback((channelId: string) => {
+    const grp = groups.find(g => g.id === channelId);
+    if (grp) return grp.name;
+    const dm = dms.find(d => d.id === channelId);
+    if (dm) return getDmLabel(dm);
+    return `#${channelId}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, dms, teamMembers]);
+
+  const searchResultsByChannel = useMemo(() => {
+    if (!searchResults) return [];
+    const byChannel = new Map<string, Message[]>();
+    for (const m of searchResults) {
+      const ch = m.channel ?? '';
+      if (!byChannel.has(ch)) byChannel.set(ch, []);
+      byChannel.get(ch)!.push(m);
+    }
+    return [...byChannel.entries()]
+      .map(([channel, messages]) => ({
+        channel,
+        label: getChannelLabel(channel),
+        messages: messages.sort((a, b) => new Date(b.sentAt ?? 0).getTime() - new Date(a.sentAt ?? 0).getTime()),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchResults, getChannelLabel]);
+
+  const jumpToSearchResult = async (msg: Message) => {
+    const channel = msg.channel ?? '';
+    const grp = groups.find(g => g.id === channel);
+    const dm = dms.find(d => d.id === channel);
+    if (grp) switchToConv(grp.id, grp.name);
+    else if (dm) switchToConv(dm.id, getDmLabel(dm));
+    else switchToChannel(channel);
+
+    setSearchOpen(false);
+    setSearchQuery('');
+
+    try {
+      const res = await getMessages({ channel, around: msg.sentAt, limit: 60 });
+      setAllMessages(res.messages);
+      setHasMoreOlder(res.hasMoreOlder ?? false);
+      cacheMessages(channel, res.messages, res.hasMoreOlder ?? false);
+    } catch { /* si falla, el hilo ya cambió de canal por switchTo*; el usuario puede reintentar */ }
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const el = document.getElementById(`msg-${msg.id}`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('bg-primary/10');
+        setTimeout(() => el.classList.remove('bg-primary/10'), 2000);
+      }, 150);
+    });
   };
 
   const headerLabel = activeConvId
@@ -3518,7 +3568,50 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
               <span>Reconectando mensajes...</span>
             </div>
           )}
-          {loading ? (
+          {searchQuery.trim() ? (
+            searching && searchResults === null ? (
+              <div className="px-5 space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex gap-3">
+                    <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
+                    <div className="space-y-1.5"><Skeleton className="h-4 w-28" /><Skeleton className="h-10 w-64" /></div>
+                  </div>
+                ))}
+              </div>
+            ) : searchResultsByChannel.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-12">
+                <Search className="w-10 h-10 text-muted-foreground mb-3" />
+                <p className="text-sm font-medium">Sin resultados</p>
+                <p className="text-xs text-muted-foreground mt-1">Prueba con otras palabras</p>
+              </div>
+            ) : (
+              <div className="px-3 space-y-4">
+                {searchResultsByChannel.map(group => (
+                  <div key={group.channel}>
+                    <div className="flex items-center gap-1.5 px-2 py-1.5">
+                      <Hash className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      <span className="text-xs font-semibold text-muted-foreground truncate">{group.label}</span>
+                      <span className="text-xs text-muted-foreground/60 flex-shrink-0">· {group.messages.length}</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {group.messages.map(m => (
+                        <button key={m.id} onClick={() => jumpToSearchResult(m)}
+                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-xs font-semibold">{m.senderName}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {m.sentAt ? new Date(m.sentAt).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground line-clamp-2">{m.content}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : loading ? (
             <div className="px-5 space-y-3">
               {[1, 2, 3].map(i => (
                 <div key={i} className="flex gap-3">
@@ -3532,12 +3625,12 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
               {activeConvId
                 ? <MessageCircle className="w-10 h-10 text-muted-foreground mb-3" />
                 : <MessageSquare className="w-10 h-10 text-muted-foreground mb-3" />}
-              <p className="text-sm font-medium">{searchQuery ? 'Sin resultados' : `Sin mensajes aún`}</p>
-              <p className="text-xs text-muted-foreground mt-1">{searchQuery ? 'Prueba con otras palabras' : 'Sé el primero en escribir algo.'}</p>
+              <p className="text-sm font-medium">Sin mensajes aún</p>
+              <p className="text-xs text-muted-foreground mt-1">Sé el primero en escribir algo.</p>
             </div>
           ) : (
             <>
-              {!searchQuery && hasMoreOlder && (
+              {hasMoreOlder && (
                 <div className="flex justify-center py-2">
                   <button
                     onClick={loadOlderMessages}
