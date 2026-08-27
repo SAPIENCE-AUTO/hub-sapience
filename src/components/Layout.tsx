@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { isPageVisible, ROUTE_TO_PAGE_KEY } from '../lib/pageVisibility';
 import PendingSavesBar from './PendingSavesBar';
 import AvatarCropEditor from './AvatarCropEditor';
-import { useRealtimeUserNotifications, ConversationCreatedPayload, ConversationDeletedPayload } from '../hooks/useRealtimeUserNotifications';
+import { useRealtimeUserNotifications, ConversationCreatedPayload, ConversationDeletedPayload, ConversationRenamedPayload, ConversationMembersUpdatedPayload } from '../hooks/useRealtimeUserNotifications';
 import { playChatDing, showChatBrowserNotification, shouldPlayDing, unlockAudio } from '../lib/chatNotifications';
 import ChatPage from '../pages/ChatPage';
 
@@ -558,6 +558,12 @@ export default function Layout() {
     onConversationDeleted: (payload: ConversationDeletedPayload) => {
       window.dispatchEvent(new CustomEvent('chat-conversation-deleted', { detail: payload }));
       console.log('[layout][conversation.deleted]', payload.conversationId);
+    },
+    onConversationRenamed: (payload: ConversationRenamedPayload) => {
+      window.dispatchEvent(new CustomEvent('chat-conversation-renamed', { detail: payload }));
+    },
+    onConversationMembersUpdated: (payload: ConversationMembersUpdatedPayload) => {
+      window.dispatchEvent(new CustomEvent('chat-conversation-members-updated', { detail: payload }));
     },
     onNewMessage: (payload) => {
       if (!payload.isActiveChannel) {

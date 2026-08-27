@@ -6,6 +6,7 @@ import {
   getMessages, searchMessages, sendMessage, getTeamMembers, getProjectDocuments,
   toggleReaction, togglePinMessage, saveTask,
   getChatConversations, saveChatConversation, deleteChatConversation,
+  renameChatConversation, updateChatConversationMembers, leaveChatConversation,
   updatePresence, getPresence, votePoll,
   publishTyping,
   GetMessagesOutputType, GetTeamMembersOutputType, GetChatConversationsOutputType,
@@ -39,6 +40,7 @@ import {
   Reply, Paperclip, Bold, Italic, Strikethrough, Download,
   Mic, Play, Pause, Bell, BellOff, Link as LinkIcon, Image, FolderOpen, CheckSquare, Calendar as CalendarIcon,
   Plus, Users, MessageCircle, ChevronDown, ChevronRight, BarChart3, Trash2, Star, ExternalLink, ArrowLeft,
+  Settings, LogOut,
 } from 'lucide-react';
 import { PollCard, parsePoll, type PollData } from '@/components/PollCard';
 import { TimelinePreviewDialog } from '@/components/TimelinePreviewDialog';
@@ -390,6 +392,190 @@ function NewGroupDialog({ open, onClose, teamMembers, myEmail, onCreate }: {
           </Button>
         </DialogFooter>
       </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Group Settings Dialog ───────────────────────────────────────────────────────
+function GroupSettingsDialog({ open, onClose, group, teamMembers, myEmail, onRenamed, onMembersUpdated, onLeft }: {
+  open: boolean; onClose: () => void;
+  group: GroupConv | null;
+  teamMembers: TeamMember[]; myEmail: string;
+  onRenamed: (id: string, name: string) => void;
+  onMembersUpdated: (id: string, members: string[]) => void;
+  onLeft: (id: string) => void;
+}) {
+  const isCreator = !!group && (group.createdBy ?? '').toLowerCase() === myEmail.toLowerCase();
+  const [name, setName] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const others = teamMembers.filter(m => m.email && m.email !== myEmail);
+
+  useEffect(() => {
+    if (open && group) {
+      setName(group.name);
+      setSelected(new Set(group.members.filter(e => e !== myEmail)));
+    }
+    if (!open) setConfirmLeave(false);
+  }, [open, group, myEmail]);
+
+  const toggle = (email: string) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(email)) next.delete(email); else next.add(email);
+    return next;
+  });
+
+  const handleSave = async () => {
+    if (!group || !name.trim()) return;
+    setSaving(true);
+    try {
+      const newName = name.trim();
+      const newMemberEmails = [...selected];
+      const oldMemberSet = new Set(group.members.filter(e => e !== myEmail));
+      const membersChanged = newMemberEmails.length !== oldMemberSet.size || newMemberEmails.some(e => !oldMemberSet.has(e));
+
+      if (newName !== group.name) {
+        await renameChatConversation({ id: group.id, name: newName });
+        onRenamed(group.id, newName);
+      }
+      if (membersChanged) {
+        await updateChatConversationMembers({ id: group.id, memberEmails: newMemberEmails });
+        onMembersUpdated(group.id, [myEmail, ...newMemberEmails]);
+      }
+      toast.success('Grupo actualizado');
+      onClose();
+    } catch { toast.error('Error al actualizar el grupo'); }
+    setSaving(false);
+  };
+
+  const handleLeave = async () => {
+    if (!group) return;
+    setLeaving(true);
+    try {
+      await leaveChatConversation({ id: group.id });
+      onLeft(group.id);
+      toast.success('Saliste del grupo');
+      onClose();
+    } catch { toast.error('No se pudo salir del grupo'); }
+    setLeaving(false);
+    setConfirmLeave(false);
+  };
+
+  if (!group) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Settings className="w-4 h-4 text-primary" />
+            {isCreator ? 'Gestionar grupo' : 'Grupo'}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Nombre del grupo</Label>
+            <Input
+              value={isCreator ? name : group.name} onChange={e => setName(e.target.value)}
+              disabled={!isCreator} className="h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">
+              Miembros ({isCreator ? selected.size + 1 : group.members.length})
+            </Label>
+            {isCreator ? (
+              <ScrollArea className="max-h-52 border border-border rounded-lg">
+                <div className="p-2 space-y-0.5">
+                  <div className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left opacity-60">
+                    <Checkbox checked disabled className="flex-shrink-0" />
+                    <Avatar name="Tú" email={myEmail} size={6} />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">Tú (creador)</div>
+                      <div className="text-xs text-muted-foreground truncate">{myEmail}</div>
+                    </div>
+                  </div>
+                  {others.map(m => {
+                    const memberName = `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || m.email || '?';
+                    const checked = selected.has(m.email!);
+                    return (
+                      <button key={m.id} onClick={() => toggle(m.email!)}
+                        className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted transition-colors text-left">
+                        <Checkbox checked={checked} onCheckedChange={() => toggle(m.email!)} className="flex-shrink-0" />
+                        <Avatar name={memberName} email={m.email} size={6} photoUrl={m.profilePhoto ?? undefined} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{memberName}</div>
+                          <div className="text-xs text-muted-foreground truncate">{m.email}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            ) : (
+              <ScrollArea className="max-h-52 border border-border rounded-lg">
+                <div className="p-2 space-y-0.5">
+                  {group.members.map(email => {
+                    const tm = teamMembers.find(m => m.email === email);
+                    const memberName = tm ? (`${tm.firstName ?? ''} ${tm.lastName ?? ''}`.trim() || email) : email;
+                    return (
+                      <div key={email} className="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left">
+                        <Avatar name={memberName} email={email} size={6} photoUrl={tm?.profilePhoto ?? undefined} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">
+                            {memberName}{email.toLowerCase() === myEmail.toLowerCase() ? ' (tú)' : ''}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">{email}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          {isCreator ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>Cancelar</Button>
+              <Button size="sm" onClick={handleSave} disabled={saving || !name.trim()} className="gap-1.5">
+                {saving ? 'Guardando...' : 'Guardar'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={onClose} disabled={leaving}>Cerrar</Button>
+              <Button variant="destructive" size="sm" onClick={() => setConfirmLeave(true)} disabled={leaving} className="gap-1.5">
+                <LogOut className="w-3.5 h-3.5" />
+                Salir del grupo
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+      <AlertDialog open={confirmLeave} onOpenChange={v => !leaving && setConfirmLeave(v)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Salir de "{group.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Dejarás de ver este grupo y sus mensajes. Un miembro actual tendría que volver a agregarte.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={leaving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={e => { e.preventDefault(); handleLeave(); }}
+              disabled={leaving}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {leaving ? 'Saliendo...' : 'Salir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
@@ -1609,6 +1795,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
   const [deletingGroup, setDeletingGroup] = useState(false);
+  const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   // Antes la búsqueda era un .filter() sobre topMessages (los ~60 mensajes ya
   // cargados) — no alcanzaba el historial real. null = sin búsqueda activa,
   // usa la lista normal; array = resultado real del servidor para esta query.
@@ -1835,6 +2022,54 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     window.addEventListener('chat-conversation-deleted', handler);
     return () => window.removeEventListener('chat-conversation-deleted', handler);
   }, [projectOnly]);
+
+  // ── Listen for conversation.renamed from Ably (via Layout) ─────────────────
+  useEffect(() => {
+    if (projectOnly) return;
+    const handler = (e: Event) => {
+      const payload = (e as CustomEvent).detail as { conversationId: string; conversationName: string };
+      if (!payload?.conversationId) return;
+      setGroups(prev => {
+        const next = prev.map(g => g.id === payload.conversationId ? { ...g, name: payload.conversationName } : g);
+        cachedGroups = next;
+        return next;
+      });
+      if (activeConvIdRef.current === payload.conversationId) {
+        setActiveConvLabel(payload.conversationName);
+      }
+    };
+    window.addEventListener('chat-conversation-renamed', handler);
+    return () => window.removeEventListener('chat-conversation-renamed', handler);
+  }, [projectOnly]);
+
+  // ── Listen for conversation.membersUpdated from Ably (via Layout) ──────────
+  useEffect(() => {
+    if (projectOnly) return;
+    const handler = (e: Event) => {
+      const payload = (e as CustomEvent).detail as { conversationId: string; members: string[] };
+      if (!payload?.conversationId) return;
+      const stillMember = payload.members.some(e2 => e2.toLowerCase() === myEmail.toLowerCase());
+      if (!stillMember) {
+        setGroups(prev => {
+          const next = prev.filter(g => g.id !== payload.conversationId);
+          cachedGroups = next;
+          return next;
+        });
+        if (activeConvIdRef.current === payload.conversationId) {
+          switchToChannel('general');
+          toast.info('Ya no eres miembro de este grupo');
+        }
+        return;
+      }
+      setGroups(prev => {
+        const next = prev.map(g => g.id === payload.conversationId ? { ...g, members: payload.members } : g);
+        cachedGroups = next;
+        return next;
+      });
+    };
+    window.addEventListener('chat-conversation-members-updated', handler);
+    return () => window.removeEventListener('chat-conversation-members-updated', handler);
+  }, [projectOnly, myEmail]);
 
   // ── Listen for user-notify status changes and sync on reconnect ───────────
   useEffect(() => {
@@ -2728,6 +2963,34 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
         teamMembers={teamMembers} myEmail={myEmail}
         onCreate={handleNewConv}
       />
+      <GroupSettingsDialog
+        open={groupSettingsOpen} onClose={() => setGroupSettingsOpen(false)}
+        group={groups.find(g => g.id === activeConvId) ?? null}
+        teamMembers={teamMembers} myEmail={myEmail}
+        onRenamed={(id, name) => {
+          setGroups(prev => {
+            const next = prev.map(g => g.id === id ? { ...g, name } : g);
+            cachedGroups = next;
+            return next;
+          });
+          if (activeConvId === id) setActiveConvLabel(name);
+        }}
+        onMembersUpdated={(id, members) => {
+          setGroups(prev => {
+            const next = prev.map(g => g.id === id ? { ...g, members } : g);
+            cachedGroups = next;
+            return next;
+          });
+        }}
+        onLeft={id => {
+          setGroups(prev => {
+            const next = prev.filter(g => g.id !== id);
+            cachedGroups = next;
+            return next;
+          });
+          if (activeConvId === id) switchToChannel('general');
+        }}
+      />
       <AlertDialog open={confirmDeleteGroup} onOpenChange={o => !deletingGroup && setConfirmDeleteGroup(o)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -3156,6 +3419,15 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
             <span className="text-sm text-muted-foreground hidden sm:inline shrink-0">
               — {groups.find(g => g.id === activeConvId)?.members.length} miembros
             </span>
+          )}
+          {activeConvId && groups.find(g => g.id === activeConvId) && (
+            <button
+              onClick={() => setGroupSettingsOpen(true)}
+              title="Gestionar grupo"
+              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
           )}
           {activeConvId && groups.find(g => g.id === activeConvId)?.createdBy?.toLowerCase() === myEmail.toLowerCase() && (
             <button

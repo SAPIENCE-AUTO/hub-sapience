@@ -282,6 +282,7 @@ export const importExcelData = (input?: any): Promise<any> => call('importExcelD
 export const importOdcFromCsv = (input?: any): Promise<any> => call('importOdcFromCsv', input);
 export const importSuppliers = (input?: any): Promise<any> => call('importSuppliers', input);
 export const inviteUsers = (input?: any): Promise<any> => call('inviteUsers', input);
+export const leaveChatConversation = (input?: any): Promise<any> => call('leaveChatConversation', input);
 export const linkFilloutForm = (input?: any): Promise<any> => call('linkFilloutForm', input);
 export const linkGroupToEvent = (input?: any): Promise<any> => call('linkGroupToEvent', input);
 export const linkProjectDeal = (input?: any): Promise<any> => call('linkProjectDeal', input);
@@ -311,6 +312,7 @@ export const registerObserver = (input?: any): Promise<any> => call('registerObs
 export const rejectExpense = (input?: any): Promise<any> => call('rejectExpense', input);
 export const rejectPurchaseOrder = (input?: any): Promise<any> => call('rejectPurchaseOrder', input);
 export const renameBoard = (input?: any): Promise<any> => call('renameBoard', input);
+export const renameChatConversation = (input?: any): Promise<any> => call('renameChatConversation', input);
 export const reorderInternalViews = (input?: any): Promise<any> => call('reorderInternalViews', input);
 export const reorderRecruitmentRows = (input?: any): Promise<any> => call('reorderRecruitmentRows', input);
 export const reorderTasks = (input?: any): Promise<any> => call('reorderTasks', input);
@@ -362,6 +364,7 @@ export const togglePinMessage = (input?: any): Promise<any> => call('togglePinMe
 export const toggleReaction = (input?: any): Promise<any> => call('toggleReaction', input);
 export const unlinkExternalView = (input?: any): Promise<any> => call('unlinkExternalView', input);
 export const unlinkTeamsChannel = (input?: any): Promise<any> => call('unlinkTeamsChannel', input);
+export const updateChatConversationMembers = (input?: any): Promise<any> => call('updateChatConversationMembers', input);
 export const updateDashboardTask = (input?: any): Promise<any> => call('updateDashboardTask', input);
 export const updatePresence = (input?: any): Promise<any> => call('updatePresence', input);
 export const updateSharedView = (input?: any): Promise<any> => call('updateSharedView', input);

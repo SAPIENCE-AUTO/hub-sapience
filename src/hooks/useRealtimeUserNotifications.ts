@@ -30,6 +30,16 @@ export type ConversationDeletedPayload = {
   conversationId: string;
 };
 
+export type ConversationRenamedPayload = {
+  conversationId: string;
+  conversationName: string;
+};
+
+export type ConversationMembersUpdatedPayload = {
+  conversationId: string;
+  members: string[];
+};
+
 type UseRealtimeUserNotificationsOptions = {
   userEmail: string;
   activeChannel: string;
@@ -37,6 +47,8 @@ type UseRealtimeUserNotificationsOptions = {
   onNewMessage: (payload: UserNotificationPayload) => void;
   onConversationCreated?: (payload: ConversationCreatedPayload) => void;
   onConversationDeleted?: (payload: ConversationDeletedPayload) => void;
+  onConversationRenamed?: (payload: ConversationRenamedPayload) => void;
+  onConversationMembersUpdated?: (payload: ConversationMembersUpdatedPayload) => void;
 };
 
 export function useRealtimeUserNotifications({
@@ -46,15 +58,21 @@ export function useRealtimeUserNotifications({
   onNewMessage,
   onConversationCreated,
   onConversationDeleted,
+  onConversationRenamed,
+  onConversationMembersUpdated,
 }: UseRealtimeUserNotificationsOptions): { status: 'connecting' | 'connected' | 'disconnected' } {
   // Use a ref for the callback so the SSE loop never goes stale without reconnecting
   const onNewMessageRef = useRef(onNewMessage);
   const onConversationCreatedRef = useRef(onConversationCreated);
   const onConversationDeletedRef = useRef(onConversationDeleted);
+  const onConversationRenamedRef = useRef(onConversationRenamed);
+  const onConversationMembersUpdatedRef = useRef(onConversationMembersUpdated);
   const activeChannelRef = useRef(activeChannel);
   onNewMessageRef.current = onNewMessage;
   onConversationCreatedRef.current = onConversationCreated;
   onConversationDeletedRef.current = onConversationDeleted;
+  onConversationRenamedRef.current = onConversationRenamed;
+  onConversationMembersUpdatedRef.current = onConversationMembersUpdated;
   activeChannelRef.current = activeChannel;
 
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
@@ -138,6 +156,18 @@ export function useRealtimeUserNotifications({
           if (parsed.name === 'conversation.deleted' && parsed.data) {
             const delPayload: ConversationDeletedPayload = typeof parsed.data === 'string' ? JSON.parse(parsed.data) : parsed.data;
             onConversationDeletedRef.current?.(delPayload);
+            return;
+          }
+
+          if (parsed.name === 'conversation.renamed' && parsed.data) {
+            const renamePayload: ConversationRenamedPayload = typeof parsed.data === 'string' ? JSON.parse(parsed.data) : parsed.data;
+            onConversationRenamedRef.current?.(renamePayload);
+            return;
+          }
+
+          if (parsed.name === 'conversation.membersUpdated' && parsed.data) {
+            const membersPayload: ConversationMembersUpdatedPayload = typeof parsed.data === 'string' ? JSON.parse(parsed.data) : parsed.data;
+            onConversationMembersUpdatedRef.current?.(membersPayload);
             return;
           }
 
