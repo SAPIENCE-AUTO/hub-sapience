@@ -2404,14 +2404,19 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
     if (!silent) setSyncing(true);
     try {
       const res = await syncFilloutResponses({ boardId: activeBoardId });
+      const backfilled = res.backfilled ?? 0;
       if (!silent) {
-        if (res.imported > 0) {
+        if (res.imported > 0 && backfilled > 0) {
+          toast.success(`${res.imported} nueva${res.imported !== 1 ? 's' : ''} · ${backfilled} celda${backfilled !== 1 ? 's' : ''} completada${backfilled !== 1 ? 's' : ''} en filas existentes`);
+        } else if (res.imported > 0) {
           toast.success(`${res.imported} respuesta${res.imported !== 1 ? 's' : ''} nueva${res.imported !== 1 ? 's' : ''} importada${res.imported !== 1 ? 's' : ''}`);
+        } else if (backfilled > 0) {
+          toast.success(`${backfilled} celda${backfilled !== 1 ? 's' : ''} completada${backfilled !== 1 ? 's' : ''} en filas existentes (columna nueva en el formulario)`);
         } else {
           toast.info('Sin respuestas nuevas');
         }
       }
-      if (res.imported > 0) silentReload();
+      if (res.imported > 0 || backfilled > 0) silentReload();
       setLastSyncTime(new Date());
     } catch (err) {
       console.error('[RecruitmentPage] Error al sincronizar con Fillout:', err);

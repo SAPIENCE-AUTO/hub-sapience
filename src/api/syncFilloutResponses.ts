@@ -124,7 +124,7 @@ export default createEndpoint({
   authenticated: true,
   description: 'Pull new Fillout form submissions and import them as recruitment rows using ID-based column mapping',
   inputSchema: z.object({ boardId: z.string() }),
-  outputSchema: z.object({ imported: z.number(), total: z.number() }),
+  outputSchema: z.object({ imported: z.number(), total: z.number(), backfilled: z.number().optional() }),
   execute: async ({ input }) => {
     const apiKey = process.env.ZITE_FILLOUT_API_KEY ?? '';
     if (!apiKey) throw new Error('Fillout API key not configured');
@@ -360,25 +360,68 @@ export default createEndpoint({
 
     if (submissions.length === 0) return { imported: 0, total: 0 };
 
-    // ── 3. Get existing rows (single query, build sets for dedup) ─────────
+    // ── 3. Get existing rows (single query, build lookup for dedup + backfill) ─
+    // Antes esto solo servía para NO duplicar filas — una submission de
+    // alguien que ya tenía fila se saltaba entera. Eso significaba que una
+    // pregunta agregada al form DESPUÉS de que la persona ya contestó
+    // (ej. el form se editó en Fillout) nunca le llenaba esa celda, ni
+    // volviendo a correr el sync — el resync siempre trae el historial
+    // completo, pero nunca revisitaba filas ya existentes para completarles
+    // columnas nuevas. Ahora si la fila ya existe, en vez de saltarse toda
+    // la submission se completan solo las columnas que le falten.
     await sleep(100);
     const { records: existingRows } = await RecruitmentRows.findAll({
       filters: { boardName, projectCode },
       limit: 2000,
-      fields: ['email', 'participantName', 'sourceForm'],
+      fields: ['id', 'email', 'participantName', 'sourceForm', 'cellData'],
     });
-    const existingEmails = new Set(existingRows.map(r => r.email?.toLowerCase()).filter(Boolean));
-    const existingNames  = new Set(existingRows.map(r => normalize(r.participantName ?? '')).filter(Boolean));
-    const importedSubmissionIds = new Set<string>();
+
+    type RowRef = { id: string; cellData: Record<string, unknown> };
+    const parseCellData = (raw?: string): Record<string, unknown> => {
+      try { return JSON.parse(raw ?? '{}'); } catch { return {}; }
+    };
+
+    const emailToRow = new Map<string, RowRef>();
+    const nameToRow = new Map<string, RowRef>();
+    const submissionIdToRow = new Map<string, RowRef>();
     for (const r of existingRows) {
+      const ref: RowRef = { id: r.id, cellData: parseCellData(r.cellData) };
+      const emailLower = r.email?.toLowerCase();
+      const nameNorm = normalize(r.participantName ?? '');
+      if (emailLower) emailToRow.set(emailLower, ref);
+      if (nameNorm) nameToRow.set(nameNorm, ref);
       if (r.sourceForm?.includes('|')) {
         const parts = r.sourceForm.split('|');
-        if (parts.length >= 2) importedSubmissionIds.add(parts[parts.length - 1]);
+        const sid = parts[parts.length - 1];
+        if (sid) submissionIdToRow.set(sid, ref);
       }
     }
 
+    const backfillMissingCells = async (row: RowRef, cells: { columnId: string; value: string }[]) => {
+      const missing = cells.filter(c => !(c.columnId in row.cellData));
+      if (missing.length === 0) return;
+      const cellRecords = missing.map(c => {
+        const isFile = colIdToType.get(c.columnId) === 'Archivo';
+        return {
+          boardId: resolvedBoardId,
+          rowId: row.id,
+          columnId: c.columnId,
+          ...(isFile ? { fileUrl: c.value } : { textValue: c.value }),
+        };
+      });
+      for (let ci = 0; ci < cellRecords.length; ci += 100) {
+        await CellValues.bulkCreate({ records: cellRecords.slice(ci, ci + 100) });
+      }
+      for (const c of missing) {
+        const isFile = colIdToType.get(c.columnId) === 'Archivo';
+        row.cellData[c.columnId] = isFile ? { fileUrl: c.value } : { textValue: c.value };
+      }
+      await RecruitmentRows.update({ id: row.id, record: { cellData: JSON.stringify(row.cellData) } });
+    };
+
     // ── 4. Process submissions in small batches to stay under rate limit ──
     let imported = 0;
+    let backfilled = 0;
     const BATCH_SIZE = 3;
     const BATCH_DELAY_MS = 600;
 
@@ -410,24 +453,19 @@ export default createEndpoint({
         const submissionId = String(submission.submissionId ?? submission.id ?? '');
         const sourceFormValue = submissionId ? `${formName}|${submissionId}` : formName;
 
-        if (submissionId && importedSubmissionIds.has(submissionId)) continue;
-
         const emailLower = coreFields.email?.toLowerCase() ?? '';
         const normName   = normalize(coreFields.participantName ?? '');
-        if (emailLower && existingEmails.has(emailLower)) continue;
-        if (!emailLower && normName && existingNames.has(normName)) continue;
 
-        if (emailLower) existingEmails.add(emailLower);
-        if (normName)   existingNames.add(normName);
-        if (submissionId) importedSubmissionIds.add(submissionId);
+        const matchedRow =
+          (submissionId ? submissionIdToRow.get(submissionId) : undefined) ??
+          (emailLower ? emailToRow.get(emailLower) : undefined) ??
+          (!emailLower && normName ? nameToRow.get(normName) : undefined);
 
-        if (submissionId) {
-          const { records: existing } = await RecruitmentRows.findAll({
-            filters: { sourceForm: sourceFormValue, boardName, projectCode },
-            limit: 1,
-            fields: ['id'],
-          });
-          if (existing.length > 0) continue;
+        if (matchedRow) {
+          const before = Object.keys(matchedRow.cellData).length;
+          await backfillMissingCells(matchedRow, cellsToWrite);
+          backfilled += Object.keys(matchedRow.cellData).length - before;
+          continue;
         }
 
         await Participants.bulkCreate({
@@ -450,6 +488,11 @@ export default createEndpoint({
           },
         });
 
+        const newRowRef: RowRef = { id: record.id, cellData: {} };
+        if (emailLower) emailToRow.set(emailLower, newRowRef);
+        if (normName)   nameToRow.set(normName, newRowRef);
+        if (submissionId) submissionIdToRow.set(submissionId, newRowRef);
+
         if (cellsToWrite.length > 0) {
           const cellRecords = cellsToWrite.map(c => {
             const isFile = colIdToType.get(c.columnId) === 'Archivo';
@@ -463,16 +506,14 @@ export default createEndpoint({
           for (let ci = 0; ci < cellRecords.length; ci += 100) {
             await CellValues.bulkCreate({ records: cellRecords.slice(ci, ci + 100) });
           }
+          const cellDataObj = Object.fromEntries(cellsToWrite.map(c => {
+            const isFile = colIdToType.get(c.columnId) === 'Archivo';
+            return [c.columnId, isFile ? { fileUrl: c.value } : { textValue: c.value }];
+          }));
+          newRowRef.cellData = cellDataObj;
           await RecruitmentRows.update({
             id: record.id,
-            record: {
-              cellData: JSON.stringify(
-                Object.fromEntries(cellsToWrite.map(c => {
-                  const isFile = colIdToType.get(c.columnId) === 'Archivo';
-                  return [c.columnId, isFile ? { fileUrl: c.value } : { textValue: c.value }];
-                }))
-              ),
-            },
+            record: { cellData: JSON.stringify(cellDataObj) },
           });
         }
 
@@ -594,6 +635,6 @@ export default createEndpoint({
       } catch { /* non-blocking */ }
     }
 
-    return { imported, total: submissions.length };
+    return { imported, total: submissions.length, backfilled };
   },
 });
