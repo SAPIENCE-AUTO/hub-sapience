@@ -5,7 +5,7 @@ import { useProject } from '../context/ProjectContext';
 import {
   getMessages, searchMessages, sendMessage, getTeamMembers, getProjectDocuments,
   toggleReaction, togglePinMessage, saveTask,
-  getChatConversations, saveChatConversation,
+  getChatConversations, saveChatConversation, deleteChatConversation,
   updatePresence, getPresence, votePoll,
   publishTyping,
   GetMessagesOutputType, GetTeamMembersOutputType, GetChatConversationsOutputType,
@@ -24,6 +24,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -1583,6 +1587,8 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState(false);
   // Antes la búsqueda era un .filter() sobre topMessages (los ~60 mensajes ya
   // cargados) — no alcanzaba el historial real. null = sin búsqueda activa,
   // usa la lista normal; array = resultado real del servidor para esta query.
@@ -1784,6 +1790,26 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     };
     window.addEventListener('chat-conversation-created', handler);
     return () => window.removeEventListener('chat-conversation-created', handler);
+  }, [projectOnly]);
+
+  // ── Listen for conversation.deleted from Ably (via Layout) ─────────────────
+  useEffect(() => {
+    if (projectOnly) return;
+    const handler = (e: Event) => {
+      const payload = (e as CustomEvent).detail as { conversationId: string };
+      if (!payload?.conversationId) return;
+      setGroups(prev => {
+        const next = prev.filter(g => g.id !== payload.conversationId);
+        cachedGroups = next;
+        return next;
+      });
+      if (activeConvIdRef.current === payload.conversationId) {
+        switchToChannel('general');
+        toast.info('Este grupo fue eliminado');
+      }
+    };
+    window.addEventListener('chat-conversation-deleted', handler);
+    return () => window.removeEventListener('chat-conversation-deleted', handler);
   }, [projectOnly]);
 
   // ── Listen for user-notify status changes and sync on reconnect ───────────
@@ -2523,6 +2549,26 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     if (isDrawer) setHasExplicitSelection(true);
   };
 
+  const handleDeleteGroup = async () => {
+    if (!activeConvId) return;
+    setDeletingGroup(true);
+    try {
+      await deleteChatConversation({ id: activeConvId });
+      setGroups(prev => {
+        const next = prev.filter(g => g.id !== activeConvId);
+        cachedGroups = next;
+        return next;
+      });
+      switchToChannel('general');
+      toast.success('Grupo eliminado');
+    } catch {
+      toast.error('No se pudo eliminar el grupo');
+    } finally {
+      setDeletingGroup(false);
+      setConfirmDeleteGroup(false);
+    }
+  };
+
   const switchToConv = (id: string, label: string) => {
     saveDraft(effectiveChannel, input);
     clearReadStateForChannel(id);
@@ -2649,6 +2695,26 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
         teamMembers={teamMembers} myEmail={myEmail}
         onCreate={handleNewConv}
       />
+      <AlertDialog open={confirmDeleteGroup} onOpenChange={o => !deletingGroup && setConfirmDeleteGroup(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar este grupo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará "{activeConvLabel}" para todos sus miembros. El historial de mensajes no se podrá recuperar desde el chat.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingGroup}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={e => { e.preventDefault(); handleDeleteGroup(); }}
+              disabled={deletingGroup}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingGroup ? 'Eliminando...' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <CreatePollDialog
         open={showPollDialog} onClose={() => setShowPollDialog(false)}
         onSend={handleSendPoll}
@@ -3036,6 +3102,15 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
             <span className="text-sm text-muted-foreground hidden sm:inline shrink-0">
               — {groups.find(g => g.id === activeConvId)?.members.length} miembros
             </span>
+          )}
+          {activeConvId && groups.find(g => g.id === activeConvId)?.createdBy?.toLowerCase() === myEmail.toLowerCase() && (
+            <button
+              onClick={() => setConfirmDeleteGroup(true)}
+              title="Eliminar grupo"
+              className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           )}
           {!activeConvId && (
             <span className="text-sm text-muted-foreground hidden sm:inline shrink-0">— {topMessages.length} mensajes</span>

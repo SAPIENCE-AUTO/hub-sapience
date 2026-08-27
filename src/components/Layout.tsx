@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { isPageVisible, ROUTE_TO_PAGE_KEY } from '../lib/pageVisibility';
 import PendingSavesBar from './PendingSavesBar';
 import AvatarCropEditor from './AvatarCropEditor';
-import { useRealtimeUserNotifications, ConversationCreatedPayload } from '../hooks/useRealtimeUserNotifications';
+import { useRealtimeUserNotifications, ConversationCreatedPayload, ConversationDeletedPayload } from '../hooks/useRealtimeUserNotifications';
 import { playChatDing, showChatBrowserNotification, shouldPlayDing, unlockAudio } from '../lib/chatNotifications';
 import ChatPage from '../pages/ChatPage';
 
@@ -554,6 +554,10 @@ export default function Layout() {
       knownConvIdsRef.current.add(payload.conversationId);
       window.dispatchEvent(new CustomEvent('chat-conversation-created', { detail: payload }));
       console.log('[layout][conversation.created]', payload.conversationId, payload.conversationType);
+    },
+    onConversationDeleted: (payload: ConversationDeletedPayload) => {
+      window.dispatchEvent(new CustomEvent('chat-conversation-deleted', { detail: payload }));
+      console.log('[layout][conversation.deleted]', payload.conversationId);
     },
     onNewMessage: (payload) => {
       if (!payload.isActiveChannel) {

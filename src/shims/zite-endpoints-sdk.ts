@@ -158,6 +158,7 @@ export const deleteBoard = (input?: any): Promise<any> => call('deleteBoard', in
 export const deleteBoardColumn = (input?: any): Promise<any> => call('deleteBoardColumn', input);
 export const deleteCRMItem = (input?: any): Promise<any> => call('deleteCRMItem', input);
 export const deleteCalendarEvent = (input?: any): Promise<any> => call('deleteCalendarEvent', input);
+export const deleteChatConversation = (input?: any): Promise<any> => call('deleteChatConversation', input);
 export const deleteCommercialView = (input?: any): Promise<any> => call('deleteCommercialView', input);
 export const deleteCotizacion = (input?: any): Promise<any> => call('deleteCotizacion', input);
 export const deleteDeal = (input?: any): Promise<any> => call('deleteDeal', input);

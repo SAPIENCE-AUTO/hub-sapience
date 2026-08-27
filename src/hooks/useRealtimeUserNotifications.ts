@@ -26,12 +26,17 @@ export type ConversationCreatedPayload = {
   createdAt: string;
 };
 
+export type ConversationDeletedPayload = {
+  conversationId: string;
+};
+
 type UseRealtimeUserNotificationsOptions = {
   userEmail: string;
   activeChannel: string;
   enabled?: boolean;
   onNewMessage: (payload: UserNotificationPayload) => void;
   onConversationCreated?: (payload: ConversationCreatedPayload) => void;
+  onConversationDeleted?: (payload: ConversationDeletedPayload) => void;
 };
 
 export function useRealtimeUserNotifications({
@@ -40,13 +45,16 @@ export function useRealtimeUserNotifications({
   enabled = true,
   onNewMessage,
   onConversationCreated,
+  onConversationDeleted,
 }: UseRealtimeUserNotificationsOptions): { status: 'connecting' | 'connected' | 'disconnected' } {
   // Use a ref for the callback so the SSE loop never goes stale without reconnecting
   const onNewMessageRef = useRef(onNewMessage);
   const onConversationCreatedRef = useRef(onConversationCreated);
+  const onConversationDeletedRef = useRef(onConversationDeleted);
   const activeChannelRef = useRef(activeChannel);
   onNewMessageRef.current = onNewMessage;
   onConversationCreatedRef.current = onConversationCreated;
+  onConversationDeletedRef.current = onConversationDeleted;
   activeChannelRef.current = activeChannel;
 
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
@@ -124,6 +132,12 @@ export function useRealtimeUserNotifications({
             const convPayload: ConversationCreatedPayload = typeof parsed.data === 'string' ? JSON.parse(parsed.data) : parsed.data;
             console.log('[ably][user-notify][conversation.created]', { conversationId: convPayload.conversationId });
             onConversationCreatedRef.current?.(convPayload);
+            return;
+          }
+
+          if (parsed.name === 'conversation.deleted' && parsed.data) {
+            const delPayload: ConversationDeletedPayload = typeof parsed.data === 'string' ? JSON.parse(parsed.data) : parsed.data;
+            onConversationDeletedRef.current?.(delPayload);
             return;
           }
 
