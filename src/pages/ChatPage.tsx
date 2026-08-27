@@ -1042,6 +1042,8 @@ function ChatInput({
   const [docQuery, setDocQuery] = useState<string | null>(null);
   const [docQueryIdx, setDocQueryIdx] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const dragCounterRef = useRef(0);
   const [recordingTime, setRecordingTime] = useState(0);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
@@ -1432,7 +1434,25 @@ function ChatInput({
           </button>
         </div>
       )}
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden focus-within:ring-1 focus-within:ring-primary/30 transition-shadow">
+      <div
+        onDragEnter={e => { e.preventDefault(); dragCounterRef.current++; setDragging(true); }}
+        onDragOver={e => e.preventDefault()}
+        onDragLeave={e => { e.preventDefault(); dragCounterRef.current--; if (dragCounterRef.current <= 0) { dragCounterRef.current = 0; setDragging(false); } }}
+        onDrop={e => {
+          e.preventDefault();
+          dragCounterRef.current = 0;
+          setDragging(false);
+          Array.from(e.dataTransfer.files).forEach(f => onFileUpload(f));
+        }}
+        className={`relative bg-card border rounded-xl shadow-sm overflow-hidden focus-within:ring-1 focus-within:ring-primary/30 transition-shadow ${dragging ? 'border-primary border-dashed bg-primary/5' : 'border-border'}`}
+      >
+        {dragging && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-primary/5 pointer-events-none">
+            <span className="text-xs font-medium text-primary bg-card border border-primary/30 rounded-lg px-3 py-1.5 shadow-sm">
+              Suelta para adjuntar
+            </span>
+          </div>
+        )}
         {pendingAttachments.length > 0 && (
           <div className="flex flex-wrap gap-2 px-3 pt-2.5 pb-1">
             {pendingAttachments.map((a, i) => (
@@ -1602,6 +1622,10 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   const [groupSearch, setGroupSearch] = useState('');
   const [favoriteChannels, setFavoriteChannels] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('chat-favorite-channels') ?? '[]')); }
+    catch { return new Set(); }
+  });
+  const [mutedChannels, setMutedChannels] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('chat-muted-channels') ?? '[]')); }
     catch { return new Set(); }
   });
   const [secFavorites, setSecFavorites] = useState(false);
@@ -2638,6 +2662,15 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     });
   };
 
+  const toggleMute = (id: string) => {
+    setMutedChannels(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      localStorage.setItem('chat-muted-channels', JSON.stringify([...next]));
+      return next;
+    });
+  };
+
 
 
   // Map email → profilePhoto for avatar display
@@ -2811,12 +2844,13 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                       const hasMention = mentionedChannels.has(ch.id) && ch.id !== activeChannel;
                       const isActive = !activeConvId && activeChannel === ch.id;
                       const isFav = favoriteChannels.has(ch.id);
+                      const isMuted = mutedChannels.has(ch.id);
                       const unread = !isActive ? (unreadCounts[ch.id] ?? 0) : 0;
                       return (
                         <button key={ch.id} onClick={() => switchToChannel(ch.id)}
                           className={`group/ch w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors ${
                             isActive ? 'bg-primary/10 text-primary font-semibold' : (unread > 0 || hasMention) ? 'text-foreground hover:bg-muted font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          }`}>
+                          } ${isMuted ? 'opacity-60' : ''}`}>
                           <Hash className="w-3 h-3 flex-shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0 flex flex-col">
                             <span className="truncate block text-sm leading-tight">{ch.id}</span>
@@ -2831,6 +2865,12 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                               {unread > 99 ? '99+' : unread}
                             </span>
                           )}
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleMute(ch.id); }}
+                            title={isMuted ? 'Activar notificaciones' : 'Silenciar canal'}
+                            className={`p-0.5 rounded transition-all hover:bg-muted ${isMuted ? 'opacity-100 text-muted-foreground' : 'opacity-0 group-hover/ch:opacity-100 text-muted-foreground/40 hover:text-foreground'}`}>
+                            {isMuted ? <BellOff className="w-3 h-3" /> : <Bell className="w-3 h-3" />}
+                          </button>
                           <button
                             onClick={e => { e.stopPropagation(); toggleFavorite(ch.id); }}
                             title={isFav ? 'Quitar de favoritos' : 'Añadir a favoritos'}
@@ -2880,14 +2920,15 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                     .map(dm => {
                       const label = getDmLabel(dm);
                       const isActive = activeConvId === dm.id;
+                      const isMuted = mutedChannels.has(dm.id);
                       const unread = !isActive ? (unreadCounts[dm.id] ?? 0) : 0;
                       const otherEmailForDm = dm.members.find(e => e !== myEmail) ?? '';
                       const dmPhotoUrl = photoMap[otherEmailForDm];
                       return (
                         <button key={dm.id} onClick={() => switchToConv(dm.id, label)}
-                          className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2.5 transition-colors ${
+                          className={`group/dm w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2.5 transition-colors ${
                             isActive ? 'bg-primary/10 text-primary font-semibold' : unread > 0 ? 'text-foreground hover:bg-muted font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          }`}>
+                          } ${isMuted ? 'opacity-60' : ''}`}>
                           <Avatar name={label} email={otherEmailForDm} size={6} photoUrl={dmPhotoUrl} />
                           <div className="flex-1 min-w-0 flex flex-col">
                             <span className="truncate block text-sm leading-tight">{label}</span>
@@ -2902,6 +2943,12 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                               {unread > 99 ? '99+' : unread}
                             </span>
                           )}
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleMute(dm.id); }}
+                            title={isMuted ? 'Activar notificaciones' : 'Silenciar chat'}
+                            className={`p-0.5 rounded transition-all hover:bg-muted flex-shrink-0 ${isMuted ? 'opacity-100 text-muted-foreground' : 'opacity-0 group-hover/dm:opacity-100 text-muted-foreground/40 hover:text-foreground'}`}>
+                            {isMuted ? <BellOff className="w-3 h-3" /> : <Bell className="w-3 h-3" />}
+                          </button>
                           {(() => {
                             const pres = presenceMap[otherEmailForDm];
                             const isOnline = pres?.lastSeenAt
@@ -2991,13 +3038,14 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                     .filter(grp => !groupSearch || grp.name.toLowerCase().includes(groupSearch.toLowerCase()))
                     .map(grp => {
                       const isActive = activeConvId === grp.id;
+                      const isMuted = mutedChannels.has(grp.id);
                       const unread = !isActive ? (unreadCounts[grp.id] ?? 0) : 0;
                       const hasMention = mentionedChannels.has(grp.id) && !isActive;
                       return (
                         <button key={grp.id} onClick={() => switchToConv(grp.id, grp.name)}
-                          className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2.5 transition-colors ${
+                          className={`group/grp w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2.5 transition-colors ${
                             isActive ? 'bg-primary/10 text-primary font-semibold' : unread > 0 ? 'text-foreground hover:bg-muted font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          }`}>
+                          } ${isMuted ? 'opacity-60' : ''}`}>
                           <div className="w-6 h-6 rounded-full bg-chart-4/80 flex items-center justify-center flex-shrink-0 mt-0.5">
                             <Users className="w-3 h-3 text-primary-foreground" />
                           </div>
@@ -3016,6 +3064,12 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
                           ) : (
                             <span className="text-[10px] text-muted-foreground flex-shrink-0">{grp.members.length}</span>
                           )}
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleMute(grp.id); }}
+                            title={isMuted ? 'Activar notificaciones' : 'Silenciar grupo'}
+                            className={`p-0.5 rounded transition-all hover:bg-muted flex-shrink-0 ${isMuted ? 'opacity-100 text-muted-foreground' : 'opacity-0 group-hover/grp:opacity-100 text-muted-foreground/40 hover:text-foreground'}`}>
+                            {isMuted ? <BellOff className="w-3 h-3" /> : <Bell className="w-3 h-3" />}
+                          </button>
                         </button>
                       );
                     })}

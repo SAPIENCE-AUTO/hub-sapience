@@ -561,36 +561,42 @@ export default function Layout() {
     },
     onNewMessage: (payload) => {
       if (!payload.isActiveChannel) {
-        // ── Normal case: user is NOT viewing this channel ──
-        // Update unread counts in localStorage
-        const stored: Record<string, number> = JSON.parse(localStorage.getItem('chat-unread-counts') ?? '{}');
-        stored[payload.channel] = (stored[payload.channel] ?? 0) + 1;
-        localStorage.setItem('chat-unread-counts', JSON.stringify(stored));
-        // Update sidebar Chat badge immediately
-        setUnreadTotal(Object.values(stored).reduce((s, c) => s + c, 0));
-        // Update mention channels
-        if (payload.hasMention) {
-          const mentions = new Set<string>(JSON.parse(localStorage.getItem('chat-mention-channels') ?? '[]'));
-          mentions.add(payload.channel);
-          localStorage.setItem('chat-mention-channels', JSON.stringify([...mentions]));
-        }
-        // Urgent if mention or DM
-        if (payload.hasMention || isDmChannel(payload.channel)) {
-          setHasMentionOrDM(true);
-        }
-        // Notify ChatPage (if mounted) to update its internal sidebar badges
-        window.dispatchEvent(new CustomEvent('chat-unread-updated', {
-          detail: { channel: payload.channel, hasMention: payload.hasMention },
-        }));
-        // Sound — plays for mentions and DMs, respects user's sound toggle
-        const isUrgent = payload.hasMention || isDmChannel(payload.channel);
-        const soundEnabled = localStorage.getItem('chat-sound-enabled') !== 'false';
-        if (soundEnabled && isUrgent && payload.messageId && shouldPlayDing(payload.messageId)) {
-          playChatDing();
-        }
-        // Browser notification — fires for mentions and DMs, independent of sound toggle
-        if (isUrgent && payload.messageId && shouldPlayDing(`notif-${payload.messageId}`)) {
-          showChatBrowserNotification(payload, chatActiveChannel);
+        // ── Canal silenciado: no badge, no mención, no sonido, no notificación ──
+        // (mismo criterio que Slack: el mensaje sigue llegando al abrir el canal,
+        // el preview de abajo sí se actualiza — solo no interrumpe)
+        const mutedChannels = new Set<string>(JSON.parse(localStorage.getItem('chat-muted-channels') ?? '[]'));
+        if (!mutedChannels.has(payload.channel)) {
+          // ── Normal case: user is NOT viewing this channel ──
+          // Update unread counts in localStorage
+          const stored: Record<string, number> = JSON.parse(localStorage.getItem('chat-unread-counts') ?? '{}');
+          stored[payload.channel] = (stored[payload.channel] ?? 0) + 1;
+          localStorage.setItem('chat-unread-counts', JSON.stringify(stored));
+          // Update sidebar Chat badge immediately
+          setUnreadTotal(Object.values(stored).reduce((s, c) => s + c, 0));
+          // Update mention channels
+          if (payload.hasMention) {
+            const mentions = new Set<string>(JSON.parse(localStorage.getItem('chat-mention-channels') ?? '[]'));
+            mentions.add(payload.channel);
+            localStorage.setItem('chat-mention-channels', JSON.stringify([...mentions]));
+          }
+          // Urgent if mention or DM
+          if (payload.hasMention || isDmChannel(payload.channel)) {
+            setHasMentionOrDM(true);
+          }
+          // Notify ChatPage (if mounted) to update its internal sidebar badges
+          window.dispatchEvent(new CustomEvent('chat-unread-updated', {
+            detail: { channel: payload.channel, hasMention: payload.hasMention },
+          }));
+          // Sound — plays for mentions and DMs, respects user's sound toggle
+          const isUrgent = payload.hasMention || isDmChannel(payload.channel);
+          const soundEnabled = localStorage.getItem('chat-sound-enabled') !== 'false';
+          if (soundEnabled && isUrgent && payload.messageId && shouldPlayDing(payload.messageId)) {
+            playChatDing();
+          }
+          // Browser notification — fires for mentions and DMs, independent of sound toggle
+          if (isUrgent && payload.messageId && shouldPlayDing(`notif-${payload.messageId}`)) {
+            showChatBrowserNotification(payload, chatActiveChannel);
+          }
         }
       } else {
         // ── Active channel case: user IS viewing this channel ──
