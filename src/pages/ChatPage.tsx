@@ -804,7 +804,6 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
   const poll = parsePoll(msg.content);
   const isSticker = !poll && isStickerMessage(msg.content);
   const urls = !isSticker && msg.content && msg.content.trim() !== ' ' ? extractPlainUrls(msg.content) : [];
-  const isRead = msg.sentAt ? (Date.now() - new Date(msg.sentAt).getTime()) > 30000 : false;
 
   return (
     <div className={`group flex gap-3 px-4 py-1 hover:bg-muted/20 relative ${isOwn ? 'flex-row-reverse' : ''}`} onClick={() => onActivate?.(msg.id)}>
@@ -919,8 +918,8 @@ const MessageItem = memo(function MessageItem({ msg, isOwn, myEmail, onReply, on
           <div className="flex items-center gap-1 mt-0.5">
             {msg.pinned && <Pin className="w-3 h-3 text-amber-500" />}
             <span className="text-xs text-muted-foreground">{time}</span>
-            <span className={`text-[11px] leading-none font-medium ${isRead ? 'text-primary' : 'text-muted-foreground/50'}`}>
-              {isRead ? '✓✓' : '✓'}
+            <span className="text-[11px] leading-none font-medium text-muted-foreground/50" title="Enviado">
+              ✓
             </span>
           </div>
         )}
@@ -1504,7 +1503,7 @@ function ChatInput({
 
 // ── Sidebar Section ───────────────────────────────────────────────────────────
 function SidebarSection({ title, icon, onAdd, addLabel, collapsed, onToggle, children, badgeCount, hasMention }: {
-  title: string; icon: React.ReactNode; onAdd: () => void; addLabel: string;
+  title: string; icon: React.ReactNode; onAdd?: () => void; addLabel?: string;
   collapsed: boolean; onToggle: () => void; children: React.ReactNode; badgeCount?: number; hasMention?: boolean;
 }) {
   return (
@@ -1520,10 +1519,12 @@ function SidebarSection({ title, icon, onAdd, addLabel, collapsed, onToggle, chi
             </span>
           )}
         </button>
-        <button onClick={onAdd} title={addLabel}
-          className="opacity-0 group-hover/sec:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
-          <Plus className="w-3.5 h-3.5" />
-        </button>
+        {onAdd && (
+          <button onClick={onAdd} title={addLabel}
+            className="opacity-0 group-hover/sec:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
       {!collapsed && <div className="pb-1">{children}</div>}
     </div>
@@ -1767,7 +1768,6 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
 
       // Sync conversations once on any transition TO connected
       if (newStatus === 'connected' && prevStatus !== 'connected') {
-        console.log('[chat][fase-b] user-notify connected, syncing conversations');
         getChatConversations({}).then(d => {
           setDms(d.dms); setGroups(d.groups);
           cachedDms = d.dms; cachedGroups = d.groups;
@@ -1830,11 +1830,6 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       }));
     },
     onMessageCreated: (msg) => {
-      console.log('[ably][received message.created]', {
-        subscribedChannel: effectiveChannel,
-        messageChannel: msg.channel,
-        messageId: msg.id,
-      });
       // The realtime event will dedupe via mergeMessagesReplacingOptimistic
       setAllMessages(prev => mergeMessagesReplacingOptimistic(prev, [msg as Message]));
       // Update last message preview for this channel (skip replies and polls)
@@ -1890,7 +1885,6 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     prevRealtimeStatusRef.current = realtimeStatus;
     // On reconnection: sync any missed messages
     if (realtimeStatus === 'connected' && prev !== 'connected' && prev !== 'disabled') {
-      console.log('[chat][fase-b] Ably reconnected, syncing missed messages');
       loadIncrementalRef.current?.();
     }
   }, [realtimeStatus]);
@@ -2274,7 +2268,6 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
         setAllMessages(prev => {
           const hasOptimistic = prev.some(m => String(m.id).startsWith('optimistic-'));
           if (hasOptimistic) {
-            console.log('[chat][fase-b] safety net: optimistic msg still present after 5s, refreshing');
             getMessages({ channel, since: lastSentAtRef.current ?? undefined, limit: 5 })
               .then(d => {
                 if (d.messages.length > 0) {
@@ -2661,7 +2654,6 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
               {favoriteChannels.size > 0 && (
                 <SidebarSection
                   title="Favoritos" icon={<Star className="w-3 h-3 text-amber-400 fill-amber-400" />}
-                  onAdd={() => {}} addLabel=""
                   collapsed={secFavorites} onToggle={() => setSecFavorites(v => !v)}
                 >
                   <div className="px-2 space-y-0.5">
@@ -2697,7 +2689,6 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
               {/* Channels */}
               <SidebarSection
                 title="Canales" icon={<Hash className="w-3 h-3 text-muted-foreground" />}
-                onAdd={() => {}} addLabel="Nuevo canal"
                 collapsed={secChannels} onToggle={() => setSecChannels(v => !v)}
                 badgeCount={['general', ...projectChannels].filter(c => (unreadCounts[c] ?? 0) > 0).length}
                 hasMention={['general', ...projectChannels].some(c => (unreadCounts[c] ?? 0) > 0 && mentionedChannels.has(c))}
@@ -2986,7 +2977,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
           ) : (
             <Hash className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           )}
-          <span className="font-semibold truncate">{headerLabel}</span>
+          <span className="font-semibold truncate min-w-[80px]">{headerLabel}</span>
           {(() => {
             const currentDm = activeConvId ? dms.find(d => d.id === activeConvId) : null;
             const isDm1to1 = !!currentDm;
