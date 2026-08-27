@@ -581,6 +581,85 @@ function GroupSettingsDialog({ open, onClose, group, teamMembers, myEmail, onRen
   );
 }
 
+// ── Global Search Dialog ────────────────────────────────────────────────────────
+// Deliberadamente separado de la búsqueda intra-canal (el ícono de lupa
+// dentro del header del canal activo, que filtra inline solo ahí) — esta
+// busca en TODOS los canales/DMs/grupos a la vez, agrupado por canal.
+function GlobalSearchDialog({ open, onClose, query, onQueryChange, searched, searching, resultsByChannel, onJump }: {
+  open: boolean; onClose: () => void;
+  query: string; onQueryChange: (v: string) => void;
+  searched: boolean; searching: boolean;
+  resultsByChannel: { channel: string; label: string; messages: Message[] }[];
+  onJump: (msg: Message) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogHeader className="px-4 py-3 border-b border-border flex-shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-sm">
+            <Search className="w-4 h-4 text-primary" /> Buscar en todo el chat
+          </DialogTitle>
+        </DialogHeader>
+        <div className="px-4 py-3 border-b border-border flex-shrink-0">
+          <Input
+            value={query} onChange={e => onQueryChange(e.target.value)}
+            placeholder="Buscar en canales, DMs y grupos..." autoFocus className="h-9 text-sm"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {!query.trim() ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-8">
+              <Search className="w-8 h-8 text-muted-foreground/50 mb-2" />
+              <p className="text-xs text-muted-foreground">Busca en todos tus canales, DMs y grupos a la vez.</p>
+            </div>
+          ) : searching && !searched ? (
+            <div className="px-5 py-4 space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="flex gap-3">
+                  <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
+                  <div className="space-y-1.5 flex-1"><Skeleton className="h-4 w-28" /><Skeleton className="h-10 w-full" /></div>
+                </div>
+              ))}
+            </div>
+          ) : resultsByChannel.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-8">
+              <Search className="w-8 h-8 text-muted-foreground/50 mb-2" />
+              <p className="text-sm font-medium">Sin resultados</p>
+              <p className="text-xs text-muted-foreground mt-1">Prueba con otras palabras</p>
+            </div>
+          ) : (
+            <div className="px-3 py-2 space-y-4">
+              {resultsByChannel.map(group => (
+                <div key={group.channel}>
+                  <div className="flex items-center gap-1.5 px-2 py-1.5">
+                    <Hash className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                    <span className="text-xs font-semibold text-muted-foreground truncate">{group.label}</span>
+                    <span className="text-xs text-muted-foreground/60 flex-shrink-0">· {group.messages.length}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {group.messages.map(m => (
+                      <button key={m.id} onClick={() => onJump(m)}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-xs font-semibold">{m.senderName}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {m.sentAt ? new Date(m.sentAt).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{m.content}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Create Poll Dialog ────────────────────────────────────────────────────────
 function CreatePollDialog({ open, onClose, onSend }: {
   open: boolean; onClose: () => void;
@@ -1820,6 +1899,13 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   // usa la lista normal; array = resultado real del servidor para esta query.
   const [searchResults, setSearchResults] = useState<Message[] | null>(null);
   const [searching, setSearching] = useState(false);
+  // Búsqueda global — deliberadamente separada de la de arriba: la de arriba
+  // busca solo dentro del canal activo (inline, instantánea), esta abre un
+  // diálogo aparte y busca en TODOS los canales/DMs/grupos a la vez.
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [globalSearchResults, setGlobalSearchResults] = useState<Message[] | null>(null);
+  const [globalSearching, setGlobalSearching] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => cachedTeamMembers ?? []);
   const [projectChannelCodes, setProjectChannelCodes] = useState<string[]>([]);
@@ -2555,22 +2641,40 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       .filter(m => m.parentMessageId === threadRootId)
       .sort((a, b) => new Date(a.sentAt ?? 0).getTime() - new Date(b.sentAt ?? 0).getTime());
   }, [allMessages, threadRootId]);
-  // La búsqueda ya no filtra inline el hilo activo — tiene su propio panel
-  // (searchResultsByChannel más abajo), así que el hilo normal siempre
-  // renderiza topMessages tal cual, búsqueda abierta o no.
-  const filteredTopMessages = topMessages;
+  // Búsqueda intra-canal: filtra inline lo ya cargado como vista previa
+  // instantánea mientras la búsqueda real (searchMessages, acotada SOLO al
+  // canal activo) va en camino — distinta a propósito de la búsqueda global
+  // (globalSearchResultsByChannel más abajo), que abre su propio diálogo y
+  // busca en todos los canales/DMs/grupos a la vez.
+  const filteredTopMessages = useMemo(() => {
+    if (!searchQuery.trim()) return topMessages;
+    if (searchResults !== null) {
+      return [...searchResults].sort((a, b) => new Date(a.sentAt ?? 0).getTime() - new Date(b.sentAt ?? 0).getTime());
+    }
+    const q = searchQuery.toLowerCase();
+    return topMessages.filter(m => m.content?.toLowerCase().includes(q) || m.senderName?.toLowerCase().includes(q));
+  }, [topMessages, searchQuery, searchResults]);
 
-  // Busca en TODOS los canales/DMs/grupos a los que el usuario tiene acceso,
-  // no solo el activo — searchMessages.ts ya soporta channels: string[].
-  const debouncedSearch = useDebouncedCallback(async (query: string, channels: string[]) => {
+  const debouncedSearch = useDebouncedCallback(async (query: string, channel: string) => {
     setSearching(true);
     try {
-      const d = await searchMessages({ query, channels, limit: 100 });
+      const d = await searchMessages({ query, channels: [channel], limit: 100 });
       setSearchResults(d.results ?? []);
     } catch {
       setSearchResults(null);
     }
     setSearching(false);
+  }, 350);
+
+  const debouncedGlobalSearch = useDebouncedCallback(async (query: string, channels: string[]) => {
+    setGlobalSearching(true);
+    try {
+      const d = await searchMessages({ query, channels, limit: 100 });
+      setGlobalSearchResults(d.results ?? []);
+    } catch {
+      setGlobalSearchResults(null);
+    }
+    setGlobalSearching(false);
   }, 350);
 
   const groupedMessages = useMemo(() => {
@@ -2929,10 +3033,21 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       setSearching(false);
       return;
     }
-    const allChannels = ['general', ...projectChannels, ...dms.map(d => d.id), ...groups.map(g => g.id)];
-    debouncedSearch(searchQuery.trim(), allChannels);
+    debouncedSearch(searchQuery.trim(), effectiveChannel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, projectChannels, dms, groups]);
+  }, [searchQuery, effectiveChannel]);
+
+  useEffect(() => {
+    if (!globalSearchOpen) return;
+    if (!globalSearchQuery.trim()) {
+      setGlobalSearchResults(null);
+      setGlobalSearching(false);
+      return;
+    }
+    const allChannels = ['general', ...projectChannels, ...dms.map(d => d.id), ...groups.map(g => g.id)];
+    debouncedGlobalSearch(globalSearchQuery.trim(), allChannels);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalSearchOpen, globalSearchQuery, projectChannels, dms, groups]);
 
   const sortedChannels = useMemo(() => {
     const all = [{ id: 'general' }, ...projectChannels.map(c => ({ id: c }))];
@@ -3016,10 +3131,10 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups, dms, teamMembers]);
 
-  const searchResultsByChannel = useMemo(() => {
-    if (!searchResults) return [];
+  const globalSearchResultsByChannel = useMemo(() => {
+    if (!globalSearchResults) return [];
     const byChannel = new Map<string, Message[]>();
-    for (const m of searchResults) {
+    for (const m of globalSearchResults) {
       const ch = m.channel ?? '';
       if (!byChannel.has(ch)) byChannel.set(ch, []);
       byChannel.get(ch)!.push(m);
@@ -3032,7 +3147,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchResults, getChannelLabel]);
+  }, [globalSearchResults, getChannelLabel]);
 
   const jumpToSearchResult = async (msg: Message) => {
     const channel = msg.channel ?? '';
@@ -3042,8 +3157,8 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
     else if (dm) switchToConv(dm.id, getDmLabel(dm));
     else switchToChannel(channel);
 
-    setSearchOpen(false);
-    setSearchQuery('');
+    setGlobalSearchOpen(false);
+    setGlobalSearchQuery('');
 
     try {
       const res = await getMessages({ channel, around: msg.sentAt, limit: 60 });
@@ -3130,6 +3245,13 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
           if (activeConvId === id) switchToChannel('general');
         }}
       />
+      <GlobalSearchDialog
+        open={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)}
+        query={globalSearchQuery} onQueryChange={setGlobalSearchQuery}
+        searched={globalSearchResults !== null} searching={globalSearching}
+        resultsByChannel={globalSearchResultsByChannel}
+        onJump={jumpToSearchResult}
+      />
       <AlertDialog open={confirmDeleteGroup} onOpenChange={o => !deletingGroup && setConfirmDeleteGroup(o)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -3205,17 +3327,23 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
       {/* Sidebar */}
       {!projectOnly && (
         <aside className={`border-r border-border bg-card flex-shrink-0 flex flex-col ${mobileShowChat ? 'hidden md:flex md:w-72' : 'w-full md:w-72'}`}>
-          {isDrawer && (
-            <div className="flex items-center px-4 py-3 border-b border-border flex-shrink-0">
-              {onClose && (
-                <button onClick={onClose} className="p-1.5 -ml-1 mr-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-              )}
-              <MessageSquare className="w-4 h-4 text-primary mr-2" />
-              <span className="font-semibold text-sm">Chat</span>
-            </div>
-          )}
+          <div className="flex items-center px-4 py-3 border-b border-border flex-shrink-0">
+            {isDrawer && onClose && (
+              <button onClick={onClose} className="p-1.5 -ml-1 mr-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+            {isDrawer && (
+              <>
+                <MessageSquare className="w-4 h-4 text-primary mr-2" />
+                <span className="font-semibold text-sm">Chat</span>
+              </>
+            )}
+            <button onClick={() => setGlobalSearchOpen(true)} title="Buscar en todo el chat"
+              className="ml-auto p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              <Search className="w-4 h-4" />
+            </button>
+          </div>
           <div className="flex-1 overflow-y-auto">
             <div className="py-2 space-y-1">
 
@@ -3714,50 +3842,7 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
               <span>Reconectando mensajes...</span>
             </div>
           )}
-          {searchQuery.trim() ? (
-            searching && searchResults === null ? (
-              <div className="px-5 space-y-3">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="flex gap-3">
-                    <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
-                    <div className="space-y-1.5"><Skeleton className="h-4 w-28" /><Skeleton className="h-10 w-64" /></div>
-                  </div>
-                ))}
-              </div>
-            ) : searchResultsByChannel.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center p-12">
-                <Search className="w-10 h-10 text-muted-foreground mb-3" />
-                <p className="text-sm font-medium">Sin resultados</p>
-                <p className="text-xs text-muted-foreground mt-1">Prueba con otras palabras</p>
-              </div>
-            ) : (
-              <div className="px-3 space-y-4">
-                {searchResultsByChannel.map(group => (
-                  <div key={group.channel}>
-                    <div className="flex items-center gap-1.5 px-2 py-1.5">
-                      <Hash className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                      <span className="text-xs font-semibold text-muted-foreground truncate">{group.label}</span>
-                      <span className="text-xs text-muted-foreground/60 flex-shrink-0">· {group.messages.length}</span>
-                    </div>
-                    <div className="space-y-0.5">
-                      {group.messages.map(m => (
-                        <button key={m.id} onClick={() => jumpToSearchResult(m)}
-                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-semibold">{m.senderName}</span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {m.sentAt ? new Date(m.sentAt).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
-                            </span>
-                          </div>
-                          <p className="text-sm text-muted-foreground line-clamp-2">{m.content}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
-          ) : loading ? (
+          {loading ? (
             <div className="px-5 space-y-3">
               {[1, 2, 3].map(i => (
                 <div key={i} className="flex gap-3">
@@ -3771,12 +3856,12 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
               {activeConvId
                 ? <MessageCircle className="w-10 h-10 text-muted-foreground mb-3" />
                 : <MessageSquare className="w-10 h-10 text-muted-foreground mb-3" />}
-              <p className="text-sm font-medium">Sin mensajes aún</p>
-              <p className="text-xs text-muted-foreground mt-1">Sé el primero en escribir algo.</p>
+              <p className="text-sm font-medium">{searchQuery ? 'Sin resultados' : 'Sin mensajes aún'}</p>
+              <p className="text-xs text-muted-foreground mt-1">{searchQuery ? 'Prueba con otras palabras' : 'Sé el primero en escribir algo.'}</p>
             </div>
           ) : (
             <>
-              {hasMoreOlder && (
+              {!searchQuery && hasMoreOlder && (
                 <div className="flex justify-center py-2">
                   <button
                     onClick={loadOlderMessages}
