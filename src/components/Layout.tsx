@@ -669,12 +669,11 @@ export default function Layout() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Request notification permission once (for chat alerts)
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
+  // El permiso de notificaciones ya NO se pide aquí automáticamente al cargar
+  // la app — Chrome/Firefox penalizan pedirlo sin gesto de usuario: si se
+  // ignora un par de veces, el navegador lo auto-bloquea para siempre, en
+  // silencio. Ahora se pide desde un botón real dentro de ChatPage.tsx
+  // (banner "Activar notificaciones"), como debe ser.
 
   // ── Listen for immediate badge updates dispatched by ChatPage ─────────────
   useEffect(() => {

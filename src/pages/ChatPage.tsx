@@ -1836,6 +1836,16 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   });
   const [secFavorites, setSecFavorites] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('chat-sound-enabled') !== 'false');
+  // Estado real del permiso de notificaciones del navegador — 'default' es
+  // "todavía no se le preguntó al usuario", el único caso en el que tiene
+  // sentido mostrarle el botón (pedirlo sin gesto real hace que el navegador
+  // lo auto-bloquee después de un par de veces, en silencio).
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(
+    () => (typeof Notification !== 'undefined' ? Notification.permission : null)
+  );
+  const [notifBannerDismissed, setNotifBannerDismissed] = useState(
+    () => localStorage.getItem('chat-notif-banner-dismissed') === 'true'
+  );
   const [taskMessage, setTaskMessage] = useState<Message | null>(null);
   const [projectDocs, setProjectDocs] = useState<ProjectDoc[]>([]);
   const [docPreview, setDocPreview] = useState<{ open: boolean; fileUrl: string; docName: string }>({ open: false, fileUrl: '', docName: '' });
@@ -3063,6 +3073,18 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
 
   const toggleSound = () => setSoundEnabled(v => { localStorage.setItem('chat-sound-enabled', String(!v)); return !v; });
 
+  // Se llama solo desde el onClick del banner — tiene que ser dentro de un
+  // gesto de usuario real para que el navegador muestre el diálogo nativo
+  // en vez de auto-negarlo.
+  const handleEnableNotifications = () => {
+    if (typeof Notification === 'undefined') return;
+    Notification.requestPermission().then(setNotifPermission);
+  };
+  const dismissNotifBanner = () => {
+    localStorage.setItem('chat-notif-banner-dismissed', 'true');
+    setNotifBannerDismissed(true);
+  };
+
   return (
     <div className="flex h-full">
       <CreateTaskFromMessageDialog
@@ -3669,6 +3691,22 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
 
         {/* Messages */}
         <div ref={messagesContainerRef} className="flex-1 overflow-y-auto py-4">
+          {/* Banner de notificaciones — solo si el navegador todavía no decidió
+              ('default'). Pedirlo aquí, en un onClick real, es la única forma
+              de que el navegador muestre el diálogo en vez de auto-negarlo. */}
+          {!isDrawer && notifPermission === 'default' && !notifBannerDismissed && (
+            <div className="sticky top-0 z-10 mx-3 mb-2 flex items-center gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs shadow-sm">
+              <Bell className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+              <span className="flex-1 text-foreground">Activa las notificaciones de escritorio para no perderte menciones cuando no estés viendo el chat.</span>
+              <button onClick={handleEnableNotifications}
+                className="flex-shrink-0 px-2.5 py-1 rounded-md bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">
+                Activar
+              </button>
+              <button onClick={dismissNotifBanner} title="Ahora no" className="flex-shrink-0 text-muted-foreground hover:text-foreground p-0.5">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           {/* Reconnecting banner — shows when incremental fetches are failing */}
           {messagesFetchError && !loading && (
             <div className="sticky top-0 z-10 mx-3 mb-2 flex items-center gap-2 rounded-lg border border-border bg-muted/90 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm shadow-sm">

@@ -147,6 +147,11 @@ export function showChatBrowserNotification(payload: ChatNotificationPayload, ac
     const notif = new Notification(title, {
       body,
       tag: `chat-${payload.channel}`,
+      // Sin esto, mensajes seguidos en el mismo canal comparten tag y el
+      // navegador solo "alerta" (sonido/aparición) la primera vez — las
+      // siguientes actualizan el contenido en silencio. Si la que se pierde
+      // así es justo la que te menciona, no te enteras.
+      renotify: true,
       silent: tabFocused, // true when focused (custom ding covers it), false when in background
     });
     notif.onclick = () => { window.focus(); notif.close(); };
