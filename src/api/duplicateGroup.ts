@@ -34,7 +34,16 @@ export default createEndpoint({
       filters: { columnId: groupColumnId, textValue: '1' },
       limit: 500,
     });
-    const rowIds = groupCells.map(c => c.rowId).filter(Boolean) as string[];
+    // Descarta rowIds que no son UUID reales — una celda de membresía puede
+    // quedar apuntando a un id temporal de cliente (`temp-<timestamp>`) si
+    // la fila se asignó a un grupo antes de que el create() del row
+    // resolviera (bug de UI ya corregido, pero la basura que ya quedó
+    // escrita en producción no se limpia sola). Sin este filtro, un solo
+    // rowId así tronaba TODO el loop con "invalid input syntax for type
+    // uuid" y ninguna fila se duplicaba, ni siquiera las anteriores en la
+    // lista — confirmado en vivo contra el grupo D2D de BIBLIOTECA.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const rowIds = groupCells.map(c => c.rowId).filter((id): id is string => !!id && UUID_RE.test(id));
 
     // 4. Duplicate each row and assign to new group
     let duplicatedRows = 0;

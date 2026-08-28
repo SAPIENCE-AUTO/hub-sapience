@@ -37,7 +37,7 @@ interface Props {
    *  "insertar antes de X" cuando ya estaba antes de X) y el usuario no
    *  tiene forma de saber por qué. */
   insertSide?: 'left' | 'right' | null;
-  onDuplicateGroup?: () => void;
+  onDuplicateGroup?: () => void | Promise<void>;
   onGroupStructureChanged?: () => void;
   linkedEventInfo?: { eventName?: string; eventDate?: string; durationHours?: number; location?: string };
   projectCode?: string;
@@ -63,6 +63,16 @@ export function GroupSectionHeader({
   const [renaming, setRenaming] = useState(false);
   const [editVal, setEditVal] = useState('');
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  // Sin esto, un click en "Duplicar grupo" que tarda unos segundos (varias
+  // llamadas secuenciales por cada fila del grupo) se siente como si no
+  // hubiera pasado nada — reabrir el menú y volver a dar click dispara una
+  // segunda duplicación en paralelo, creando el grupo y sus filas por
+  // partida doble (confirmado en vivo: dos columnas de grupo con el mismo
+  // columnOrder, señal de que ambas leyeron el grupo original al mismo
+  // tiempo). El estado vive en este componente, que no se desmonta al
+  // cerrarse el dropdown, así que sigue protegiendo aunque el usuario
+  // reabra el menú mientras la primera duplicación sigue en curso.
+  const [duplicating, setDuplicating] = useState(false);
   const color = isNone ? 'hsl(var(--muted-foreground))' : getGroupColor(colorId);
 
   // ── Public name (alias for external shared views) ──────────────────────────
@@ -365,8 +375,21 @@ export function GroupSectionHeader({
                 <Pencil className="w-3.5 h-3.5" /> Renombrar
               </DropdownMenuItem>
               {onDuplicateGroup && (
-                <DropdownMenuItem className="text-xs gap-2 cursor-pointer" onClick={onDuplicateGroup}>
-                  <Copy className="w-3.5 h-3.5" /> Duplicar grupo
+                <DropdownMenuItem
+                  className="text-xs gap-2 cursor-pointer"
+                  disabled={duplicating}
+                  onClick={async () => {
+                    if (duplicating) return;
+                    setDuplicating(true);
+                    try {
+                      await onDuplicateGroup();
+                    } finally {
+                      setDuplicating(false);
+                    }
+                  }}
+                >
+                  {duplicating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+                  Duplicar grupo
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem

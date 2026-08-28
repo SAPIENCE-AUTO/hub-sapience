@@ -638,8 +638,15 @@ export default function PMPage({ initialSection = 'timelines' }: { initialSectio
     const maxOrder = tasksInTargetGroup.length > 0 ? Math.max(...tasksInTargetGroup.map(t => t.order ?? 0)) : 0;
     const newOrder = maxOrder + 1000;
 
+    // No se asigna el grupo al tempId aquí — un setCellVal contra el tempId
+    // manda un saveCellValue real al servidor con ese rowId, y como el id
+    // temporal nunca es una fila real, esa celda de membresía queda huérfana
+    // para siempre (columnId válido, rowId basura) en vez de reemplazarse
+    // cuando llega el id real. Confirmado en vivo: rompía duplicateGroup.ts
+    // a medio loop con "invalid input syntax for type uuid" al toparse con
+    // esa celda. La tarea se ve un instante en "Sin grupo" hasta que
+    // saveTask resuelve y se asigna una sola vez, abajo, ya con res.id.
     setTasks(prev => [...prev, { id: tempId, taskName: name, projectCode: selectedProject ?? '', boardName: activeBoardName, boardId: activeBoardId, parentTaskId: parentId ?? '', status: 'Pendiente', order: newOrder } as Task]);
-    if (groupId) taskGroupDynCols.setCellVal(tempId, groupId, { textValue: '1' });
     try {
       const res = await saveTask({ taskName: name, projectCode: selectedProject ?? undefined, boardName: activeBoardName, boardId: activeBoardId || undefined, parentTaskId: parentId ?? '', order: newOrder });
       // Replace temp ID with real ID immediately so cell edits use the correct record
@@ -695,8 +702,10 @@ export default function PMPage({ initialSection = 'timelines' }: { initialSectio
 
   const quickCreateEvent = async (name: string, parentId?: string, groupId?: string) => {
     const tempId = 'temp-' + Date.now();
+    // Mismo motivo que en quickCreateTask: no asignar el grupo al tempId,
+    // solo al id real una vez que saveCalendarEvent resuelve — evita dejar
+    // una celda de membresía huérfana con un rowId que nunca fue una fila.
     setEvents(prev => [...prev, { id: tempId, eventName: name, projectCode: selectedProject ?? '', calendarName: activeCalBoardName, boardId: activeCalBoardId, parentEventId: parentId ?? '' } as CalEvent]);
-    if (groupId) calGroupDynCols.setCellVal(tempId, groupId, { textValue: '1' });
     try {
       const res = await saveCalendarEvent({ eventName: name, projectCode: selectedProject ?? undefined, calendarName: activeCalBoardName || undefined, boardId: activeCalBoardId || undefined, parentEventId: parentId ?? '' });
       // Replace temp ID with real ID immediately so cell edits (e.g. Datetime) use the correct CalendarEvents record
@@ -1302,12 +1311,13 @@ export default function PMPage({ initialSection = 'timelines' }: { initialSectio
                     onRefresh={debouncedSilentReload}
                     onBulkDelete={ids => setBulkDeletingIds(ids)}
                     onDuplicateGroup={async (groupId) => {
+                      const toastId = toast.loading('Duplicando grupo…');
                       try {
                         const res = await duplicateGroup({ groupColumnId: groupId, tableType: 'task' });
-                        toast.success(`Grupo duplicado con ${res.duplicatedRows} tarea${res.duplicatedRows !== 1 ? 's' : ''}`);
+                        toast.success(`Grupo duplicado con ${res.duplicatedRows} tarea${res.duplicatedRows !== 1 ? 's' : ''}`, { id: toastId });
                         debouncedSilentReload();
                         taskGroupDynCols.reload();
-                      } catch { toast.error('Error al duplicar grupo'); }
+                      } catch { toast.error('Error al duplicar grupo', { id: toastId }); }
                     }}
                     onGroupStructureChanged={() => {
                       if (selectedProject) publishRecruitmentGroupsChanged({ projectCode: selectedProject, boardId: taskGroupBoardId, changeType: 'structure' }).catch(() => {});

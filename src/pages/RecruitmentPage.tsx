@@ -2788,8 +2788,12 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
   const quickCreate = async (name: string, groupId?: string) => {
     if (!activeBoardId) { toast.error('No hay tablero activo'); return; }
     const tempId = 'temp-' + Date.now();
+    // No asignar el grupo al tempId — un setCellVal contra un rowId que
+    // nunca llega a ser una fila real deja una celda de membresía huérfana
+    // en el servidor para siempre (confirmado en vivo: rompía
+    // duplicateGroup.ts con "invalid input syntax for type uuid"). Se
+    // asigna una sola vez, abajo, ya con el id real de saveRecruitmentRow.
     setRows(prev => [...prev, { id: tempId, rowName: name, participantName: name, boardName: activeBoardName, boardId: activeBoardId, status: 'Pendiente', level: 0 } as Row]);
-    if (groupId) groupDynCols.setCellVal(tempId, groupId, { textValue: '1' });
     try {
       const res = await saveRecruitmentRow({ rowName: name, participantName: name, projectCode: selectedProject ?? undefined, boardId: activeBoardId, boardName: activeBoardName, status: 'Pendiente', level: 0 });
       if (res.id) setRows(prev => prev.map(r => r.id === tempId ? { ...r, id: res.id } : r));
@@ -3393,13 +3397,14 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
             setExpandedGroups={setExpandedGroups}
             activeGroupFilter={activeGroupFilter}
             onDuplicateGroup={async (groupId) => {
+              const toastId = toast.loading('Duplicando grupo…');
               try {
                 const res = await duplicateGroup({ groupColumnId: groupId, tableType: 'recruitment' });
-                toast.success(`Grupo duplicado con ${res.duplicatedRows} fila${res.duplicatedRows !== 1 ? 's' : ''}`);
+                toast.success(`Grupo duplicado con ${res.duplicatedRows} fila${res.duplicatedRows !== 1 ? 's' : ''}`, { id: toastId });
                 silentReload();
                 groupDynCols.reload();
                 setTimeout(publishGroupChange, 300);
-              } catch { toast.error('Error al duplicar grupo'); }
+              } catch { toast.error('Error al duplicar grupo', { id: toastId }); }
             }}
             onGroupStructureChanged={publishGroupChange}
           />
