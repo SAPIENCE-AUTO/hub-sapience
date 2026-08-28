@@ -123,8 +123,27 @@ export default createEndpoint({
     }
 
     // ── Guard: delete ALL existing __fillout_link__ sentinels for this board ──
-    // Prevents duplicate sentinels from accumulating.
+    // Prevents duplicate sentinels from accumulating. Antes de borrarlos, se
+    // rescata su questionMapping — perderlo aquí es lo que rompía todo: cada
+    // re-vinculación (el mismo botón "Vincular form", sin importar si ya
+    // estaba vinculado) reconstruía el mapeo desde cero solo por coincidencia
+    // de nombre, tirando la asociación estable por filloutId acumulada desde
+    // el primer link. Si el nombre visible de una columna no calzaba exacto
+    // con la pregunta actual de Fillout (typo corregido, texto reformulado),
+    // esa pregunta perdía su columna — se creaba una nueva y la vieja se
+    // quedaba huérfana, viéndose como si el formulario "se hubiera
+    // desvinculado solo".
     const oldLinks = existingCols.filter(c => c.columnType === '__fillout_link__');
+    let oldMapping: { filloutId: string; columnId: string; questionName: string }[] = [];
+    for (const oldLink of oldLinks) {
+      try {
+        const oldMeta = JSON.parse(oldLink.optionsJson ?? '{}');
+        const m = (oldMeta.questionMapping ?? []) as typeof oldMapping;
+        if (m.length > oldMapping.length) oldMapping = m; // se queda con el más completo si hay varios sentinels
+      } catch { /* ignore */ }
+    }
+    const mappedColIdByFilloutId = new Map(oldMapping.map(m => [m.filloutId, m.columnId]));
+
     for (const oldLink of oldLinks) {
       try {
         await BoardColumns.update({
@@ -136,6 +155,7 @@ export default createEndpoint({
 
     const visibleCols = existingCols.filter(c => c.columnType !== '__fillout_link__');
     const visibleColCount = visibleCols.length;
+    const visibleColIds = new Set(visibleCols.map(c => c.id));
 
     const colByNorm = new Map<string, string>();
     for (const col of visibleCols) {
@@ -160,6 +180,17 @@ export default createEndpoint({
       if (!name) continue;
       const normName = normalize(name);
       const coreKey = matchCore(name);
+
+      // Prioridad 1: ya estaba mapeada por este mismo filloutId en el link
+      // anterior — es la señal estable, se reusa tal cual sin tocar el
+      // nombre (evita el reset descrito arriba). Solo si esa columna ya no
+      // existe (se borró) se cae al emparejamiento por nombre de siempre.
+      const previousColId = mappedColIdByFilloutId.get(q.id);
+      if (previousColId && visibleColIds.has(previousColId) && !claimedColIds.has(previousColId)) {
+        claimedColIds.add(previousColId);
+        resolution.set(q.id, { colId: previousColId });
+        continue;
+      }
 
       let candidateColId: string | undefined;
       if (coreKey) {
