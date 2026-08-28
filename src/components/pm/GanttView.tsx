@@ -101,7 +101,7 @@ export function GanttView({ tasks, dynCols, childDynCols, groupDynCols, boardId 
   const hasScrolledRef = useRef(false);
   const scrollRef      = useRef<HTMLDivElement>(null);
   const dragRef        = useRef<{
-    taskId: string; edge: 'left' | 'right'; origStart: string; origEnd: string;
+    taskId: string; edge: 'left' | 'right' | 'move'; origStart: string; origEnd: string;
     startX: number; curStart: string; curEnd: string;
   } | null>(null);
   const ppdRef        = useRef(4);
@@ -121,14 +121,24 @@ export function GanttView({ tasks, dynCols, childDynCols, groupDynCols, boardId 
       if (drag.edge === 'left') {
         const d = new Date(drag.origStart + 'T00:00:00'); d.setDate(d.getDate() + deltaDays);
         if (d < new Date(drag.origEnd + 'T00:00:00')) newStart = d.toISOString().split('T')[0];
-      } else {
+      } else if (drag.edge === 'right') {
         const d = new Date(drag.origEnd + 'T00:00:00'); d.setDate(d.getDate() + deltaDays);
         if (d > new Date(drag.origStart + 'T00:00:00')) newEnd = d.toISOString().split('T')[0];
+      } else {
+        // 'move': ambas fechas se desplazan juntas — no hay clamp de cruce
+        // porque la duración entre ellas no cambia, solo su posición.
+        const ds = new Date(drag.origStart + 'T00:00:00'); ds.setDate(ds.getDate() + deltaDays);
+        const de = new Date(drag.origEnd   + 'T00:00:00'); de.setDate(de.getDate() + deltaDays);
+        newStart = ds.toISOString().split('T')[0];
+        newEnd   = de.toISOString().split('T')[0];
       }
       drag.curStart = newStart; drag.curEnd = newEnd;
       const bLeft  = Math.max(0, (new Date(newStart + 'T00:00:00').getTime() - padMinRef.current.getTime()) / 86400000 * ppdRef.current);
       const bWidth = Math.max(((new Date(newEnd + 'T00:00:00').getTime() - new Date(newStart + 'T00:00:00').getTime()) / 86400000 + 1) * ppdRef.current, 4);
-      setDragPreview({ taskId: drag.taskId, bLeft, bWidth, label: drag.edge === 'left' ? fmtDate(new Date(newStart + 'T00:00:00')) : fmtDate(new Date(newEnd + 'T00:00:00')), mouseX: e.clientX, mouseY: e.clientY });
+      const label = drag.edge === 'left' ? fmtDate(new Date(newStart + 'T00:00:00'))
+        : drag.edge === 'right' ? fmtDate(new Date(newEnd + 'T00:00:00'))
+        : `${fmtDate(new Date(newStart + 'T00:00:00'))} – ${fmtDate(new Date(newEnd + 'T00:00:00'))}`;
+      setDragPreview({ taskId: drag.taskId, bLeft, bWidth, label, mouseX: e.clientX, mouseY: e.clientY });
     };
     const handleMouseUp = () => {
       const drag = dragRef.current;
@@ -308,12 +318,12 @@ export function GanttView({ tasks, dynCols, childDynCols, groupDynCols, boardId 
     }
   };
 
-  const startResize = (e: React.MouseEvent, task: Task, edge: 'left' | 'right') => {
+  const startResize = (e: React.MouseEvent, task: Task, edge: 'left' | 'right' | 'move') => {
     e.preventDefault(); e.stopPropagation();
     const s = tStart(task), en = tEnd(task);
     if (!s || !en) return;
     dragRef.current = { taskId: task.id, edge, origStart: s, origEnd: en, startX: e.clientX, curStart: s, curEnd: en };
-    document.body.style.cursor = 'col-resize';
+    document.body.style.cursor = edge === 'move' ? 'grabbing' : 'col-resize';
   };
 
   const toggleGroup = (id: string) => setCollapsedGroups(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -407,8 +417,9 @@ export function GanttView({ tasks, dynCols, childDynCols, groupDynCols, boardId 
         <WeekendShading />
         <GridLinesComp />
         {s && e && (
-          <div className={`absolute ${isChild ? 'top-1 h-5 rounded shadow-sm' : 'top-1.5 h-6 rounded-md shadow-sm'}`}
-            style={{ left: finalLeft, width: finalWidth, backgroundColor: barColor, border: `${isChild ? 1 : 1.5}px solid ${barColor}`, userSelect: 'none' }}>
+          <div className={`absolute cursor-grab active:cursor-grabbing ${isChild ? 'top-1 h-5 rounded shadow-sm' : 'top-1.5 h-6 rounded-md shadow-sm'}`}
+            style={{ left: finalLeft, width: finalWidth, backgroundColor: barColor, border: `${isChild ? 1 : 1.5}px solid ${barColor}`, userSelect: 'none' }}
+            onMouseDown={ev => startResize(ev, task, 'move')}>
             {/* Left resize */}
             <div className="absolute left-0 top-0 bottom-0 w-3 z-20 cursor-col-resize flex items-center justify-center rounded-l-sm hover:bg-white/20 transition-colors"
               onMouseDown={ev => startResize(ev, task, 'left')}>
