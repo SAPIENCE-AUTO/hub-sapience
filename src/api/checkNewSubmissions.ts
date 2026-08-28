@@ -142,7 +142,7 @@ export default createEndpoint({
   streaming: true,
   description: 'Lightweight delta-sync: fetches only new Fillout submissions since the last sync cursor. Fast path returns immediately if nothing new.',
   inputSchema: z.object({ boardId: z.string() }),
-  outputSchema: z.object({ newCount: z.number(), total: z.number() }),
+  outputSchema: z.object({ newCount: z.number(), total: z.number(), backfilled: z.number().optional() }),
   execute: async ({ input, stream }) => {
     const apiKey = process.env.ZITE_FILLOUT_API_KEY ?? '';
     if (!apiKey) throw new Error('Fillout API key not configured');
@@ -352,40 +352,49 @@ export default createEndpoint({
       return { newCount: 0, total: 0 };
     }
 
-    // ── 4. Build set of already-imported submissionIds ────────────────────
+    // ── 4. Build lookup for dedup + backfill ───────────────────────────────
+    // Antes: si el submissionId ya existía se saltaba (bien), pero si el
+    // submissionId era nuevo — alguien vuelve a contestar el mismo form —
+    // los checks de email/nombre se saltaban por completo (estaban
+    // condicionados a "if (!submissionId)"), así que se le creaba una fila
+    // DUPLICADA en vez de completarle las columnas nuevas a la que ya tenía.
+    // Mismo síntoma que en syncFilloutResponses.ts (una pregunta agregada al
+    // form después nunca se le llenaba a quien ya tenía fila) más un problema
+    // extra propio de este endpoint: filas duplicadas por reenvío.
     const { records: existingRows } = await RecruitmentRows.findAll({
       filters: { boardName, projectCode },
       limit: 2000,
-      fields: ['email', 'participantName', 'sourceForm'],
+      fields: ['id', 'email', 'participantName', 'sourceForm', 'cellData'],
     });
 
-    const importedSubmissionIds = new Set<string>();
-    const existingEmails = new Set<string>();
-    const existingNames  = new Set<string>();
+    type RowRef = { id: string; cellData: Record<string, unknown> };
+    const parseCellData = (raw?: string): Record<string, unknown> => {
+      try { return JSON.parse(raw ?? '{}'); } catch { return {}; }
+    };
 
+    const emailToRow = new Map<string, RowRef>();
+    const nameToRow = new Map<string, RowRef>();
+    const submissionIdToRow = new Map<string, RowRef>();
     for (const r of existingRows) {
-      if (r.sourceForm && r.sourceForm.includes('|')) {
+      const ref: RowRef = { id: r.id, cellData: parseCellData(r.cellData) };
+      const emailLower = r.email?.toLowerCase();
+      const nameNorm = normalize(r.participantName ?? '');
+      if (emailLower) emailToRow.set(emailLower, ref);
+      if (nameNorm) nameToRow.set(nameNorm, ref);
+      if (r.sourceForm?.includes('|')) {
         const parts = r.sourceForm.split('|');
-        if (parts.length >= 2) importedSubmissionIds.add(parts[parts.length - 1]);
+        const sid = parts[parts.length - 1];
+        if (sid) submissionIdToRow.set(sid, ref);
       }
-      if (r.email) existingEmails.add(r.email.toLowerCase());
-      if (r.participantName) existingNames.add(normalize(r.participantName));
     }
 
-    // ── 5. Filter truly new submissions ───────────────────────────────────
-    const newSubmissions = submissions.filter(s => {
-      const sid = s.submissionId ?? s.id;
-      return sid ? !importedSubmissionIds.has(String(sid)) : true;
-    });
+    // Nota: ya no hay un pre-filtro de "submissions nuevas" aquí — el chequeo
+    // de si esta submission ya se procesó se resuelve dentro del batch loop
+    // (7a), donde ya se tienen coreFields/matchedRow para decidir si hay que
+    // completar celdas en vez de simplemente ignorarla.
+    const newSubmissions = submissions;
 
-    if (newSubmissions.length === 0) {
-      const latestTime = submissions[submissions.length - 1]?.submissionTime ?? submissions[submissions.length - 1]?.createdAt;
-      const updatedMeta = { ...meta, lastSyncedAt: latestTime ?? new Date().toISOString() };
-      await BoardColumns.update({ id: linkCol.id, record: { optionsJson: JSON.stringify(updatedMeta) } });
-      return { newCount: 0, total: submissions.length };
-    }
-
-    // ── 6. Fetch project dates for duplicate detection ────────────────────
+    // ── 5. Fetch project dates for duplicate detection ────────────────────
     const { records: allProjects } = await Projects.findAll({
       limit: 500,
       fields: ['projectCode', 'startDate', 'endDate', 'client'],
@@ -395,7 +404,7 @@ export default createEndpoint({
       if (p.projectCode) projectDatesMap.set(p.projectCode, { startDate: p.startDate, endDate: p.endDate });
     }
 
-    // ── 7. Import new submissions, por lotes ────────────────────────────────
+    // ── 6. Import new submissions, por lotes ────────────────────────────────
     // BATCH_SIZE = 20: cada respuesta ya no paga ~10 round-trips propios a
     // Postgres (fila, participante, celdas, cellData, detección de
     // duplicados, cada uno por separado) — se procesan 20 juntas por vez.
@@ -404,6 +413,7 @@ export default createEndpoint({
     // límite de 65,535 parámetros por sentencia de Postgres.
     const BATCH_SIZE = 20;
     let newCount = 0;
+    let backfilled = 0;
     const totalCandidates = newSubmissions.length;
     stream?.write({ imported: 0, total: totalCandidates });
 
@@ -413,13 +423,14 @@ export default createEndpoint({
       submissionId: string;
       sourceFormValue: string;
       autoRowOrder: number;
+      matchedRow?: RowRef;
     };
 
     for (let bi = 0; bi < newSubmissions.length; bi += BATCH_SIZE) {
       const batch = newSubmissions.slice(bi, bi + BATCH_SIZE);
 
       try {
-        // ── 7a. Preparar en memoria + dedup secuencial (sin tocar la DB) ──
+        // ── 7a. Preparar en memoria + resolver contra filas ya existentes ──
         const prepared: Prepared[] = [];
         for (const submission of batch) {
           const questions: any[] = submission.questions ?? submission.answers ?? [];
@@ -439,25 +450,34 @@ export default createEndpoint({
 
           const emailLower = coreFields.email?.toLowerCase() ?? '';
           const normName   = normalize(coreFields.participantName ?? '');
-          if (!submissionId) {
-            if (emailLower && existingEmails.has(emailLower)) continue;
-            if (!emailLower && normName && existingNames.has(normName)) continue;
-          }
-          if (emailLower) existingEmails.add(emailLower);
-          if (normName)   existingNames.add(normName);
-          if (submissionId) importedSubmissionIds.add(submissionId);
+
+          // Ya procesada exactamente esta submission (mismo id) → nada que hacer.
+          if (submissionId && submissionIdToRow.has(submissionId)) continue;
+
+          const matchedRow =
+            (emailLower ? emailToRow.get(emailLower) : undefined) ??
+            (!emailLower && normName ? nameToRow.get(normName) : undefined);
 
           const sourceFormValue = submissionId ? `${formName}|${submissionId}` : formName;
           const submissionTime = submission.submissionTime ?? submission.createdAt ?? submission.lastUpdatedAt;
           const autoRowOrder = submissionTime ? Math.floor(new Date(submissionTime).getTime() / 1000) : Math.floor(Date.now() / 1000);
 
-          prepared.push({ coreFields, cellsToWrite, submissionId, sourceFormValue, autoRowOrder });
+          prepared.push({ coreFields, cellsToWrite, submissionId, sourceFormValue, autoRowOrder, matchedRow });
+
+          // Registro en memoria para que el resto de ESTE lote (y de lotes
+          // siguientes) reconozca a esta persona aunque su fila real se cree
+          // más abajo, todavía no tenga id.
+          if (submissionId) submissionIdToRow.set(submissionId, matchedRow ?? { id: '', cellData: {} });
+          if (!matchedRow) {
+            if (emailLower) emailToRow.set(emailLower, { id: '', cellData: {} });
+            if (normName)   nameToRow.set(normName, { id: '', cellData: {} });
+          }
         }
 
-        // ── 7b. Reconfirmar "ya existe" para TODO el lote de un jalón ──────
+        // ── 7b. Reconfirmar contra la BD para todo el lote de un jalón ─────
         // (guarda contra una carrera con otro proceso — antes era un
         // findAll por submission, ahora uno solo por lote con `in`).
-        const withSubmissionId = prepared.filter(p => p.submissionId);
+        const withSubmissionId = prepared.filter(p => p.submissionId && !p.matchedRow);
         let existingSourceForms = new Set<string>();
         if (withSubmissionId.length > 0) {
           const { records: existingCheck } = await RecruitmentRows.findAll({
@@ -467,7 +487,32 @@ export default createEndpoint({
           });
           existingSourceForms = new Set(existingCheck.map(r => r.sourceForm));
         }
-        const toImport = prepared.filter(p => !p.submissionId || !existingSourceForms.has(p.sourceFormValue));
+        // Una carrera real (otro proceso ya la creó justo ahora) no trae el id
+        // de la fila — no hay a qué backfillear con seguridad, se omite.
+        const toImport = prepared.filter(p => !p.matchedRow && (!p.submissionId || !existingSourceForms.has(p.sourceFormValue)));
+        const toBackfill = prepared.filter(p => p.matchedRow && p.matchedRow.id);
+
+        if (toBackfill.length > 0) {
+          const cellRecords: Record<string, unknown>[] = [];
+          const cellDataUpdates: { id: string; cellData: string }[] = [];
+          for (const p of toBackfill) {
+            const row = p.matchedRow!;
+            const missing = p.cellsToWrite.filter(c => !(c.columnId in row.cellData));
+            if (missing.length === 0) continue;
+            for (const c of missing) {
+              const colType = colIdToType.get(c.columnId) ?? 'Texto';
+              const typed = toTypedValue(c.value, colType);
+              cellRecords.push({ boardId: resolvedBoardId, rowId: row.id, columnId: c.columnId, ...typed });
+              row.cellData[c.columnId] = typed;
+            }
+            cellDataUpdates.push({ id: row.id, cellData: JSON.stringify(row.cellData) });
+            backfilled += missing.length;
+          }
+          for (let ci = 0; ci < cellRecords.length; ci += 300) {
+            await CellValues.bulkCreate({ records: cellRecords.slice(ci, ci + 300) });
+          }
+          if (cellDataUpdates.length > 0) await RecruitmentRows.bulkUpdate(cellDataUpdates);
+        }
 
         if (toImport.length > 0) {
           // ── 7c. Resolver participantes juntos ──────────────────────────
@@ -502,7 +547,7 @@ export default createEndpoint({
           for (let i = 0; i < toImport.length; i++) {
             const p = toImport[i];
             const row = createdRows[i] as any;
-            if (!row || p.cellsToWrite.length === 0) continue;
+            if (!row) continue;
             const cellData: Record<string, unknown> = {};
             for (const c of p.cellsToWrite) {
               const colType = colIdToType.get(c.columnId) ?? 'Texto';
@@ -510,7 +555,18 @@ export default createEndpoint({
               cellRecords.push({ boardId: resolvedBoardId, rowId: row.id, columnId: c.columnId, ...typed });
               cellData[c.columnId] = typed;
             }
-            cellDataUpdates.push({ id: row.id, cellData: JSON.stringify(cellData) });
+            if (Object.keys(cellData).length > 0) cellDataUpdates.push({ id: row.id, cellData: JSON.stringify(cellData) });
+
+            // Reemplaza el placeholder de 7a por la fila real — para que un
+            // lote POSTERIOR de esta misma corrida (la misma persona vuelve a
+            // aparecer más adelante en submissions) la reconozca y complete
+            // celdas en vez de intentar crearla otra vez.
+            const ref: RowRef = { id: row.id, cellData };
+            const emailLower = p.coreFields.email?.toLowerCase();
+            const normName = normalize(p.coreFields.participantName ?? '');
+            if (p.submissionId) submissionIdToRow.set(p.submissionId, ref);
+            if (emailLower) emailToRow.set(emailLower, ref);
+            if (normName)   nameToRow.set(normName, ref);
           }
           for (let ci = 0; ci < cellRecords.length; ci += 300) {
             await CellValues.bulkCreate({ records: cellRecords.slice(ci, ci + 300) });
@@ -581,6 +637,6 @@ export default createEndpoint({
       record: { optionsJson: JSON.stringify({ ...latestMeta, lastSyncedAt: newCursor }) },
     });
 
-    return { newCount, total: submissions.length };
+    return { newCount, total: submissions.length, backfilled };
   },
 });

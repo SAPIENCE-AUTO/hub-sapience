@@ -2010,7 +2010,9 @@ function FilloutLinkDialog({ open, onOpenChange, boardId, projectCode, boardName
       setImportedCount(finalRes.newCount);
       setImportPhase('done');
       busyRef.current = false;
-      onImportDone(finalRes.newCount);
+      // Suma backfilled: celdas completadas en filas que ya existían también
+      // deben disparar el reload de la grid, aunque newCount se quede en 0.
+      onImportDone(finalRes.newCount + (finalRes.backfilled ?? 0));
     } catch (err) {
       console.error('[RecruitmentPage] Error al vincular formulario de Fillout:', err);
       toast.error('Error al vincular el formulario');
