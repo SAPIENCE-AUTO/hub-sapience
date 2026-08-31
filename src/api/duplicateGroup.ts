@@ -50,7 +50,7 @@ export default createEndpoint({
     for (const rowId of rowIds) {
       if (tableType === 'recruitment') {
         const orig = await RecruitmentRows.findOne({ id: rowId });
-        if (!orig) continue;
+        if (!orig || orig.deletedAt) continue;
         const { id: _id, ...rest } = orig;
         const newRow = await RecruitmentRows.create({
           record: {
