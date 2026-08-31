@@ -245,7 +245,7 @@ export default createEndpoint({
     const endLocal = toLocalCdmx(endIso);
 
     // Restringir reenvío: usar singleValueExtendedProperties con DoNotForward del PS_PUBLIC_STRINGS namespace
-    const isRestrictedForwarding = !!event.permitirReenvio;
+    const isRestrictedForwarding = !!event.restringirReenvio;
     const graphBase = GRAPH_BASE;
 
     console.log(`[syncOutlookInvite] eventId=${input.eventId} action=${input.action} restrictedForwarding=${isRestrictedForwarding} endpoint=v1.0 ${isRestrictedForwarding ? "property='DoNotForward', propertySet='00020329-0000-0000-C000-000000000046'" : 'invite normal (sin restricción de reenvío)'}`);

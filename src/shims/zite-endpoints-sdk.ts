@@ -360,6 +360,7 @@ export const syncCalendarCellValues = (input?: any): Promise<any> => call('syncC
 export const syncExternalView = (input?: any): Promise<any> => call('syncExternalView', input);
 export const syncFilloutResponses = (input?: any): Promise<any> => call('syncFilloutResponses', input);
 export const syncOutlookInvite = (input?: any): Promise<any> => call('syncOutlookInvite', input);
+export const syncZoomMeeting = (input?: any): Promise<any> => call('syncZoomMeeting', input);
 export const togglePinMessage = (input?: any): Promise<any> => call('togglePinMessage', input);
 export const toggleReaction = (input?: any): Promise<any> => call('toggleReaction', input);
 export const unlinkExternalView = (input?: any): Promise<any> => call('unlinkExternalView', input);

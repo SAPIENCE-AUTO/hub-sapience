@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CalendarEvents, BoardColumns, CellValues, CalendarAuditLog } from '../../server/compat';
+import { createEndpoint, CalendarEvents, BoardColumns, CellValues, CalendarAuditLog, pool } from '../../server/compat';
 import { publishEvent } from '../lib/ably';
 import { resolveWriteBoardId, smartWriteCellValue } from '../serverUtils/smartWrite';
 import { lookupBoardUUID } from '../serverUtils/resolveBoardId';
@@ -83,13 +83,74 @@ export default createEndpoint({
 
       const userInputFields = { ...fields };
 
-      if (ev?.outlookEventId && ev?.inviteStatus !== 'Cancelado' && ev?.inviteStatus !== 'Por actualizar' && (fields as any).inviteStatus === undefined) {
+      // ── ¿De verdad cambió algo que le importa al invite (o al meeting de Zoom)? ──
+      // Antes, "Por actualizar" se prendía con solo llamar a este endpoint,
+      // sin importar qué campo se tocó — confirmado en vivo: el botón
+      // "Guardar" de EventDetailDialog.tsx reenvía el formulario COMPLETO
+      // en cada guardado (fecha, invitados, notas, Dinámica, Perfil...),
+      // con los mismos valores de siempre si el usuario no tocó nada. Por
+      // eso vincular un grupo de reclutamiento (que abre y cierra ese mismo
+      // diálogo) marcaba "Por actualizar" sin haber cambiado una sola letra
+      // del invite. Ahora se compara valor viejo (`ev`) contra valor nuevo
+      // — el flag solo prende si un campo que de verdad aparece en el
+      // cuerpo del correo (ver syncOutlookInvite.ts) cambió de verdad.
+      const NATIVE_INVITE_KEYS = ['eventName', 'eventDate', 'durationHours', 'inviteEmails'] as const;
+      let inviteContentChanged = NATIVE_INVITE_KEYS.some(
+        k => (fields as any)[k] !== undefined && (fields as any)[k] !== (ev as any)?.[k]
+      );
+      if (!inviteContentChanged && restringirReenvio !== undefined && restringirReenvio !== (ev as any)?.restringirReenvio) {
+        inviteContentChanged = true;
+      }
+      // Fecha/hora/nombre son también lo único que le importa al meeting de
+      // Zoom (ver server/zoom/client.ts) — se separa del resto para poder
+      // marcar el meeting como desactualizado sin heredar campos exclusivos
+      // de Outlook (inviteEmails, restringirReenvio) que a Zoom no le tocan.
+      const SCHEDULE_KEYS = ['eventName', 'eventDate', 'durationHours'] as const;
+      const scheduleChanged = SCHEDULE_KEYS.some(
+        k => (fields as any)[k] !== undefined && (fields as any)[k] !== (ev as any)?.[k]
+      );
+
+      if (!inviteContentChanged) {
+        // Campos dinámicos que sí alimentan el cuerpo del invite (Dinámica,
+        // Perfil, Descripción, Detalles, Dirección, Link — ver `sections`
+        // en syncOutlookInvite.ts). A diferencia de los nativos, aquí no
+        // hay "valor viejo" a la mano — hay que leerlo de Cell Values antes
+        // de que el resto de esta función lo sobreescriba más abajo.
+        const dynFieldsTouched = DYN_ONLY_FIELDS.filter(f => (input as any)[f.inputKey] !== undefined);
+        if (dynFieldsTouched.length > 0) {
+          const compareBoardId = effectiveBoardId || (projectCode && calendarName ? `cal-${projectCode}-${calendarName}` : undefined);
+          if (compareBoardId) {
+            const { records: compareCols } = await BoardColumns.findAll({ filters: { boardId: compareBoardId }, limit: 100 });
+            for (const { inputKey, colName, excludeType } of dynFieldsTouched) {
+              const newVal = String((input as any)[inputKey] ?? '');
+              const col = compareCols.find(c => c.columnName === colName && (!excludeType || c.columnType !== excludeType));
+              const oldVal = col
+                ? (await CellValues.findOne({ filters: { boardId: compareBoardId, rowId: id, columnId: col.id } }))?.textValue ?? ''
+                : '';
+              if (newVal !== oldVal) { inviteContentChanged = true; break; }
+            }
+          }
+        }
+      }
+
+      if (ev?.outlookEventId && ev?.inviteStatus !== 'Cancelado' && ev?.inviteStatus !== 'Por actualizar' && (fields as any).inviteStatus === undefined && inviteContentChanged) {
         (fields as any).inviteStatus = 'Por actualizar';
         inviteStatusChanged = true;
       }
 
-      await CalendarEvents.update({ id, record: { ...fields, ...(restringirReenvio !== undefined ? { permitirReenvio: restringirReenvio } : {}) } });
+      await CalendarEvents.update({ id, record: { ...fields, ...(restringirReenvio !== undefined ? { restringirReenvio } : {}) } });
       eventId = id;
+
+      // ── Marca el meeting de Zoom (si existe) como desactualizado ───────────
+      // Fire-and-forget: nunca debe tumbar el guardado del evento en sí. El
+      // filtro `zoom_meeting_id is not null` hace que sea un no-op cuando
+      // el evento no tiene sesión de observación con Zoom armado.
+      if (scheduleChanged) {
+        pool.query(
+          `update observation_sessions set zoom_needs_update = true where calendar_event_id = $1 and zoom_meeting_id is not null`,
+          [id],
+        ).catch(err => console.error('[saveCalendarEvent] marcar zoom_needs_update falló:', err));
+      }
 
       // Ably publish — UUID-first for boardId
       try {
@@ -129,7 +190,7 @@ export default createEndpoint({
       }
       // Strip boardId from fields to avoid passing it twice (it's set explicitly below)
       const { boardId: _stripBoardId, ...createFields } = fields;
-      const record = await CalendarEvents.create({ record: { ...createFields, boardId: boardIdUUID, ...(restringirReenvio !== undefined ? { permitirReenvio: restringirReenvio } : {}) } });
+      const record = await CalendarEvents.create({ record: { ...createFields, boardId: boardIdUUID, ...(restringirReenvio !== undefined ? { restringirReenvio } : {}) } });
       eventId = record.id;
       projectCode = fields.projectCode;
       calendarName = fields.calendarName;

@@ -128,6 +128,33 @@ export async function createZoomMeeting(params: {
   return data;
 }
 
+/**
+ * Reagenda un meeting ya creado a una nueva fecha/hora/tema — sin esto, si
+ * el evento de calendario cambia de fecha después de "Crear stream", el
+ * meeting de Zoom se queda pegado en el horario original para siempre (no
+ * había ningún código que lo tocara de nuevo). No requiere hostEmail: a
+ * diferencia de crear (`/users/{email}/meetings`), reagendar es directo por
+ * ID (`/meetings/{id}`), igual que `setZoomLiveStream`.
+ */
+export async function updateZoomMeeting(meetingId: number, params: {
+  topic?: string; startTimeIso: string; durationMinutes: number;
+}): Promise<void> {
+  const res = await zoomFetch(`/meetings/${meetingId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      ...(params.topic ? { topic: params.topic } : {}),
+      type: 2,
+      start_time: params.startTimeIso,
+      timezone: 'UTC', // mismo motivo que en createZoomMeeting — startTimeIso ya viene en UTC
+      duration: params.durationMinutes,
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new ZoomAuthError(`Zoom respondió ${res.status} actualizando el meeting: ${detail.slice(0, 300)}`);
+  }
+}
+
 /** Apunta el meeting al live stream de Mux — así el host solo le da "Live" adentro de Zoom. */
 export async function setZoomLiveStream(meetingId: number, params: { streamUrl: string; streamKey: string; pageUrl?: string }): Promise<void> {
   const res = await zoomFetch(`/meetings/${meetingId}/livestream`, {

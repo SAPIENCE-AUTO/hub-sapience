@@ -9,7 +9,7 @@ const dedup = <T extends { id: string }>(a: T[], b: T[]): T[] => {
 };
 
 const TASK_FIELDS = ['taskName', 'projectCode', 'boardName', 'status', 'assignedTo', 'startDate', 'endDate', 'parentTaskId', 'order', 'notes', 'boardId'] as const;
-const EVENT_FIELDS = ['eventName', 'projectCode', 'calendarName', 'eventDate', 'durationHours', 'location', 'attendees', 'inviteSent', 'notes', 'parentEventId', 'inviteStatus', 'outlookEventId', 'outlookEventLink', 'inviteBodyHtml', 'inviteEmails', 'boardId', 'permitirReenvio'] as const;
+const EVENT_FIELDS = ['eventName', 'projectCode', 'calendarName', 'eventDate', 'durationHours', 'location', 'attendees', 'inviteSent', 'notes', 'parentEventId', 'inviteStatus', 'outlookEventId', 'outlookEventLink', 'inviteBodyHtml', 'inviteEmails', 'boardId', 'restringirReenvio'] as const;
 
 const taskSchema = z.object({
   id: z.string(),
@@ -140,7 +140,7 @@ export default createEndpoint({
           outlookEventLink: ev.outlookEventLink,
           inviteBodyHtml: ev.inviteBodyHtml,
           inviteEmails: ev.inviteEmails,
-          restringirReenvio: ev.permitirReenvio ?? false,
+          restringirReenvio: ev.restringirReenvio ?? false,
         })),
         boards: [],
         calendarBoards: [],
@@ -229,7 +229,7 @@ export default createEndpoint({
         outlookEventLink: ev.outlookEventLink,
         inviteBodyHtml: ev.inviteBodyHtml,
         inviteEmails: ev.inviteEmails,
-        restringirReenvio: ev.permitirReenvio ?? false,
+        restringirReenvio: ev.restringirReenvio ?? false,
       })),
       boards,
       calendarBoards,

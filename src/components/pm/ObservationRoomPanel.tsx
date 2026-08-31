@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Loader2, Radio, Copy, Eye, EyeOff, ExternalLink, Trash2, Download, Circle } from 'lucide-react';
+import { Loader2, Radio, Copy, Eye, EyeOff, ExternalLink, Trash2, Download, Circle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  createObservationStream, getObservationSessionDetail, getAblyToken,
+  createObservationStream, getObservationSessionDetail, getAblyToken, syncZoomMeeting,
   postProducerChatMessage, deleteObservationChatMessage, exportObservationAttendance,
 } from 'zite-endpoints-sdk';
 import { useObservationChat, type ObservationChatMessage } from '@/hooks/useObservationChat';
@@ -20,6 +20,7 @@ interface ObservationSession {
   observationUrl: string;
   zoomJoinUrl?: string;
   zoomStartUrl?: string;
+  zoomNeedsUpdate?: boolean;
 }
 
 interface ConnectedObserver {
@@ -64,6 +65,7 @@ export function ObservationRoomPanel({ calendarEventId }: { calendarEventId: str
   const [showKey, setShowKey] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [syncingZoom, setSyncingZoom] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -120,6 +122,18 @@ export function ObservationRoomPanel({ calendarEventId }: { calendarEventId: str
       toast.error('Error al crear el stream');
     }
     setCreating(false);
+  };
+
+  const handleSyncZoom = async () => {
+    setSyncingZoom(true);
+    try {
+      await syncZoomMeeting({ calendarEventId });
+      await load();
+      toast.success('Horario de Zoom actualizado ✓');
+    } catch {
+      toast.error('No se pudo actualizar el horario de Zoom');
+    }
+    setSyncingZoom(false);
   };
 
   const handleSend = async () => {
@@ -218,16 +232,33 @@ export function ObservationRoomPanel({ calendarEventId }: { calendarEventId: str
               </a>
             </div>
             {session.zoomJoinUrl ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground w-24 flex-shrink-0">Zoom</span>
-                <code className="flex-1 truncate bg-muted px-1.5 py-0.5 rounded text-[11px]">{session.zoomJoinUrl}</code>
-                <button onClick={() => copy(session.zoomJoinUrl!, 'Link de Zoom')} className="text-muted-foreground hover:text-foreground flex-shrink-0">
-                  <Copy className="w-3 h-3" />
-                </button>
-                <a href={session.zoomJoinUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex-shrink-0">
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground w-24 flex-shrink-0">Zoom</span>
+                  <code className="flex-1 truncate bg-muted px-1.5 py-0.5 rounded text-[11px]">{session.zoomJoinUrl}</code>
+                  <button onClick={() => copy(session.zoomJoinUrl!, 'Link de Zoom')} className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                    <Copy className="w-3 h-3" />
+                  </button>
+                  <a href={session.zoomJoinUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                {session.zoomNeedsUpdate && (
+                  <div className="flex items-center gap-1.5 pl-24 -mt-0.5">
+                    <span className="flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="w-3 h-3" /> El horario cambió — Zoom sigue en el anterior
+                    </span>
+                    <button
+                      onClick={handleSyncZoom}
+                      disabled={syncingZoom}
+                      className="flex items-center gap-1 text-[10px] text-primary hover:underline disabled:opacity-50"
+                    >
+                      {syncingZoom ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                      Actualizar horario
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <p className="text-[11px] text-muted-foreground/50 italic">Zoom no configurado — solo Mux.</p>
             )}

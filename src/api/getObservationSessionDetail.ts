@@ -23,6 +23,7 @@ export default createEndpoint({
       observationUrl: z.string(),
       zoomJoinUrl: z.string().optional(),
       zoomStartUrl: z.string().optional(),
+      zoomNeedsUpdate: z.boolean().optional(),
     }).optional(),
     connected: z.array(z.object({
       observerId: z.string(),
@@ -43,7 +44,7 @@ export default createEndpoint({
   }),
   execute: async ({ input }) => {
     const sessionResult = await pool.query(
-      `select id, slug, nombre, cliente, estado, mux_stream_key, mux_playback_id, mux_asset_id, zoom_join_url, zoom_start_url
+      `select id, slug, nombre, cliente, estado, mux_stream_key, mux_playback_id, mux_asset_id, zoom_join_url, zoom_start_url, zoom_needs_update
        from observation_sessions where calendar_event_id = $1`,
       [input.calendarEventId],
     );
@@ -107,6 +108,7 @@ export default createEndpoint({
         observationUrl: `${appUrl}/s/${s.slug}`,
         zoomJoinUrl: s.zoom_join_url ?? undefined,
         zoomStartUrl: s.zoom_start_url ?? undefined,
+        zoomNeedsUpdate: s.zoom_needs_update ?? false,
       },
       connected,
       chat,
