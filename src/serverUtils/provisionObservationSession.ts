@@ -3,7 +3,7 @@ import { createLiveStream } from '../../server/mux/client';
 import { createZoomMeeting, setZoomLiveStream, ZoomAuthError } from '../../server/zoom/client';
 import { randomBytes } from 'node:crypto';
 
-const MUX_SERVER_URL = 'rtmps://global-live.mux.com:443/app';
+export const MUX_SERVER_URL = 'rtmps://global-live.mux.com:443/app';
 
 function slugify(input: string): string {
   return (
@@ -28,14 +28,14 @@ function slugify(input: string): string {
  * configurado) — se trata igual que "Zoom no configurado": el stream de Mux
  * se crea de todos modos, sin Zoom.
  */
-function zoomHostPool(): string[] {
+export function zoomHostPool(): string[] {
   return (process.env.ZITE_ZOOM_HOST_EMAILS ?? '').split(',').map((h) => h.trim()).filter(Boolean);
 }
 
-async function pickFreeZoomHost(startTime: Date, endTime: Date): Promise<string | null> {
-  const pool_ = zoomHostPool();
-  if (pool_.length === 0) return null;
-
+/** `excludeSessionId` — al revisar si HAY que reasignar (syncZoomMeeting.ts),
+ *  la propia sesión que se está reagendando no cuenta como "choque contra sí
+ *  misma": ocupa el horario VIEJO, no el nuevo que se está evaluando. */
+async function busyZoomHosts(startTime: Date, endTime: Date, excludeSessionId?: string): Promise<Set<string>> {
   const { rows: busy } = await pool.query(
     `select distinct os.zoom_host_email
      from observation_sessions os
@@ -43,11 +43,27 @@ async function pickFreeZoomHost(startTime: Date, endTime: Date): Promise<string 
      where os.zoom_host_email is not null
        and ce.event_date is not null
        and ce.event_date < $2
-       and (ce.event_date + (coalesce(ce.duration_hours, 1) * interval '1 hour')) > $1`,
-    [startTime.toISOString(), endTime.toISOString()],
+       and (ce.event_date + (coalesce(ce.duration_hours, 1) * interval '1 hour')) > $1
+       ${excludeSessionId ? 'and os.id <> $3' : ''}`,
+    excludeSessionId ? [startTime.toISOString(), endTime.toISOString(), excludeSessionId] : [startTime.toISOString(), endTime.toISOString()],
   );
-  const busyHosts = new Set(busy.map((r) => r.zoom_host_email as string));
+  return new Set(busy.map((r) => r.zoom_host_email as string));
+}
+
+export async function pickFreeZoomHost(startTime: Date, endTime: Date, excludeSessionId?: string): Promise<string | null> {
+  const pool_ = zoomHostPool();
+  if (pool_.length === 0) return null;
+  const busyHosts = await busyZoomHosts(startTime, endTime, excludeSessionId);
   return pool_.find((h) => !busyHosts.has(h)) ?? null;
+}
+
+/** ¿Sigue libre ESTA cuenta específica a la nueva hora? Usado por
+ *  syncZoomMeeting.ts antes de reagendar el meeting existente — si su host ya
+ *  no está libre, hay que reasignar a otra cuenta en vez de mover el meeting
+ *  hacia un choque real de horario. */
+export async function isZoomHostFree(hostEmail: string, startTime: Date, endTime: Date, excludeSessionId: string): Promise<boolean> {
+  const busyHosts = await busyZoomHosts(startTime, endTime, excludeSessionId);
+  return !busyHosts.has(hostEmail);
 }
 
 export interface ProvisionedObservationSession {

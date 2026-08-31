@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { saveCalendarEvent, duplicateRows, syncOutlookInvite } from 'zite-endpoints-sdk';
+import { saveCalendarEvent, duplicateRows, syncOutlookInvite, syncZoomMeeting } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -256,6 +256,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
   const [localReenvio,   setLocalReenvio]   = useState<Map<string, boolean>>(new Map());
   const [bulkSyncing,    setBulkSyncing]    = useState(false);
   const [quickSyncingId, setQuickSyncingId] = useState<string | null>(null);
+  const [zoomSyncingId, setZoomSyncingId] = useState<string | null>(null);
   const nameCol = useResizableCol('pm-events-name-col', 250, 120);
 
   const EVT_LOCS = ['Online', 'Sala 5-A', 'Sala 5-B', 'Sala 5-C', 'Sala 6-A', 'Sala 6-B', 'Sala 6-D', 'Sala 6-F', 'Sala 6-G', 'Sala 6-H', 'Otro'];
@@ -307,7 +308,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
   const groups       = groupDynCols.columns;
   const topLevel     = events.filter(e => !e.parentEventId);
   const getChildEvts = (id: string) => events.filter(e => e.parentEventId === id);
-  const totalCols    = 7 + dynCols.columns.filter(c => visibleColIds.has(c.id)).length + 1;
+  const totalCols    = 8 + dynCols.columns.filter(c => visibleColIds.has(c.id)).length + 1;
 
   const getEvtGroupId = (evId: string) =>
     groups.find(g => groupDynCols.getCellVal(evId, g.id)?.textValue === '1')?.id ?? null;
@@ -460,6 +461,12 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
                   const result = await syncOutlookInvite({ eventId: ev.id, action });
                   if (result.success) {
                     toast.success(action === 'create' ? 'Invitación creada en Outlook' : 'Invitación actualizada en Outlook');
+                    // Encadenado: si el horario cambió, "Actualizar invitación" es
+                    // justo el momento en que alguien ya está resolviendo eso mismo
+                    // — no tiene sentido pedirle un segundo clic aparte para Zoom.
+                    if (action === 'update' && (ev as any).zoomNeedsUpdate) {
+                      try { await syncZoomMeeting({ calendarEventId: ev.id }); } catch { /* se ve el aviso en la lista si sigue pendiente */ }
+                    }
                     onRefresh?.();
                   } else {
                     toast.error('Error al sincronizar con Outlook');
@@ -473,6 +480,38 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
             >
               {quickSyncingId === ev.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             </button>
+          </td>
+          {/* Zoom status — solo si el evento tiene meeting de Zoom (sesión de observación creada) */}
+          <td style={{ width: 96, maxWidth: 96, padding: '2px 6px', borderBottom: '1px solid hsl(var(--border) / 0.3)', borderRight: '1px solid hsl(var(--border) / 0.3)' }}>
+            {(ev as any).hasZoom ? (
+              (ev as any).zoomNeedsUpdate ? (
+                <button
+                  onClick={async () => {
+                    if (zoomSyncingId) return;
+                    setZoomSyncingId(ev.id);
+                    try {
+                      await syncZoomMeeting({ calendarEventId: ev.id });
+                      toast.success('Horario de Zoom actualizado');
+                      onRefresh?.();
+                    } catch { toast.error('Error al actualizar Zoom'); }
+                    finally { setZoomSyncingId(null); }
+                  }}
+                  disabled={zoomSyncingId === ev.id}
+                  title="El horario cambió — clic para actualizar el meeting de Zoom"
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity bg-amber-100 text-amber-700 disabled:opacity-50"
+                >
+                  {zoomSyncingId === ev.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  Zoom desactualizado
+                </button>
+              ) : (
+                <span
+                  title="El meeting de Zoom está al día con la fecha/hora del evento"
+                  className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap bg-green-100 text-green-700"
+                >
+                  Zoom
+                </span>
+              )
+            ) : null}
           </td>
           {/* Restringir reenvío checkbox */}
           <td style={{ width: 44, maxWidth: 44, padding: '2px 0', borderBottom: '1px solid hsl(var(--border) / 0.3)', borderRight: '1px solid hsl(var(--border) / 0.3)', textAlign: 'center' }}>
@@ -610,6 +649,10 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
                       try {
                         await syncOutlookInvite({ eventId: id, action: 'update' });
                         ok++;
+                        const ev = events.find(e => e.id === id);
+                        if ((ev as any)?.zoomNeedsUpdate) {
+                          try { await syncZoomMeeting({ calendarEventId: id }); } catch { /* se ve el aviso en la lista si sigue pendiente */ }
+                        }
                       } catch { fail++; }
                     }
                     setBulkSyncing(false);
@@ -719,6 +762,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
               <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 160 }} title="Emails asistentes">Emails asist.</th>
               <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }} title="Estatus de la invitación">Invite</th>
               <th className="text-center px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 90 }} title="Crear/actualizar la invitación en Outlook">Outlook</th>
+              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }} title="Estatus del meeting de Zoom">Zoom</th>
               <th className="text-center px-0 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 44 }}>
                 <TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center justify-center w-full"><Lock className="w-3.5 h-3.5 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top"><p className="text-xs">Restringir reenvío de invitación</p></TooltipContent></Tooltip></TooltipProvider>
               </th>

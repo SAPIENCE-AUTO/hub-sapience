@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, Tasks, CalendarEvents, Boards } from '../../server/compat';
+import { createEndpoint, Tasks, CalendarEvents, Boards, pool } from '../../server/compat';
 
 const dedup = <T extends { id: string }>(a: T[], b: T[]): T[] => {
   const seen = new Map<string, T>();
@@ -45,7 +45,20 @@ const eventSchema = z.object({
   inviteBodyHtml: z.string().optional(),
   inviteEmails: z.string().optional(),
   restringirReenvio: z.boolean().optional(),
+  hasZoom: z.boolean().optional(),
+  zoomNeedsUpdate: z.boolean().optional(),
 });
+
+/** Zoom status por evento, para la pastilla en la vista de lista (EventsTable.tsx)
+ *  — sin esto solo se ve si abres el detalle del evento uno por uno. */
+async function fetchZoomStatusByEventIds(eventIds: string[]): Promise<Map<string, { hasZoom: boolean; zoomNeedsUpdate: boolean }>> {
+  if (eventIds.length === 0) return new Map();
+  const { rows } = await pool.query(
+    `select calendar_event_id, zoom_meeting_id, zoom_needs_update from observation_sessions where calendar_event_id = any($1::uuid[])`,
+    [eventIds],
+  );
+  return new Map(rows.map((r: any) => [r.calendar_event_id, { hasZoom: !!r.zoom_meeting_id, zoomNeedsUpdate: !!r.zoom_needs_update }]));
+}
 
 /** Fetch tasks with dual-read: boardId primary + legacy fallback for unmigrated records */
 async function fetchTasksDualRead(input: { boardId: string; projectCode?: string; boardName?: string }) {
@@ -120,6 +133,7 @@ export default createEndpoint({
         fields: [...EVENT_FIELDS],
         sorts: [{ field: 'createdAt', direction: 'asc' }],
       });
+      const zoomByEventId = await fetchZoomStatusByEventIds(eventsResult.records.map(ev => ev.id));
       return {
         tasks: [],
         calendarEvents: eventsResult.records.map(ev => ({
@@ -141,6 +155,8 @@ export default createEndpoint({
           inviteBodyHtml: ev.inviteBodyHtml,
           inviteEmails: ev.inviteEmails,
           restringirReenvio: ev.restringirReenvio ?? false,
+          hasZoom: zoomByEventId.get(ev.id)?.hasZoom ?? false,
+          zoomNeedsUpdate: zoomByEventId.get(ev.id)?.zoomNeedsUpdate ?? false,
         })),
         boards: [],
         calendarBoards: [],
@@ -209,6 +225,8 @@ export default createEndpoint({
       .sort((a, b) => (a.boardOrder ?? 0) - (b.boardOrder ?? 0))
       .map(b => ({ id: b.id, name: b.boardName ?? '', boardType: b.boardType ?? 'calendar', boardOrder: b.boardOrder ?? 0 }));
 
+    const zoomByEventId = await fetchZoomStatusByEventIds(eventsResult.records.map(ev => ev.id));
+
     return {
       tasks,
       calendarEvents: eventsResult.records.map(ev => ({
@@ -230,6 +248,8 @@ export default createEndpoint({
         inviteBodyHtml: ev.inviteBodyHtml,
         inviteEmails: ev.inviteEmails,
         restringirReenvio: ev.restringirReenvio ?? false,
+        hasZoom: zoomByEventId.get(ev.id)?.hasZoom ?? false,
+        zoomNeedsUpdate: zoomByEventId.get(ev.id)?.zoomNeedsUpdate ?? false,
       })),
       boards,
       calendarBoards,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, CalendarEvents, Boards } from '../../server/compat';
+import { createEndpoint, CalendarEvents, Boards, pool } from '../../server/compat';
 
 const dedup = <T extends { id: string }>(a: T[], b: T[]): T[] => {
   const seen = new Map<string, T>();
@@ -25,6 +25,8 @@ const eventSchema = z.object({
   outlookEventLink: z.string().optional(),
   inviteBodyHtml: z.string().optional(),
   inviteEmails: z.string().optional(),
+  hasZoom: z.boolean().optional(),
+  zoomNeedsUpdate: z.boolean().optional(),
 });
 
 export default createEndpoint({
@@ -102,6 +104,14 @@ export default createEndpoint({
       return true;
     });
 
+    const zoomRows = events.length
+      ? (await pool.query(
+          `select calendar_event_id, zoom_meeting_id, zoom_needs_update from observation_sessions where calendar_event_id = any($1::uuid[])`,
+          [events.map(ev => ev.id)],
+        )).rows
+      : [];
+    const zoomByEventId = new Map(zoomRows.map((r: any) => [r.calendar_event_id, { hasZoom: !!r.zoom_meeting_id, zoomNeedsUpdate: !!r.zoom_needs_update }]));
+
     return {
       events: events.map(ev => ({
         id: ev.id,
@@ -120,6 +130,8 @@ export default createEndpoint({
         outlookEventLink: ev.outlookEventLink,
         inviteBodyHtml: ev.inviteBodyHtml,
         inviteEmails: ev.inviteEmails,
+        hasZoom: zoomByEventId.get(ev.id)?.hasZoom ?? false,
+        zoomNeedsUpdate: zoomByEventId.get(ev.id)?.zoomNeedsUpdate ?? false,
       })),
     };
   },

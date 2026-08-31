@@ -4,7 +4,7 @@ import { useProject } from '../context/ProjectContext';
 import { useRealtimeBoardEvents, BoardFieldUpdatedPayload } from '../hooks/useRealtimeBoardEvents';
 import { useProjectPresence } from '../hooks/useProjectPresence';
 import { ProjectPresenceAvatars } from '../components/ProjectPresenceAvatars';
-import { getTasks, saveTask, deleteTask, saveCalendarEvent, deleteCalendarEvent, reorderTasks, GetTasksOutputType, duplicateGroup, sendTimelineToWebhook, saveBoard, deleteBoard, duplicateBoard, saveCellValue, getRecruitmentGroups, GetRecruitmentGroupsOutputType, syncOutlookInvite, getCalendarBoardStatus, getTimelineBoardStatus, getProjects, saveProject, getTeamMembers, GetTeamMembersOutputType, renameBoard, createBoardWithTemplate, publishRecruitmentGroupsChanged, publishRecruitmentRowsChanged, getTaskById, getCalendarEventById } from 'zite-endpoints-sdk';
+import { getTasks, saveTask, deleteTask, saveCalendarEvent, deleteCalendarEvent, reorderTasks, GetTasksOutputType, duplicateGroup, sendTimelineToWebhook, saveBoard, deleteBoard, duplicateBoard, saveCellValue, getRecruitmentGroups, GetRecruitmentGroupsOutputType, syncOutlookInvite, syncZoomMeeting, getCalendarBoardStatus, getTimelineBoardStatus, getProjects, saveProject, getTeamMembers, GetTeamMembersOutputType, renameBoard, createBoardWithTemplate, publishRecruitmentGroupsChanged, publishRecruitmentRowsChanged, getTaskById, getCalendarEventById } from 'zite-endpoints-sdk';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -741,6 +741,10 @@ export default function PMPage({ initialSection = 'timelines' }: { initialSectio
       const result = await syncOutlookInvite({ eventId: editingEvent.id, action });
       if (result.success) {
         toast.success(action === 'cancel' ? 'Invitación cancelada en Outlook' : 'Sincronizado con Outlook ✓');
+        // Encadenado con Zoom: ver el mismo comentario en EventsTable.tsx.
+        if (action === 'update' && (editingEvent as any).zoomNeedsUpdate) {
+          try { await syncZoomMeeting({ calendarEventId: editingEvent.id }); } catch { /* se ve el aviso en la lista si sigue pendiente */ }
+        }
         const updated = {
           ...editingEvent,
           inviteStatus: result.inviteStatus ?? editingEvent.inviteStatus,

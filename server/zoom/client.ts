@@ -155,6 +155,20 @@ export async function updateZoomMeeting(meetingId: number, params: {
   }
 }
 
+/**
+ * Borra un meeting — se usa cuando reasignar de cuenta de Zoom por choque de
+ * horario deja el meeting viejo huérfano (ver syncZoomMeeting.ts). Best-effort
+ * en el caller: un meeting de prueba o vencido que no se pudo borrar no debe
+ * tronar el flujo completo de reasignación.
+ */
+export async function deleteZoomMeeting(meetingId: number): Promise<void> {
+  const res = await zoomFetch(`/meetings/${meetingId}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 404) {
+    const detail = await res.text().catch(() => '');
+    throw new ZoomAuthError(`Zoom respondió ${res.status} borrando el meeting: ${detail.slice(0, 300)}`);
+  }
+}
+
 /** Apunta el meeting al live stream de Mux — así el host solo le da "Live" adentro de Zoom. */
 export async function setZoomLiveStream(meetingId: number, params: { streamUrl: string; streamKey: string; pageUrl?: string }): Promise<void> {
   const res = await zoomFetch(`/meetings/${meetingId}/livestream`, {

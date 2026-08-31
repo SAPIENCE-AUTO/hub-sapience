@@ -8,7 +8,7 @@ function fmtDate(d: Date): string {
   return `${day}-${mon}-${year}`;
 }
 import { useNavigate } from 'react-router-dom';
-import { getProjects, saveProject, deleteProject, getAllCalendarEvents, saveCalendarEvent, syncOutlookInvite, getTeamMembers, GetProjectsOutputType, GetTeamMembersOutputType } from 'zite-endpoints-sdk';
+import { getProjects, saveProject, deleteProject, getAllCalendarEvents, saveCalendarEvent, syncOutlookInvite, syncZoomMeeting, getTeamMembers, GetProjectsOutputType, GetTeamMembersOutputType } from 'zite-endpoints-sdk';
 import TeamMemberPicker from '../components/TeamMemberPicker';
 import TeamsChannelDialog from '../components/TeamsChannelDialog';
 import WeeklyCalendar, { type CalEventItem, getProjectColorVar } from '../components/WeeklyCalendar';
@@ -491,6 +491,10 @@ export default function ProjectsPage() {
       const result = await syncOutlookInvite({ eventId: selCalEvent.id, action });
       if (result.success) {
         toast.success(action === 'cancel' ? 'Invitación cancelada en Outlook' : 'Sincronizado con Outlook ✓');
+        // Encadenado con Zoom: ver el mismo comentario en EventsTable.tsx.
+        if (action === 'update' && (selCalEvent as any).zoomNeedsUpdate) {
+          try { await syncZoomMeeting({ calendarEventId: selCalEvent.id }); } catch { /* se ve el aviso en la lista si sigue pendiente */ }
+        }
         const updatedEvent: typeof selCalEvent = {
           ...selCalEvent,
           inviteStatus: result.inviteStatus ?? selCalEvent.inviteStatus,
