@@ -702,14 +702,16 @@ export function useDynamicColumns(boardId: string, seedRows?: SeedRow[], options
     return savePromise;
   };
 
-  // Optimistic: removes column instantly, restores on error.
-  const removeColumn = async (colId: string) => {
+  // Optimistic: removes column instantly, restores on error. `tableType`,
+  // cuando se da, hace que el backend también mande a la papelera las filas/
+  // tareas del grupo en vez de solo desasignarlas (ver deleteBoardColumn.ts).
+  const removeColumn = async (colId: string, tableType?: 'recruitment' | 'task') => {
     const snapshot = [...columns];
     const updated = columns.filter(c => c.id !== colId);
     setColumns(updated);
     colCache.set(boardId, updated);
     try {
-      await deleteBoardColumn({ id: colId });
+      await deleteBoardColumn({ id: colId, tableType });
     } catch {
       setColumns(snapshot);
       colCache.set(boardId, snapshot);

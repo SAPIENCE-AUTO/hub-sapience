@@ -515,6 +515,7 @@ export const TaskList = memo(function TaskList({ tasks, onEdit, onDelete, onSave
                     </tr>
                   )}
                   <GroupSectionHeader
+                    tableType="task"
                     groupId={g.id}
                     name={g.columnName ?? 'Sin grupo'}
                     colorId={g.columnType}

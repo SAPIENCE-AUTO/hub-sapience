@@ -9,6 +9,7 @@ import { getTrashItems, restoreFromTrash, permanentlyDelete, GetTrashItemsOutput
 
 type TrashBoard = GetTrashItemsOutputType['boards'][0];
 type TrashRow = GetTrashItemsOutputType['rows'][0];
+type TrashTask = GetTrashItemsOutputType['tasks'][0];
 
 interface Props {
   open: boolean;
@@ -54,6 +55,7 @@ export function TrashSheet({ open, onOpenChange, projectCode, onRestored }: Prop
   const [loading, setLoading] = useState(false);
   const [boards, setBoards] = useState<TrashBoard[]>([]);
   const [rows, setRows] = useState<TrashRow[]>([]);
+  const [tasks, setTasks] = useState<TrashTask[]>([]);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [emptyingTrash, setEmptyingTrash] = useState(false);
 
@@ -64,6 +66,7 @@ export function TrashSheet({ open, onOpenChange, projectCode, onRestored }: Prop
       const data = await getTrashItems({ projectCode });
       setBoards(data.boards);
       setRows(data.rows);
+      setTasks(data.tasks);
     } catch {
       toast.error('Error al cargar la papelera');
     } finally {
@@ -103,6 +106,20 @@ export function TrashSheet({ open, onOpenChange, projectCode, onRestored }: Prop
     }
   };
 
+  const restoreTask = async (task: TrashTask) => {
+    setRestoringId(task.id);
+    try {
+      await restoreFromTrash({ type: 'task', taskId: task.id });
+      setTasks(prev => prev.filter(t => t.id !== task.id));
+      toast.success(`"${task.taskName || 'Tarea'}" restaurada`);
+      onRestored();
+    } catch {
+      toast.error('Error al restaurar la tarea');
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
   const emptyTrash = async () => {
     setEmptyingTrash(true);
     try {
@@ -116,7 +133,7 @@ export function TrashSheet({ open, onOpenChange, projectCode, onRestored }: Prop
     }
   };
 
-  const isEmpty = boards.length === 0 && rows.length === 0;
+  const isEmpty = boards.length === 0 && rows.length === 0 && tasks.length === 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -159,7 +176,7 @@ export function TrashSheet({ open, onOpenChange, projectCode, onRestored }: Prop
                           <p className="text-sm font-medium truncate">{board.boardName}</p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-xs text-muted-foreground">
-                              {board.rowCount} participante{board.rowCount !== 1 ? 's' : ''}
+                              {board.rowCount} elemento{board.rowCount !== 1 ? 's' : ''}
                             </span>
                             <DaysLeftBadge deletedAt={board.deletedAt} />
                           </div>
@@ -171,6 +188,45 @@ export function TrashSheet({ open, onOpenChange, projectCode, onRestored }: Prop
                           className="gap-1.5 h-7 text-xs flex-shrink-0 mt-0.5"
                           disabled={restoringId === board.boardId}
                           onClick={() => restoreBoard(board)}
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Restaurar
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Deleted tasks */}
+              {tasks.length > 0 && (
+                <section>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                    Tareas ({tasks.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {tasks.map(task => (
+                      <div key={task.id} className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {task.taskName || 'Sin nombre'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            {task.boardName && (
+                              <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                                {task.boardName}
+                              </Badge>
+                            )}
+                            <DaysLeftBadge deletedAt={task.deletedAt} />
+                          </div>
+                          <DeletedByLabel deletedBy={task.deletedBy} deletedAt={task.deletedAt} />
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 h-7 text-xs flex-shrink-0 mt-0.5"
+                          disabled={restoringId === task.id}
+                          onClick={() => restoreTask(task)}
                         >
                           <RotateCcw className="w-3 h-3" />
                           Restaurar

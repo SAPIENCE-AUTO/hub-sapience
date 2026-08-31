@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, BoardColumns, Boards } from '../../server/compat';
+import { createEndpoint, RecruitmentRows, BoardColumns, Boards, Tasks } from '../../server/compat';
 
 export default createEndpoint({
   authenticated: true,
-  description: 'Get soft-deleted boards and rows for a project (UUID-forward with legacy fallback)',
+  description: 'Get soft-deleted boards, rows, and tasks for a project (UUID-forward with legacy fallback)',
   inputSchema: z.object({ projectCode: z.string() }),
   outputSchema: z.object({
     boards: z.array(z.object({
@@ -19,6 +19,13 @@ export default createEndpoint({
       email: z.string().optional(),
       boardName: z.string().optional(),
       deletedAt: z.string(),
+    })),
+    tasks: z.array(z.object({
+      id: z.string(),
+      taskName: z.string().optional(),
+      boardName: z.string().optional(),
+      deletedAt: z.string(),
+      deletedBy: z.string().optional(),
     })),
   }),
   execute: async ({ input }) => {
@@ -102,11 +109,33 @@ export default createEndpoint({
         deletedAt: r.deletedAt!,
       }));
 
+    // ── 4. Find deleted tasks ──────────────────────────────────────────────
+    // Tasks solo tiene borrado suave desde el incidente BIBLIOTECA (grupo
+    // "WOMEN - GEN X" borrado por accidente, 16 tareas, sin forma de
+    // recuperarlas sin acceso directo a la base) — antes de eso no había
+    // nada que mostrar aquí.
+    const { records: allTasks } = await Tasks.findAll({
+      filters: { projectCode: input.projectCode },
+      fields: ['id', 'taskName', 'boardName', 'deletedAt', 'deletedBy', 'parentTaskId'],
+      limit: 2000,
+    });
+    const deletedTasks = allTasks.filter(t => !!t.deletedAt);
+    const individuallyDeletedTasks = deletedTasks
+      .filter(t => !deletedBoardNames.has(t.boardName ?? '') && !t.parentTaskId)
+      .map(t => ({
+        id: t.id,
+        taskName: t.taskName,
+        boardName: t.boardName,
+        deletedAt: t.deletedAt!,
+        deletedBy: t.deletedBy ?? undefined,
+      }));
+
     const boards = [...boardMap.values()].map(b => ({
       ...b,
-      rowCount: deletedRows.filter(r => r.boardName === b.boardName).length,
+      rowCount: deletedRows.filter(r => r.boardName === b.boardName).length
+        + deletedTasks.filter(t => t.boardName === b.boardName).length,
     }));
 
-    return { boards, rows: individuallyDeleted };
+    return { boards, rows: individuallyDeleted, tasks: individuallyDeletedTasks };
   },
 });

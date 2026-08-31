@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, BoardColumns, CellValues } from '../../server/compat';
+import { createEndpoint, RecruitmentRows, BoardColumns, CellValues, Tasks } from '../../server/compat';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -12,13 +12,14 @@ async function restoreBatch(ids: string[], updater: (id: string) => Promise<unkn
 
 export default createEndpoint({
   authenticated: true,
-  description: 'Restore a board or individual row from trash',
+  description: 'Restore a board, an individual row, or an individual task from trash',
   inputSchema: z.object({
-    type: z.enum(['board', 'row']),
+    type: z.enum(['board', 'row', 'task']),
     boardId: z.string().optional(),
     boardName: z.string().optional(),
     projectCode: z.string().optional(),
     rowId: z.string().optional(),
+    taskId: z.string().optional(),
   }),
   outputSchema: z.object({ success: z.boolean() }),
   execute: async ({ input }) => {
@@ -45,6 +46,17 @@ export default createEndpoint({
 
       await sleep(250);
 
+      // Restore tasks (grupos de Actividades/PM cascadean su borrado a Tasks
+      // desde deleteBoardColumn.ts — se restauran igual que las filas)
+      const { records: tasks } = await Tasks.findAll({
+        filters: { boardId: input.boardId },
+        fields: ['id'],
+        limit: 2000,
+      });
+      await restoreBatch(tasks.map(t => t.id), id => Tasks.update({ id, record: { deletedAt: '' } }));
+
+      await sleep(250);
+
       // Restore cells
       const { records: cells } = await CellValues.findAll({
         filters: { boardId: input.boardId },
@@ -52,6 +64,18 @@ export default createEndpoint({
         limit: 2000,
       });
       await restoreBatch(cells.map(c => c.id), id => CellValues.update({ id, record: { deletedAt: '' } }));
+
+    } else if (input.type === 'task') {
+      if (!input.taskId) return { success: false };
+
+      // Find the task and its subtasks
+      const { records: children } = await Tasks.findAll({
+        filters: { parentTaskId: input.taskId },
+        fields: ['id'],
+        limit: 100,
+      });
+      const allIds = [input.taskId, ...children.map(c => c.id)];
+      await restoreBatch(allIds, id => Tasks.update({ id, record: { deletedAt: '' } }));
 
     } else {
       if (!input.rowId) return { success: false };

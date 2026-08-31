@@ -65,7 +65,7 @@ export default createEndpoint({
       Projects.findAll({ limit: 200, fields: ['projectCode', 'fullName', 'status'] }),
       CalendarEvents.findAll({ limit: 200, fields: ['eventName', 'eventDate', 'projectCode'] }),
       RecruitmentRows.findAll({ limit: 500, fields: ['group', 'projectCode'] }),
-      Tasks.findAll({ limit: 500, fields: ['taskName', 'projectCode', 'status', 'boardName', 'parentTaskId'] }),
+      Tasks.findAll({ limit: 500, fields: ['taskName', 'projectCode', 'status', 'boardName', 'parentTaskId', 'deletedAt'] }),
     ]);
 
     // Deduplicate groups by name
@@ -103,7 +103,7 @@ export default createEndpoint({
         projectCode,
       })),
       tasks: taskRecords
-        .filter(t => t.taskName && !t.parentTaskId)
+        .filter(t => t.taskName && !t.parentTaskId && !t.deletedAt)
         .map(t => ({
           id: t.id,
           name: t.taskName!,

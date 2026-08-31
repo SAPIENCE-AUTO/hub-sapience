@@ -259,7 +259,7 @@ async function buildDashboard(
     { records: rows },
     { records: pos },
   ] = await Promise.all([
-    Tasks.findAll({ limit: 1000, fields: ['taskName', 'projectCode', 'status', 'assignedTo', 'endDate', 'boardName', 'parentTaskId', 'boardId'] }),
+    Tasks.findAll({ limit: 1000, fields: ['taskName', 'projectCode', 'status', 'assignedTo', 'endDate', 'boardName', 'parentTaskId', 'boardId', 'deletedAt'] }),
     CellValues.findAll({ filters: { textValue: user.id }, limit: 2000, fields: ['rowId', 'boardId'] }),
     CalendarEvents.findAll({ limit: 500, fields: ['eventName', 'projectCode', 'eventDate', 'location', 'calendarName', 'durationHours'] }),
     RecruitmentRows.findAll({ limit: 2000, fields: ['projectCode', 'status'] }),
@@ -324,6 +324,7 @@ async function buildDashboard(
 
   // Top-level tasks only
   const projectTasks = allTasks.filter(t =>
+    !t.deletedAt &&
     !t.parentTaskId &&
     (isGlobal || myCodes.has(t.projectCode ?? '') || dynamicAssignedTaskIds.has(t.id)) &&
     (!input.projectCode || t.projectCode === input.projectCode)

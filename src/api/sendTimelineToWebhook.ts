@@ -133,7 +133,7 @@ export default createEndpoint({
       return u ? ([u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || val) : val;
     };
 
-    const tasks       = tasksResult.records;
+    const tasks       = tasksResult.records.filter(t => !t.deletedAt);
     const projectName = projectResult?.fullName || input.projectCode;
     const now         = new Date().toISOString();
 

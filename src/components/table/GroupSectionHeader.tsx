@@ -4,6 +4,7 @@ import { Pencil, Trash2, ChevronDown, ChevronRight, GripVertical, MoreHorizontal
 import { LinkEventDialog } from './LinkEventDialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getGroupColor } from './tableUtils';
 import { ColorSwatches } from './ColorSwatches';
@@ -39,6 +40,11 @@ interface Props {
   insertSide?: 'left' | 'right' | null;
   onDuplicateGroup?: () => void | Promise<void>;
   onGroupStructureChanged?: () => void;
+  /** Cuando se da, "Eliminar grupo" también borra (a la papelera) las filas/tareas
+   *  del grupo en vez de solo desasignarlas — ver deleteBoardColumn.ts. Sin esto
+   *  (EventsTable, grupos de eventos de calendario) el borrado queda como antes:
+   *  solo la columna y sus celdas de membresía. */
+  tableType?: 'recruitment' | 'task';
   linkedEventInfo?: { eventName?: string; eventDate?: string; durationHours?: number; location?: string };
   projectCode?: string;
   onLinkEvent?: (calBoardId: string, eventId: string) => Promise<void>;
@@ -58,7 +64,7 @@ export function GroupSectionHeader({
   onDragStart, onDragOver, onDragEnd, onDrop, isDragOver, insertSide, onDuplicateGroup, onGroupStructureChanged,
   linkedEventInfo, projectCode, onLinkEvent, onUnlinkEvent, onCreateEventForGroup,
   onSendTimeline, onPreviewTimeline, timelineStatus, timelineUrl, timelineLoading,
-  showPublicName = false,
+  showPublicName = false, tableType,
 }: Props) {
   const [renaming, setRenaming] = useState(false);
   const [editVal, setEditVal] = useState('');
@@ -73,6 +79,8 @@ export function GroupSectionHeader({
   // cerrarse el dropdown, así que sigue protegiendo aunque el usuario
   // reabra el menú mientras la primera duplicación sigue en curso.
   const [duplicating, setDuplicating] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState(false);
   const color = isNone ? 'hsl(var(--muted-foreground))' : getGroupColor(colorId);
 
   // ── Public name (alias for external shared views) ──────────────────────────
@@ -161,6 +169,44 @@ export function GroupSectionHeader({
     }
     setRenaming(false);
   };
+
+  const confirmDeleteGroup = async () => {
+    if (deletingGroup) return;
+    setDeletingGroup(true);
+    try {
+      await groupDynCols.removeColumn(groupId, tableType);
+      onGroupStructureChanged?.();
+      setDeleteConfirmOpen(false);
+    } catch { /* keep existing behavior */ } finally {
+      setDeletingGroup(false);
+    }
+  };
+
+  const noun = tableType === 'recruitment' ? 'participante' : 'tarea';
+  const deleteDialog = (
+    <AlertDialog open={deleteConfirmOpen} onOpenChange={o => !deletingGroup && setDeleteConfirmOpen(o)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Eliminar el grupo "{name}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {tableType
+              ? `Se eliminará el grupo y ${itemCount === 0 ? `no tiene ${noun}s` : `${itemCount} ${noun}${itemCount !== 1 ? 's' : ''}`} que contiene. Podrás recuperarlos desde la Papelera durante 10 días.`
+              : `Se eliminará el grupo "${name}"${itemCount > 0 ? ` (${itemCount} elemento${itemCount !== 1 ? 's' : ''})` : ''}. Esta acción no se puede deshacer.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deletingGroup}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={confirmDeleteGroup}
+            disabled={deletingGroup}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deletingGroup ? 'Eliminando...' : 'Eliminar grupo'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 
   // ── Link event dialog ──────────────────────────────────────────────────────
   const linkDialog = projectCode && !isNone ? (
@@ -394,7 +440,7 @@ export function GroupSectionHeader({
               )}
               <DropdownMenuItem
                 className="text-xs gap-2 cursor-pointer text-destructive focus:text-destructive"
-                onClick={async () => { try { await groupDynCols.removeColumn(groupId); onGroupStructureChanged?.(); } catch { /* keep existing behavior */ } }}
+                onClick={() => setDeleteConfirmOpen(true)}
               >
                 <Trash2 className="w-3.5 h-3.5" /> Eliminar grupo
               </DropdownMenuItem>
@@ -444,6 +490,7 @@ export function GroupSectionHeader({
           </td>
         </tr>
         {linkDialog}
+        {deleteDialog}
       </>
     );
   }
@@ -460,6 +507,7 @@ export function GroupSectionHeader({
         {inner}
       </div>
       {linkDialog}
+      {deleteDialog}
     </>
   );
 }

@@ -191,6 +191,8 @@ export interface TasksRecordType {
   notes?: string;
   boardName?: string;
   boardId?: string;
+  deletedAt?: string;
+  deletedBy?: string;
   createdAt?: string;
   updatedAt?: string;
 }

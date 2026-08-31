@@ -192,7 +192,7 @@ export default createEndpoint({
 
     // Phase 2: tasks, events, dynamic cells
     const [{ records: allTasks }, { records: allEvents }, { records: assignedCells }] = await Promise.all([
-      Tasks.findAll({ limit: 1000, fields: ['taskName', 'projectCode', 'status', 'assignedTo', 'endDate', 'boardName', 'parentTaskId', 'boardId'] }),
+      Tasks.findAll({ limit: 1000, fields: ['taskName', 'projectCode', 'status', 'assignedTo', 'endDate', 'boardName', 'parentTaskId', 'boardId', 'deletedAt'] }),
       CalendarEvents.findAll({ limit: 500, fields: ['eventName', 'projectCode', 'eventDate', 'location', 'calendarName', 'durationHours'] }),
       CellValues.findAll({ filters: { textValue: user.id }, limit: 2000, fields: ['rowId', 'boardId'] }),
     ]);
@@ -237,6 +237,7 @@ export default createEndpoint({
     }
 
     const projectTasks = allTasks.filter(t =>
+      !t.deletedAt &&
       !t.parentTaskId &&
       (isGlobal || myCodes.has(t.projectCode ?? '') || dynamicAssignedTaskIds.has(t.id))
     );

@@ -216,6 +216,8 @@ export const SCHEMA: Record<string, TableDef> = {
       notes: { col: 'notes', kind: 'text' },
       boardName: { col: 'board_name', kind: 'text' },
       boardId: { col: 'board_id', kind: 'text' },
+      deletedAt: { col: 'deleted_at', kind: 'datetime' },
+      deletedBy: { col: 'deleted_by', kind: 'text' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },

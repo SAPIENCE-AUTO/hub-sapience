@@ -1,6 +1,27 @@
 import { z } from 'zod';
 import { createEndpoint, BoardColumns, CellValues, RecruitmentRows, Tasks } from '../../server/compat';
 
+// Duplicar fila por fila en serie (findOne → create → findAll celdas →
+// bulkCreate → create celda de grupo, ×N filas) hacía que duplicar un grupo
+// de 30+ filas tardara varios segundos seguidos — se sentía "no instantáneo"
+// y ya causó un doble-clic real (ver comentario en GroupSectionHeader.tsx).
+// Con lotes de 6 en paralelo baja el tiempo total a ~1/6, sin abrir tantas
+// conexiones a la vez como para saturar el pool.
+const CONCURRENCY = 6;
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 export default createEndpoint({
   authenticated: true,
   description: 'Duplicate a group column and all rows inside it',
@@ -45,12 +66,11 @@ export default createEndpoint({
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const rowIds = groupCells.map(c => c.rowId).filter((id): id is string => !!id && UUID_RE.test(id));
 
-    // 4. Duplicate each row and assign to new group
-    let duplicatedRows = 0;
-    for (const rowId of rowIds) {
+    // 4. Duplicate each row and assign to new group (en paralelo, ver mapWithConcurrency arriba)
+    async function duplicateOneRow(rowId: string): Promise<boolean> {
       if (tableType === 'recruitment') {
         const orig = await RecruitmentRows.findOne({ id: rowId });
-        if (!orig || orig.deletedAt) continue;
+        if (!orig || orig.deletedAt) return false;
         const { id: _id, ...rest } = orig;
         const newRow = await RecruitmentRows.create({
           record: {
@@ -88,11 +108,11 @@ export default createEndpoint({
           },
         });
 
-        duplicatedRows++;
+        return true;
       } else {
         const orig = await Tasks.findOne({ id: rowId });
-        if (!orig) continue;
-        const { id: _id, ...rest } = orig;
+        if (!orig || orig.deletedAt) return false;
+        const { id: _id, deletedAt: _da, deletedBy: _db, ...rest } = orig;
         const newTask = await Tasks.create({
           record: { ...rest, taskName: `${rest.taskName ?? 'Tarea'} (copia)` },
         });
@@ -125,9 +145,12 @@ export default createEndpoint({
           },
         });
 
-        duplicatedRows++;
+        return true;
       }
     }
+
+    const results = await mapWithConcurrency(rowIds, CONCURRENCY, duplicateOneRow);
+    const duplicatedRows = results.filter(Boolean).length;
 
     return { newGroupId: newCol.id, duplicatedRows };
   },

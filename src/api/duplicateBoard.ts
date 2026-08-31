@@ -203,7 +203,7 @@ export default createEndpoint({
     }
 
     // ── 5. Duplicate tasks (two passes for parent-child mapping) ─────────────
-    const allTasks = srcTasksRes.records;
+    const allTasks = srcTasksRes.records.filter(t => !t.deletedAt);
     const topLevel = allTasks.filter(t => !t.parentTaskId);
     const children  = allTasks.filter(t => !!t.parentTaskId);
     const taskIdMap = new Map<string, string>(); // oldTaskId → newTaskId

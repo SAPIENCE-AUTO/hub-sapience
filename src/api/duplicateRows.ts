@@ -85,8 +85,8 @@ export default createEndpoint({
         createdIds.push(newEvent.id);
       } else {
         const orig = await Tasks.findOne({ id });
-        if (!orig) continue;
-        const { id: _id, ...rest } = orig;
+        if (!orig || orig.deletedAt) continue;
+        const { id: _id, deletedAt: _da, deletedBy: _db, ...rest } = orig;
         const newTask = await Tasks.create({
           record: { ...rest, taskName: `${rest.taskName ?? 'Tarea'} (copia)` },
         });

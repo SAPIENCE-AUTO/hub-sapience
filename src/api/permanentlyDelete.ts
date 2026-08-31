@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, RecruitmentRows, BoardColumns, CellValues } from '../../server/compat';
+import { createEndpoint, RecruitmentRows, BoardColumns, CellValues, Tasks } from '../../server/compat';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
@@ -30,6 +30,25 @@ export default createEndpoint({
     const expiredRows = rows.filter(r => r.deletedAt && isExpired(r.deletedAt)).slice(0, 50);
     for (const row of expiredRows) {
       await RecruitmentRows.delete({ id: row.id });
+      await sleep(30);
+      deleted++;
+    }
+
+    if (deleted >= 50) return { deleted };
+
+    // ── Tasks ────────────────────────────────────────────────────────────
+    // deletedAt es timestamptz real (no 'text' como el resto, ver
+    // generate.py) — usa isNotEmpty en vez de `not: ''`, que compararía
+    // el timestamp contra un string vacío y tronaría en Postgres.
+    await sleep(200);
+    const { records: tasks } = await Tasks.findAll({
+      filters: { deletedAt: { isNotEmpty: true } } as any,
+      fields: ['id', 'deletedAt'],
+      limit: 500,
+    });
+    const expiredTasks = tasks.filter(t => t.deletedAt && isExpired(t.deletedAt)).slice(0, 50 - deleted);
+    for (const task of expiredTasks) {
+      await Tasks.delete({ id: task.id });
       await sleep(30);
       deleted++;
     }

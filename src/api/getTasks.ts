@@ -8,7 +8,7 @@ const dedup = <T extends { id: string }>(a: T[], b: T[]): T[] => {
   return Array.from(seen.values());
 };
 
-const TASK_FIELDS = ['taskName', 'projectCode', 'boardName', 'status', 'assignedTo', 'startDate', 'endDate', 'parentTaskId', 'order', 'notes', 'boardId'] as const;
+const TASK_FIELDS = ['taskName', 'projectCode', 'boardName', 'status', 'assignedTo', 'startDate', 'endDate', 'parentTaskId', 'order', 'notes', 'boardId', 'deletedAt'] as const;
 const EVENT_FIELDS = ['eventName', 'projectCode', 'calendarName', 'eventDate', 'durationHours', 'location', 'attendees', 'inviteSent', 'notes', 'parentEventId', 'inviteStatus', 'outlookEventId', 'outlookEventLink', 'inviteBodyHtml', 'inviteEmails', 'boardId', 'restringirReenvio'] as const;
 
 const taskSchema = z.object({
@@ -75,10 +75,10 @@ async function fetchTasksDualRead(input: { boardId: string; projectCode?: string
       fields: [...TASK_FIELDS],
     });
     const fallback = q2.records.filter(t => !t.boardId);
-    return sortByOrder(dedup(q1.records, fallback));
+    return sortByOrder(excludeDeleted(dedup(q1.records, fallback)));
   }
 
-  return sortByOrder(q1.records);
+  return sortByOrder(excludeDeleted(q1.records));
 }
 
 // `Tasks.findAll` no aplica ORDER BY por default — sin esto, Postgres devuelve
@@ -86,6 +86,10 @@ async function fetchTasksDualRead(input: { boardId: string; projectCode?: string
 // invertido respecto al campo `order` que reorderTasks.ts sí mantiene al día.
 const sortByOrder = <T extends { order?: number }>(rows: T[]): T[] =>
   [...rows].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+// Tasks ahora sí tiene borrado suave (deletedAt) — sin este filtro las tareas
+// en la papelera reaparecerían en el Gantt/listas.
+const excludeDeleted = (rows: any[]): any[] => rows.filter(r => !r.deletedAt);
 
 export default createEndpoint({
   authenticated: true,
@@ -116,7 +120,7 @@ export default createEndpoint({
       if (input.projectCode) taskFilters.projectCode = input.projectCode;
       if (input.boardName) taskFilters.boardName = input.boardName;
       const tasksResult = await Tasks.findAll({ filters: taskFilters, limit: 500, fields: [...TASK_FIELDS] });
-      return { tasks: sortByOrder(tasksResult.records), calendarEvents: [], boards: [], calendarBoards: [], boardObjects: [], calendarBoardObjects: [] };
+      return { tasks: sortByOrder(excludeDeleted(tasksResult.records)), calendarEvents: [], boards: [], calendarBoards: [], boardObjects: [], calendarBoardObjects: [] };
     }
 
     // ── Fast path: only events ──
@@ -174,7 +178,7 @@ export default createEndpoint({
           if (input.projectCode) taskFilters.projectCode = input.projectCode;
           if (input.boardName) taskFilters.boardName = input.boardName;
           const r = await Tasks.findAll({ filters: taskFilters, limit: 500, fields: [...TASK_FIELDS] });
-          return sortByOrder(r.records);
+          return sortByOrder(excludeDeleted(r.records));
         })();
 
     const [tasks, eventsResult, pmBoardsResult, calBoardsResult] = await Promise.all([

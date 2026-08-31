@@ -28,10 +28,10 @@ export default createEndpoint({
   execute: async ({ input }) => {
     const record = await Tasks.findOne({
       id: input.id,
-      fields: ['taskName', 'projectCode', 'boardName', 'boardId', 'status', 'assignedTo', 'startDate', 'endDate', 'parentTaskId', 'order', 'notes'],
+      fields: ['taskName', 'projectCode', 'boardName', 'boardId', 'status', 'assignedTo', 'startDate', 'endDate', 'parentTaskId', 'order', 'notes', 'deletedAt'],
     });
 
-    if (!record) {
+    if (!record || record.deletedAt) {
       return { task: null };
     }
 

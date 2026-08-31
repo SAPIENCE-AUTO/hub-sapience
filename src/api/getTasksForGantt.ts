@@ -105,6 +105,7 @@ export default createEndpoint({
 
       // ── Filter tasks to active pm boards ───────────────────────────────────
       const validTasks = tasks.filter(t => {
+        if (t.deletedAt) return false;
         // UUID-first: if task has a boardId UUID, validate it directly
         if (t.boardId && activeBoardUUIDs.has(t.boardId)) return true;
         // Legacy fallback: validate via composite key

@@ -46,7 +46,7 @@ export default createEndpoint({
           'lider', 'analistas', 'moderadores', 'asistentes', 'muestra', 'muestraImagen',
         ],
       }),
-      Tasks.findAll({ limit: 1000, fields: ['projectCode', 'startDate', 'endDate'] }),
+      Tasks.findAll({ limit: 1000, fields: ['projectCode', 'startDate', 'endDate', 'deletedAt'] }),
       CalendarEvents.findAll({ limit: 500, fields: ['projectCode', 'eventDate'] }),
     ]);
 
@@ -62,7 +62,7 @@ export default createEndpoint({
     };
 
     for (const t of tasks) {
-      if (!t.projectCode) continue;
+      if (!t.projectCode || t.deletedAt) continue;
       const start = t.startDate?.split('T')[0];
       const end   = t.endDate?.split('T')[0];
       if (start) updateMin(t.projectCode, start);

@@ -1415,6 +1415,7 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
                   {/* Group header row — sticky <td colspan> at top:33px */}
                   <GroupSectionHeader
                     showPublicName={true}
+                    tableType="recruitment"
                     groupId={g.id}
                     name={g.columnName ?? 'Sin grupo'}
                     colorId={g.columnType}

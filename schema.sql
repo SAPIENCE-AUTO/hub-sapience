@@ -225,6 +225,8 @@ create table tasks (
   notes                         text,
   board_name                    text,
   board_id                      text,
+  deleted_at                    timestamptz,
+  deleted_by                    text,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now(),
   constraint tasks_status_chk check ("status" is null or "status" in ('Pendiente', 'En progreso', 'Completada', 'Bloqueada', 'Archivada'))

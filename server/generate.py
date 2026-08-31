@@ -44,6 +44,23 @@ CHECK_EXTRA = {
     ('projects', 'status'): ['Stand by'],
 }
 
+# Campos agregados a mano, no derivables del export de Zite: Tasks nunca tuvo
+# borrado suave ahí (era DELETE real — confirmado, `tasks` no traía deletedAt
+# en ningún campo del export). Se agrega tras el incidente BIBLIOTECA (28 ago
+# 2026): borrar la columna de un grupo mandaba sus tareas a "Sin grupo" pero
+# las tareas seguían enteras, sin ningún respaldo — recuperar la real
+# ("WOMEN - GEN X", 16 tareas) requirió restaurarla directo en la base. Se
+# decidió que borrar un grupo sí borre sus tareas, así que ahora necesitan la
+# misma papelera de 10 días que ya tienen participantes y columnas. `deleted_at`
+# usa timestamptz real (no 'text', a diferencia del resto de deleted_at
+# heredados de Zite) porque este campo nace ya en Postgres, sin arrastrar el
+# tipo legado. La migración sobre la tabla ya existente vive en
+# server/scripts/add-tasks-soft-delete.ts (ALTER TABLE, no se ejecuta sola).
+EXTRA_COLUMNS = {
+    'Tasks': [('deletedAt', 'deleted_at', 'timestamptz', 'datetime'),
+              ('deletedBy', 'deleted_by', 'text', 'text')],
+}
+
 # Índice único agregado directamente en Supabase después de la carga inicial
 # (migración `20260808172245_remote_schema.sql`), no derivable del export de
 # Zite: Zite nunca impidió dos cell_values "vivas" para la misma posición
@@ -133,6 +150,8 @@ for t in tables:
         elif opts and ty == 'multiple_select':
             v = ", ".join("'" + o.replace("'", "''") + "'" for o in opts)
             checks.append(f"  constraint {T}_{col}_chk check ({q(col)} is null or {q(col)} <@ array[{v}]::text[])")
+    for prop, col, pg, kind in EXTRA_COLUMNS.get(model(t['name']), []):
+        add(prop, col, pg, kind)
     add('createdAt', 'created_at', 'timestamptz', 'datetime', 'now')
     add('updatedAt', 'updated_at', 'timestamptz', 'datetime', 'now')
     many = {mm['prop']: mm for mm in m2m.values() if mm['owner']['id'] == t['id']}

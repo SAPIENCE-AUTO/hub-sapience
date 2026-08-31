@@ -86,9 +86,9 @@ export default createEndpoint({
       );
       await sleep(300);
 
-      // ── 4. Hard-delete tasks ───────────────────────────────────────────
+      // ── 4. Soft-delete tasks ─────────────────────────────────────────────
       await softDeleteBatch(tasksResult.records.map(r => r.id), id =>
-        Tasks.delete({ id })
+        Tasks.update({ id, record: { deletedAt: now, deletedBy } })
       );
       await sleep(300);
 
@@ -216,9 +216,9 @@ export default createEndpoint({
     );
     await sleep(300);
 
-    // ── 6. Hard-delete tasks ────────────────────────────────────────────
+    // ── 6. Soft-delete tasks ─────────────────────────────────────────────
     await softDeleteBatch(tasksResult.records.map(r => r.id), id =>
-      Tasks.delete({ id })
+      Tasks.update({ id, record: { deletedAt: now, deletedBy } })
     );
     await sleep(300);
 
