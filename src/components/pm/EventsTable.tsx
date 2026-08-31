@@ -721,7 +721,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
         </Button>
       </div>
       <div className="bg-card border rounded-lg overflow-auto max-h-[calc(100vh-360px)]">
-        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + 128 + 128 + 96 + 90 + 44 + dynCols.columns.filter(c => visibleColIds.has(c.id)).reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}>
+        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + 128 + 128 + 96 + 90 + 96 + 44 + dynCols.columns.filter(c => visibleColIds.has(c.id)).reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}>
           <colgroup>
             <col style={{ width: 32 }} />
             <col style={{ width: nameCol.width }} />
@@ -729,6 +729,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
             <col style={{ width: 128 }} />
             <col style={{ width: 96 }} />
             <col style={{ width: 90 }} />
+            <col style={{ width: 96 }} />
             <col style={{ width: 44 }} />
             {/* Un <col> por CADA columna dinámica, sin filtrar por visibleColIds —
                 DynamicColumnHeaders/Cells sí renderizan un <th>/<td> placeholder
