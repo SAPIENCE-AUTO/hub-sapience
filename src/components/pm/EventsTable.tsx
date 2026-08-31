@@ -269,6 +269,24 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
     () => new Set(dynCols.columns.filter(c => c.id !== locCol?.id).map(c => c.id)),
     [dynCols.columns, locCol?.id],
   );
+  // Zoom se ancla junto a "Crear stream" (columna dinámica creada junto con
+  // "Link Zoom"/"Link de observación" — ver add-observation-board-columns.ts).
+  // El orden de columnas dinámicas es POR TABLERO, no fijo (aquí, p.ej.,
+  // "Responsable" va antes que "Crear stream") — poner el pill antes/después
+  // del bloque completo no lo deja junto a esa columna en particular. Por eso
+  // el bloque se parte en dos llamadas a DynamicColumnHeaders/Cells, usando
+  // `hiddenColumns` (que omite la celda por completo, a diferencia de
+  // `visibleColIds`, que deja un placeholder) para que cada mitad renderice
+  // solo lo suyo, con el pill de Zoom insertado exactamente entre las dos.
+  const dynColsSorted = useMemo(
+    () => [...dynCols.columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0)),
+    [dynCols.columns],
+  );
+  const crearStreamIdx = dynColsSorted.findIndex(c => c.columnName === 'Crear stream');
+  const dynColsBeforeZoom = crearStreamIdx === -1 ? dynColsSorted : dynColsSorted.slice(0, crearStreamIdx + 1);
+  const dynColsAfterZoom = crearStreamIdx === -1 ? [] : dynColsSorted.slice(crearStreamIdx + 1);
+  const beforeZoomIds = useMemo(() => new Set(dynColsBeforeZoom.map(c => c.id)), [dynColsBeforeZoom]);
+  const afterZoomIds = useMemo(() => new Set(dynColsAfterZoom.map(c => c.id)), [dynColsAfterZoom]);
   const getField = (evId: string, field: 'location' | 'attendees', fallback?: string | null) => {
     const local = localFields.get(evId)?.[field];
     if (local !== undefined) return local;
@@ -501,11 +519,13 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
             colUniqueValues={colUniqueValues}
             selectedIds={selectedIds}
             visibleColIds={visibleColIds}
+            hiddenColumns={afterZoomIds}
+            hideAddButton
             onBulkSave={(colId, value, label) => showBulkConfirm(label, () => {
               const ops = [...selectedIds].filter(id => id !== ev.id).map(id => ({ rowId: id, colId, value }));
               if (ops.length > 0) dynCols.batchSetCellVals(ops);
             })} />
-          {/* Zoom status — al final, junto a "Link Zoom"/"Link de observación".
+          {/* Zoom status — pegado a "Crear stream" (ver add-observation-board-columns.ts).
               Si el invite de Outlook YA está "Por actualizar", ese mismo cambio de
               fecha/hora también ensució Zoom (es subconjunto exacto de lo que
               dispara el invite) — arreglar el invite ya arregla Zoom de rebote
@@ -544,6 +564,16 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
               )
             ) : null}
           </td>
+          <DynamicColumnCells rowId={ev.id} dynCols={dynCols} recentColors={recentColors}
+            recentTextColors={recentTextColors} recentBgColors={recentBgColors}
+            colUniqueValues={colUniqueValues}
+            selectedIds={selectedIds}
+            visibleColIds={visibleColIds}
+            hiddenColumns={beforeZoomIds}
+            onBulkSave={(colId, value, label) => showBulkConfirm(label, () => {
+              const ops = [...selectedIds].filter(id => id !== ev.id).map(id => ({ rowId: id, colId, value }));
+              if (ops.length > 0) dynCols.batchSetCellVals(ops);
+            })} />
         </tr>
         {showNested && (
           <tr className="border-b border-border/20">
@@ -748,11 +778,12 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
                 se quedaba sin ancho declarado y colapsaba a ~30px. La columna
                 excluida sigue ocupando su posición, pero con ancho 0 para no
                 gastar espacio real. */}
-            {[...dynCols.columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0)).map(c => { const w = visibleColIds.has(c.id) ? dynCols.getColWidth(c.id) : 0; return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
-            {/* Zoom va al final, junto a "Link Zoom"/"Link de observación" (columnas
-                dinámicas de mayor columnOrder) — no tiene sentido que compita por
-                atención con Invite/Outlook al inicio de la fila. */}
+            {dynColsBeforeZoom.map(c => { const w = visibleColIds.has(c.id) ? dynCols.getColWidth(c.id) : 0; return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
+            {/* Zoom va pegado a "Crear stream" (la última columna del bloque de
+                arriba) — no tiene sentido que compita por atención con
+                Invite/Outlook al inicio de la fila. */}
             <col style={{ width: 96 }} />
+            {dynColsAfterZoom.map(c => { const w = visibleColIds.has(c.id) ? dynCols.getColWidth(c.id) : 0; return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
             <col />
           </colgroup>
           <thead className="bg-muted sticky top-0 z-30">
@@ -776,8 +807,9 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
               <th className="text-center px-0 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 44 }}>
                 <TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center justify-center w-full"><Lock className="w-3.5 h-3.5 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top"><p className="text-xs">Restringir reenvío de invitación</p></TooltipContent></Tooltip></TooltipProvider>
               </th>
-              <DynamicColumnHeaders dynCols={dynCols} columnFilters={columnFilters} setColFilter={setColFilter} colUniqueValues={colUniqueValues} visibleColIds={visibleColIds} />
+              <DynamicColumnHeaders dynCols={dynCols} columnFilters={columnFilters} setColFilter={setColFilter} colUniqueValues={colUniqueValues} visibleColIds={visibleColIds} hiddenColumns={afterZoomIds} hideAddButton />
               <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }} title="Estatus del meeting de Zoom">Zoom</th>
+              <DynamicColumnHeaders dynCols={dynCols} columnFilters={columnFilters} setColFilter={setColFilter} colUniqueValues={colUniqueValues} visibleColIds={visibleColIds} hiddenColumns={beforeZoomIds} />
             </tr>
           </thead>
           <tbody>

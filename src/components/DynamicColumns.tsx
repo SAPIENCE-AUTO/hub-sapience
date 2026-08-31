@@ -1639,7 +1639,7 @@ const DEFAULT_COLORED_OPTS: ColoredOption[] = [
 ];
 const DEFAULT_FORMULA: FormulaConfig = { expression: '', resultType: 'number' };
 
-export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, setColFilter, colUniqueValues, hiddenColumns, sortColumn, sortDirection, onToggleSort, visibleColIds }: {
+export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, setColFilter, colUniqueValues, hiddenColumns, sortColumn, sortDirection, onToggleSort, visibleColIds, hideAddButton }: {
   dynCols: DynCols;
   asDiv?: boolean;
   sticky?: boolean;
@@ -1651,6 +1651,12 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
   sortDirection?: 'asc' | 'desc';
   onToggleSort?: (colId: string) => void;
   visibleColIds?: Set<string> | null;
+  /** Para tablas que llaman este componente más de una vez por fila (partiendo
+   *  el bloque de columnas dinámicas en dos, para anclar una columna fija
+   *  propia entre dos dinámicas específicas — ver EventsTable.tsx) — el botón
+   *  "+ Columna" y el relleno final deben aparecer una sola vez, en la
+   *  llamada que de verdad renderiza el final real de la fila. */
+  hideAddButton?: boolean;
 }) {
   const [openAdd, setOpenAdd] = useState(false);
   const [openRename, setOpenRename] = useState(false);
@@ -2206,7 +2212,7 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
         );
       })}
 
-      {asDiv
+      {!hideAddButton && (asDiv
         ? <div className="px-1 py-1 bg-muted/20" style={{ display: 'table-cell', verticalAlign: 'middle' }}>
             <button onClick={() => { resetForm(); setOpenAdd(true); }}
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 px-2 py-1 rounded-md transition-colors whitespace-nowrap">
@@ -2222,7 +2228,7 @@ export function DynamicColumnHeaders({ dynCols, asDiv, sticky, columnFilters, se
               <Plus className="w-3 h-3" /> Columna
             </button>
           </th>
-      }
+      )}
 
       {/* Add Column Dialog */}
       <Dialog open={openAdd} onOpenChange={o => { if (!o) resetForm(); setOpenAdd(o); }}>
@@ -2356,7 +2362,7 @@ const SKIP_SKELETON_TYPES = new Set(['Checkbox', 'Rating', 'Botón', 'Status', '
 // durante el scroll virtualizado) — sin memo, se recalculan todas en cada
 // frame de scroll aunque su contenido no haya cambiado. Requiere que quien la
 // use pase `onBulkSave` estable (useCallback), o el memo nunca hace bail-out.
-export const DynamicColumnCells = memo(function DynamicColumnCells({ rowId, dynCols, asDiv, hiddenColumns, recentColors, recentTextColors, recentBgColors, selectedIds, onBulkSave, colUniqueValues, visibleColIds }: { rowId: string; dynCols: DynCols; asDiv?: boolean; hiddenColumns?: Set<string>; recentColors?: string[]; recentTextColors?: string[]; recentBgColors?: string[]; selectedIds?: Set<string>; onBulkSave?: (colId: string, value: CellVal, label: string) => void; colUniqueValues?: (key: string) => string[]; visibleColIds?: Set<string> | null }) {
+export const DynamicColumnCells = memo(function DynamicColumnCells({ rowId, dynCols, asDiv, hiddenColumns, recentColors, recentTextColors, recentBgColors, selectedIds, onBulkSave, colUniqueValues, visibleColIds, hideAddButton }: { rowId: string; dynCols: DynCols; asDiv?: boolean; hiddenColumns?: Set<string>; recentColors?: string[]; recentTextColors?: string[]; recentBgColors?: string[]; selectedIds?: Set<string>; onBulkSave?: (colId: string, value: CellVal, label: string) => void; colUniqueValues?: (key: string) => string[]; visibleColIds?: Set<string> | null; /** Ver el mismo prop en DynamicColumnHeaders — el relleno final debe existir una sola vez por fila. */ hideAddButton?: boolean }) {
   const sorted = [...dynCols.columns]
     .sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0))
     .filter(col => !hiddenColumns?.has(col.id));
@@ -2423,7 +2429,7 @@ export const DynamicColumnCells = memo(function DynamicColumnCells({ rowId, dynC
           </td>
         );
       })}
-      {asDiv ? <div className="bg-muted/10" /> : <td className="bg-muted/10 border-b border-border/30" />}
+      {!hideAddButton && (asDiv ? <div className="bg-muted/10" /> : <td className="bg-muted/10 border-b border-border/30" />)}
     </>
   );
 });
