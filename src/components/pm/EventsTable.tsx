@@ -552,14 +552,14 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
                   className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity bg-amber-100 text-amber-700 disabled:opacity-50"
                 >
                   {zoomSyncingId === ev.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                  Zoom desactualizado
+                  Desactualizado
                 </button>
               ) : (
                 <span
                   title="El meeting de Zoom está al día con la fecha/hora del evento"
                   className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap bg-green-100 text-green-700"
                 >
-                  Zoom
+                  Al día
                 </span>
               )
             ) : null}
