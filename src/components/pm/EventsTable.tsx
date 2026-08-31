@@ -481,9 +481,40 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
               {quickSyncingId === ev.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             </button>
           </td>
-          {/* Zoom status — solo si el evento tiene meeting de Zoom (sesión de observación creada) */}
+          {/* Restringir reenvío checkbox */}
+          <td style={{ width: 44, maxWidth: 44, padding: '2px 0', borderBottom: '1px solid hsl(var(--border) / 0.3)', borderRight: '1px solid hsl(var(--border) / 0.3)', textAlign: 'center' }}>
+            <Checkbox
+              checked={localReenvio.has(ev.id) ? localReenvio.get(ev.id)! : !!(ev as any).restringirReenvio}
+              onCheckedChange={(checked) => {
+                const val = !!checked;
+                setLocalReenvio(prev => { const m = new Map(prev); m.set(ev.id, val); return m; });
+                saveCalendarEvent({ id: ev.id, restringirReenvio: val }).catch(() => {
+                  setLocalReenvio(prev => { const m = new Map(prev); m.set(ev.id, !val); return m; });
+                  toast.error('Error al guardar');
+                });
+              }}
+              className="h-3.5 w-3.5"
+            />
+          </td>
+          <DynamicColumnCells rowId={ev.id} dynCols={dynCols} recentColors={recentColors}
+            recentTextColors={recentTextColors} recentBgColors={recentBgColors}
+            colUniqueValues={colUniqueValues}
+            selectedIds={selectedIds}
+            visibleColIds={visibleColIds}
+            onBulkSave={(colId, value, label) => showBulkConfirm(label, () => {
+              const ops = [...selectedIds].filter(id => id !== ev.id).map(id => ({ rowId: id, colId, value }));
+              if (ops.length > 0) dynCols.batchSetCellVals(ops);
+            })} />
+          {/* Zoom status — al final, junto a "Link Zoom"/"Link de observación".
+              Si el invite de Outlook YA está "Por actualizar", ese mismo cambio de
+              fecha/hora también ensució Zoom (es subconjunto exacto de lo que
+              dispara el invite) — arreglar el invite ya arregla Zoom de rebote
+              (ver el encadenado en el handler de Outlook), así que no hace falta
+              una segunda pastilla ámbar duplicando la misma alerta. Solo se
+              muestra cuando de verdad es la ÚNICA señal: no hay invite pendiente
+              (sin invitación enviada, o cancelada) que lo vaya a resolver solo. */}
           <td style={{ width: 96, maxWidth: 96, padding: '2px 6px', borderBottom: '1px solid hsl(var(--border) / 0.3)', borderRight: '1px solid hsl(var(--border) / 0.3)' }}>
-            {(ev as any).hasZoom ? (
+            {(ev as any).hasZoom && ev.inviteStatus !== 'Por actualizar' ? (
               (ev as any).zoomNeedsUpdate ? (
                 <button
                   onClick={async () => {
@@ -513,30 +544,6 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
               )
             ) : null}
           </td>
-          {/* Restringir reenvío checkbox */}
-          <td style={{ width: 44, maxWidth: 44, padding: '2px 0', borderBottom: '1px solid hsl(var(--border) / 0.3)', borderRight: '1px solid hsl(var(--border) / 0.3)', textAlign: 'center' }}>
-            <Checkbox
-              checked={localReenvio.has(ev.id) ? localReenvio.get(ev.id)! : !!(ev as any).restringirReenvio}
-              onCheckedChange={(checked) => {
-                const val = !!checked;
-                setLocalReenvio(prev => { const m = new Map(prev); m.set(ev.id, val); return m; });
-                saveCalendarEvent({ id: ev.id, restringirReenvio: val }).catch(() => {
-                  setLocalReenvio(prev => { const m = new Map(prev); m.set(ev.id, !val); return m; });
-                  toast.error('Error al guardar');
-                });
-              }}
-              className="h-3.5 w-3.5"
-            />
-          </td>
-          <DynamicColumnCells rowId={ev.id} dynCols={dynCols} recentColors={recentColors}
-            recentTextColors={recentTextColors} recentBgColors={recentBgColors}
-            colUniqueValues={colUniqueValues}
-            selectedIds={selectedIds}
-            visibleColIds={visibleColIds}
-            onBulkSave={(colId, value, label) => showBulkConfirm(label, () => {
-              const ops = [...selectedIds].filter(id => id !== ev.id).map(id => ({ rowId: id, colId, value }));
-              if (ops.length > 0) dynCols.batchSetCellVals(ops);
-            })} />
         </tr>
         {showNested && (
           <tr className="border-b border-border/20">
@@ -729,7 +736,6 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
             <col style={{ width: 128 }} />
             <col style={{ width: 96 }} />
             <col style={{ width: 90 }} />
-            <col style={{ width: 96 }} />
             <col style={{ width: 44 }} />
             {/* Un <col> por CADA columna dinámica, sin filtrar por visibleColIds —
                 DynamicColumnHeaders/Cells sí renderizan un <th>/<td> placeholder
@@ -743,6 +749,10 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
                 excluida sigue ocupando su posición, pero con ancho 0 para no
                 gastar espacio real. */}
             {[...dynCols.columns].sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0)).map(c => { const w = visibleColIds.has(c.id) ? dynCols.getColWidth(c.id) : 0; return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
+            {/* Zoom va al final, junto a "Link Zoom"/"Link de observación" (columnas
+                dinámicas de mayor columnOrder) — no tiene sentido que compita por
+                atención con Invite/Outlook al inicio de la fila. */}
+            <col style={{ width: 96 }} />
             <col />
           </colgroup>
           <thead className="bg-muted sticky top-0 z-30">
@@ -763,11 +773,11 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
               <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 160 }} title="Emails asistentes">Emails asist.</th>
               <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }} title="Estatus de la invitación">Invite</th>
               <th className="text-center px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 90 }} title="Crear/actualizar la invitación en Outlook">Outlook</th>
-              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }} title="Estatus del meeting de Zoom">Zoom</th>
               <th className="text-center px-0 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 44 }}>
                 <TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center justify-center w-full"><Lock className="w-3.5 h-3.5 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top"><p className="text-xs">Restringir reenvío de invitación</p></TooltipContent></Tooltip></TooltipProvider>
               </th>
               <DynamicColumnHeaders dynCols={dynCols} columnFilters={columnFilters} setColFilter={setColFilter} colUniqueValues={colUniqueValues} visibleColIds={visibleColIds} />
+              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }} title="Estatus del meeting de Zoom">Zoom</th>
             </tr>
           </thead>
           <tbody>
