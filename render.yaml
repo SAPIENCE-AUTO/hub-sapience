@@ -60,6 +60,8 @@ services:
         sync: false
       - key: ZITE_GOOGLE_MAPS_API_KEY
         sync: false
+      - key: ZITE_GOOGLE_VISION_API_KEY
+        sync: false
       - key: ZITE_OPENAI_ACCESS_TOKEN
         sync: false
       - key: ZITE_OUTLOOK_SEND_AS_EMAIL
