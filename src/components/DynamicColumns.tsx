@@ -42,7 +42,7 @@ import {
   ChevronDown, ChevronUp, ArrowUpDown, CircleDot, Type, Hash, Calendar as CalendarIcon, Clock, CheckSquare,
   ChevronDownCircle, User, Mail, Phone, Paperclip, MousePointerClick,
   Square as LucideIcon, ArrowLeftFromLine, ArrowRightFromLine, GripVertical,
-  Pipette, Calculator, MapPin, ExternalLink, GaugeCircle, Highlighter, Copy, Link2,
+  Pipette, Calculator, MapPin, ExternalLink, GaugeCircle, Highlighter, Copy, Link2, Search,
 } from 'lucide-react';
 import { executeButtonAction, getStreetViewUrl } from 'zite-endpoints-sdk';
 import { ColumnFilterPopover } from './ColumnFilterPopover';
@@ -1306,16 +1306,31 @@ function FilePreviewDialog({ open, onOpenChange, url, fileName }: {
       >
         <DialogHeader className="flex flex-row items-center justify-between px-4 py-2.5 border-b border-border/50 flex-shrink-0 gap-3 space-y-0">
           <DialogTitle className="text-sm font-medium truncate flex-1 min-w-0">{title}</DialogTitle>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
-            className="flex items-center gap-1.5 text-xs text-primary hover:underline whitespace-nowrap flex-shrink-0"
-          >
-            Abrir en nueva pestaña
-            <ExternalLink className="w-3 h-3" />
-          </a>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {fileType === 'image' && (
+              <a
+                href={`https://lens.google.com/uploadbyurl?url=${encodeURIComponent(url)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="flex items-center gap-1.5 text-xs text-primary hover:underline whitespace-nowrap"
+                title="Buscar esta imagen en Google para ver si aparece en otros sitios (posible foto bajada de internet)"
+              >
+                Buscar en Google
+                <Search className="w-3 h-3" />
+              </a>
+            )}
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1.5 text-xs text-primary hover:underline whitespace-nowrap"
+            >
+              Abrir en nueva pestaña
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </DialogHeader>
         <div className="flex items-center justify-center bg-muted/20 overflow-auto p-4" style={{ minHeight: 300, maxHeight: '80vh' }}>
           {fileType === 'image' && (
