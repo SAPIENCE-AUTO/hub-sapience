@@ -43,8 +43,9 @@ import {
   ChevronDownCircle, User, Mail, Phone, Paperclip, MousePointerClick,
   Square as LucideIcon, ArrowLeftFromLine, ArrowRightFromLine, GripVertical,
   Pipette, Calculator, MapPin, ExternalLink, GaugeCircle, Highlighter, Copy, Link2, Search,
+  CheckCircle2, AlertTriangle,
 } from 'lucide-react';
-import { executeButtonAction, getStreetViewUrl } from 'zite-endpoints-sdk';
+import { executeButtonAction, getStreetViewUrl, checkImageWeb } from 'zite-endpoints-sdk';
 import { ColumnFilterPopover } from './ColumnFilterPopover';
 import { toast } from 'sonner';
 
@@ -1292,11 +1293,37 @@ function getFileLabel(url: string): string {
 }
 
 // ── File preview dialog ───────────────────────────────────────────────────────
+type WebCheckResult = {
+  pages: { url: string; title?: string }[];
+  exactMatches: number;
+  bestGuess?: string;
+  error?: string;
+};
+
 function FilePreviewDialog({ open, onOpenChange, url, fileName }: {
   open: boolean; onOpenChange: (o: boolean) => void; url: string; fileName?: string;
 }) {
   const fileType = getFileType(url);
   const title = fileName || url.split('/').pop()?.split('?')[0] || 'Archivo';
+  const [checking, setChecking] = useState(false);
+  const [result, setResult] = useState<WebCheckResult | null>(null);
+  const [resultOpen, setResultOpen] = useState(false);
+
+  const handleCheck = async () => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const r = await checkImageWeb({ imageUrl: url });
+      setResult(r);
+      setResultOpen(true);
+    } catch {
+      setResult({ pages: [], exactMatches: 0, error: 'No se pudo conectar con Cloud Vision' });
+      setResultOpen(true);
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -1308,17 +1335,52 @@ function FilePreviewDialog({ open, onOpenChange, url, fileName }: {
           <DialogTitle className="text-sm font-medium truncate flex-1 min-w-0">{title}</DialogTitle>
           <div className="flex items-center gap-3 flex-shrink-0">
             {fileType === 'image' && (
-              <a
-                href={`https://lens.google.com/uploadbyurl?url=${encodeURIComponent(url)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1.5 text-xs text-primary hover:underline whitespace-nowrap"
-                title="Buscar esta imagen en Google para ver si aparece en otros sitios (posible foto bajada de internet)"
-              >
-                Buscar en Google
-                <Search className="w-3 h-3" />
-              </a>
+              <Popover open={resultOpen} onOpenChange={setResultOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={checking}
+                    onClick={e => { e.stopPropagation(); handleCheck(); }}
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline whitespace-nowrap disabled:opacity-50"
+                    title="Buscar esta imagen en internet con Google Cloud Vision (posible foto bajada de internet)"
+                  >
+                    {checking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                    Verificar en Google
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 text-xs space-y-2" onClick={e => e.stopPropagation()}>
+                  {result?.error && (
+                    <p className="text-destructive flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> {result.error}
+                    </p>
+                  )}
+                  {result && !result.error && result.pages.length === 0 && result.exactMatches === 0 && (
+                    <p className="text-emerald-600 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" /> Sin coincidencias en internet
+                    </p>
+                  )}
+                  {result && !result.error && (result.pages.length > 0 || result.exactMatches > 0) && (
+                    <>
+                      <p className="text-amber-600 font-medium flex items-start gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        Esta imagen aparece en {result.pages.length} página{result.pages.length !== 1 ? 's' : ''} de internet
+                        {result.exactMatches > 0 ? ` (${result.exactMatches} coincidencia${result.exactMatches !== 1 ? 's' : ''} exacta${result.exactMatches !== 1 ? 's' : ''})` : ''}
+                      </p>
+                      {result.pages.length > 0 && (
+                        <ul className="space-y-1 max-h-40 overflow-y-auto">
+                          {result.pages.map((p, i) => (
+                            <li key={i}>
+                              <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate block">
+                                {p.title || p.url}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </PopoverContent>
+              </Popover>
             )}
             <a
               href={url}
