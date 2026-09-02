@@ -243,7 +243,10 @@ function JoinScreen({
 }) {
   return (
     <div className="flex min-h-dvh flex-col bg-[#0F3D4C] px-6 pb-10 pt-14 text-white">
-      <img src={LOGO_URL} alt="Sapience" className="h-7 w-auto" />
+      {/* self-start: el padre es flex-col sin items-center, así que por
+          default el logo se estiraba a lo ancho del contenedor (stretch es
+          el align-items implícito) — sin esto se veía deformado. */}
+      <img src={LOGO_URL} alt="Sapience" className="h-7 w-auto self-start" />
       <div className="flex flex-1 flex-col justify-center">
         {nombre && (
           <p className="mb-1 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#6FC2DA]">{cliente ?? 'Sapience'}</p>

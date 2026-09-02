@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  getSwipeSesiones, createSwipeSesion, getSwipeSesionDetail, createSwipeCapitulo,
-  getSwipeIdeas, createSwipeIdea, setSwipeCapituloEstado, getSwipeResultados,
+  getSwipeSesiones, createSwipeSesion, deleteSwipeSesion, getSwipeSesionDetail, createSwipeCapitulo,
+  getSwipeIdeas, createSwipeIdea, updateSwipeIdea, getSwipeVotosDeIdea, setSwipeCapituloEstado, getSwipeResultados,
 } from 'zite-endpoints-sdk';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Copy, Plus } from 'lucide-react';
+import { Copy, Plus, Star, Heart, X, Trash2, Pencil, Users } from 'lucide-react';
 
 interface SesionRow { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulosCount: number }
 interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number }
-interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number }
-interface ResultadoIdea { id: string; titulo: string; imagenUrl?: string; totalVotos: number; potencial: number; descarte: number; pctPotencial: number }
+interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number; tieneVotos: boolean }
+interface ResultadoIdea { id: string; titulo: string; imagenUrl?: string; totalVotos: number; potencial: number; descarte: number; superLikes: number; pctPotencial: number; score: number }
 interface Detalle { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulos: CapituloRow[] }
+interface VotoRow { alias: string; valor: string; msDecision?: number; createdAt: string }
+
+const VALOR_ICON: Record<string, React.ComponentType<{ className?: string }>> = { potencial: Heart, descarte: X, super: Star };
+const VALOR_COLOR: Record<string, string> = { potencial: '#1F9D6F', descarte: '#C4302B', super: '#D4A017' };
 
 /**
  * Dashboard del facilitador para el módulo Swipe — Fase 1: crear sesiones y
@@ -37,6 +41,10 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   const [newSesionCliente, setNewSesionCliente] = useState('');
   const [creatingSesion, setCreatingSesion] = useState(false);
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingSesion, setDeletingSesion] = useState(false);
+
   const [newCapOpen, setNewCapOpen] = useState(false);
   const [newCapNombre, setNewCapNombre] = useState('');
   const [newCapDescripcion, setNewCapDescripcion] = useState('');
@@ -47,6 +55,16 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   const [newIdeaDescripcion, setNewIdeaDescripcion] = useState('');
   const [newIdeaImagenUrl, setNewIdeaImagenUrl] = useState('');
   const [creatingIdea, setCreatingIdea] = useState(false);
+
+  const [editingIdea, setEditingIdea] = useState<IdeaRow | null>(null);
+  const [editTitulo, setEditTitulo] = useState('');
+  const [editDescripcion, setEditDescripcion] = useState('');
+  const [editImagenUrl, setEditImagenUrl] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [expandedVotosIdeaId, setExpandedVotosIdeaId] = useState<string | null>(null);
+  const [votosByIdea, setVotosByIdea] = useState<Record<string, VotoRow[]>>({});
+  const [loadingVotos, setLoadingVotos] = useState(false);
 
   const loadSesiones = async () => {
     setLoadingSesiones(true);
@@ -79,7 +97,7 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   };
 
   useEffect(() => {
-    if (selectedCapituloId) { loadIdeas(selectedCapituloId); setResultados(null); }
+    if (selectedCapituloId) { loadIdeas(selectedCapituloId); setResultados(null); setExpandedVotosIdeaId(null); }
   }, [selectedCapituloId]);
 
   // Refresca resultados mientras el capítulo seleccionado siga abierto —
@@ -108,6 +126,22 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
       toast.error((err as Error)?.message || 'No se pudo crear la sesión.');
     }
     setCreatingSesion(false);
+  };
+
+  const handleDeleteSesion = async () => {
+    if (!detalle || deleteConfirmText !== 'BORRAR') return;
+    setDeletingSesion(true);
+    try {
+      await deleteSwipeSesion({ sesionId: detalle.id });
+      setDeleteConfirmOpen(false);
+      setDeleteConfirmText('');
+      setSelectedSesionId(null);
+      toast.success('Sesión eliminada');
+      await loadSesiones();
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo eliminar la sesión.');
+    }
+    setDeletingSesion(false);
   };
 
   const handleCreateCapitulo = async () => {
@@ -145,6 +179,45 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
       toast.error((err as Error)?.message || 'No se pudo agregar la idea.');
     }
     setCreatingIdea(false);
+  };
+
+  const openEditIdea = (idea: IdeaRow) => {
+    setEditingIdea(idea);
+    setEditTitulo(idea.titulo);
+    setEditDescripcion(idea.descripcion ?? '');
+    setEditImagenUrl(idea.imagenUrl ?? '');
+  };
+
+  const handleSaveEditIdea = async () => {
+    if (!editingIdea || !editTitulo.trim() || !selectedCapituloId) return;
+    setSavingEdit(true);
+    try {
+      await updateSwipeIdea({
+        ideaId: editingIdea.id,
+        titulo: editTitulo.trim(),
+        descripcion: editDescripcion.trim() || undefined,
+        imagenUrl: editImagenUrl.trim() || undefined,
+      });
+      setEditingIdea(null);
+      await loadIdeas(selectedCapituloId);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo editar la idea.');
+    }
+    setSavingEdit(false);
+  };
+
+  const toggleVotos = async (ideaId: string) => {
+    if (expandedVotosIdeaId === ideaId) { setExpandedVotosIdeaId(null); return; }
+    setExpandedVotosIdeaId(ideaId);
+    if (!votosByIdea[ideaId]) {
+      setLoadingVotos(true);
+      try {
+        const res = await getSwipeVotosDeIdea({ ideaId });
+        setVotosByIdea((prev) => ({ ...prev, [ideaId]: res.votos ?? [] }));
+      } finally {
+        setLoadingVotos(false);
+      }
+    }
   };
 
   const handleToggleCapituloEstado = async (cap: CapituloRow) => {
@@ -215,9 +288,38 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                     <CardTitle>{detalle.nombre}</CardTitle>
                     <p className="text-xs text-muted-foreground">/swipe/{detalle.codigo}</p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => copyLink(detalle.codigo)}>
-                    <Copy className="h-3.5 w-3.5" /> Copiar link
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => copyLink(detalle.codigo)}>
+                      <Copy className="h-3.5 w-3.5" /> Copiar link
+                    </Button>
+                    <Dialog open={deleteConfirmOpen} onOpenChange={(open) => { setDeleteConfirmOpen(open); if (!open) setDeleteConfirmText(''); }}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader><DialogTitle>Eliminar "{detalle.nombre}"</DialogTitle></DialogHeader>
+                        <p className="text-sm text-muted-foreground">
+                          Esto borra la sesión completa: sus capítulos, ideas, participantes y votos. No se puede deshacer.
+                        </p>
+                        <Input
+                          placeholder="Escribe BORRAR para confirmar"
+                          value={deleteConfirmText}
+                          onChange={(e) => setDeleteConfirmText(e.target.value)}
+                        />
+                        <DialogFooter>
+                          <Button
+                            variant="destructive"
+                            onClick={handleDeleteSesion}
+                            disabled={deletingSesion || deleteConfirmText !== 'BORRAR'}
+                          >
+                            {deletingSesion ? 'Eliminando…' : 'Eliminar sesión'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </CardHeader>
               </Card>
 
@@ -283,8 +385,44 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                         <ul className="space-y-1.5">
                           {(ideasByCapitulo[cap.id] ?? []).map((idea) => (
                             <li key={idea.id} className="rounded-md border border-border px-3 py-2 text-sm">
-                              <p className="font-medium text-foreground">{idea.titulo}</p>
-                              {idea.descripcion && <p className="text-xs text-muted-foreground">{idea.descripcion}</p>}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="font-medium text-foreground">{idea.titulo}</p>
+                                  {idea.descripcion && <p className="text-xs text-muted-foreground">{idea.descripcion}</p>}
+                                </div>
+                                <div className="flex flex-shrink-0 gap-1">
+                                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => toggleVotos(idea.id)}>
+                                    <Users className="h-3.5 w-3.5" />
+                                  </Button>
+                                  {!idea.tieneVotos && (
+                                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openEditIdea(idea)}>
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {expandedVotosIdeaId === idea.id && (
+                                <div className="mt-2 space-y-1 border-t border-border pt-2">
+                                  {loadingVotos && !votosByIdea[idea.id] && (
+                                    <p className="text-xs text-muted-foreground">Cargando…</p>
+                                  )}
+                                  {votosByIdea[idea.id]?.length === 0 && (
+                                    <p className="text-xs text-muted-foreground">Nadie ha votado esta idea todavía.</p>
+                                  )}
+                                  {(votosByIdea[idea.id] ?? []).map((voto, i) => {
+                                    const Icon = VALOR_ICON[voto.valor] ?? Heart;
+                                    return (
+                                      <div key={i} className="flex items-center justify-between text-xs">
+                                        <span className="text-foreground">{voto.alias}</span>
+                                        <span className="flex items-center gap-1" style={{ color: VALOR_COLOR[voto.valor] }}>
+                                          <Icon className="h-3 w-3" fill="currentColor" /> {voto.valor}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </li>
                           ))}
                           {(ideasByCapitulo[cap.id] ?? []).length === 0 && (
@@ -301,7 +439,14 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                               <div key={idea.id} className="space-y-1">
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="font-medium text-foreground">{idea.titulo}</span>
-                                  <span className="text-muted-foreground">{idea.pctPotencial}% · {idea.totalVotos} votos</span>
+                                  <span className="flex items-center gap-2 text-muted-foreground">
+                                    {idea.superLikes > 0 && (
+                                      <span className="flex items-center gap-0.5 text-[#D4A017]">
+                                        <Star className="h-3 w-3" fill="currentColor" /> {idea.superLikes}
+                                      </span>
+                                    )}
+                                    {idea.pctPotencial}% · {idea.totalVotos} votos
+                                  </span>
                                 </div>
                                 <Progress value={idea.pctPotencial} />
                               </div>
@@ -317,6 +462,22 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
           )}
         </div>
       </div>
+
+      <Dialog open={!!editingIdea} onOpenChange={(open) => { if (!open) setEditingIdea(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar idea</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Título (máx. 60 caracteres)" maxLength={60} value={editTitulo} onChange={(e) => setEditTitulo(e.target.value)} />
+            <Input placeholder="Descripción (máx. 180 caracteres)" maxLength={180} value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
+            <Input placeholder="URL de imagen (opcional)" value={editImagenUrl} onChange={(e) => setEditImagenUrl(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button onClick={handleSaveEditIdea} disabled={savingEdit || !editTitulo.trim()}>
+              {savingEdit ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -179,6 +179,7 @@ export const deleteProject = (input?: any): Promise<any> => call('deleteProject'
 export const deletePurchaseOrder = (input?: any): Promise<any> => call('deletePurchaseOrder', input);
 export const deleteRecruitmentRow = (input?: any): Promise<any> => call('deleteRecruitmentRow', input);
 export const deleteSharedView = (input?: any): Promise<any> => call('deleteSharedView', input);
+export const deleteSwipeSesion = (input?: any): Promise<any> => call('deleteSwipeSesion', input);
 export const deleteTask = (input?: any): Promise<any> => call('deleteTask', input);
 export const deleteUser = (input?: any): Promise<any> => call('deleteUser', input);
 export const detectDuplicateSuppliers = (input?: any): Promise<any> => call('detectDuplicateSuppliers', input);
@@ -277,6 +278,7 @@ export const getSwipeIdeas = (input?: any): Promise<any> => call('getSwipeIdeas'
 export const getSwipeResultados = (input?: any): Promise<any> => call('getSwipeResultados', input);
 export const getSwipeSesionDetail = (input?: any): Promise<any> => call('getSwipeSesionDetail', input);
 export const getSwipeSesiones = (input?: any): Promise<any> => call('getSwipeSesiones', input);
+export const getSwipeVotosDeIdea = (input?: any): Promise<any> => call('getSwipeVotosDeIdea', input);
 export const getTaskById = (input?: any): Promise<any> => call('getTaskById', input);
 export const getTaskComments = (input?: any): Promise<any> => call('getTaskComments', input);
 export const getTasks = (input?: any): Promise<any> => call('getTasks', input);
@@ -382,6 +384,7 @@ export const updateChatConversationMembers = (input?: any): Promise<any> => call
 export const updateDashboardTask = (input?: any): Promise<any> => call('updateDashboardTask', input);
 export const updatePresence = (input?: any): Promise<any> => call('updatePresence', input);
 export const updateSharedView = (input?: any): Promise<any> => call('updateSharedView', input);
+export const updateSwipeIdea = (input?: any): Promise<any> => call('updateSwipeIdea', input);
 export const updateUser = (input?: any): Promise<any> => call('updateUser', input);
 export const uploadProfilePhoto = (input?: any): Promise<any> => call('uploadProfilePhoto', input);
 export const uploadSupplierInvoice = (input?: any): Promise<any> => call('uploadSupplierInvoice', input);
