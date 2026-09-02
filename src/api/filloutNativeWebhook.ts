@@ -143,23 +143,24 @@ export default createEndpoint({
     const formId = input.formId;
     if (!formId) return { success: true };
 
-    // ── 1. Find the board linked to this formId ────────────────────────────
+    // ── 1. Find EVERY board with an active link to this formId ─────────────
+    // Un mismo formulario puede estar vinculado a varios tableros a la vez a
+    // propósito (ej. reusar el mismo Fillout para reclutar en paralelo) — así
+    // que cada respuesta nueva se aplica a TODOS los vínculos activos, no
+    // solo al primero que se encuentre. `deletedAt` se filtra explícitamente:
+    // re-vincular el mismo formulario a un tablero nuevo (típicamente porque
+    // alguien borró y recreó el tablero pensando que el vínculo "se rompió")
+    // deja sentinels viejos de tableros ya borrados con el mismo formId —
+    // sin este filtro, un `.find()` sin orden podía quedarse con uno de esos
+    // tableros muertos y la respuesta nueva se perdía ahí, invisible para
+    // siempre (confirmado en vivo: una respuesta real de ELÁSTICO/CHILE cayó
+    // en un tablero ya borrado 3 horas antes).
     const { records: linkCols } = await BoardColumns.findAll({
       filters: { columnType: '__fillout_link__' },
       limit: 200,
     });
 
-    const linkCol = linkCols.find(col => {
-      if (!col.optionsJson) return false;
-      try {
-        const meta = JSON.parse(col.optionsJson);
-        return meta.formId === formId;
-      } catch { return false; }
-    });
-
-    if (!linkCol?.optionsJson) return { success: true };
-
-    const meta = JSON.parse(linkCol.optionsJson) as {
+    type LinkMeta = {
       formId: string;
       formName: string;
       boardId: string;
@@ -168,6 +169,54 @@ export default createEndpoint({
       boardName: string;
       questionMapping?: { filloutId: string; columnId: string; questionName: string }[];
     };
+
+    const matchingLinks: LinkMeta[] = [];
+    for (const col of linkCols) {
+      if (col.deletedAt || !col.optionsJson) continue;
+      try {
+        const meta = JSON.parse(col.optionsJson);
+        if (meta.formId === formId) matchingLinks.push(meta);
+      } catch { /* ignore malformed sentinel */ }
+    }
+
+    if (matchingLinks.length === 0) return { success: true };
+
+    // ── 2. Extract questions from the payload (una sola vez, compartido) ───
+    const questions: any[] =
+      input.questions ??
+      input.answers ??
+      input.submission?.questions ??
+      input.submission?.answers ??
+      [];
+
+    if (questions.length === 0) return { success: true };
+
+    for (const meta of matchingLinks) {
+      try {
+        await processSubmissionForBoard(meta, questions);
+      } catch (err) {
+        console.error('[filloutNativeWebhook] Error procesando para tablero', {
+          boardId: meta.boardId, boardName: meta.boardName, err,
+        });
+      }
+    }
+
+    return { success: true };
+  },
+});
+
+async function processSubmissionForBoard(
+  meta: {
+    formId: string;
+    formName: string;
+    boardId: string;
+    legacyBoardId?: string;
+    projectCode: string;
+    boardName: string;
+    questionMapping?: { filloutId: string; columnId: string; questionName: string }[];
+  },
+  questions: any[],
+): Promise<void> {
     const { projectCode, boardName, formName, questionMapping = [] } = meta;
 
     // ── Resolve boardId: if meta.boardId is legacy (pre-migration link), try UUID ─
@@ -198,16 +247,6 @@ export default createEndpoint({
     });
     const colIdToType = new Map(boardCols.map(c => [c.id, c.columnType ?? '']));
 
-    // ── 2. Extract questions from the payload ─────────────────────────────
-    const questions: any[] =
-      input.questions ??
-      input.answers ??
-      input.submission?.questions ??
-      input.submission?.answers ??
-      [];
-
-    if (questions.length === 0) return { success: true };
-
     // ── 3. Parse core fields and dynamic cells ────────────────────────────
     const coreFields: Record<string, string> = {};
     const cellsToWrite: { columnId: string; value: string }[] = [];
@@ -221,7 +260,7 @@ export default createEndpoint({
       if (colId && value) cellsToWrite.push({ columnId: colId, value });
     }
 
-    if (!coreFields.participantName && !coreFields.email) return { success: true };
+    if (!coreFields.participantName && !coreFields.email) return;
 
     // ── 4. Dedup check ────────────────────────────────────────────────────
     const emailLower = coreFields.email?.toLowerCase() ?? '';
@@ -231,7 +270,7 @@ export default createEndpoint({
 
     if (existingChecks.length > 0) {
       const [result] = await Promise.all(existingChecks);
-      if (result.records.length > 0) return { success: true };
+      if (result.records.length > 0) return;
     }
 
     // ── 5. Upsert participant ─────────────────────────────────────────────
@@ -321,7 +360,4 @@ export default createEndpoint({
         if (note) await RecruitmentRows.update({ id: record.id, record: { notes: note } });
       }
     } catch { /* non-blocking */ }
-
-    return { success: true };
-  },
-});
+}

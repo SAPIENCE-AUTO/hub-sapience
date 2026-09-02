@@ -76,23 +76,38 @@ export default createEndpoint({
     if (!apiKey) throw new Error('Fillout API key not configured');
 
     // ── 0. Resolve boardId to UUID ─────────────────────────────────────────
-    const lookup = await lookupBoardUUID(
-      input.projectCode ?? '',
-      input.boardName,
-      'recruitment',
-    );
-    const effectiveBoardId = lookup.found && lookup.uuid ? lookup.uuid : input.boardId;
-    const legacyBoardId = lookup.legacyId;
-    const boardIdChanged = effectiveBoardId !== input.boardId;
+    // El frontend ya manda el UUID del tablero que el usuario tiene abierto en
+    // pantalla — si ya es un UUID válido, se usa tal cual. Buscarlo de nuevo
+    // por nombre (projectCode+boardName) solo tiene sentido para IDs legacy
+    // (pre-migración), y hacerlo siempre era un riesgo real: si existen dos
+    // tableros activos con el mismo nombre (ver incidente ELÁSTICO/CHILE, "Ya
+    // existe un tablero llamado..." en RecruitmentPage.tsx), la búsqueda por
+    // nombre puede resolver a un tablero distinto del que el usuario está
+    // viendo, y el vínculo (y el borrado de sentinels viejos del paso
+    // siguiente) termina aplicándose al tablero equivocado.
+    const UUID_RE_INPUT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let effectiveBoardId = input.boardId;
+    let legacyBoardId: string | undefined;
+    let boardIdChanged = false;
 
-    if (lookup.found) {
-      console.log('[linkFilloutForm] Resolved boardId to UUID', {
-        input: input.boardId, uuid: effectiveBoardId,
-      });
-    } else {
-      console.warn('[linkFilloutForm] UUID not found, using input boardId as fallback', {
-        input: input.boardId, reason: lookup.reason,
-      });
+    if (!UUID_RE_INPUT.test(input.boardId)) {
+      const lookup = await lookupBoardUUID(
+        input.projectCode ?? '',
+        input.boardName,
+        'recruitment',
+      );
+      if (lookup.found && lookup.uuid) {
+        effectiveBoardId = lookup.uuid;
+        legacyBoardId = lookup.legacyId;
+        boardIdChanged = true;
+        console.log('[linkFilloutForm] Resolved legacy boardId to UUID', {
+          input: input.boardId, uuid: effectiveBoardId,
+        });
+      } else {
+        console.warn('[linkFilloutForm] UUID not found, using input boardId as fallback', {
+          input: input.boardId, reason: lookup.reason,
+        });
+      }
     }
 
     // ── 1. Fetch form questions ────────────────────────────────────────────
