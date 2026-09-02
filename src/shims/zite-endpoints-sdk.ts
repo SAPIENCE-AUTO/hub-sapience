@@ -154,6 +154,9 @@ export const countFilloutSubmissions = (input?: any): Promise<any> => call('coun
 export const createBoardWithTemplate = (input?: any): Promise<any> => call('createBoardWithTemplate', input);
 export const createObservationStream = (input?: any): Promise<any> => call('createObservationStream', input);
 export const createSharedView = (input?: any): Promise<any> => call('createSharedView', input);
+export const createSwipeCapitulo = (input?: any): Promise<any> => call('createSwipeCapitulo', input);
+export const createSwipeIdea = (input?: any): Promise<any> => call('createSwipeIdea', input);
+export const createSwipeSesion = (input?: any): Promise<any> => call('createSwipeSesion', input);
 export const createTeamsChannel = (input?: any): Promise<any> => call('createTeamsChannel', input);
 export const deleteBoard = (input?: any): Promise<any> => call('deleteBoard', input);
 export const deleteBoardColumn = (input?: any): Promise<any> => call('deleteBoardColumn', input);
@@ -230,8 +233,8 @@ export const getLastAnalysis = (input?: any): Promise<any> => call('getLastAnaly
 export const getLinkedEventsInfo = (input?: any): Promise<any> => call('getLinkedEventsInfo', input);
 export const getLinkedParticipants = (input?: any): Promise<any> => call('getLinkedParticipants', input);
 export const getMessages = (input?: any): Promise<any> => call('getMessages', input);
-export const searchMessages = (input?: any): Promise<any> => call('searchMessages', input);
 export const getMisPendientes = (input?: any): Promise<any> => call('getMisPendientes', input);
+export const searchMessages = (input?: any): Promise<any> => call('searchMessages', input);
 export const getMigrationLogs = (input?: any): Promise<any> => call('getMigrationLogs', input);
 export const getMultiProjectCostAnalysis = (input?: any): Promise<any> => call('getMultiProjectCostAnalysis', input);
 export const getObservationChatMessages = (input?: any): Promise<any> => call('getObservationChatMessages', input);
@@ -268,6 +271,12 @@ export const getStreetViewUrl = (input?: any): Promise<any> => call('getStreetVi
 export const getSupplierInvoiceById = (input?: any): Promise<any> => call('getSupplierInvoiceById', input);
 export const getSupplierInvoices = (input?: any): Promise<any> => call('getSupplierInvoices', input);
 export const getSupplierPortalData = (input?: any): Promise<any> => call('getSupplierPortalData', input);
+export const getSwipeCapitulo = (input?: any): Promise<any> => call('getSwipeCapitulo', input);
+export const getSwipeEstado = (input?: any): Promise<any> => call('getSwipeEstado', input);
+export const getSwipeIdeas = (input?: any): Promise<any> => call('getSwipeIdeas', input);
+export const getSwipeResultados = (input?: any): Promise<any> => call('getSwipeResultados', input);
+export const getSwipeSesionDetail = (input?: any): Promise<any> => call('getSwipeSesionDetail', input);
+export const getSwipeSesiones = (input?: any): Promise<any> => call('getSwipeSesiones', input);
 export const getTaskById = (input?: any): Promise<any> => call('getTaskById', input);
 export const getTaskComments = (input?: any): Promise<any> => call('getTaskComments', input);
 export const getTasks = (input?: any): Promise<any> => call('getTasks', input);
@@ -284,6 +293,7 @@ export const importOdcFromCsv = (input?: any): Promise<any> => call('importOdcFr
 export const importSuppliers = (input?: any): Promise<any> => call('importSuppliers', input);
 export const inviteUsers = (input?: any): Promise<any> => call('inviteUsers', input);
 export const leaveChatConversation = (input?: any): Promise<any> => call('leaveChatConversation', input);
+export const joinSwipeSesion = (input?: any): Promise<any> => call('joinSwipeSesion', input);
 export const linkFilloutForm = (input?: any): Promise<any> => call('linkFilloutForm', input);
 export const linkGroupToEvent = (input?: any): Promise<any> => call('linkGroupToEvent', input);
 export const linkProjectDeal = (input?: any): Promise<any> => call('linkProjectDeal', input);
@@ -355,8 +365,10 @@ export const sendMessage = (input?: any): Promise<any> => call('sendMessage', in
 export const sendPaymentReceipt = (input?: any): Promise<any> => call('sendPaymentReceipt', input);
 export const sendPoEmail = (input?: any): Promise<any> => call('sendPoEmail', input);
 export const sendTimelineToWebhook = (input?: any): Promise<any> => call('sendTimelineToWebhook', input);
+export const setSwipeCapituloEstado = (input?: any): Promise<any> => call('setSwipeCapituloEstado', input);
 export const submitExpense = (input?: any): Promise<any> => call('submitExpense', input);
 export const submitPurchaseOrder = (input?: any): Promise<any> => call('submitPurchaseOrder', input);
+export const submitSwipeVotos = (input?: any): Promise<any> => call('submitSwipeVotos', input);
 export const syncCalendarCellValues = (input?: any): Promise<any> => call('syncCalendarCellValues', input);
 export const syncExternalView = (input?: any): Promise<any> => call('syncExternalView', input);
 export const syncFilloutResponses = (input?: any): Promise<any> => call('syncFilloutResponses', input);

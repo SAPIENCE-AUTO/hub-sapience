@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign } from 'lucide-react';
+import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign, Wrench } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProjectHubLanding } from '../components/project-hub/ProjectHubLanding';
+import { ProjectToolsTab } from '../components/project-hub/ProjectToolsTab';
 import RecruitmentPage from './RecruitmentPage';
 import PMPage from './PMPage';
 import ChatPage from './ChatPage';
@@ -21,7 +22,7 @@ import { uploadFile } from 'zite-file-upload-sdk';
 import { toast } from 'sonner';
 
 type Project = GetProjectsOutputType['projects'][0];
-type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos';
+type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos' | 'tools';
 type PmSection = 'timelines' | 'calendarios';
 
 const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -30,7 +31,13 @@ const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ classNam
   { id: 'presupuesto',   label: 'Presupuesto',   icon: DollarSign },
   { id: 'chat',          label: 'Chat',           icon: MessageSquare },
   { id: 'documentos',    label: 'Documentos',     icon: FileText },
+  { id: 'tools',         label: 'Tools',          icon: Wrench },
 ];
+
+// Acceso limitado mientras Tools solo tiene el módulo Swipe recién lanzado —
+// "de momento" (Sergio, 2026-08-20): se espera abrir a más gente conforme se
+// sumen más herramientas.
+const TOOLS_ALLOWED_EMAILS = ['sergio@sapience.com.mx', 'luis@sapience.com.mx'];
 
 // `?tab=` en la URL viene de 3 lugares con vocabularios distintos: los links
 // de este componente (usan los TabId de arriba), el correo de aprobación de
@@ -92,14 +99,19 @@ export default function ProjectHubPage() {
     ((user?.cotizacionRubros ?? []).length > 0)
   );
 
-  const visibleTabs = ALL_TABS.filter(t => t.id !== 'presupuesto' || canSeeBudget);
+  const canSeeTools = !!(user?.email && TOOLS_ALLOWED_EMAILS.includes(user.email));
+
+  const visibleTabs = ALL_TABS.filter(t =>
+    (t.id !== 'presupuesto' || canSeeBudget) &&
+    (t.id !== 'tools' || canSeeTools),
+  );
 
   // Reset active tab if it's no longer visible (p.ej. se perdió el acceso a Presupuesto)
   useEffect(() => {
     if (activeTab !== 'hub' && !visibleTabs.find(t => t.id === activeTab)) {
       setActiveTab('hub');
     }
-  }, [canSeeBudget]);
+  }, [canSeeBudget, canSeeTools]);
 
   const goToActividades = (section: PmSection) => { setPmSection(section); setActiveTab('actividades'); };
 
@@ -249,6 +261,7 @@ export default function ProjectHubPage() {
                 <ProjectDocuments projectCode={projectId ?? ''} />
               </div>
             )}
+            {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} />}
           </>
         )}
       </div>

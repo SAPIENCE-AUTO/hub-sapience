@@ -14,6 +14,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Permite Host headers de túneles de desarrollo (ngrok/localtunnel) —
+    // solo afecta el server de dev, nunca el build de producción.
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8787',
