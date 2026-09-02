@@ -193,7 +193,7 @@ export default createEndpoint({
 
     for (const meta of matchingLinks) {
       try {
-        await processSubmissionForBoard(meta, questions);
+        await processSubmissionForBoard(meta, questions, input.submissionId ?? '');
       } catch (err) {
         console.error('[filloutNativeWebhook] Error procesando para tablero', {
           boardId: meta.boardId, boardName: meta.boardName, err,
@@ -216,6 +216,7 @@ async function processSubmissionForBoard(
     questionMapping?: { filloutId: string; columnId: string; questionName: string }[];
   },
   questions: any[],
+  submissionId: string,
 ): Promise<void> {
     const { projectCode, boardName, formName, questionMapping = [] } = meta;
 
@@ -262,15 +263,23 @@ async function processSubmissionForBoard(
 
     if (!coreFields.participantName && !coreFields.email) return;
 
-    // ── 4. Dedup check ────────────────────────────────────────────────────
-    const emailLower = coreFields.email?.toLowerCase() ?? '';
-    const existingChecks: Promise<{ records: any[] }>[] = [];
-    if (emailLower) existingChecks.push(RecruitmentRows.findAll({ filters: { email: emailLower, boardName, projectCode }, limit: 5, fields: ['id', 'email'] }));
-    else if (coreFields.participantName) existingChecks.push(RecruitmentRows.findAll({ filters: { participantName: { contains: coreFields.participantName }, boardName, projectCode }, limit: 5, fields: ['id', 'participantName'] }));
-
-    if (existingChecks.length > 0) {
-      const [result] = await Promise.all(existingChecks);
-      if (result.records.length > 0) return;
+    // ── 4. Dedup check — por submissionId ÚNICAMENTE ────────────────────────
+    // Antes revisaba si YA EXISTÍA alguien con este correo/nombre en el
+    // tablero y, de ser así, se saltaba la respuesta entera — eso fusionaba
+    // submissions de personas genuinamente distintas cuando compartían
+    // correo (reclutamiento presencial: quien recluta en campo llena el
+    // formulario POR el participante con su propio correo). Cada submission
+    // de Fillout es un evento de captura real y necesita su propia fila,
+    // aunque comparta correo/nombre con otra. Solo se salta si es LA MISMA
+    // submission ya procesada antes (mismo submissionId).
+    const sourceFormValue = submissionId ? `${formName}|${submissionId}` : formName;
+    if (submissionId) {
+      const { records: already } = await RecruitmentRows.findAll({
+        filters: { sourceForm: sourceFormValue, boardName, projectCode },
+        limit: 1,
+        fields: ['id'],
+      });
+      if (already.length > 0) return;
     }
 
     // ── 5. Upsert participant ─────────────────────────────────────────────
@@ -302,7 +311,7 @@ async function processSubmissionForBoard(
         phone: coreFields.phone,
         idNumber: coreFields.idNumber,
         status: 'Pendiente',
-        sourceForm: formName,
+        sourceForm: sourceFormValue,
         level: 0,
       },
     });

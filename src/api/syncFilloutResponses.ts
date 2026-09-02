@@ -381,19 +381,22 @@ export default createEndpoint({
       try { return JSON.parse(raw ?? '{}'); } catch { return {}; }
     };
 
-    const emailToRow = new Map<string, RowRef>();
-    const nameToRow = new Map<string, RowRef>();
+    // Dedup por submissionId ÚNICAMENTE — una fila por respuesta de Fillout,
+    // siempre. Emparejar por email/nombre (como se hacía antes) fusionaba
+    // submissions de personas genuinamente distintas cuando compartían
+    // correo — pasa de verdad en campo (ej. ELÁSTICO/CHILE): quien reclutó
+    // en persona llenó el formulario POR varios participantes con su propio
+    // correo, y el emparejamiento por email las colapsaba todas en una sola
+    // fila, perdiendo a las demás en silencio. El único caso que sí debe
+    // reusar una fila existente es la MISMA submission (mismo submissionId)
+    // — típicamente porque el form ganó una pregunta nueva después de que
+    // esa respuesta ya se había importado, y hay que completarle esa celda.
     const submissionIdToRow = new Map<string, RowRef>();
     for (const r of existingRows) {
-      const ref: RowRef = { id: r.id, cellData: parseCellData(r.cellData) };
-      const emailLower = r.email?.toLowerCase();
-      const nameNorm = normalize(r.participantName ?? '');
-      if (emailLower) emailToRow.set(emailLower, ref);
-      if (nameNorm) nameToRow.set(nameNorm, ref);
       if (r.sourceForm?.includes('|')) {
         const parts = r.sourceForm.split('|');
         const sid = parts[parts.length - 1];
-        if (sid) submissionIdToRow.set(sid, ref);
+        if (sid) submissionIdToRow.set(sid, { id: r.id, cellData: parseCellData(r.cellData) });
       }
     }
 
@@ -453,13 +456,10 @@ export default createEndpoint({
         const submissionId = String(submission.submissionId ?? submission.id ?? '');
         const sourceFormValue = submissionId ? `${formName}|${submissionId}` : formName;
 
-        const emailLower = coreFields.email?.toLowerCase() ?? '';
-        const normName   = normalize(coreFields.participantName ?? '');
-
-        const matchedRow =
-          (submissionId ? submissionIdToRow.get(submissionId) : undefined) ??
-          (emailLower ? emailToRow.get(emailLower) : undefined) ??
-          (!emailLower && normName ? nameToRow.get(normName) : undefined);
+        // Solo la MISMA submission (mismo id) reusa fila — ver comentario
+        // arriba de submissionIdToRow. Cualquier otra, aunque comparta correo
+        // o nombre, se importa como fila nueva.
+        const matchedRow = submissionId ? submissionIdToRow.get(submissionId) : undefined;
 
         if (matchedRow) {
           const before = Object.keys(matchedRow.cellData).length;
@@ -489,8 +489,6 @@ export default createEndpoint({
         });
 
         const newRowRef: RowRef = { id: record.id, cellData: {} };
-        if (emailLower) emailToRow.set(emailLower, newRowRef);
-        if (normName)   nameToRow.set(normName, newRowRef);
         if (submissionId) submissionIdToRow.set(submissionId, newRowRef);
 
         if (cellsToWrite.length > 0) {
