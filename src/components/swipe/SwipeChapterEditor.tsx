@@ -305,8 +305,13 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
         </div>
         <div className="mb-3 rounded-2xl bg-[linear-gradient(160deg,#14495A_0%,#0F3D4C_55%,#0A2F3B_100%)] p-3">
           <div className="overflow-hidden rounded-2xl bg-white shadow-lg">
-            <div className="flex aspect-[4/3] w-full items-center justify-center bg-[#eef1f2] text-xs text-[#9aa5a9]">
-              {imagenUrl ? <img src={imagenUrl} alt="" className="h-full w-full object-cover" /> : 'sin foto todavía'}
+            <div className="relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden bg-[#eef1f2] text-xs text-[#9aa5a9]">
+              {imagenUrl ? (
+                <>
+                  <img src={imagenUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl" />
+                  <img src={imagenUrl} alt="" className="relative max-h-full max-w-full object-contain p-3" />
+                </>
+              ) : 'sin foto todavía'}
             </div>
             <div className="px-4 pb-4 pt-3.5">
               <p className="text-[17px] font-bold leading-tight text-[#0F3D4C]">{titulo || 'Título de la idea'}</p>

@@ -81,8 +81,9 @@ export default function EjesEvaluacionSliders({
 
       <div className="mt-4 flex-shrink-0 overflow-hidden rounded-[20px] bg-white shadow-lg">
         {idea.imagenUrl ? (
-          <div className="flex h-32 w-full items-center justify-center bg-[#eef1f2]">
-            <img src={idea.imagenUrl} alt={idea.titulo} className="h-full w-full object-cover" draggable={false} />
+          <div className="relative flex h-32 w-full items-center justify-center overflow-hidden bg-[#eef1f2]">
+            <img src={idea.imagenUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl" draggable={false} />
+            <img src={idea.imagenUrl} alt={idea.titulo} className="relative max-h-full max-w-full object-contain p-2" draggable={false} />
           </div>
         ) : null}
         <div className="px-4 py-3">
