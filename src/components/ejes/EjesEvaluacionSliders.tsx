@@ -120,18 +120,24 @@ export default function EjesEvaluacionSliders({
         </div>
       </div>
 
-      <div className="mt-5 flex flex-1 items-center justify-center">
-        <div className="relative aspect-square w-full max-w-[220px] rounded-xl bg-white/5">
-          <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-white/15" />
-          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/15" />
-          {cuadranteBajoAltoLabel && <span className="absolute left-1.5 top-1.5 text-[9px] font-medium text-white/35">{cuadranteBajoAltoLabel}</span>}
-          {cuadranteAltoAltoLabel && <span className="absolute right-1.5 top-1.5 text-right text-[9px] font-medium text-white/35">{cuadranteAltoAltoLabel}</span>}
-          {cuadranteBajoBajoLabel && <span className="absolute bottom-1.5 left-1.5 text-[9px] font-medium text-white/35">{cuadranteBajoBajoLabel}</span>}
-          {cuadranteAltoBajoLabel && <span className="absolute bottom-1.5 right-1.5 text-right text-[9px] font-medium text-white/35">{cuadranteAltoBajoLabel}</span>}
-          <div
-            className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
-            style={{ left: `${pctX}%`, top: `${pctY}%`, backgroundColor: '#027495' }}
-          />
+      <div className="mt-5 flex flex-1 items-center justify-center gap-2">
+        <span className="flex-shrink-0 -rotate-90 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-white/45">
+          {ejeYLabel}
+        </span>
+        <div className="flex w-full max-w-[220px] flex-col items-center">
+          <div className="relative aspect-square w-full rounded-xl bg-white/5">
+            <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-white/15" />
+            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/15" />
+            {cuadranteBajoAltoLabel && <span className="absolute left-1.5 top-1.5 text-[9px] font-medium text-white/35">{cuadranteBajoAltoLabel}</span>}
+            {cuadranteAltoAltoLabel && <span className="absolute right-1.5 top-1.5 text-right text-[9px] font-medium text-white/35">{cuadranteAltoAltoLabel}</span>}
+            {cuadranteBajoBajoLabel && <span className="absolute bottom-1.5 left-1.5 text-[9px] font-medium text-white/35">{cuadranteBajoBajoLabel}</span>}
+            {cuadranteAltoBajoLabel && <span className="absolute bottom-1.5 right-1.5 text-right text-[9px] font-medium text-white/35">{cuadranteAltoBajoLabel}</span>}
+            <div
+              className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
+              style={{ left: `${pctX}%`, top: `${pctY}%`, backgroundColor: '#027495' }}
+            />
+          </div>
+          <span className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/45">{ejeXLabel}</span>
         </div>
       </div>
 
