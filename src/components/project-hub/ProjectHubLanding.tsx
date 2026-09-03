@@ -109,9 +109,13 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
     }).catch(() => setEvents([]));
 
     getTasks({ projectCode, only: 'tasks' }).then(d => {
+      // El orden que devuelve el backend es el de creación de la fase, no
+      // por fecha — hay que ordenar aquí para que el Gantt se lea de arriba
+      // a abajo en orden cronológico, como se espera de un timeline.
       const phases = (d.tasks ?? [])
         .filter((t: any) => !t.parentTaskId)
-        .map((t: any) => ({ name: t.taskName ?? 'Sin nombre', status: t.status, startDate: t.startDate, endDate: t.endDate }));
+        .map((t: any) => ({ name: t.taskName ?? 'Sin nombre', status: t.status, startDate: t.startDate, endDate: t.endDate }))
+        .sort((a, b) => (a.startDate ?? '').localeCompare(b.startDate ?? ''));
       setGantt(computeGanttSegments(phases));
     }).catch(() => setGantt(null));
 
