@@ -12,41 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Copy, Plus, Star, Trash2, Maximize2, Check, Play, Pause } from 'lucide-react';
 import SwipeResultsProjection, { QUADRANTE_META, type SwipeQuadrante } from '@/components/swipe/SwipeResultsProjection';
 import SwipeChapterEditor from '@/components/swipe/SwipeChapterEditor';
+import { TEAL, EstadoPill } from '@/components/swipe/swipeColors';
 
 interface SesionRow { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulosCount: number }
 interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number; ideaThumbnails: string[]; pctAprobacion?: number }
 interface ResultadoIdea { id: string; titulo: string; imagenUrl?: string; totalVotos: number; potencial: number; descarte: number; superLikes: number; pctPotencial: number; score: number; avgMsDecision?: number; quadrante?: SwipeQuadrante }
 interface ResultadoCapitulo { capituloId: string; capituloNombre: string; totalParticipantesVotaron: number; ideas: ResultadoIdea[] }
 interface Detalle { id: string; codigo: string; nombre: string; cliente?: string; estado: string; participantesCount: number; capitulos: CapituloRow[] }
-
-// Valores exactos del moodboard de look & feel del Hub (no aproximados) —
-// Info/Éxito no existen todavía como tokens globales de Tailwind, así que
-// viven aquí como literales en vez de tocar tailwind.config.ts/index.css
-// desde este módulo. Teal/Gold sí coinciden con --primary/--secondary.
-const TEAL = '#0F3D4D';
-const INFO = '#1795D3';
-const EXITO = '#257E55';
-const GRIS = '#8b93a1';
-
-// Cerrado usa Info (no gris): un capítulo cerrado tiene resultados listos
-// para ver, no está "muerto" — bloqueado sí es el estado sin nada que hacer.
-const ESTADO_COLOR: Record<string, string> = {
-  activa: EXITO, abierto: EXITO,
-  cerrada: INFO, cerrado: INFO,
-  borrador: GRIS, bloqueado: GRIS,
-};
-
-function EstadoPill({ estado }: { estado: string }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
-      style={{ backgroundColor: ESTADO_COLOR[estado] ?? GRIS }}
-    >
-      <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
-      {estado}
-    </span>
-  );
-}
 
 /**
  * Dashboard del facilitador para el módulo Swipe: crear sesiones y

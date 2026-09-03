@@ -242,7 +242,9 @@ export default function ProjectHubPage() {
             {activeTab === 'hub' && projectId && (
               <ProjectHubLanding
                 projectCode={projectId}
+                projectId={project?.id}
                 canSeeBudget={canSeeBudget}
+                canSeeTools={canSeeTools}
                 onOpenTab={setActiveTab}
                 onOpenActividades={goToActividades}
               />

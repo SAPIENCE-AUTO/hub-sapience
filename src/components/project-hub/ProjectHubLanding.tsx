@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder } from 'lucide-react';
-import { getRecruitmentSummary, getTasks, getProjectTeamsFiles, getMessages } from 'zite-endpoints-sdk';
+import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench } from 'lucide-react';
+import { getRecruitmentSummary, getTasks, getProjectTeamsFiles, getMessages, getSwipeSesiones } from 'zite-endpoints-sdk';
 import { computeGanttSegments, GanttData } from './ganttMath';
+import { TEAL, EstadoPill } from '../swipe/swipeColors';
 
 type PmSection = 'timelines' | 'calendarios';
 
 interface ProjectHubLandingProps {
   projectCode: string;
+  projectId?: string;
   canSeeBudget: boolean;
-  onOpenTab: (tab: 'reclutamiento' | 'presupuesto' | 'documentos' | 'chat') => void;
+  canSeeTools: boolean;
+  onOpenTab: (tab: 'reclutamiento' | 'presupuesto' | 'documentos' | 'chat' | 'tools') => void;
   onOpenActividades: (section: PmSection) => void;
 }
+
+type SwipeSesionItem = { id: string; nombre: string; estado: string };
 
 type RecruitmentBoardSummary = { boardName: string; totalParticipants: number; groups: { name: string; count: number }[] };
 type RecruitmentSummary = { totalParticipants: number; boards: RecruitmentBoardSummary[] };
@@ -51,16 +56,21 @@ function statusColorClass(seg: { status?: string; startDate: string; endDate: st
   return 'bg-muted-foreground/30';
 }
 
-export function ProjectHubLanding({ projectCode, canSeeBudget, onOpenTab, onOpenActividades }: ProjectHubLandingProps) {
+export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSeeTools, onOpenTab, onOpenActividades }: ProjectHubLandingProps) {
   const [recruitment, setRecruitment] = useState<RecruitmentSummary | null>(null);
   const [events, setEvents] = useState<EventItem[] | null>(null);
   const [gantt, setGantt] = useState<GanttData | null | undefined>(undefined);
   const [folders, setFolders] = useState<FolderItem[] | null>(null);
   const [teamsLinked, setTeamsLinked] = useState(true);
   const [messages, setMessages] = useState<MessageItem[] | null>(null);
+  const [swipeSesiones, setSwipeSesiones] = useState<SwipeSesionItem[] | null>(null);
 
   useEffect(() => {
-    setRecruitment(null); setEvents(null); setGantt(undefined); setFolders(null); setMessages(null);
+    setRecruitment(null); setEvents(null); setGantt(undefined); setFolders(null); setMessages(null); setSwipeSesiones(null);
+
+    if (canSeeTools && projectId) {
+      getSwipeSesiones({ proyectoId: projectId }).then((d) => setSwipeSesiones(d.sesiones ?? [])).catch(() => setSwipeSesiones([]));
+    }
 
     getRecruitmentSummary({ projectCode }).then(setRecruitment).catch(() => setRecruitment({ totalParticipants: 0, boards: [] }));
 
@@ -88,7 +98,7 @@ export function ProjectHubLanding({ projectCode, canSeeBudget, onOpenTab, onOpen
     }).catch(() => { setTeamsLinked(false); setFolders([]); });
 
     getMessages({ channel: projectCode, limit: 3 }).then(d => setMessages(d.messages ?? [])).catch(() => setMessages([]));
-  }, [projectCode]);
+  }, [projectCode, projectId, canSeeTools]);
 
   const now = Date.now();
 
@@ -237,6 +247,44 @@ export function ProjectHubLanding({ projectCode, canSeeBudget, onOpenTab, onOpen
             )}
           </div>
         </div>
+
+        {/* ── Tools (solo para quien tiene acceso) ── */}
+        {canSeeTools && (
+          <div
+            onClick={() => onOpenTab('tools')}
+            className="relative flex cursor-pointer overflow-hidden rounded-xl border transition-colors hover:border-[color-mix(in_srgb,#0F3D4D_35%,white)]"
+            style={{ backgroundColor: `color-mix(in srgb, ${TEAL} 6%, white)`, borderColor: `color-mix(in srgb, ${TEAL} 18%, white)` }}
+          >
+            <div className="w-1 flex-shrink-0" style={{ backgroundColor: TEAL }} />
+            <div className="min-w-0 flex-1 px-3.5 pb-3 pt-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: TEAL }}>
+                  <Wrench className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="text-sm font-medium" style={{ color: TEAL }}>Tools</span>
+                {swipeSesiones && (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {swipeSesiones.length} sesión{swipeSesiones.length !== 1 ? 'es' : ''} de Swipe
+                  </span>
+                )}
+              </div>
+              {!swipeSesiones && <div className="h-8" />}
+              {swipeSesiones && swipeSesiones.length === 0 && (
+                <p className="pb-1 pt-1.5 text-xs text-muted-foreground">Sin sesiones de Swipe todavía — ábrelo para crear la primera.</p>
+              )}
+              {swipeSesiones && swipeSesiones.length > 0 && (
+                <div className="space-y-1 pb-0.5 pt-1.5">
+                  {swipeSesiones.slice(0, 3).map((s) => (
+                    <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-foreground">{s.nombre}</span>
+                      <EstadoPill estado={s.estado} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* ── Presupuesto ── */}
