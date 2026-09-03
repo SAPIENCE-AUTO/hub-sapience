@@ -1,13 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench } from 'lucide-react';
 import { getRecruitmentSummary, getTasks, getProjectTeamsFiles, getMessages, getSwipeSesiones } from 'zite-endpoints-sdk';
 import { computeGanttSegments, GanttData } from './ganttMath';
-import { TEAL, TEAL_2, GOLD, INFO, EXITO, NEUTRAL, EstadoPill } from '../swipe/swipeColors';
+import { TEAL, TEAL_2, GOLD, INFO, EXITO, NEUTRAL, ALERTA, EstadoPill } from '../swipe/swipeColors';
 
 // Paleta de acento por tarjeta — mismos 6 tonos del sistema decidido en el
 // moodboard del Hub, sin inventar hues nuevos. El desglose de Reclutamiento
 // por tablero rota sobre este mismo arreglo.
 const ACCENT_PALETTE = [TEAL, GOLD, INFO, EXITO, NEUTRAL, TEAL_2];
+
+// Header sólido con ícono + etiqueta en blanco (o tinta oscura sobre gold,
+// que es demasiado claro para texto blanco) — la identidad de color de cada
+// tarjeta vive aquí, no en un ícono con tinte chiquito.
+function ColorHead({ color, ink, icon, label }: { color: string; ink?: string; icon: ReactNode; label: string }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2" style={{ backgroundColor: color, color: ink ?? '#fff' }}>
+      {icon}
+      <span className="text-[11px] font-semibold uppercase tracking-wide">{label}</span>
+    </div>
+  );
+}
 
 type PmSection = 'timelines' | 'calendarios';
 
@@ -148,223 +160,197 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
         {/* ── Timelines: hero — la pieza que más se consulta en junta, va primero y más grande ── */}
         <div
           onClick={() => onOpenActividades('timelines')}
-          className="relative flex cursor-pointer overflow-hidden rounded-xl border transition-colors hover:border-[color-mix(in_srgb,#0F3D4D_35%,white)]"
-          style={{ backgroundColor: `color-mix(in srgb, ${TEAL} 4%, white)`, borderColor: `color-mix(in srgb, ${TEAL} 16%, white)` }}
+          className="cursor-pointer overflow-hidden rounded-xl"
+          style={{ backgroundColor: TEAL_2 }}
         >
-          <div className="w-1.5 flex-shrink-0" style={{ backgroundColor: TEAL }} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2.5 px-4 pt-4 pb-1.5">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: TEAL }}><BarChart2 className="w-4 h-4 text-white" /></div>
-              <span className="text-base font-semibold text-foreground">Timelines</span>
-              {gantt && (
-                <span className="ml-auto text-xs text-muted-foreground font-mono">
-                  {fmtDate(gantt.rangeStart.toISOString())} — {fmtDate(gantt.rangeEnd.toISOString())} · {gantt.segments.length} fases
-                </span>
-              )}
-            </div>
-            {gantt === undefined && <div className="h-20" />}
-            {gantt === null && <p className="px-4 pb-4 pt-1 text-xs text-muted-foreground">Aún no hay fechas cargadas en el timeline</p>}
+          <div className="flex items-center gap-2.5 px-4 pt-4 pb-1.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/15"><BarChart2 className="w-4 h-4" style={{ color: GOLD }} /></div>
+            <span className="text-base font-semibold text-white">Timelines</span>
             {gantt && (
-              <div className="px-4 pb-4 pt-2">
-                {/* Regla: inicio de cada semana (lunes), alineada con las líneas verticales de cada fila */}
-                <div className="flex items-center gap-3 mb-1.5">
-                  <div className="w-40 flex-shrink-0" />
-                  <div className="relative flex-1 h-3">
-                    {weekTicks.map((t, i) => (
-                      <span key={i} className="absolute text-[10px] text-muted-foreground/70 whitespace-nowrap font-mono"
-                        style={{ left: `${t.pct}%`, transform: t.pct > 90 ? 'translateX(-100%)' : t.pct < 2 ? 'none' : 'translateX(-50%)' }}>
-                        {t.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 max-h-[240px] overflow-y-auto">
-                  {gantt.segments.map((seg, i) => {
-                    const color = statusColor(seg, now);
-                    return (
-                      <div key={`${seg.name}-${i}`} className="flex items-center gap-3">
-                        <div className="w-40 flex-shrink-0">
-                          <p className="text-[13px] text-foreground truncate font-medium" title={seg.name}>{seg.name}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{fmtRange(seg.startDate, seg.endDate)}</p>
-                        </div>
-                        <div className="relative flex-1 h-6">
-                          {weekTicks.map((t, i2) => (
-                            <div key={i2} className="absolute top-0 bottom-0 w-px bg-border" style={{ left: `${t.pct}%` }} />
-                          ))}
-                          {todayPct !== null && (
-                            <div className="absolute top-0 bottom-0 w-px border-l border-dashed z-10" style={{ left: `${todayPct}%`, borderColor: GOLD }} />
-                          )}
-                          <div className="absolute top-1/2 -translate-y-1/2 h-2.5 w-full rounded-full bg-muted" />
-                          <div
-                            className={`absolute top-1/2 -translate-y-1/2 h-2.5 rounded-full ${color ? '' : 'bg-muted-foreground/30'}`}
-                            style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, backgroundColor: color ?? undefined }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <span className="ml-auto text-xs text-white/60 font-mono">
+                {fmtDate(gantt.rangeStart.toISOString())} — {fmtDate(gantt.rangeEnd.toISOString())} · {gantt.segments.length} fases
+              </span>
             )}
           </div>
+          {gantt === undefined && <div className="h-20" />}
+          {gantt === null && <p className="px-4 pb-4 pt-1 text-xs text-white/60">Aún no hay fechas cargadas en el timeline</p>}
+          {gantt && (
+            <div className="px-4 pb-4 pt-2">
+              {/* Regla: inicio de cada semana (lunes), alineada con las líneas verticales de cada fila */}
+              <div className="flex items-center gap-3 mb-1.5">
+                <div className="w-40 flex-shrink-0" />
+                <div className="relative flex-1 h-3">
+                  {weekTicks.map((t, i) => (
+                    <span key={i} className="absolute text-[10px] text-white/50 whitespace-nowrap font-mono"
+                      style={{ left: `${t.pct}%`, transform: t.pct > 90 ? 'translateX(-100%)' : t.pct < 2 ? 'none' : 'translateX(-50%)' }}>
+                      {t.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 max-h-[240px] overflow-y-auto">
+                {gantt.segments.map((seg, i) => {
+                  const color = statusColor(seg, now);
+                  return (
+                    <div key={`${seg.name}-${i}`} className="flex items-center gap-3">
+                      <div className="w-40 flex-shrink-0">
+                        <p className="text-[13px] text-white truncate font-medium" title={seg.name}>{seg.name}</p>
+                        <p className="text-[10px] text-white/50 font-mono">{fmtRange(seg.startDate, seg.endDate)}</p>
+                      </div>
+                      <div className="relative flex-1 h-6">
+                        {weekTicks.map((t, i2) => (
+                          <div key={i2} className="absolute top-0 bottom-0 w-px bg-white/10" style={{ left: `${t.pct}%` }} />
+                        ))}
+                        {todayPct !== null && (
+                          <div className="absolute top-0 bottom-0 w-px border-l border-dashed z-10" style={{ left: `${todayPct}%`, borderColor: GOLD }} />
+                        )}
+                        <div className="absolute top-1/2 -translate-y-1/2 h-2.5 w-full rounded-full bg-white/10" />
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 h-2.5 rounded-full"
+                          style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, backgroundColor: color ?? 'rgba(255,255,255,.25)' }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* ── Reclutamiento ── */}
-          <div onClick={() => onOpenTab('reclutamiento')} className="flex rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-            <div className="w-1 flex-shrink-0" style={{ backgroundColor: TEAL }} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 px-3.5 pt-3 pb-0.5">
-                <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${TEAL}1a`, color: TEAL }}><Users className="w-3.5 h-3.5" /></div>
-                <span className="text-sm font-medium text-foreground">Reclutamiento</span>
+          <div onClick={() => onOpenTab('reclutamiento')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
+            <div className="px-3.5 pt-3 pb-3" style={{ backgroundColor: TEAL }}>
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0 bg-white/20"><Users className="w-3.5 h-3.5 text-white" /></div>
+                <span className="text-sm font-medium text-white">Reclutamiento</span>
               </div>
               {recruitment ? (
-                <div className="px-3.5 pt-1.5 pb-2.5">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-semibold font-mono leading-none" style={{ color: TEAL }}>{recruitment.totalParticipants}</span>
-                    <span className="text-xs text-muted-foreground">
-                      participantes · {recruitment.boards.reduce((n, b) => n + b.groups.length, 0)} grupos
-                      {recruitment.boards.length > 1 ? ` · ${recruitment.boards.length} tableros` : ''}
-                    </span>
-                  </div>
-                  {recruitment.boards.length > 1 && (
-                    <div className="flex h-1.5 rounded-full overflow-hidden mt-3">
-                      {recruitment.boards.map((board, bi) => (
-                        <div
-                          key={`${board.boardName}-bar-${bi}`}
-                          style={{
-                            width: `${(board.totalParticipants / Math.max(recruitment.totalParticipants, 1)) * 100}%`,
-                            backgroundColor: ACCENT_PALETTE[bi % ACCENT_PALETTE.length],
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold font-mono leading-none text-white">{recruitment.totalParticipants}</span>
+                  <span className="text-xs text-white/70">
+                    participantes · {recruitment.boards.reduce((n, b) => n + b.groups.length, 0)} grupos
+                    {recruitment.boards.length > 1 ? ` · ${recruitment.boards.length} tableros` : ''}
+                  </span>
                 </div>
               ) : (
                 <div className="h-8" />
               )}
-              {recruitment && recruitment.boards.length > 0 && (
-                <div className="border-t border-border max-h-[150px] overflow-y-auto px-3.5 pb-1">
+            </div>
+            {recruitment && recruitment.boards.length > 1 && (
+              <div className="px-3.5 pt-3">
+                <div className="flex h-1.5 rounded-full overflow-hidden">
                   {recruitment.boards.map((board, bi) => (
-                    <div key={`${board.boardName}-${bi}`}>
-                      <p className="flex items-center gap-1.5 text-[11px] font-medium text-foreground pt-2 pb-0.5 truncate">
-                        {recruitment.boards.length > 1 && (
-                          <span className="w-1.5 h-1.5 rounded-sm flex-shrink-0" style={{ backgroundColor: ACCENT_PALETTE[bi % ACCENT_PALETTE.length] }} />
-                        )}
-                        {board.boardName} · {board.totalParticipants}
-                      </p>
-                      {board.groups.map((g, gi) => (
-                        <div key={`${g.name}-${gi}`} className="flex justify-between gap-2 py-1 text-xs border-b border-border last:border-b-0">
-                          <span className="truncate text-muted-foreground pl-2">{g.name}</span>
-                          <span className="text-foreground font-mono flex-shrink-0">{g.count}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <div
+                      key={`${board.boardName}-bar-${bi}`}
+                      style={{
+                        width: `${(board.totalParticipants / Math.max(recruitment.totalParticipants, 1)) * 100}%`,
+                        backgroundColor: ACCENT_PALETTE[bi % ACCENT_PALETTE.length],
+                      }}
+                    />
                   ))}
                 </div>
-              )}
-              {recruitment && recruitment.boards.length === 0 && <p className="px-3.5 pb-3 text-xs text-muted-foreground">Sin tableros de reclutamiento</p>}
-            </div>
+              </div>
+            )}
+            {recruitment && recruitment.boards.length > 0 && (
+              <div className="max-h-[150px] overflow-y-auto px-3.5 pt-2 pb-1">
+                {recruitment.boards.map((board, bi) => (
+                  <div key={`${board.boardName}-${bi}`}>
+                    <p className="flex items-center gap-1.5 text-[11px] font-medium text-foreground pt-2 pb-0.5 truncate">
+                      {recruitment.boards.length > 1 && (
+                        <span className="w-1.5 h-1.5 rounded-sm flex-shrink-0" style={{ backgroundColor: ACCENT_PALETTE[bi % ACCENT_PALETTE.length] }} />
+                      )}
+                      {board.boardName} · {board.totalParticipants}
+                    </p>
+                    {board.groups.map((g, gi) => (
+                      <div key={`${g.name}-${gi}`} className="flex justify-between gap-2 py-1 text-xs border-b border-border last:border-b-0">
+                        <span className="truncate text-muted-foreground pl-2">{g.name}</span>
+                        <span className="text-foreground font-mono flex-shrink-0">{g.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+            {recruitment && recruitment.boards.length === 0 && <p className="px-3.5 py-3 text-xs text-muted-foreground">Sin tableros de reclutamiento</p>}
           </div>
 
           {/* ── Calendario ── */}
-          <div onClick={() => onOpenActividades('calendarios')} className="flex rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-            <div className="w-1 flex-shrink-0" style={{ backgroundColor: INFO }} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 px-3.5 pt-3 pb-0.5">
-                <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${INFO}1a`, color: INFO }}><CalendarDays className="w-3.5 h-3.5" /></div>
-                <span className="text-sm font-medium text-foreground">Calendario</span>
+          <div onClick={() => onOpenActividades('calendarios')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
+            <div className="px-3.5 pt-3 pb-3" style={{ backgroundColor: INFO }}>
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0 bg-white/20"><CalendarDays className="w-3.5 h-3.5 text-white" /></div>
+                <span className="text-sm font-medium text-white">Calendario</span>
               </div>
               {events ? (
-                <div className="flex items-baseline gap-2 px-3.5 pt-1.5 pb-2.5">
-                  <span className="text-3xl font-semibold font-mono leading-none" style={{ color: INFO }}>{events.length}</span>
-                  <span className="text-xs text-muted-foreground">sesiones</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold font-mono leading-none text-white">{events.length}</span>
+                  <span className="text-xs text-white/70">sesiones</span>
                 </div>
               ) : (
                 <div className="h-8" />
               )}
-              {events && events.length > 0 && (
-                <div className="border-t border-border max-h-[150px] overflow-y-auto px-3.5">
-                  {events.map(ev => {
-                    const isPast = ev.eventDate ? new Date(ev.eventDate).getTime() < now : false;
-                    return (
-                      <div key={ev.id} className={`flex justify-between gap-2 py-1.5 text-xs border-b border-border last:border-b-0 ${isPast ? 'opacity-50' : ''}`}>
-                        <span className="truncate text-foreground">{ev.eventName || 'Sin nombre'}</span>
-                        <span className="text-muted-foreground flex-shrink-0 font-mono">{ev.eventDate ? fmtDateTime(ev.eventDate) : '—'}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {events && events.length === 0 && <p className="px-3.5 pb-3 text-xs text-muted-foreground">Sin sesiones registradas</p>}
             </div>
+            {events && events.length > 0 && (
+              <div className="max-h-[150px] overflow-y-auto px-3.5">
+                {events.map(ev => {
+                  const isPast = ev.eventDate ? new Date(ev.eventDate).getTime() < now : false;
+                  return (
+                    <div key={ev.id} className={`flex justify-between gap-2 py-1.5 text-xs border-b border-border last:border-b-0 ${isPast ? 'opacity-50' : ''}`}>
+                      <span className="truncate text-foreground">{ev.eventName || 'Sin nombre'}</span>
+                      <span className="text-muted-foreground flex-shrink-0 font-mono">{ev.eventDate ? fmtDateTime(ev.eventDate) : '—'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {events && events.length === 0 && <p className="px-3.5 py-3 text-xs text-muted-foreground">Sin sesiones registradas</p>}
           </div>
         </div>
 
-        {/* ── Tools (solo para quien tiene acceso) ── */}
-        {canSeeTools && (
-          <div
-            onClick={() => onOpenTab('tools')}
-            className="relative flex cursor-pointer overflow-hidden rounded-xl border transition-colors hover:border-[color-mix(in_srgb,#0F3D4D_35%,white)]"
-            style={{ backgroundColor: `color-mix(in srgb, ${TEAL} 6%, white)`, borderColor: `color-mix(in srgb, ${TEAL} 18%, white)` }}
-          >
-            <div className="w-1 flex-shrink-0" style={{ backgroundColor: TEAL }} />
-            <div className="min-w-0 flex-1 px-3.5 pb-3 pt-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: TEAL }}>
-                  <Wrench className="h-3.5 w-3.5 text-white" />
-                </div>
-                <span className="text-sm font-medium" style={{ color: TEAL }}>Tools</span>
-                {swipeSesiones && (
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {swipeSesiones.length} sesión{swipeSesiones.length !== 1 ? 'es' : ''} de Swipe
-                  </span>
+        {/* ── Tools / Presupuesto / Documentos / Chat — un color distinto cada una ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {canSeeTools && (
+            <div onClick={() => onOpenTab('tools')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
+              <ColorHead color={EXITO} icon={<Wrench className="w-3.5 h-3.5" />} label="Tools" />
+              <div className="px-3.5 py-3">
+                {!swipeSesiones && <div className="h-4" />}
+                {swipeSesiones && swipeSesiones.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Sin sesiones de Swipe todavía — ábrelo para crear la primera.</p>
+                )}
+                {swipeSesiones && swipeSesiones.length > 0 && (
+                  <div className="space-y-1">
+                    {swipeSesiones.slice(0, 3).map((s) => (
+                      <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate text-foreground">{s.nombre}</span>
+                        <EstadoPill estado={s.estado} />
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-              {!swipeSesiones && <div className="h-8" />}
-              {swipeSesiones && swipeSesiones.length === 0 && (
-                <p className="pb-1 pt-1.5 text-xs text-muted-foreground">Sin sesiones de Swipe todavía — ábrelo para crear la primera.</p>
-              )}
-              {swipeSesiones && swipeSesiones.length > 0 && (
-                <div className="space-y-1 pb-0.5 pt-1.5">
-                  {swipeSesiones.slice(0, 3).map((s) => (
-                    <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate text-foreground">{s.nombre}</span>
-                      <EstadoPill estado={s.estado} />
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* ── Presupuesto ── */}
           {canSeeBudget && (
-            <div onClick={() => onOpenTab('presupuesto')} className="flex rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-              <div className="w-1 flex-shrink-0" style={{ backgroundColor: GOLD }} />
-              <div className="flex-1 flex items-center gap-2.5 px-3.5 py-3">
-                <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${GOLD}26`, color: '#8a6b0a' }}><DollarSign className="w-3.5 h-3.5" /></div>
-                <span className="text-sm font-medium text-foreground">Presupuesto</span>
-                <span className="ml-auto text-xs text-muted-foreground">Ver detalle</span>
+            <div onClick={() => onOpenTab('presupuesto')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
+              <ColorHead color={GOLD} ink="#412402" icon={<DollarSign className="w-3.5 h-3.5" />} label="Presupuesto" />
+              <div className="px-3.5 py-3">
+                <span className="text-xs text-muted-foreground">Ver detalle</span>
               </div>
             </div>
           )}
 
           {/* ── Documentos ── */}
-          <div onClick={() => onOpenTab('documentos')} className="flex rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-            <div className="w-1 flex-shrink-0" style={{ backgroundColor: NEUTRAL }} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 px-3.5 pt-3 pb-1">
-                <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${NEUTRAL}1a`, color: NEUTRAL }}><FileText className="w-3.5 h-3.5" /></div>
-                <span className="text-sm font-medium text-foreground">Documentos</span>
-              </div>
-              {!teamsLinked && <p className="px-3.5 pb-3.5 pt-1 text-xs text-muted-foreground">Sin carpetas vinculadas</p>}
-              {teamsLinked && folders && folders.length === 0 && <p className="px-3.5 pb-3.5 pt-1 text-xs text-muted-foreground">Sin archivos aún</p>}
+          <div onClick={() => onOpenTab('documentos')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
+            <ColorHead color={NEUTRAL} icon={<FileText className="w-3.5 h-3.5" />} label="Documentos" />
+            <div className="px-3.5 py-3">
+              {!teamsLinked && <p className="text-xs text-muted-foreground">Sin carpetas vinculadas</p>}
+              {teamsLinked && folders && folders.length === 0 && <p className="text-xs text-muted-foreground">Sin archivos aún</p>}
               {teamsLinked && folders && folders.length > 0 && (
-                <div className="flex flex-wrap gap-4 px-3.5 pb-3.5 pt-1">
+                <div className="flex flex-wrap gap-4">
                   {folders.slice(0, 6).map((f, i) => (
                     <div key={`${f.name}-${i}`} className="flex flex-col items-center gap-1 w-14">
                       <Folder className="w-6 h-6" style={{ color: NEUTRAL }} />
@@ -378,16 +364,12 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
           </div>
 
           {/* ── Chat ── */}
-          <div onClick={() => onOpenTab('chat')} className="flex rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-            <div className="w-1 flex-shrink-0" style={{ backgroundColor: TEAL_2 }} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 px-3.5 pt-3 pb-1">
-                <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${TEAL_2}1a`, color: TEAL_2 }}><MessageSquare className="w-3.5 h-3.5" /></div>
-                <span className="text-sm font-medium text-foreground">Chat</span>
-              </div>
-              {messages && messages.length === 0 && <p className="px-3.5 pb-3.5 pt-1 text-xs text-muted-foreground">Sin mensajes aún</p>}
+          <div onClick={() => onOpenTab('chat')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
+            <ColorHead color={ALERTA} icon={<MessageSquare className="w-3.5 h-3.5" />} label="Chat" />
+            <div className="px-3.5 py-3">
+              {messages && messages.length === 0 && <p className="text-xs text-muted-foreground">Sin mensajes aún</p>}
               {messages && messages.length > 0 && (
-                <div className="px-3.5 pb-3 pt-1 max-h-[100px] overflow-y-auto">
+                <div className="max-h-[100px] overflow-y-auto">
                   {messages.map((m, i) => (
                     <p key={i} className="text-xs py-1 border-b border-border last:border-b-0">
                       <span className="font-medium text-foreground">{m.senderName || m.senderEmail?.split('@')[0] || 'Alguien'}: </span>
