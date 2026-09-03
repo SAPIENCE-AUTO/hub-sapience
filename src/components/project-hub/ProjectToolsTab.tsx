@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import SwipeDashboardPage from '../../pages/SwipeDashboardPage';
 import EjesDashboardPage from '../../pages/EjesDashboardPage';
+import { PreworkPanel } from './PreworkPanel';
 
-type SubTab = 'swipe' | 'ejes';
+type SubTab = 'swipe' | 'ejes' | 'prework';
 
 const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'swipe', label: 'Swipe' },
   { id: 'ejes', label: 'Ejes' },
+  { id: 'prework', label: 'Prework' },
 ];
 
 /**
  * Pestaña "Tools" del hub de proyecto — home para herramientas internas que
- * se vayan sumando. Empezó con solo Swipe (ver git blame); Ejes es la
- * segunda. El selector interno replica el mismo patrón visual de tabs que
- * ProjectHubPage.tsx usa un nivel arriba (bg-primary activo, hover en
- * inactivo) — no un componente nuevo, solo el mismo criterio.
+ * se vayan sumando. Empezó con solo Swipe (ver git blame); Prework y Ejes
+ * son la segunda y tercera. El selector interno replica el mismo patrón
+ * visual de tabs que ProjectHubPage.tsx usa un nivel arriba (bg-primary
+ * activo, hover en inactivo) — no un componente nuevo, solo el mismo criterio.
  */
 export function ProjectToolsTab({ projectId }: { projectId?: string }) {
   const [subTab, setSubTab] = useState<SubTab>('swipe');
@@ -40,6 +42,7 @@ export function ProjectToolsTab({ projectId }: { projectId?: string }) {
       <div className="flex-1 min-h-0 overflow-y-auto">
         {subTab === 'swipe' && <SwipeDashboardPage proyectoId={projectId} />}
         {subTab === 'ejes' && <EjesDashboardPage proyectoId={projectId} />}
+        {subTab === 'prework' && <PreworkPanel proyectoId={projectId} />}
       </div>
     </div>
   );

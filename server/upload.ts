@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { getSupabaseAdmin } from './supabaseAdmin';
 import { resolveAuth } from './auth';
 import { Suppliers } from './compat';
+import { verifySessionToken } from './preworkAuth';
 
 /**
  * POST /api/upload — ruta dedicada, NO pasa por el dispatcher genérico de
@@ -30,6 +31,9 @@ const ALLOWED_MIME_TYPES = new Set([
   'text/csv',
   'application/xml', 'text/xml',
   'text/plain',
+  // Prework: video/nota de voz de participantes (foto ya cubierta arriba).
+  'video/mp4', 'video/quicktime', 'video/webm',
+  'audio/mpeg', 'audio/mp4', 'audio/webm', 'audio/ogg',
 ]);
 
 function sanitizeFilename(name: string): string {
@@ -72,13 +76,18 @@ uploadApp.post(
     }
     const folder = typeof body.folder === 'string' ? body.folder : undefined;
 
-    // ── Auth: sesión normal, o portal de proveedores por token+password ──
-    // (mismo par que valida uploadSupplierInvoice.ts — no se inventa un
-    // segundo criterio de acceso para el portal).
+    // ── Auth: sesión normal, portal de proveedores (token+password), o
+    // portal de participante de Prework (preworkToken) — tres orígenes
+    // posibles para un archivo, cada uno con su propio criterio de acceso.
     const portalToken = typeof body.token === 'string' ? body.token : undefined;
     const portalPassword = typeof body.password === 'string' ? body.password : undefined;
+    const preworkToken = typeof body.preworkToken === 'string' ? body.preworkToken : undefined;
 
-    if (portalToken) {
+    if (preworkToken) {
+      if (!verifySessionToken(preworkToken)) {
+        return c.json({ message: 'Sesión de Prework inválida o expirada' }, 401);
+      }
+    } else if (portalToken) {
       const supplier = await Suppliers.findOne({ filters: { accessToken: portalToken } });
       if (!supplier || supplier.portalPassword !== portalPassword) {
         return c.json({ message: 'Token o clave de acceso inválidos' }, 401);

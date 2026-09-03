@@ -137,6 +137,8 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
 export const getMe = (input?: any): Promise<any> => call('getMe', input);
 
 export const addExpenseComment = (input?: any): Promise<any> => call('addExpenseComment', input);
+export const analizarPreworkEstudio = (input?: any): Promise<any> => call('analizarPreworkEstudio', input);
+export const analizarPreworkRespuesta = (input?: any): Promise<any> => call('analizarPreworkRespuesta', input);
 export const analyzeRecruitmentStatus = (input?: any): Promise<any> => call('analyzeRecruitmentStatus', input);
 export const approveDeal = (input?: any): Promise<any> => call('approveDeal', input);
 export const approveExpense = (input?: any): Promise<any> => call('approveExpense', input);
@@ -157,6 +159,9 @@ export const createEjesIdeasBulk = (input?: any): Promise<any> => call('createEj
 export const createEjesSesion = (input?: any): Promise<any> => call('createEjesSesion', input);
 export const createEjesTablero = (input?: any): Promise<any> => call('createEjesTablero', input);
 export const createObservationStream = (input?: any): Promise<any> => call('createObservationStream', input);
+export const createPreworkEstudio = (input?: any): Promise<any> => call('createPreworkEstudio', input);
+export const createPreworkMision = (input?: any): Promise<any> => call('createPreworkMision', input);
+export const createPreworkSeguimiento = (input?: any): Promise<any> => call('createPreworkSeguimiento', input);
 export const createSharedView = (input?: any): Promise<any> => call('createSharedView', input);
 export const createSwipeCapitulo = (input?: any): Promise<any> => call('createSwipeCapitulo', input);
 export const createSwipeIdea = (input?: any): Promise<any> => call('createSwipeIdea', input);
@@ -185,6 +190,8 @@ export const deleteProject = (input?: any): Promise<any> => call('deleteProject'
 export const deletePurchaseOrder = (input?: any): Promise<any> => call('deletePurchaseOrder', input);
 export const deleteRecruitmentRow = (input?: any): Promise<any> => call('deleteRecruitmentRow', input);
 export const deleteSharedView = (input?: any): Promise<any> => call('deleteSharedView', input);
+export const deleteSwipeCapitulo = (input?: any): Promise<any> => call('deleteSwipeCapitulo', input);
+export const deleteSwipeIdea = (input?: any): Promise<any> => call('deleteSwipeIdea', input);
 export const deleteSwipeSesion = (input?: any): Promise<any> => call('deleteSwipeSesion', input);
 export const deleteTask = (input?: any): Promise<any> => call('deleteTask', input);
 export const deleteUser = (input?: any): Promise<any> => call('deleteUser', input);
@@ -192,6 +199,8 @@ export const detectDuplicateSuppliers = (input?: any): Promise<any> => call('det
 export const duplicateBoard = (input?: any): Promise<any> => call('duplicateBoard', input);
 export const duplicateCotizacion = (input?: any): Promise<any> => call('duplicateCotizacion', input);
 export const duplicateGroup = (input?: any): Promise<any> => call('duplicateGroup', input);
+export const duplicateSwipeCapitulo = (input?: any): Promise<any> => call('duplicateSwipeCapitulo', input);
+export const duplicateSwipeIdea = (input?: any): Promise<any> => call('duplicateSwipeIdea', input);
 export const duplicateRows = (input?: any): Promise<any> => call('duplicateRows', input);
 export const ensurePendienteNotasBlock = (input?: any): Promise<any> => call('ensurePendienteNotasBlock', input);
 export const executeButtonAction = (input?: any): Promise<any> => call('executeButtonAction', input);
@@ -266,6 +275,14 @@ export const getPoLineItems = (input?: any): Promise<any> => call('getPoLineItem
 export const getPoNotifications = (input?: any): Promise<any> => call('getPoNotifications', input);
 export const getPoPdfBase64 = (input?: any): Promise<any> => call('getPoPdfBase64', input);
 export const getPresence = (input?: any): Promise<any> => call('getPresence', input);
+export const getPreworkEstudios = (input?: any): Promise<any> => call('getPreworkEstudios', input);
+export const getPreworkMisiones = (input?: any): Promise<any> => call('getPreworkMisiones', input);
+export const getPreworkParticipacionStatus = (input?: any): Promise<any> => call('getPreworkParticipacionStatus', input);
+export const getPreworkParticipantesCandidatos = (input?: any): Promise<any> => call('getPreworkParticipantesCandidatos', input);
+export const getPreworkPerfilesEstudio = (input?: any): Promise<any> => call('getPreworkPerfilesEstudio', input);
+export const getPreworkRespuestas = (input?: any): Promise<any> => call('getPreworkRespuestas', input);
+export const getPreworkSeguimientos = (input?: any): Promise<any> => call('getPreworkSeguimientos', input);
+export const getPreworkTags = (input?: any): Promise<any> => call('getPreworkTags', input);
 export const getProjectBudget = (input?: any): Promise<any> => call('getProjectBudget', input);
 export const getProjectCostAnalysis = (input?: any): Promise<any> => call('getProjectCostAnalysis', input);
 export const getProjectDocuments = (input?: any): Promise<any> => call('getProjectDocuments', input);
@@ -332,6 +349,13 @@ export const postObserverHeartbeat = (input?: any): Promise<any> => call('postOb
 export const postProducerChatMessage = (input?: any): Promise<any> => call('postProducerChatMessage', input);
 export const preparePoEmail = (input?: any): Promise<any> => call('preparePoEmail', input);
 export const previewInviteTemplate = (input?: any): Promise<any> => call('previewInviteTemplate', input);
+export const preworkGetAblyToken = (input?: any): Promise<any> => call('preworkGetAblyToken', input);
+export const preworkGetFeedSocial = (input?: any): Promise<any> => call('preworkGetFeedSocial', input);
+export const preworkGetMisiones = (input?: any): Promise<any> => call('preworkGetMisiones', input);
+export const preworkInvitarParticipantes = (input?: any): Promise<any> => call('preworkInvitarParticipantes', input);
+export const preworkLogin = (input?: any): Promise<any> => call('preworkLogin', input);
+export const preworkReaccionarRespuesta = (input?: any): Promise<any> => call('preworkReaccionarRespuesta', input);
+export const preworkSubmitRespuesta = (input?: any): Promise<any> => call('preworkSubmitRespuesta', input);
 export const publishDocEvent = (input?: any): Promise<any> => call('publishDocEvent', input);
 export const publishPresenceEvent = (input?: any): Promise<any> => call('publishPresenceEvent', input);
 export const publishRecruitmentGroupsChanged = (input?: any): Promise<any> => call('publishRecruitmentGroupsChanged', input);
@@ -396,13 +420,19 @@ export const syncExternalView = (input?: any): Promise<any> => call('syncExterna
 export const syncFilloutResponses = (input?: any): Promise<any> => call('syncFilloutResponses', input);
 export const syncOutlookInvite = (input?: any): Promise<any> => call('syncOutlookInvite', input);
 export const syncZoomMeeting = (input?: any): Promise<any> => call('syncZoomMeeting', input);
+export const tagPreworkRespuesta = (input?: any): Promise<any> => call('tagPreworkRespuesta', input);
 export const togglePinMessage = (input?: any): Promise<any> => call('togglePinMessage', input);
 export const toggleReaction = (input?: any): Promise<any> => call('toggleReaction', input);
+export const transcribirPreworkRespuesta = (input?: any): Promise<any> => call('transcribirPreworkRespuesta', input);
 export const unlinkExternalView = (input?: any): Promise<any> => call('unlinkExternalView', input);
 export const unlinkTeamsChannel = (input?: any): Promise<any> => call('unlinkTeamsChannel', input);
 export const updateChatConversationMembers = (input?: any): Promise<any> => call('updateChatConversationMembers', input);
 export const updateDashboardTask = (input?: any): Promise<any> => call('updateDashboardTask', input);
 export const updatePresence = (input?: any): Promise<any> => call('updatePresence', input);
+export const updatePreworkAsignacion = (input?: any): Promise<any> => call('updatePreworkAsignacion', input);
+export const updatePreworkEstudio = (input?: any): Promise<any> => call('updatePreworkEstudio', input);
+export const updatePreworkMision = (input?: any): Promise<any> => call('updatePreworkMision', input);
+export const updatePreworkRespuestaEstado = (input?: any): Promise<any> => call('updatePreworkRespuestaEstado', input);
 export const updateSharedView = (input?: any): Promise<any> => call('updateSharedView', input);
 export const updateEjesIdea = (input?: any): Promise<any> => call('updateEjesIdea', input);
 export const updateSwipeIdea = (input?: any): Promise<any> => call('updateSwipeIdea', input);

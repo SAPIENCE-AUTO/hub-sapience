@@ -10,8 +10,8 @@ import { supabase } from '@/lib/supabaseClient';
 export interface UploadResult { fileUrl: string; name: string; size: number; mimeType?: string }
 
 export async function uploadFile(
-  { data, filename, folder, token, password }: {
-    data: File; filename: string; folder?: string; token?: string; password?: string;
+  { data, filename, folder, token, password, preworkToken }: {
+    data: File; filename: string; folder?: string; token?: string; password?: string; preworkToken?: string;
   },
 ): Promise<UploadResult> {
   if (import.meta.env.VITE_MOCK_USER === 'true') {
@@ -23,7 +23,10 @@ export async function uploadFile(
   if (folder) form.append('folder', folder);
 
   const headers: Record<string, string> = {};
-  if (token) {
+  if (preworkToken) {
+    // Portal de participante de Prework: público por token de sesión propio.
+    form.append('preworkToken', preworkToken);
+  } else if (token) {
     // Portal de proveedores: público por token+password, no por sesión.
     form.append('token', token);
     if (password) form.append('password', password);
