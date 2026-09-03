@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getSwipeIdeas, createSwipeIdea, createSwipeIdeasBulk, updateSwipeIdea, moveSwipeIdea, getSwipeVotosDeIdea,
+  deleteSwipeIdea, duplicateSwipeIdea,
 } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ChevronUp, ChevronDown, Pencil, Users, Plus, Lock, Play } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { ChevronUp, ChevronDown, Pencil, Users, Plus, Lock, Play, Copy, Trash2 } from 'lucide-react';
 import SwipePreviewModal from './SwipePreviewModal';
 
 interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number; tieneVotos: boolean }
@@ -41,6 +46,9 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
   const [votosOpenId, setVotosOpenId] = useState<string | null>(null);
   const [votosByIdea, setVotosByIdea] = useState<Record<string, VotoRow[]>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [ideaToDelete, setIdeaToDelete] = useState<IdeaRow | null>(null);
+  const [deletingIdea, setDeletingIdea] = useState(false);
+  const [duplicatingIdeaId, setDuplicatingIdeaId] = useState<string | null>(null);
   const shownFirstLoad = useRef(false);
 
   const selected = ideas.find((i) => i.id === selectedId) ?? null;
@@ -126,6 +134,35 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
     }
   };
 
+  const handleDuplicateIdea = async (ideaId: string) => {
+    setDuplicatingIdeaId(ideaId);
+    try {
+      await duplicateSwipeIdea({ ideaId });
+      await load();
+      onIdeasChanged?.();
+      toast.success('Idea duplicada');
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo duplicar la idea.');
+    }
+    setDuplicatingIdeaId(null);
+  };
+
+  const handleDeleteIdea = async () => {
+    if (!ideaToDelete) return;
+    setDeletingIdea(true);
+    try {
+      await deleteSwipeIdea({ ideaId: ideaToDelete.id });
+      if (selectedId === ideaToDelete.id) startNueva();
+      setIdeaToDelete(null);
+      await load();
+      onIdeasChanged?.();
+      toast.success('Idea eliminada');
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo eliminar la idea.');
+    }
+    setDeletingIdea(false);
+  };
+
   const toggleVotos = async (ideaId: string) => {
     if (votosOpenId === ideaId) { setVotosOpenId(null); return; }
     setVotosOpenId(ideaId);
@@ -206,14 +243,31 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
                   >
                     <Users className="h-3.5 w-3.5" />
                   </button>
+                  <button
+                    className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
+                    onClick={(e) => { e.stopPropagation(); handleDuplicateIdea(idea.id); }}
+                    disabled={duplicatingIdeaId === idea.id}
+                    aria-label="Duplicar idea"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
                   {idea.tieneVotos ? (
                     <span className="ml-0.5 flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-secondary-foreground">
                       <Lock className="h-2.5 w-2.5" /> con votos
                     </span>
                   ) : (
-                    <button className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" onClick={(e) => { e.stopPropagation(); selectIdea(idea); }} aria-label="Editar">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
+                    <>
+                      <button className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" onClick={(e) => { e.stopPropagation(); selectIdea(idea); }} aria-label="Editar">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); setIdeaToDelete(idea); }}
+                        aria-label="Eliminar idea"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -291,6 +345,25 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
           onClose={() => setPreviewOpen(false)}
         />
       )}
+
+      <AlertDialog open={!!ideaToDelete} onOpenChange={(open) => { if (!open) setIdeaToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar "{ideaToDelete?.titulo}"?</AlertDialogTitle>
+            <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingIdea}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteIdea}
+              disabled={deletingIdea}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingIdea ? 'Eliminando…' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

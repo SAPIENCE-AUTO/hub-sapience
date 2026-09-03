@@ -3,12 +3,17 @@ import { toast } from 'sonner';
 import {
   getSwipeSesiones, createSwipeSesion, deleteSwipeSesion, getSwipeSesionDetail, createSwipeCapitulo,
   setSwipeCapituloEstado, getSwipeResultados, getSwipeResultadosSesion,
+  deleteSwipeCapitulo, duplicateSwipeCapitulo,
 } from 'zite-endpoints-sdk';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Copy, Plus, Star, Trash2, Maximize2, Check, Play, Pause } from 'lucide-react';
 import SwipeResultsProjection, { QUADRANTE_META, type SwipeQuadrante } from '@/components/swipe/SwipeResultsProjection';
 import SwipeChapterEditor from '@/components/swipe/SwipeChapterEditor';
@@ -50,6 +55,10 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   const [newCapNombre, setNewCapNombre] = useState('');
   const [newCapDescripcion, setNewCapDescripcion] = useState('');
   const [creatingCap, setCreatingCap] = useState(false);
+
+  const [capituloToDelete, setCapituloToDelete] = useState<CapituloRow | null>(null);
+  const [deletingCapitulo, setDeletingCapitulo] = useState(false);
+  const [duplicatingCapituloId, setDuplicatingCapituloId] = useState<string | null>(null);
 
   const loadSesiones = async () => {
     setLoadingSesiones(true);
@@ -150,6 +159,33 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
     } catch (err) {
       toast.error((err as Error)?.message || 'No se pudo cambiar el estado del capítulo.');
     }
+  };
+
+  const handleDuplicateCapitulo = async (cap: CapituloRow) => {
+    setDuplicatingCapituloId(cap.id);
+    try {
+      await duplicateSwipeCapitulo({ capituloId: cap.id });
+      toast.success('Capítulo duplicado');
+      if (selectedSesionId) await loadDetalle(selectedSesionId);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo duplicar el capítulo.');
+    }
+    setDuplicatingCapituloId(null);
+  };
+
+  const handleDeleteCapitulo = async () => {
+    if (!capituloToDelete) return;
+    setDeletingCapitulo(true);
+    try {
+      await deleteSwipeCapitulo({ capituloId: capituloToDelete.id });
+      if (selectedCapituloId === capituloToDelete.id) setSelectedCapituloId(null);
+      setCapituloToDelete(null);
+      toast.success('Capítulo eliminado');
+      if (selectedSesionId) await loadDetalle(selectedSesionId);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo eliminar el capítulo.');
+    }
+    setDeletingCapitulo(false);
   };
 
   const copyLink = (codigo: string) => {
@@ -338,6 +374,23 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                         </div>
                       </button>
                       <Button
+                        size="sm" variant="ghost"
+                        className="h-8 w-8 flex-shrink-0 p-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => handleDuplicateCapitulo(cap)}
+                        disabled={duplicatingCapituloId === cap.id}
+                        aria-label="Duplicar capítulo"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm" variant="ghost"
+                        className="h-8 w-8 flex-shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => setCapituloToDelete(cap)}
+                        aria-label="Eliminar capítulo"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
                         size="sm"
                         className="flex-shrink-0 hover:opacity-90"
                         style={{ backgroundColor: TEAL, color: '#fff' }}
@@ -430,6 +483,27 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!capituloToDelete} onOpenChange={(open) => { if (!open) setCapituloToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar "{capituloToDelete?.nombre}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminarán sus {capituloToDelete?.ideasCount ?? 0} idea{capituloToDelete?.ideasCount !== 1 ? 's' : ''} y los votos que tenga. No se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingCapitulo}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCapitulo}
+              disabled={deletingCapitulo}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingCapitulo ? 'Eliminando…' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {projectionCapitulos && detalle && (
         <SwipeResultsProjection
