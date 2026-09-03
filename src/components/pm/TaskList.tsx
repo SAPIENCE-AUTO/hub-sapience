@@ -83,13 +83,22 @@ export const TaskList = memo(function TaskList({ tasks, onEdit, onDelete, onSave
   };
 
   const saveTimelineRange = async (taskId: string, start: string, end: string) => {
+    // Guarda las fechas previas para poder revertir el update optimista si
+    // saveTask falla — sin esto, un error de red dejaba el timeline
+    // mostrando la fecha nueva como si se hubiera guardado, y la pérdida
+    // solo se notaba hasta volver a cargar los datos reales del servidor
+    // (reportado en vivo: fechas de DOPAMINA "desaparecidas" al regresar).
+    const prevTask = tasks.find(t => t.id === taskId);
+    const prevStart = prevTask?.startDate;
+    const prevEnd = prevTask?.endDate;
     onTasksChange(prev => prev.map(t => t.id === taskId ? { ...t, startDate: start || undefined, endDate: end || undefined } : t));
     try {
       await saveTask({ id: taskId, startDate: start || undefined, endDate: end || undefined });
       if (startDynCol) dynCols.setCellVal(taskId, startDynCol.id, { dateValue: start ? start + 'T00:00:00' : undefined });
       if (endDynCol)   dynCols.setCellVal(taskId, endDynCol.id,   { dateValue: end   ? end   + 'T00:00:00' : undefined });
     } catch {
-      toast.error('Error al guardar fechas');
+      onTasksChange(prev => prev.map(t => t.id === taskId ? { ...t, startDate: prevStart, endDate: prevEnd } : t));
+      toast.error('Error al guardar fechas — se restauraron las fechas anteriores');
     }
   };
 
