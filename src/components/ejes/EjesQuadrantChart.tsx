@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts';
@@ -59,9 +60,31 @@ export default function EjesQuadrantChart({
 }: EjesQuadrantChartProps) {
   const midX = (ejeXMin + ejeXMax) / 2;
   const midY = (ejeYMin + ejeYMax) / 2;
-  const ideasVisibles = detalleIdeaId ? ideas.filter((idea) => idea.id === detalleIdeaId) : ideas;
-  const scatterData = ideasVisibles.map((idea) => ({ ...idea, x: idea.avgX, y: idea.avgY }));
-  const puntosIndividuales = (detalleEvaluaciones ?? []).map((ev) => ({ x: ev.valorX, y: ev.valorY }));
+  const ideasVisibles = useMemo(
+    () => (detalleIdeaId ? ideas.filter((idea) => idea.id === detalleIdeaId) : ideas),
+    [ideas, detalleIdeaId],
+  );
+  const scatterData = useMemo(
+    () => ideasVisibles.map((idea) => ({ ...idea, x: idea.avgX, y: idea.avgY })),
+    [ideasVisibles],
+  );
+  // Los puntitos grises llevan el mismo título/imagen/cuadrante que su idea
+  // — no solo sus coordenadas — así el tooltip siempre muestra lo mismo sin
+  // importar si el punto que recharts detecta más cercano al cursor es el
+  // promedio (rojo) o uno de estos individuales; antes, al no tener título,
+  // el tooltip se apagaba en seco justo al entrar en la zona de la idea
+  // seleccionada (glitch reportado: "el mini pop up desaparece").
+  const ideaSeleccionada = detalleIdeaId ? ideas.find((idea) => idea.id === detalleIdeaId) : undefined;
+  const puntosIndividuales = useMemo(
+    () => (detalleEvaluaciones ?? []).map((ev) => ({
+      x: ev.valorX, y: ev.valorY,
+      titulo: ideaSeleccionada?.titulo,
+      imagenUrl: ideaSeleccionada?.imagenUrl,
+      cuadranteLabel: ideaSeleccionada?.cuadranteLabel,
+      totalEvaluaciones: ideaSeleccionada?.totalEvaluaciones,
+    })),
+    [detalleEvaluaciones, ideaSeleccionada],
+  );
   const stroke = gridColor ?? 'hsl(var(--border))';
   const fill = textColor ?? 'hsl(var(--muted-foreground))';
 
