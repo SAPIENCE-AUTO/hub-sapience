@@ -156,6 +156,7 @@ export const createObservationStream = (input?: any): Promise<any> => call('crea
 export const createSharedView = (input?: any): Promise<any> => call('createSharedView', input);
 export const createSwipeCapitulo = (input?: any): Promise<any> => call('createSwipeCapitulo', input);
 export const createSwipeIdea = (input?: any): Promise<any> => call('createSwipeIdea', input);
+export const createSwipeIdeasBulk = (input?: any): Promise<any> => call('createSwipeIdeasBulk', input);
 export const createSwipeSesion = (input?: any): Promise<any> => call('createSwipeSesion', input);
 export const createTeamsChannel = (input?: any): Promise<any> => call('createTeamsChannel', input);
 export const deleteBoard = (input?: any): Promise<any> => call('deleteBoard', input);
@@ -306,6 +307,7 @@ export const mergeSupplierRecords = (input?: any): Promise<any> => call('mergeSu
 export const migrateAgeColumns = (input?: any): Promise<any> => call('migrateAgeColumns', input);
 export const migrateCellValuesToUUID = (input?: any): Promise<any> => call('migrateCellValuesToUUID', input);
 export const migrateProjectToUUID = (input?: any): Promise<any> => call('migrateProjectToUUID', input);
+export const moveSwipeIdea = (input?: any): Promise<any> => call('moveSwipeIdea', input);
 export const normalizeSupplierNames = (input?: any): Promise<any> => call('normalizeSupplierNames', input);
 export const parseExcelFile = (input?: any): Promise<any> => call('parseExcelFile', input);
 export const parseOdcCsv = (input?: any): Promise<any> => call('parseOdcCsv', input);

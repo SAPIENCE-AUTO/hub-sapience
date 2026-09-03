@@ -2,38 +2,51 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getSwipeSesiones, createSwipeSesion, deleteSwipeSesion, getSwipeSesionDetail, createSwipeCapitulo,
-  getSwipeIdeas, createSwipeIdea, updateSwipeIdea, getSwipeVotosDeIdea, setSwipeCapituloEstado,
-  getSwipeResultados, getSwipeResultadosSesion,
+  setSwipeCapituloEstado, getSwipeResultados, getSwipeResultadosSesion,
 } from 'zite-endpoints-sdk';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Copy, Plus, Star, Heart, X, Trash2, Pencil, Users, Maximize2 } from 'lucide-react';
+import { Copy, Plus, Star, Trash2, Maximize2 } from 'lucide-react';
 import SwipeResultsProjection, { QUADRANTE_META, type SwipeQuadrante } from '@/components/swipe/SwipeResultsProjection';
+import SwipeChapterEditor from '@/components/swipe/SwipeChapterEditor';
 
 interface SesionRow { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulosCount: number }
 interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number }
-interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number; tieneVotos: boolean }
 interface ResultadoIdea { id: string; titulo: string; imagenUrl?: string; totalVotos: number; potencial: number; descarte: number; superLikes: number; pctPotencial: number; score: number; avgMsDecision?: number; quadrante?: SwipeQuadrante }
 interface ResultadoCapitulo { capituloId: string; capituloNombre: string; totalParticipantesVotaron: number; ideas: ResultadoIdea[] }
 interface Detalle { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulos: CapituloRow[] }
-interface VotoRow { alias: string; valor: string; msDecision?: number; createdAt: string }
 
-const VALOR_ICON: Record<string, React.ComponentType<{ className?: string }>> = { potencial: Heart, descarte: X, super: Star };
-const VALOR_COLOR: Record<string, string> = { potencial: '#1F9D6F', descarte: '#C4302B', super: '#D4A017' };
-const ESTADO_DOT: Record<string, string> = {
-  activa: '#1F9D6F', abierto: '#1F9D6F',
-  borrador: '#8FA0A6', bloqueado: '#8FA0A6',
-  cerrada: '#6E8388', cerrado: '#6E8388',
+// Pills de estado — mismo patrón del moodboard de look & feel del Hub (dot +
+// pastilla de color sólido). "Éxito"/gris reusan el enfoque de las pills
+// existentes; verde y azul son aproximaciones cercanas a los swatches del
+// moodboard (info/éxito) porque todavía no existen como tokens globales de
+// Tailwind — no se tocó tailwind.config.ts/index.css desde este módulo.
+const ESTADO_PILL: Record<string, string> = {
+  activa: 'bg-[#16A34A] text-white',
+  abierto: 'bg-[#16A34A] text-white',
+  borrador: 'bg-secondary text-secondary-foreground',
+  bloqueado: 'bg-secondary text-secondary-foreground',
+  cerrada: 'bg-muted text-muted-foreground',
+  cerrado: 'bg-muted text-muted-foreground',
 };
 
+function EstadoPill({ estado }: { estado: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${ESTADO_PILL[estado] ?? 'bg-muted text-muted-foreground'}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {estado}
+    </span>
+  );
+}
+
 /**
- * Dashboard del facilitador para el módulo Swipe — Fase 1: crear sesiones y
- * capítulos, dar de alta ideas una por una, abrir/cerrar capítulos y ver un
- * ranking simple. Sin CSV bulk, sin export XLSX, sin Realtime — eso queda
- * para fases posteriores (ver plan del módulo).
+ * Dashboard del facilitador para el módulo Swipe: crear sesiones y
+ * capítulos, y dentro de cada capítulo el editor de ideas
+ * (SwipeChapterEditor) — reordenar, alta rápida, preview en vivo. Ver
+ * resultados por capítulo o de la sesión completa, y proyectarlos.
  */
 export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string } = {}) {
   const [sesiones, setSesiones] = useState<SesionRow[]>([]);
@@ -41,7 +54,6 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   const [selectedSesionId, setSelectedSesionId] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Detalle | null>(null);
   const [selectedCapituloId, setSelectedCapituloId] = useState<string | null>(null);
-  const [ideasByCapitulo, setIdeasByCapitulo] = useState<Record<string, IdeaRow[]>>({});
   const [resultados, setResultados] = useState<{ totalParticipantesVotaron: number; ideas: ResultadoIdea[] } | null>(null);
 
   const [newSesionOpen, setNewSesionOpen] = useState(false);
@@ -60,22 +72,6 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   const [newCapNombre, setNewCapNombre] = useState('');
   const [newCapDescripcion, setNewCapDescripcion] = useState('');
   const [creatingCap, setCreatingCap] = useState(false);
-
-  const [newIdeaOpen, setNewIdeaOpen] = useState(false);
-  const [newIdeaTitulo, setNewIdeaTitulo] = useState('');
-  const [newIdeaDescripcion, setNewIdeaDescripcion] = useState('');
-  const [newIdeaImagenUrl, setNewIdeaImagenUrl] = useState('');
-  const [creatingIdea, setCreatingIdea] = useState(false);
-
-  const [editingIdea, setEditingIdea] = useState<IdeaRow | null>(null);
-  const [editTitulo, setEditTitulo] = useState('');
-  const [editDescripcion, setEditDescripcion] = useState('');
-  const [editImagenUrl, setEditImagenUrl] = useState('');
-  const [savingEdit, setSavingEdit] = useState(false);
-
-  const [expandedVotosIdeaId, setExpandedVotosIdeaId] = useState<string | null>(null);
-  const [votosByIdea, setVotosByIdea] = useState<Record<string, VotoRow[]>>({});
-  const [loadingVotos, setLoadingVotos] = useState(false);
 
   const loadSesiones = async () => {
     setLoadingSesiones(true);
@@ -102,13 +98,8 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
     else setDetalle(null);
   }, [selectedSesionId]);
 
-  const loadIdeas = async (capituloId: string) => {
-    const res = await getSwipeIdeas({ capituloId });
-    setIdeasByCapitulo((prev) => ({ ...prev, [capituloId]: res.ideas ?? [] }));
-  };
-
   useEffect(() => {
-    if (selectedCapituloId) { loadIdeas(selectedCapituloId); setResultados(null); setExpandedVotosIdeaId(null); }
+    setResultados(null);
   }, [selectedCapituloId]);
 
   // Refresca resultados mientras el capítulo seleccionado siga abierto —
@@ -168,67 +159,6 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
       toast.error((err as Error)?.message || 'No se pudo crear el capítulo.');
     }
     setCreatingCap(false);
-  };
-
-  const handleCreateIdea = async () => {
-    if (!newIdeaTitulo.trim() || !selectedCapituloId) return;
-    setCreatingIdea(true);
-    try {
-      await createSwipeIdea({
-        capituloId: selectedCapituloId,
-        titulo: newIdeaTitulo.trim(),
-        descripcion: newIdeaDescripcion.trim() || undefined,
-        imagenUrl: newIdeaImagenUrl.trim() || undefined,
-      });
-      setNewIdeaOpen(false);
-      setNewIdeaTitulo('');
-      setNewIdeaDescripcion('');
-      setNewIdeaImagenUrl('');
-      await loadIdeas(selectedCapituloId);
-      if (selectedSesionId) await loadDetalle(selectedSesionId);
-    } catch (err) {
-      toast.error((err as Error)?.message || 'No se pudo agregar la idea.');
-    }
-    setCreatingIdea(false);
-  };
-
-  const openEditIdea = (idea: IdeaRow) => {
-    setEditingIdea(idea);
-    setEditTitulo(idea.titulo);
-    setEditDescripcion(idea.descripcion ?? '');
-    setEditImagenUrl(idea.imagenUrl ?? '');
-  };
-
-  const handleSaveEditIdea = async () => {
-    if (!editingIdea || !editTitulo.trim() || !selectedCapituloId) return;
-    setSavingEdit(true);
-    try {
-      await updateSwipeIdea({
-        ideaId: editingIdea.id,
-        titulo: editTitulo.trim(),
-        descripcion: editDescripcion.trim() || undefined,
-        imagenUrl: editImagenUrl.trim() || undefined,
-      });
-      setEditingIdea(null);
-      await loadIdeas(selectedCapituloId);
-    } catch (err) {
-      toast.error((err as Error)?.message || 'No se pudo editar la idea.');
-    }
-    setSavingEdit(false);
-  };
-
-  const toggleVotos = async (ideaId: string) => {
-    if (expandedVotosIdeaId === ideaId) { setExpandedVotosIdeaId(null); return; }
-    setExpandedVotosIdeaId(ideaId);
-    if (!votosByIdea[ideaId]) {
-      setLoadingVotos(true);
-      try {
-        const res = await getSwipeVotosDeIdea({ ideaId });
-        setVotosByIdea((prev) => ({ ...prev, [ideaId]: res.votos ?? [] }));
-      } finally {
-        setLoadingVotos(false);
-      }
-    }
   };
 
   const handleToggleCapituloEstado = async (cap: CapituloRow) => {
@@ -297,10 +227,10 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
               <div className="min-w-0">
                 <p className="truncate font-semibold text-foreground">{s.nombre}</p>
                 {s.cliente && <p className="truncate text-xs text-muted-foreground">{s.cliente}</p>}
-                <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ESTADO_DOT[s.estado] ?? '#8FA0A6' }} />
-                  {s.capitulosCount} capítulo{s.capitulosCount !== 1 ? 's' : ''} · {s.estado}
-                </p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <EstadoPill estado={s.estado} />
+                  <span className="text-xs text-muted-foreground">{s.capitulosCount} capítulo{s.capitulosCount !== 1 ? 's' : ''}</span>
+                </div>
               </div>
               <Button
                 size="sm" variant="ghost"
@@ -361,12 +291,12 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                 {detalle.capitulos.map((cap) => (
                   <Card key={cap.id} className={selectedCapituloId === cap.id ? 'border-primary' : ''}>
                     <CardHeader className="flex-row items-center justify-between space-y-0 py-3">
-                      <button className="text-left" onClick={() => setSelectedCapituloId(cap.id)}>
+                      <button className="text-left" onClick={() => setSelectedCapituloId(selectedCapituloId === cap.id ? null : cap.id)}>
                         <p className="font-medium text-foreground">{cap.nombre}</p>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ESTADO_DOT[cap.estado] ?? '#8FA0A6' }} />
-                          {cap.ideasCount} idea{cap.ideasCount !== 1 ? 's' : ''} · {cap.estado}
-                        </p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <EstadoPill estado={cap.estado} />
+                          <span className="text-xs text-muted-foreground">{cap.ideasCount} idea{cap.ideasCount !== 1 ? 's' : ''}</span>
+                        </div>
                       </button>
                       <Button
                         size="sm"
@@ -378,86 +308,14 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                     </CardHeader>
 
                     {selectedCapituloId === cap.id && (
-                      <CardContent className="space-y-4 pt-0">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-semibold text-foreground">Ideas</h3>
-                          <Dialog open={newIdeaOpen} onOpenChange={setNewIdeaOpen}>
-                            <DialogTrigger asChild><Button size="sm" variant="outline"><Plus className="h-3.5 w-3.5" /> Idea</Button></DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader><DialogTitle>Nueva idea</DialogTitle></DialogHeader>
-                              <div className="space-y-3">
-                                <Input placeholder="Título (máx. 60 caracteres)" maxLength={60} value={newIdeaTitulo} onChange={(e) => setNewIdeaTitulo(e.target.value)} />
-                                <Input placeholder="Descripción (máx. 180 caracteres)" maxLength={180} value={newIdeaDescripcion} onChange={(e) => setNewIdeaDescripcion(e.target.value)} />
-                                <Input placeholder="URL de imagen (opcional)" value={newIdeaImagenUrl} onChange={(e) => setNewIdeaImagenUrl(e.target.value)} />
-                              </div>
-                              <DialogFooter>
-                                <Button onClick={handleCreateIdea} disabled={creatingIdea || !newIdeaTitulo.trim()}>
-                                  {creatingIdea ? 'Agregando…' : 'Agregar'}
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-
-                        <ul className="space-y-1.5">
-                          {(ideasByCapitulo[cap.id] ?? []).map((idea) => (
-                            <li key={idea.id} className="rounded-md border border-border px-3 py-2 text-sm">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex min-w-0 gap-2.5">
-                                  {idea.imagenUrl ? (
-                                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white">
-                                      <img src={idea.imagenUrl} alt="" className="max-h-full max-w-full object-contain" />
-                                    </div>
-                                  ) : (
-                                    <div className="h-10 w-10 flex-shrink-0 rounded-md bg-muted" />
-                                  )}
-                                  <div className="min-w-0">
-                                    <p className="font-medium text-foreground">{idea.titulo}</p>
-                                    {idea.descripcion && <p className="text-xs text-muted-foreground">{idea.descripcion}</p>}
-                                  </div>
-                                </div>
-                                <div className="flex flex-shrink-0 gap-1">
-                                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => toggleVotos(idea.id)}>
-                                    <Users className="h-3.5 w-3.5" />
-                                  </Button>
-                                  {!idea.tieneVotos && (
-                                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openEditIdea(idea)}>
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-
-                              {expandedVotosIdeaId === idea.id && (
-                                <div className="mt-2 space-y-1 border-t border-border pt-2">
-                                  {loadingVotos && !votosByIdea[idea.id] && (
-                                    <p className="text-xs text-muted-foreground">Cargando…</p>
-                                  )}
-                                  {votosByIdea[idea.id]?.length === 0 && (
-                                    <p className="text-xs text-muted-foreground">Nadie ha votado esta idea todavía.</p>
-                                  )}
-                                  {(votosByIdea[idea.id] ?? []).map((voto, i) => {
-                                    const Icon = VALOR_ICON[voto.valor] ?? Heart;
-                                    return (
-                                      <div key={i} className="flex items-center justify-between text-xs">
-                                        <span className="text-foreground">{voto.alias}</span>
-                                        <span className="flex items-center gap-1" style={{ color: VALOR_COLOR[voto.valor] }}>
-                                          <Icon className="h-3 w-3" fill="currentColor" /> {voto.valor}
-                                        </span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </li>
-                          ))}
-                          {(ideasByCapitulo[cap.id] ?? []).length === 0 && (
-                            <p className="text-sm text-muted-foreground">Sin ideas todavía.</p>
-                          )}
-                        </ul>
+                      <CardContent className="space-y-5 pt-0">
+                        <SwipeChapterEditor
+                          capituloId={cap.id}
+                          onIdeasChanged={() => selectedSesionId && loadDetalle(selectedSesionId)}
+                        />
 
                         {resultados && (
-                          <div className="space-y-2 border-t border-border pt-3">
+                          <div className="space-y-2 border-t border-border pt-4">
                             <div className="flex items-center justify-between">
                               <h3 className="text-sm font-semibold text-foreground">
                                 Resultados · {resultados.totalParticipantesVotaron} participante{resultados.totalParticipantesVotaron !== 1 ? 's' : ''} {resultados.totalParticipantesVotaron !== 1 ? 'votaron' : 'votó'}
@@ -508,22 +366,6 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
           )}
         </div>
       </div>
-
-      <Dialog open={!!editingIdea} onOpenChange={(open) => { if (!open) setEditingIdea(null); }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Editar idea</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <Input placeholder="Título (máx. 60 caracteres)" maxLength={60} value={editTitulo} onChange={(e) => setEditTitulo(e.target.value)} />
-            <Input placeholder="Descripción (máx. 180 caracteres)" maxLength={180} value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
-            <Input placeholder="URL de imagen (opcional)" value={editImagenUrl} onChange={(e) => setEditImagenUrl(e.target.value)} />
-          </div>
-          <DialogFooter>
-            <Button onClick={handleSaveEditIdea} disabled={savingEdit || !editTitulo.trim()}>
-              {savingEdit ? 'Guardando…' : 'Guardar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={!!sesionToDelete} onOpenChange={(open) => { if (!open) { setSesionToDelete(null); setDeleteConfirmText(''); } }}>
         <DialogContent>
