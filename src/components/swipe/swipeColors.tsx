@@ -7,8 +7,13 @@
  * duplicar la paleta ni el componente de pill.
  */
 export const TEAL = '#0F3D4D';
+export const TEAL_2 = '#0A303D';
+export const GOLD = '#F4C025';
 export const INFO = '#1795D3';
 export const EXITO = '#257E55';
+export const ALERTA = '#DC7A09';
+export const PELIGRO = '#D32222';
+export const NEUTRAL = '#5B687B';
 export const GRIS = '#8b93a1';
 
 // Cerrado usa Info (no gris): un capítulo/sesión cerrada tiene resultados
