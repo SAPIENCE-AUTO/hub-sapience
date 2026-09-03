@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Copy, Plus, Star, Heart, X, Trash2, Pencil, Users } from 'lucide-react';
+import { Copy, Plus, Star, Heart, X, Trash2, Pencil, Users, Maximize2 } from 'lucide-react';
+import SwipeResultsProjection from '@/components/swipe/SwipeResultsProjection';
 
 interface SesionRow { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulosCount: number }
 interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number }
@@ -20,6 +21,11 @@ interface VotoRow { alias: string; valor: string; msDecision?: number; createdAt
 
 const VALOR_ICON: Record<string, React.ComponentType<{ className?: string }>> = { potencial: Heart, descarte: X, super: Star };
 const VALOR_COLOR: Record<string, string> = { potencial: '#1F9D6F', descarte: '#C4302B', super: '#D4A017' };
+const ESTADO_DOT: Record<string, string> = {
+  activa: '#1F9D6F', abierto: '#1F9D6F',
+  borrador: '#8FA0A6', bloqueado: '#8FA0A6',
+  cerrada: '#6E8388', cerrado: '#6E8388',
+};
 
 /**
  * Dashboard del facilitador para el módulo Swipe — Fase 1: crear sesiones y
@@ -41,9 +47,11 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   const [newSesionCliente, setNewSesionCliente] = useState('');
   const [creatingSesion, setCreatingSesion] = useState(false);
 
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [sesionToDelete, setSesionToDelete] = useState<SesionRow | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingSesion, setDeletingSesion] = useState(false);
+
+  const [projectionOpen, setProjectionOpen] = useState(false);
 
   const [newCapOpen, setNewCapOpen] = useState(false);
   const [newCapNombre, setNewCapNombre] = useState('');
@@ -129,13 +137,13 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   };
 
   const handleDeleteSesion = async () => {
-    if (!detalle || deleteConfirmText !== 'BORRAR') return;
+    if (!sesionToDelete || deleteConfirmText !== 'BORRAR') return;
     setDeletingSesion(true);
     try {
-      await deleteSwipeSesion({ sesionId: detalle.id });
-      setDeleteConfirmOpen(false);
+      await deleteSwipeSesion({ sesionId: sesionToDelete.id });
+      if (selectedSesionId === sesionToDelete.id) setSelectedSesionId(null);
+      setSesionToDelete(null);
       setDeleteConfirmText('');
-      setSelectedSesionId(null);
       toast.success('Sesión eliminada');
       await loadSesiones();
     } catch (err) {
@@ -266,15 +274,28 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
           {loadingSesiones && <p className="text-sm text-muted-foreground">Cargando…</p>}
           {!loadingSesiones && sesiones.length === 0 && <p className="text-sm text-muted-foreground">Aún no hay sesiones.</p>}
           {sesiones.map((s) => (
-            <button
+            <div
               key={s.id}
               onClick={() => { setSelectedSesionId(s.id); setSelectedCapituloId(null); }}
-              className={`block w-full rounded-lg border p-3 text-left transition-colors ${selectedSesionId === s.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent'}`}
+              className={`group flex cursor-pointer items-start justify-between gap-2 rounded-lg border p-3 transition-colors ${selectedSesionId === s.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent'}`}
             >
-              <p className="font-semibold text-foreground">{s.nombre}</p>
-              {s.cliente && <p className="text-xs text-muted-foreground">{s.cliente}</p>}
-              <p className="mt-1 text-xs text-muted-foreground">{s.capitulosCount} capítulo{s.capitulosCount !== 1 ? 's' : ''} · {s.estado}</p>
-            </button>
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-foreground">{s.nombre}</p>
+                {s.cliente && <p className="truncate text-xs text-muted-foreground">{s.cliente}</p>}
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ESTADO_DOT[s.estado] ?? '#8FA0A6' }} />
+                  {s.capitulosCount} capítulo{s.capitulosCount !== 1 ? 's' : ''} · {s.estado}
+                </p>
+              </div>
+              <Button
+                size="sm" variant="ghost"
+                className="h-7 w-7 flex-shrink-0 p-0 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+                onClick={(e) => { e.stopPropagation(); setSesionToDelete(s); }}
+                aria-label="Eliminar sesión"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           ))}
         </div>
 
@@ -288,38 +309,9 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                     <CardTitle>{detalle.nombre}</CardTitle>
                     <p className="text-xs text-muted-foreground">/swipe/{detalle.codigo}</p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => copyLink(detalle.codigo)}>
-                      <Copy className="h-3.5 w-3.5" /> Copiar link
-                    </Button>
-                    <Dialog open={deleteConfirmOpen} onOpenChange={(open) => { setDeleteConfirmOpen(open); if (!open) setDeleteConfirmText(''); }}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader><DialogTitle>Eliminar "{detalle.nombre}"</DialogTitle></DialogHeader>
-                        <p className="text-sm text-muted-foreground">
-                          Esto borra la sesión completa: sus capítulos, ideas, participantes y votos. No se puede deshacer.
-                        </p>
-                        <Input
-                          placeholder="Escribe BORRAR para confirmar"
-                          value={deleteConfirmText}
-                          onChange={(e) => setDeleteConfirmText(e.target.value)}
-                        />
-                        <DialogFooter>
-                          <Button
-                            variant="destructive"
-                            onClick={handleDeleteSesion}
-                            disabled={deletingSesion || deleteConfirmText !== 'BORRAR'}
-                          >
-                            {deletingSesion ? 'Eliminando…' : 'Eliminar sesión'}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
+                  <Button variant="outline" size="sm" onClick={() => copyLink(detalle.codigo)}>
+                    <Copy className="h-3.5 w-3.5" /> Copiar link
+                  </Button>
                 </CardHeader>
               </Card>
 
@@ -349,7 +341,10 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                     <CardHeader className="flex-row items-center justify-between space-y-0 py-3">
                       <button className="text-left" onClick={() => setSelectedCapituloId(cap.id)}>
                         <p className="font-medium text-foreground">{cap.nombre}</p>
-                        <p className="text-xs text-muted-foreground">{cap.ideasCount} idea{cap.ideasCount !== 1 ? 's' : ''} · {cap.estado}</p>
+                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ESTADO_DOT[cap.estado] ?? '#8FA0A6' }} />
+                          {cap.ideasCount} idea{cap.ideasCount !== 1 ? 's' : ''} · {cap.estado}
+                        </p>
                       </button>
                       <Button
                         size="sm"
@@ -386,9 +381,18 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                           {(ideasByCapitulo[cap.id] ?? []).map((idea) => (
                             <li key={idea.id} className="rounded-md border border-border px-3 py-2 text-sm">
                               <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <p className="font-medium text-foreground">{idea.titulo}</p>
-                                  {idea.descripcion && <p className="text-xs text-muted-foreground">{idea.descripcion}</p>}
+                                <div className="flex min-w-0 gap-2.5">
+                                  {idea.imagenUrl ? (
+                                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white">
+                                      <img src={idea.imagenUrl} alt="" className="max-h-full max-w-full object-contain" />
+                                    </div>
+                                  ) : (
+                                    <div className="h-10 w-10 flex-shrink-0 rounded-md bg-muted" />
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-foreground">{idea.titulo}</p>
+                                    {idea.descripcion && <p className="text-xs text-muted-foreground">{idea.descripcion}</p>}
+                                  </div>
                                 </div>
                                 <div className="flex flex-shrink-0 gap-1">
                                   <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => toggleVotos(idea.id)}>
@@ -432,9 +436,14 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
 
                         {resultados && (
                           <div className="space-y-2 border-t border-border pt-3">
-                            <h3 className="text-sm font-semibold text-foreground">
-                              Resultados · {resultados.totalParticipantesVotaron} participante{resultados.totalParticipantesVotaron !== 1 ? 's' : ''} {resultados.totalParticipantesVotaron !== 1 ? 'votaron' : 'votó'}
-                            </h3>
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-sm font-semibold text-foreground">
+                                Resultados · {resultados.totalParticipantesVotaron} participante{resultados.totalParticipantesVotaron !== 1 ? 's' : ''} {resultados.totalParticipantesVotaron !== 1 ? 'votaron' : 'votó'}
+                              </h3>
+                              <Button size="sm" variant="outline" onClick={() => setProjectionOpen(true)}>
+                                <Maximize2 className="h-3.5 w-3.5" /> Proyectar
+                              </Button>
+                            </div>
                             {resultados.ideas.map((idea) => (
                               <div key={idea.id} className="space-y-1">
                                 <div className="flex items-center justify-between text-xs">
@@ -478,6 +487,40 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!sesionToDelete} onOpenChange={(open) => { if (!open) { setSesionToDelete(null); setDeleteConfirmText(''); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Eliminar "{sesionToDelete?.nombre}"</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Esto borra la sesión completa: sus capítulos, ideas, participantes y votos. No se puede deshacer.
+          </p>
+          <Input
+            placeholder="Escribe BORRAR para confirmar"
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.target.value)}
+          />
+          <DialogFooter>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteSesion}
+              disabled={deletingSesion || deleteConfirmText !== 'BORRAR'}
+            >
+              {deletingSesion ? 'Eliminando…' : 'Eliminar sesión'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {projectionOpen && resultados && detalle && (
+        <SwipeResultsProjection
+          sesionNombre={detalle.nombre}
+          cliente={detalle.cliente}
+          capituloNombre={detalle.capitulos.find((c) => c.id === selectedCapituloId)?.nombre ?? ''}
+          totalParticipantesVotaron={resultados.totalParticipantesVotaron}
+          ideas={resultados.ideas}
+          onClose={() => setProjectionOpen(false)}
+        />
+      )}
     </div>
   );
 }
