@@ -13,6 +13,8 @@ export interface EjesIdeaResultado {
   cuadranteLabel?: string;
 }
 
+export interface EjesEvaluacionPunto { valorX: number; valorY: number }
+
 interface EjesQuadrantChartProps {
   ejeXLabel: string; ejeXMin: number; ejeXMax: number;
   ejeYLabel: string; ejeYMin: number; ejeYMax: number;
@@ -22,6 +24,17 @@ interface EjesQuadrantChartProps {
   gridColor?: string;
   textColor?: string;
   onIdeaClick?: (idea: EjesIdeaResultado) => void;
+  /** Idea seleccionada: su punto promedio se dibuja más grande y encima de sus evaluaciones individuales (puntitos grises). */
+  detalleIdeaId?: string;
+  detalleEvaluaciones?: EjesEvaluacionPunto[];
+}
+
+const RADIO_BASE = 5;
+const RADIO_MAX = 13;
+const RADIO_SELECCIONADO = 15;
+
+function radioPorEvaluaciones(n: number): number {
+  return Math.min(RADIO_MAX, RADIO_BASE + n * 1.3);
 }
 
 /**
@@ -30,14 +43,23 @@ interface EjesQuadrantChartProps {
  * ya es dependencia y ya tiene exactamente esta forma) — no se hand-rolla
  * SVG. Las `ReferenceLine` al punto medio de cada eje son las que dividen
  * el plano en los 4 cuadrantes.
+ *
+ * El tamaño de cada punto-promedio ya no viene de `ZAxis` (no se puede
+ * mezclar con el resaltado manual de la idea seleccionada sin pelearse por
+ * el mismo dominio de tamaños) — se calcula a mano vía un `shape` custom,
+ * lo que de paso permite dibujar más grande y con anillo blanco el punto de
+ * la idea que el facilitador seleccionó, encima de sus puntitos grises de
+ * evaluación individual (que van en un `Scatter` aparte, dibujado antes
+ * para quedar detrás).
  */
 export default function EjesQuadrantChart({
   ejeXLabel, ejeXMin, ejeXMax, ejeYLabel, ejeYMin, ejeYMax, ideas, height = 320,
-  dotColor = '#027495', gridColor, textColor, onIdeaClick,
+  dotColor = '#027495', gridColor, textColor, onIdeaClick, detalleIdeaId, detalleEvaluaciones,
 }: EjesQuadrantChartProps) {
   const midX = (ejeXMin + ejeXMax) / 2;
   const midY = (ejeYMin + ejeYMax) / 2;
-  const scatterData = ideas.map((idea) => ({ ...idea, x: idea.avgX, y: idea.avgY, z: idea.totalEvaluaciones }));
+  const scatterData = ideas.map((idea) => ({ ...idea, x: idea.avgX, y: idea.avgY }));
+  const puntosIndividuales = (detalleEvaluaciones ?? []).map((ev) => ({ x: ev.valorX, y: ev.valorY }));
   const stroke = gridColor ?? 'hsl(var(--border))';
   const fill = textColor ?? 'hsl(var(--muted-foreground))';
 
@@ -53,7 +75,6 @@ export default function EjesQuadrantChart({
           dataKey="y" type="number" domain={[ejeYMin, ejeYMax]} tick={{ fontSize: 11, fill }}
           label={{ value: ejeYLabel, angle: -90, position: 'insideLeft', offset: 10, fontSize: 11, fill }}
         />
-        <ZAxis dataKey="z" range={[70, 260]} />
         <ReferenceLine x={midX} stroke={stroke} strokeDasharray="4 4" />
         <ReferenceLine y={midY} stroke={stroke} strokeDasharray="4 4" />
         <Tooltip
@@ -61,6 +82,7 @@ export default function EjesQuadrantChart({
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null;
             const p = payload[0].payload as EjesIdeaResultado;
+            if (!p.titulo) return null;
             return (
               <div className="space-y-1 rounded-lg border border-border bg-card p-2 text-xs shadow-md">
                 <p className="font-semibold text-foreground">{p.titulo}</p>
@@ -70,11 +92,29 @@ export default function EjesQuadrantChart({
             );
           }}
         />
+        {puntosIndividuales.length > 0 && (
+          <Scatter
+            data={puntosIndividuales}
+            shape={(props: any) => (
+              <circle cx={props.cx} cy={props.cy} r={4} fill="#9aa5a9" fillOpacity={0.7} />
+            )}
+            isAnimationActive={false}
+          />
+        )}
         <Scatter
           data={scatterData}
-          fill={dotColor}
-          fillOpacity={0.85}
-          cursor={onIdeaClick ? 'pointer' : undefined}
+          shape={(props: any) => {
+            const seleccionada = props.payload?.id === detalleIdeaId;
+            const r = seleccionada ? RADIO_SELECCIONADO : radioPorEvaluaciones(props.payload?.totalEvaluaciones ?? 0);
+            return (
+              <circle
+                cx={props.cx} cy={props.cy} r={r}
+                fill={dotColor} fillOpacity={0.85}
+                stroke={seleccionada ? '#fff' : 'none'} strokeWidth={seleccionada ? 2.5 : 0}
+                style={{ cursor: onIdeaClick ? 'pointer' : undefined }}
+              />
+            );
+          }}
           onClick={(entry: any) => onIdeaClick?.(entry)}
         />
       </ScatterChart>

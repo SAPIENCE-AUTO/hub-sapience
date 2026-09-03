@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getEjesSesiones, createEjesSesion, deleteEjesSesion, getEjesSesionDetail, createEjesTablero,
-  setEjesTableroEstado, getEjesResultadosTablero, getEjesResultadosSesion,
+  setEjesTableroEstado, getEjesResultadosTablero, getEjesResultadosSesion, getEjesEvaluacionesDeIdea,
 } from 'zite-endpoints-sdk';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Copy, Plus, Trash2, Maximize2, Check, Play, Pause } from 'lucide-react';
 import { TEAL, EstadoPill } from '@/lib/toolColors';
 import EjesTableroEditor from '@/components/ejes/EjesTableroEditor';
-import EjesQuadrantChart, { type EjesIdeaResultado } from '@/components/ejes/EjesQuadrantChart';
+import EjesQuadrantChart, { type EjesIdeaResultado, type EjesEvaluacionPunto } from '@/components/ejes/EjesQuadrantChart';
 import EjesResultsProjection, { type ResultadoTablero } from '@/components/ejes/EjesResultsProjection';
 import { useRealtimeEjes } from '@/hooks/useRealtimeEjes';
 
@@ -43,6 +43,8 @@ export default function EjesDashboardPage({ proyectoId }: { proyectoId?: string 
   const [detalle, setDetalle] = useState<Detalle | null>(null);
   const [selectedTableroId, setSelectedTableroId] = useState<string | null>(null);
   const [resultados, setResultados] = useState<ResultadosTablero | null>(null);
+  const [detalleIdeaId, setDetalleIdeaId] = useState<string | null>(null);
+  const [detalleEvaluaciones, setDetalleEvaluaciones] = useState<EjesEvaluacionPunto[] | null>(null);
 
   const [newSesionOpen, setNewSesionOpen] = useState(false);
   const [newSesionNombre, setNewSesionNombre] = useState('');
@@ -96,11 +98,19 @@ export default function EjesDashboardPage({ proyectoId }: { proyectoId?: string 
     else setDetalle(null);
   }, [selectedSesionId]);
 
-  useEffect(() => { setResultados(null); }, [selectedTableroId]);
+  useEffect(() => { setResultados(null); setDetalleIdeaId(null); setDetalleEvaluaciones(null); }, [selectedTableroId]);
 
   const loadResultados = async (tableroId: string) => {
     const res = await getEjesResultadosTablero({ tableroId });
     setResultados(res);
+  };
+
+  const handleIdeaClick = async (idea: EjesIdeaResultado) => {
+    if (detalleIdeaId === idea.id) { setDetalleIdeaId(null); setDetalleEvaluaciones(null); return; }
+    setDetalleIdeaId(idea.id);
+    setDetalleEvaluaciones(null);
+    const res = await getEjesEvaluacionesDeIdea({ ideaId: idea.id });
+    setDetalleEvaluaciones(res.evaluaciones ?? []);
   };
 
   useEffect(() => {
@@ -115,7 +125,10 @@ export default function EjesDashboardPage({ proyectoId }: { proyectoId?: string 
   useRealtimeEjes({
     tableroId: selectedTableroId ?? undefined,
     enabled: tableroSeleccionado?.estado === 'abierto',
-    onEvaluacionNueva: () => { if (selectedTableroId) loadResultados(selectedTableroId); },
+    onEvaluacionNueva: () => {
+      if (selectedTableroId) loadResultados(selectedTableroId);
+      if (detalleIdeaId) getEjesEvaluacionesDeIdea({ ideaId: detalleIdeaId }).then((res) => setDetalleEvaluaciones(res.evaluaciones ?? []));
+    },
   });
 
   const handleCreateSesion = async () => {
@@ -429,12 +442,39 @@ export default function EjesDashboardPage({ proyectoId }: { proyectoId?: string 
                             {resultados.ideas.length === 0 ? (
                               <p className="text-sm text-muted-foreground">Todavía no hay evaluaciones.</p>
                             ) : (
-                              <EjesQuadrantChart
-                                ejeXLabel={resultados.ejeXLabel} ejeXMin={resultados.ejeXMin} ejeXMax={resultados.ejeXMax}
-                                ejeYLabel={resultados.ejeYLabel} ejeYMin={resultados.ejeYMin} ejeYMax={resultados.ejeYMax}
-                                ideas={resultados.ideas}
-                                dotColor={TEAL}
-                              />
+                              <>
+                                <EjesQuadrantChart
+                                  ejeXLabel={resultados.ejeXLabel} ejeXMin={resultados.ejeXMin} ejeXMax={resultados.ejeXMax}
+                                  ejeYLabel={resultados.ejeYLabel} ejeYMin={resultados.ejeYMin} ejeYMax={resultados.ejeYMax}
+                                  ideas={resultados.ideas}
+                                  dotColor={TEAL}
+                                  onIdeaClick={handleIdeaClick}
+                                  detalleIdeaId={detalleIdeaId ?? undefined}
+                                  detalleEvaluaciones={detalleEvaluaciones ?? undefined}
+                                />
+                                <div className="flex flex-wrap gap-1.5">
+                                  {resultados.ideas.map((idea) => (
+                                    <button
+                                      key={idea.id}
+                                      onClick={() => handleIdeaClick(idea)}
+                                      className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                                        detalleIdeaId === idea.id
+                                          ? 'border-transparent text-white'
+                                          : 'border-border text-muted-foreground hover:bg-accent'
+                                      }`}
+                                      style={detalleIdeaId === idea.id ? { backgroundColor: TEAL } : undefined}
+                                    >
+                                      {idea.titulo} · {idea.totalEvaluaciones}
+                                    </button>
+                                  ))}
+                                </div>
+                                {detalleIdeaId && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Mostrando cada evaluación individual (puntos grises) de "{resultados.ideas.find((i) => i.id === detalleIdeaId)?.titulo}"
+                                    {detalleEvaluaciones === null ? ' · cargando…' : ''} — click de nuevo para cerrar.
+                                  </p>
+                                )}
+                              </>
                             )}
                             {resultados.sinEvaluar.length > 0 && (
                               <p className="text-xs text-muted-foreground">
