@@ -1,5 +1,7 @@
+import { useRef, useState } from 'react';
 import { X, Crosshair } from 'lucide-react';
-import EjesQuadrantChart, { type EjesIdeaResultado } from './EjesQuadrantChart';
+import { getEjesEvaluacionesDeIdea } from 'zite-endpoints-sdk';
+import EjesQuadrantChart, { type EjesIdeaResultado, type EjesEvaluacionPunto } from './EjesQuadrantChart';
 import { TEAL, INFO } from '@/lib/toolColors';
 
 export interface ResultadoTablero {
@@ -30,6 +32,34 @@ interface EjesResultsProjectionProps {
  */
 export default function EjesResultsProjection({ sesionNombre, cliente, tableros, onClose }: EjesResultsProjectionProps) {
   const ideasEvaluadas = tableros.reduce((sum, t) => sum + t.ideas.length, 0);
+
+  // Hover en vez de click (a diferencia del dashboard, aquí no hay lista de
+  // chips para "cerrar" la selección — al quitar el mouse, se cierra sola).
+  // Se guarda también el tableroId del punto en hover: como varios tableros
+  // se muestran a la vez, sin esto el filtro de "modo detalle" de
+  // EjesQuadrantChart (oculta las demás ideas) escondería por error TODAS
+  // las ideas de los otros tableros, que nunca van a matchear ese id.
+  const [hoveredTableroId, setHoveredTableroId] = useState<string | null>(null);
+  const [hoveredIdeaId, setHoveredIdeaId] = useState<string | null>(null);
+  const [hoveredEvaluaciones, setHoveredEvaluaciones] = useState<EjesEvaluacionPunto[] | null>(null);
+  const hoverReqRef = useRef(0);
+
+  const handleIdeaHover = (tableroId: string, idea: EjesIdeaResultado | null) => {
+    hoverReqRef.current += 1;
+    if (!idea) {
+      setHoveredTableroId(null);
+      setHoveredIdeaId(null);
+      setHoveredEvaluaciones(null);
+      return;
+    }
+    setHoveredTableroId(tableroId);
+    setHoveredIdeaId(idea.id);
+    setHoveredEvaluaciones(null);
+    const reqId = hoverReqRef.current;
+    getEjesEvaluacionesDeIdea({ ideaId: idea.id }).then((res) => {
+      if (hoverReqRef.current === reqId) setHoveredEvaluaciones(res.evaluaciones ?? []);
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-[#F7FAFA]">
@@ -89,6 +119,9 @@ export default function EjesResultsProjection({ sesionNombre, cliente, tableros,
                     ideas={tab.ideas}
                     height={420}
                     dotColor={TEAL}
+                    onIdeaHover={(idea) => handleIdeaHover(tab.tableroId, idea)}
+                    detalleIdeaId={hoveredTableroId === tab.tableroId ? hoveredIdeaId ?? undefined : undefined}
+                    detalleEvaluaciones={hoveredTableroId === tab.tableroId ? hoveredEvaluaciones ?? undefined : undefined}
                   />
                 </div>
                 <p className="px-6 pb-4 pt-1 text-xs text-muted-foreground">

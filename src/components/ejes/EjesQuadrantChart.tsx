@@ -25,6 +25,8 @@ interface EjesQuadrantChartProps {
   gridColor?: string;
   textColor?: string;
   onIdeaClick?: (idea: EjesIdeaResultado) => void;
+  /** Pasar cursor sobre un punto (y quitarlo, con `null`) — mismo modo detalle que `onIdeaClick`, pero disparado al pasar el mouse en vez de hacer click (usado en la proyección, donde no hay lista de chips para "cerrar" la selección). */
+  onIdeaHover?: (idea: EjesIdeaResultado | null) => void;
   /** Idea seleccionada: su punto promedio se dibuja más grande y encima de sus evaluaciones individuales (puntitos grises). */
   detalleIdeaId?: string;
   detalleEvaluaciones?: EjesEvaluacionPunto[];
@@ -53,7 +55,7 @@ function radioPorEvaluaciones(n: number): number {
  */
 export default function EjesQuadrantChart({
   ejeXLabel, ejeXMin, ejeXMax, ejeYLabel, ejeYMin, ejeYMax, ideas, height = 320,
-  dotColor = '#027495', gridColor, textColor, onIdeaClick, detalleIdeaId, detalleEvaluaciones,
+  dotColor = '#027495', gridColor, textColor, onIdeaClick, onIdeaHover, detalleIdeaId, detalleEvaluaciones,
 }: EjesQuadrantChartProps) {
   const midX = (ejeXMin + ejeXMax) / 2;
   const midY = (ejeYMin + ejeYMax) / 2;
@@ -123,6 +125,8 @@ export default function EjesQuadrantChart({
             );
           }}
           onClick={(entry: any) => onIdeaClick?.(entry)}
+          onMouseEnter={(entry: any) => onIdeaHover?.(entry)}
+          onMouseLeave={() => onIdeaHover?.(null)}
           isAnimationActive={false}
         />
       </ScatterChart>
