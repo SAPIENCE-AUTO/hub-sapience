@@ -8,7 +8,9 @@ export interface EjesIdea {
 }
 
 interface EjesEvaluacionSlidersProps {
-  ideas: EjesIdea[];
+  idea: EjesIdea;
+  progresoActual: number;
+  progresoTotal: number;
   ejeXLabel: string;
   ejeXMin: number;
   ejeXMax: number;
@@ -19,44 +21,38 @@ interface EjesEvaluacionSlidersProps {
   cuadranteBajoAltoLabel?: string;
   cuadranteBajoBajoLabel?: string;
   cuadranteAltoBajoLabel?: string;
-  onEvaluar: (ideaId: string, valorX: number, valorY: number, msDecision: number) => void;
-  onComplete: () => void;
+  onConfirmar: (valorX: number, valorY: number, msDecision: number) => void;
 }
 
 /**
- * Decisión ya confirmada con el usuario: 2 sliders, no un mapa tocable —
- * más preciso/explícito. El cuadrado de preview de abajo es puramente
- * visual (no interactivo), solo confirma dónde va a caer el punto mientras
- * se arrastra, sin cambiar el mecanismo de entrada.
+ * Una idea a la vez — el facilitador activa las ideas 1 a 1 (ver
+ * setEjesIdeaEstado.ts), así que este componente ya no recibe el arreglo
+ * completo ni maneja su propio índice/"siguiente": solo evalúa la idea que
+ * le pasa el padre y llama `onConfirmar`; es `EjesPage.tsx` quien decide
+ * cuándo mostrar la siguiente (cuando el facilitador la active). Decisión
+ * ya confirmada con el usuario: 2 sliders, no un mapa tocable. El cuadrado
+ * de preview de abajo es puramente visual (no interactivo).
  */
 export default function EjesEvaluacionSliders({
-  ideas, ejeXLabel, ejeXMin, ejeXMax, ejeYLabel, ejeYMin, ejeYMax,
+  idea, progresoActual, progresoTotal, ejeXLabel, ejeXMin, ejeXMax, ejeYLabel, ejeYMin, ejeYMax,
   cuadranteAltoAltoLabel, cuadranteBajoAltoLabel, cuadranteBajoBajoLabel, cuadranteAltoBajoLabel,
-  onEvaluar, onComplete,
+  onConfirmar,
 }: EjesEvaluacionSlidersProps) {
-  const [index, setIndex] = useState(0);
   const midX = (ejeXMin + ejeXMax) / 2;
   const midY = (ejeYMin + ejeYMax) / 2;
   const [valorX, setValorX] = useState(midX);
   const [valorY, setValorY] = useState(midY);
   const shownAtRef = useRef(Date.now());
 
-  const idea = ideas[index];
-
   useEffect(() => {
     setValorX(midX);
     setValorY(midY);
     shownAtRef.current = Date.now();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
-
-  if (!idea) return null;
+  }, [idea.id]);
 
   const handleConfirmar = () => {
-    onEvaluar(idea.id, valorX, valorY, Date.now() - shownAtRef.current);
-    const next = index + 1;
-    setIndex(next);
-    if (next >= ideas.length) onComplete();
+    onConfirmar(valorX, valorY, Date.now() - shownAtRef.current);
   };
 
   // Posición del punto en el cuadrado de preview (0% = abajo-izquierda, 100% = arriba-derecha)
@@ -66,16 +62,14 @@ export default function EjesEvaluacionSliders({
   return (
     <div className="flex h-full flex-col overscroll-none px-5 pb-6 pt-3">
       <div className="flex-shrink-0">
-        <div className="flex gap-1">
-          {ideas.map((i, ix) => (
-            <div
-              key={i.id}
-              className={`h-1 flex-1 rounded-full transition-colors ${ix < index ? 'bg-[#3FA9C4]' : ix === index ? 'bg-white/70' : 'bg-white/15'}`}
-            />
-          ))}
+        <div className="h-1 w-full overflow-hidden rounded-full bg-white/15">
+          <div
+            className="h-full rounded-full bg-[#3FA9C4] transition-[width]"
+            style={{ width: `${(progresoActual / Math.max(1, progresoTotal)) * 100}%` }}
+          />
         </div>
         <p className="mt-2 text-center text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
-          {index + 1} / {ideas.length}
+          Idea {progresoActual} / {progresoTotal}
         </p>
       </div>
 

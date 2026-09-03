@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { getEjesEstado, getEjesTablero, joinEjesSesion, submitEjesEvaluacion } from 'zite-endpoints-sdk';
+import { getEjesEstado, joinEjesSesion, submitEjesEvaluacion } from 'zite-endpoints-sdk';
 import EjesEvaluacionSliders, { type EjesIdea } from '@/components/ejes/EjesEvaluacionSliders';
 
 // Mismo logo que SwipePage.tsx/ObservationRoomPage.tsx/LoginPage.tsx.
@@ -8,26 +8,27 @@ const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/pub
 
 interface StoredParticipante { participanteId: string; alias: string; deviceToken: string }
 
+interface TableroActivo {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  totalIdeas: number;
+  ejeXLabel: string; ejeXMin: number; ejeXMax: number;
+  ejeYLabel: string; ejeYMin: number; ejeYMax: number;
+  cuadranteAltoAltoLabel?: string; cuadranteBajoAltoLabel?: string;
+  cuadranteBajoBajoLabel?: string; cuadranteAltoBajoLabel?: string;
+  ideaActiva: (EjesIdea & { orden: number }) | null;
+}
+
 interface EstadoSesion {
   found: boolean;
   estadoSesion?: string;
   nombre?: string;
   cliente?: string;
-  tableroActivo?: { id: string; nombre: string; descripcion?: string; totalIdeas: number } | null;
+  tableroActivo?: TableroActivo | null;
 }
 
-interface TableroCargado {
-  id: string;
-  nombre: string;
-  descripcion?: string;
-  ideas: EjesIdea[];
-  ejeXLabel: string; ejeXMin: number; ejeXMax: number;
-  ejeYLabel: string; ejeYMin: number; ejeYMax: number;
-  cuadranteAltoAltoLabel?: string; cuadranteBajoAltoLabel?: string;
-  cuadranteBajoBajoLabel?: string; cuadranteAltoBajoLabel?: string;
-}
-
-type Phase = 'loading' | 'notfound' | 'join' | 'waiting' | 'intro' | 'evaluando' | 'done';
+type Phase = 'loading' | 'notfound' | 'join' | 'waiting' | 'intro' | 'evaluando' | 'esperando_idea' | 'done';
 
 function storageKey(codigo: string) {
   return `ejes_participante_${codigo}`;
@@ -35,18 +36,20 @@ function storageKey(codigo: string) {
 
 /**
  * Página pública `/ejes/:codigo` — hermana de <Layout> en App.tsx, nunca
- * pasa por useAuth(). Mismo esqueleto que SwipePage.tsx (estado `undefined`
- * = cargando, `{found:false}` = código inválido, device token en
- * localStorage por código), cambiando el stack de swipe por
- * EjesEvaluacionSliders (2 sliders, decisión ya confirmada con el usuario).
+ * pasa por useAuth(). Las ideas se activan 1 a 1 (no todo el tablero de
+ * golpe): `getEjesEstado` ya trae la idea activa completa dentro de
+ * `tableroActivo`, así que no hace falta un segundo fetch por tablero.
+ * `completedIdeaIds` evita re-mostrar el formulario si el polling (4s)
+ * vuelve a traer la misma idea antes de que el facilitador la cierre.
  */
 export default function EjesPage() {
   const { codigo = '' } = useParams();
   const [participante, setParticipante] = useState<StoredParticipante | null>(null);
   const [estado, setEstado] = useState<EstadoSesion | undefined>(undefined);
-  const [tablero, setTablero] = useState<TableroCargado | null>(null);
   const [phase, setPhase] = useState<Phase>('loading');
-  const completedRef = useRef<Set<string>>(new Set());
+  const [tableroIntroVistoId, setTableroIntroVistoId] = useState<string | null>(null);
+  const completedIdeaIds = useRef<Set<string>>(new Set());
+  const preloadedRef = useRef<Set<string>>(new Set());
 
   const [aliasInput, setAliasInput] = useState('');
   const [joining, setJoining] = useState(false);
@@ -79,40 +82,26 @@ export default function EjesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codigo]);
 
-  useEffect(() => {
-    if (!participante || !estado?.found || !estado.tableroActivo) return;
-    const tabId = estado.tableroActivo.id;
-    if (completedRef.current.has(tabId) || tablero?.id === tabId) return;
+  const ideaActiva = estado?.tableroActivo?.ideaActiva;
 
-    let cancelled = false;
-    getEjesTablero({ tableroId: tabId }).then((res) => {
-      if (cancelled || !res.found) return;
-      (res.ideas ?? []).forEach((idea: EjesIdea) => {
-        if (idea.imagenUrl) { const img = new Image(); img.src = idea.imagenUrl; }
-      });
-      setTablero({
-        id: tabId, nombre: res.nombre, descripcion: res.descripcion, ideas: res.ideas ?? [],
-        ejeXLabel: res.ejeXLabel, ejeXMin: res.ejeXMin, ejeXMax: res.ejeXMax,
-        ejeYLabel: res.ejeYLabel, ejeYMin: res.ejeYMin, ejeYMax: res.ejeYMax,
-        cuadranteAltoAltoLabel: res.cuadranteAltoAltoLabel, cuadranteBajoAltoLabel: res.cuadranteBajoAltoLabel,
-        cuadranteBajoBajoLabel: res.cuadranteBajoBajoLabel, cuadranteAltoBajoLabel: res.cuadranteAltoBajoLabel,
-      });
-    });
-    return () => { cancelled = true; };
-  }, [participante, estado?.tableroActivo?.id, estado?.found, tablero?.id]);
+  useEffect(() => {
+    if (ideaActiva?.imagenUrl && !preloadedRef.current.has(ideaActiva.id)) {
+      preloadedRef.current.add(ideaActiva.id);
+      const img = new Image();
+      img.src = ideaActiva.imagenUrl;
+    }
+  }, [ideaActiva]);
 
   useEffect(() => {
     if (estado === undefined) { setPhase('loading'); return; }
     if (!estado.found) { setPhase('notfound'); return; }
     if (!participante) { setPhase('join'); return; }
-    if (!estado.tableroActivo) {
-      setPhase(estado.estadoSesion === 'cerrada' ? 'done' : 'waiting');
-      return;
-    }
-    if (completedRef.current.has(estado.tableroActivo.id)) { setPhase('waiting'); return; }
-    if (tablero?.id !== estado.tableroActivo.id) { setPhase('loading'); return; }
-    setPhase((prev) => (prev === 'evaluando' ? 'evaluando' : 'intro'));
-  }, [estado, participante, tablero]);
+    const tablero = estado.tableroActivo;
+    if (!tablero) { setPhase(estado.estadoSesion === 'cerrada' ? 'done' : 'waiting'); return; }
+    if (tableroIntroVistoId !== tablero.id) { setPhase('intro'); return; }
+    if (!tablero.ideaActiva || completedIdeaIds.current.has(tablero.ideaActiva.id)) { setPhase('esperando_idea'); return; }
+    setPhase('evaluando');
+  }, [estado, participante, tableroIntroVistoId]);
 
   const handleJoin = async (e: FormEvent) => {
     e.preventDefault();
@@ -136,14 +125,11 @@ export default function EjesPage() {
     setJoining(false);
   };
 
-  const handleEvaluar = (ideaId: string, valorX: number, valorY: number, msDecision: number) => {
-    if (!participante) return;
-    submitEjesEvaluacion({ participanteId: participante.participanteId, ideaId, valorX, valorY, msDecision }).catch(() => {});
-  };
-
-  const handleComplete = () => {
-    if (tablero) completedRef.current.add(tablero.id);
-    setPhase('waiting');
+  const handleConfirmar = (valorX: number, valorY: number, msDecision: number) => {
+    if (!participante || !ideaActiva) return;
+    completedIdeaIds.current.add(ideaActiva.id);
+    submitEjesEvaluacion({ participanteId: participante.participanteId, ideaId: ideaActiva.id, valorX, valorY, msDecision }).catch(() => {});
+    setPhase('esperando_idea');
   };
 
   if (phase === 'loading') return <CenterMessage>Cargando…</CenterMessage>;
@@ -178,17 +164,22 @@ export default function EjesPage() {
     return <CenterMessage>Listo. Esperando al siguiente tablero…</CenterMessage>;
   }
 
-  if (phase === 'intro' && tablero) {
+  if (phase === 'esperando_idea') {
+    return <CenterMessage>Listo. Esperando la siguiente idea…</CenterMessage>;
+  }
+
+  if (phase === 'intro' && estado?.tableroActivo) {
+    const tablero = estado.tableroActivo;
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center bg-[#0F3D4D] px-6 text-center text-white">
         <img src={LOGO_URL} alt="Sapience" className="mb-8 h-7 w-auto" />
         <h1 className="text-2xl font-bold">{tablero.nombre}</h1>
         {tablero.descripcion && <p className="mt-3 max-w-sm text-[15px] text-[#8FB6C0]">{tablero.descripcion}</p>}
         <p className="mt-4 text-sm text-[#3FA9C4]">
-          {tablero.ideas.length} ideas · {tablero.ejeXLabel} × {tablero.ejeYLabel}
+          {tablero.totalIdeas} ideas · {tablero.ejeXLabel} × {tablero.ejeYLabel}
         </p>
         <button
-          onClick={() => setPhase('evaluando')}
+          onClick={() => setTableroIntroVistoId(tablero.id)}
           className="mt-9 rounded-full bg-[#027495] px-10 py-3.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#025F7A]"
         >
           Empezar
@@ -197,19 +188,22 @@ export default function EjesPage() {
     );
   }
 
-  if (phase === 'evaluando' && tablero) {
+  if (phase === 'evaluando' && estado?.tableroActivo?.ideaActiva) {
+    const tablero = estado.tableroActivo;
+    const idea = tablero.ideaActiva!;
     return (
       <div className="h-dvh overscroll-none bg-[#0F3D4D]">
         <EjesEvaluacionSliders
-          ideas={tablero.ideas}
+          idea={idea}
+          progresoActual={idea.orden + 1}
+          progresoTotal={tablero.totalIdeas}
           ejeXLabel={tablero.ejeXLabel} ejeXMin={tablero.ejeXMin} ejeXMax={tablero.ejeXMax}
           ejeYLabel={tablero.ejeYLabel} ejeYMin={tablero.ejeYMin} ejeYMax={tablero.ejeYMax}
           cuadranteAltoAltoLabel={tablero.cuadranteAltoAltoLabel}
           cuadranteBajoAltoLabel={tablero.cuadranteBajoAltoLabel}
           cuadranteBajoBajoLabel={tablero.cuadranteBajoBajoLabel}
           cuadranteAltoBajoLabel={tablero.cuadranteAltoBajoLabel}
-          onEvaluar={handleEvaluar}
-          onComplete={handleComplete}
+          onConfirmar={handleConfirmar}
         />
       </div>
     );

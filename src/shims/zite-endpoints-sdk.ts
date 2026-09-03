@@ -244,7 +244,6 @@ export const getEjesResultadosSesion = (input?: any): Promise<any> => call('getE
 export const getEjesResultadosTablero = (input?: any): Promise<any> => call('getEjesResultadosTablero', input);
 export const getEjesSesionDetail = (input?: any): Promise<any> => call('getEjesSesionDetail', input);
 export const getEjesSesiones = (input?: any): Promise<any> => call('getEjesSesiones', input);
-export const getEjesTablero = (input?: any): Promise<any> => call('getEjesTablero', input);
 export const getExpenseAuditLog = (input?: any): Promise<any> => call('getExpenseAuditLog', input);
 export const getExpenseComments = (input?: any): Promise<any> => call('getExpenseComments', input);
 export const getExpenseLineItems = (input?: any): Promise<any> => call('getExpenseLineItems', input);
@@ -409,6 +408,7 @@ export const sendMessage = (input?: any): Promise<any> => call('sendMessage', in
 export const sendPaymentReceipt = (input?: any): Promise<any> => call('sendPaymentReceipt', input);
 export const sendPoEmail = (input?: any): Promise<any> => call('sendPoEmail', input);
 export const sendTimelineToWebhook = (input?: any): Promise<any> => call('sendTimelineToWebhook', input);
+export const setEjesIdeaEstado = (input?: any): Promise<any> => call('setEjesIdeaEstado', input);
 export const setEjesTableroEstado = (input?: any): Promise<any> => call('setEjesTableroEstado', input);
 export const setSwipeCapituloEstado = (input?: any): Promise<any> => call('setSwipeCapituloEstado', input);
 export const submitExpense = (input?: any): Promise<any> => call('submitExpense', input);

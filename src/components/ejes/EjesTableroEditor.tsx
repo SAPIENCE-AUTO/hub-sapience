@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getEjesIdeas, createEjesIdea, createEjesIdeasBulk, updateEjesIdea, moveEjesIdea, getEjesEvaluacionesDeIdea,
+  setEjesIdeaEstado,
 } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ChevronUp, ChevronDown, Pencil, Users, Plus, Lock } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Users, Plus, Lock, Play, Pause } from 'lucide-react';
+import { TEAL, EstadoPill } from '@/lib/toolColors';
 
-interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number; tieneEvaluaciones: boolean }
+interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number; estado: string; tieneEvaluaciones: boolean }
 interface EvaluacionRow { alias: string; valorX: number; valorY: number }
 
 /**
@@ -119,6 +121,17 @@ export default function EjesTableroEditor({ tableroId, onIdeasChanged }: { table
     }
   };
 
+  const handleToggleIdeaEstado = async (idea: IdeaRow) => {
+    const nuevoEstado = idea.estado === 'abierto' ? 'cerrado' : 'abierto';
+    try {
+      await setEjesIdeaEstado({ ideaId: idea.id, estado: nuevoEstado });
+      await load();
+      onIdeasChanged?.();
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo cambiar el estado de la idea.');
+    }
+  };
+
   const toggleEvaluaciones = async (ideaId: string) => {
     if (evaluacionesOpenId === ideaId) { setEvaluacionesOpenId(null); return; }
     setEvaluacionesOpenId(ideaId);
@@ -172,7 +185,10 @@ export default function EjesTableroEditor({ tableroId, onIdeasChanged }: { table
                   <div className="h-9 w-9 flex-shrink-0 rounded-md bg-muted" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{idea.titulo}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate text-sm font-medium text-foreground">{idea.titulo}</p>
+                    <EstadoPill estado={idea.estado} />
+                  </div>
                   {idea.descripcion && <p className="truncate text-xs text-muted-foreground">{idea.descripcion}</p>}
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-0.5">
@@ -208,6 +224,14 @@ export default function EjesTableroEditor({ tableroId, onIdeasChanged }: { table
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                   )}
+                  <button
+                    className="ml-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-white hover:opacity-90"
+                    style={{ backgroundColor: TEAL }}
+                    onClick={(e) => { e.stopPropagation(); handleToggleIdeaEstado(idea); }}
+                    aria-label={idea.estado === 'abierto' ? 'Cerrar idea' : 'Abrir idea'}
+                  >
+                    {idea.estado === 'abierto' ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                  </button>
                 </div>
               </div>
               {evaluacionesOpenId === idea.id && (

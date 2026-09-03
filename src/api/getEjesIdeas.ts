@@ -7,6 +7,7 @@ const ideaSchema = z.object({
   descripcion: z.string().optional(),
   imagenUrl: z.string().optional(),
   orden: z.number(),
+  estado: z.string(),
   tieneEvaluaciones: z.boolean(),
 });
 
@@ -17,7 +18,7 @@ export default createEndpoint({
   outputSchema: z.object({ ideas: z.array(ideaSchema) }),
   execute: async ({ input }) => {
     const result = await pool.query(
-      `select i.id, i.titulo, i.descripcion, i.imagen_url, i.orden,
+      `select i.id, i.titulo, i.descripcion, i.imagen_url, i.orden, i.estado,
               exists(select 1 from ejes_evaluaciones e where e.idea_id = i.id) as tiene_evaluaciones
        from ejes_ideas i where i.tablero_id = $1 order by i.orden asc`,
       [input.tableroId],
@@ -29,6 +30,7 @@ export default createEndpoint({
         descripcion: (row.descripcion ?? undefined) as string | undefined,
         imagenUrl: (row.imagen_url ?? undefined) as string | undefined,
         orden: Number(row.orden),
+        estado: row.estado as string,
         tieneEvaluaciones: row.tiene_evaluaciones as boolean,
       })),
     };
