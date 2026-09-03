@@ -145,6 +145,70 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
       <p className="text-sm text-muted-foreground mb-4">¿A dónde quieres ir?</p>
 
       <div className="flex flex-col gap-3 max-w-5xl">
+        {/* ── Timelines: hero — la pieza que más se consulta en junta, va primero y más grande ── */}
+        <div
+          onClick={() => onOpenActividades('timelines')}
+          className="relative flex cursor-pointer overflow-hidden rounded-xl border transition-colors hover:border-[color-mix(in_srgb,#0F3D4D_35%,white)]"
+          style={{ backgroundColor: `color-mix(in srgb, ${TEAL} 4%, white)`, borderColor: `color-mix(in srgb, ${TEAL} 16%, white)` }}
+        >
+          <div className="w-1.5 flex-shrink-0" style={{ backgroundColor: TEAL }} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 px-4 pt-4 pb-1.5">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: TEAL }}><BarChart2 className="w-4 h-4 text-white" /></div>
+              <span className="text-base font-semibold text-foreground">Timelines</span>
+              {gantt && (
+                <span className="ml-auto text-xs text-muted-foreground font-mono">
+                  {fmtDate(gantt.rangeStart.toISOString())} — {fmtDate(gantt.rangeEnd.toISOString())} · {gantt.segments.length} fases
+                </span>
+              )}
+            </div>
+            {gantt === undefined && <div className="h-20" />}
+            {gantt === null && <p className="px-4 pb-4 pt-1 text-xs text-muted-foreground">Aún no hay fechas cargadas en el timeline</p>}
+            {gantt && (
+              <div className="px-4 pb-4 pt-2">
+                {/* Regla: inicio de cada semana (lunes), alineada con las líneas verticales de cada fila */}
+                <div className="flex items-center gap-3 mb-1.5">
+                  <div className="w-40 flex-shrink-0" />
+                  <div className="relative flex-1 h-3">
+                    {weekTicks.map((t, i) => (
+                      <span key={i} className="absolute text-[10px] text-muted-foreground/70 whitespace-nowrap font-mono"
+                        style={{ left: `${t.pct}%`, transform: t.pct > 90 ? 'translateX(-100%)' : t.pct < 2 ? 'none' : 'translateX(-50%)' }}>
+                        {t.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 max-h-[240px] overflow-y-auto">
+                  {gantt.segments.map((seg, i) => {
+                    const color = statusColor(seg, now);
+                    return (
+                      <div key={`${seg.name}-${i}`} className="flex items-center gap-3">
+                        <div className="w-40 flex-shrink-0">
+                          <p className="text-[13px] text-foreground truncate font-medium" title={seg.name}>{seg.name}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono">{fmtRange(seg.startDate, seg.endDate)}</p>
+                        </div>
+                        <div className="relative flex-1 h-6">
+                          {weekTicks.map((t, i2) => (
+                            <div key={i2} className="absolute top-0 bottom-0 w-px bg-border" style={{ left: `${t.pct}%` }} />
+                          ))}
+                          {todayPct !== null && (
+                            <div className="absolute top-0 bottom-0 w-px border-l border-dashed z-10" style={{ left: `${todayPct}%`, borderColor: GOLD }} />
+                          )}
+                          <div className="absolute top-1/2 -translate-y-1/2 h-2.5 w-full rounded-full bg-muted" />
+                          <div
+                            className={`absolute top-1/2 -translate-y-1/2 h-2.5 rounded-full ${color ? '' : 'bg-muted-foreground/30'}`}
+                            style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, backgroundColor: color ?? undefined }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* ── Reclutamiento ── */}
           <div onClick={() => onOpenTab('reclutamiento')} className="flex rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
@@ -155,16 +219,16 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                 <span className="text-sm font-medium text-foreground">Reclutamiento</span>
               </div>
               {recruitment ? (
-                <div className="px-3.5 pt-1.5 pb-2">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-xl font-semibold font-mono" style={{ color: TEAL }}>{recruitment.totalParticipants}</span>
+                <div className="px-3.5 pt-1.5 pb-2.5">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-semibold font-mono leading-none" style={{ color: TEAL }}>{recruitment.totalParticipants}</span>
                     <span className="text-xs text-muted-foreground">
                       participantes · {recruitment.boards.reduce((n, b) => n + b.groups.length, 0)} grupos
                       {recruitment.boards.length > 1 ? ` · ${recruitment.boards.length} tableros` : ''}
                     </span>
                   </div>
                   {recruitment.boards.length > 1 && (
-                    <div className="flex h-1.5 rounded-full overflow-hidden mt-2.5">
+                    <div className="flex h-1.5 rounded-full overflow-hidden mt-3">
                       {recruitment.boards.map((board, bi) => (
                         <div
                           key={`${board.boardName}-bar-${bi}`}
@@ -213,8 +277,8 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                 <span className="text-sm font-medium text-foreground">Calendario</span>
               </div>
               {events ? (
-                <div className="flex items-baseline gap-1.5 px-3.5 pt-1.5 pb-2">
-                  <span className="text-xl font-semibold font-mono" style={{ color: INFO }}>{events.length}</span>
+                <div className="flex items-baseline gap-2 px-3.5 pt-1.5 pb-2.5">
+                  <span className="text-3xl font-semibold font-mono leading-none" style={{ color: INFO }}>{events.length}</span>
                   <span className="text-xs text-muted-foreground">sesiones</span>
                 </div>
               ) : (
@@ -227,7 +291,7 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                     return (
                       <div key={ev.id} className={`flex justify-between gap-2 py-1.5 text-xs border-b border-border last:border-b-0 ${isPast ? 'opacity-50' : ''}`}>
                         <span className="truncate text-foreground">{ev.eventName || 'Sin nombre'}</span>
-                        <span className="text-muted-foreground flex-shrink-0">{ev.eventDate ? fmtDateTime(ev.eventDate) : '—'}</span>
+                        <span className="text-muted-foreground flex-shrink-0 font-mono">{ev.eventDate ? fmtDateTime(ev.eventDate) : '—'}</span>
                       </div>
                     );
                   })}
@@ -235,66 +299,6 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
               )}
               {events && events.length === 0 && <p className="px-3.5 pb-3 text-xs text-muted-foreground">Sin sesiones registradas</p>}
             </div>
-          </div>
-        </div>
-
-        {/* ── Timelines (franja ancha, pieza central) ── */}
-        <div onClick={() => onOpenActividades('timelines')} className="flex rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-          <div className="w-1 flex-shrink-0" style={{ backgroundColor: TEAL }} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 px-3.5 pt-3 pb-1">
-              <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${TEAL}1a`, color: TEAL }}><BarChart2 className="w-3.5 h-3.5" /></div>
-              <span className="text-sm font-medium text-foreground">Timelines</span>
-              {gantt && (
-                <span className="ml-auto text-xs text-muted-foreground font-mono">
-                  {fmtDate(gantt.rangeStart.toISOString())} — {fmtDate(gantt.rangeEnd.toISOString())} · {gantt.segments.length} fases
-                </span>
-              )}
-            </div>
-            {gantt === undefined && <div className="h-16" />}
-            {gantt === null && <p className="px-3.5 pb-3.5 pt-1 text-xs text-muted-foreground">Aún no hay fechas cargadas en el timeline</p>}
-            {gantt && (
-              <div className="px-3.5 pb-3.5 pt-1.5">
-                {/* Regla: inicio de cada semana (lunes), alineada con las líneas verticales de cada fila */}
-                <div className="flex items-center gap-2.5 mb-1">
-                  <div className="w-36 flex-shrink-0" />
-                  <div className="relative flex-1 h-3">
-                    {weekTicks.map((t, i) => (
-                      <span key={i} className="absolute text-[10px] text-muted-foreground/70 whitespace-nowrap font-mono"
-                        style={{ left: `${t.pct}%`, transform: t.pct > 90 ? 'translateX(-100%)' : t.pct < 2 ? 'none' : 'translateX(-50%)' }}>
-                        {t.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1.5 max-h-[190px] overflow-y-auto">
-                  {gantt.segments.map((seg, i) => {
-                    const color = statusColor(seg, now);
-                    return (
-                      <div key={`${seg.name}-${i}`} className="flex items-center gap-2.5">
-                        <div className="w-36 flex-shrink-0">
-                          <p className="text-xs text-foreground truncate" title={seg.name}>{seg.name}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{fmtRange(seg.startDate, seg.endDate)}</p>
-                        </div>
-                        <div className="relative flex-1 h-5">
-                          {weekTicks.map((t, i2) => (
-                            <div key={i2} className="absolute top-0 bottom-0 w-px bg-border" style={{ left: `${t.pct}%` }} />
-                          ))}
-                          {todayPct !== null && (
-                            <div className="absolute top-0 bottom-0 w-px border-l border-dashed z-10" style={{ left: `${todayPct}%`, borderColor: GOLD }} />
-                          )}
-                          <div className="absolute top-1/2 -translate-y-1/2 h-2 w-full rounded-full bg-muted" />
-                          <div
-                            className={`absolute top-1/2 -translate-y-1/2 h-2 rounded-full ${color ? '' : 'bg-muted-foreground/30'}`}
-                            style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, backgroundColor: color ?? undefined }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
