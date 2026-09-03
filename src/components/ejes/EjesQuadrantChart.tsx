@@ -84,10 +84,18 @@ export default function EjesQuadrantChart({
             const p = payload[0].payload as EjesIdeaResultado;
             if (!p.titulo) return null;
             return (
-              <div className="space-y-1 rounded-lg border border-border bg-card p-2 text-xs shadow-md">
-                <p className="font-semibold text-foreground">{p.titulo}</p>
-                {p.cuadranteLabel && <p className="text-muted-foreground">{p.cuadranteLabel}</p>}
-                <p className="text-muted-foreground">{p.totalEvaluaciones} evaluación{p.totalEvaluaciones !== 1 ? 'es' : ''}</p>
+              <div className="w-56 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                {p.imagenUrl ? (
+                  <div className="relative flex h-28 w-full items-center justify-center overflow-hidden bg-[#eef1f2]">
+                    <img src={p.imagenUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl" />
+                    <img src={p.imagenUrl} alt="" className="relative max-h-full max-w-full object-contain p-2" />
+                  </div>
+                ) : null}
+                <div className="p-3">
+                  <p className="text-[15px] font-bold leading-tight text-foreground">{p.titulo}</p>
+                  {p.cuadranteLabel && <p className="mt-1 text-xs text-muted-foreground">{p.cuadranteLabel}</p>}
+                  <p className="mt-0.5 text-xs text-muted-foreground">{p.totalEvaluaciones} evaluación{p.totalEvaluaciones !== 1 ? 'es' : ''}</p>
+                </div>
               </div>
             );
           }}
