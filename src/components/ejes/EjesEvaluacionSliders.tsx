@@ -73,17 +73,26 @@ export default function EjesEvaluacionSliders({
         </p>
       </div>
 
-      <div className="mt-4 flex-shrink-0 overflow-hidden rounded-[20px] bg-white shadow-lg">
+      <div className="mt-4 flex-shrink-0 overflow-hidden rounded-[20px] shadow-lg">
         {idea.imagenUrl ? (
-          <div className="relative flex h-32 w-full items-center justify-center overflow-hidden bg-[#eef1f2]">
-            <img src={idea.imagenUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl" draggable={false} />
-            <img src={idea.imagenUrl} alt={idea.titulo} className="relative max-h-full max-w-full object-contain p-2" draggable={false} />
+          <div className="bg-white">
+            <div className="relative flex h-32 w-full items-center justify-center overflow-hidden bg-[#eef1f2]">
+              <img src={idea.imagenUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl" draggable={false} />
+              <img src={idea.imagenUrl} alt={idea.titulo} className="relative max-h-full max-w-full object-contain p-2" draggable={false} />
+            </div>
+            <div className="px-4 py-3">
+              <h2 className="text-[19px] font-bold leading-tight text-[#0F3D4D]">{idea.titulo}</h2>
+              {idea.descripcion && <p className="mt-1 text-[13.5px] text-[#6b7280]">{idea.descripcion}</p>}
+            </div>
           </div>
-        ) : null}
-        <div className="px-4 py-3">
-          <h2 className="text-[19px] font-bold leading-tight text-[#0F3D4D]">{idea.titulo}</h2>
-          {idea.descripcion && <p className="mt-1 text-[13.5px] text-[#6b7280]">{idea.descripcion}</p>}
-        </div>
+        ) : (
+          // Sin imagen: la idea es la protagonista — no se reserva un hueco
+          // vacío donde iría la foto, el texto llena todo el bloque.
+          <div className="flex min-h-[180px] flex-col items-center justify-center bg-[linear-gradient(160deg,#14495A_0%,#0F3D4C_55%,#0A2F3B_100%)] px-6 py-8 text-center">
+            <h2 className="text-[22px] font-bold leading-tight text-white">{idea.titulo}</h2>
+            {idea.descripcion && <p className="mt-2 text-[14px] leading-snug text-[#8FB6C0]">{idea.descripcion}</p>}
+          </div>
+        )}
       </div>
 
       <div className="mt-5 flex-shrink-0 space-y-4">

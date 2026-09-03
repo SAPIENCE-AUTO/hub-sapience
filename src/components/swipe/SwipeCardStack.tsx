@@ -217,7 +217,7 @@ function Badge({ label, color, opacity, rotate, side }: {
  * con el texto encima, mismo patrón que Tinder/Hinge. Sin imagen: gradient
  * de marca con el texto centrado, para que la idea no se sienta a medias.
  */
-function CardBody({ idea }: { idea: SwipeIdea }) {
+export function CardBody({ idea }: { idea: SwipeIdea }) {
   if (!idea.imagenUrl) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-[linear-gradient(160deg,#14495A_0%,#0F3D4C_55%,#0A2F3B_100%)] px-8 text-center">
