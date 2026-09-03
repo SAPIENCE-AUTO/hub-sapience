@@ -4,39 +4,45 @@ import {
   getSwipeSesiones, createSwipeSesion, deleteSwipeSesion, getSwipeSesionDetail, createSwipeCapitulo,
   setSwipeCapituloEstado, getSwipeResultados, getSwipeResultadosSesion,
 } from 'zite-endpoints-sdk';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Copy, Plus, Star, Trash2, Maximize2 } from 'lucide-react';
+import { Copy, Plus, Star, Trash2, Maximize2, Check, Play, Pause } from 'lucide-react';
 import SwipeResultsProjection, { QUADRANTE_META, type SwipeQuadrante } from '@/components/swipe/SwipeResultsProjection';
 import SwipeChapterEditor from '@/components/swipe/SwipeChapterEditor';
 
 interface SesionRow { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulosCount: number }
-interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number }
+interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number; ideaThumbnails: string[]; pctAprobacion?: number }
 interface ResultadoIdea { id: string; titulo: string; imagenUrl?: string; totalVotos: number; potencial: number; descarte: number; superLikes: number; pctPotencial: number; score: number; avgMsDecision?: number; quadrante?: SwipeQuadrante }
 interface ResultadoCapitulo { capituloId: string; capituloNombre: string; totalParticipantesVotaron: number; ideas: ResultadoIdea[] }
-interface Detalle { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulos: CapituloRow[] }
+interface Detalle { id: string; codigo: string; nombre: string; cliente?: string; estado: string; participantesCount: number; capitulos: CapituloRow[] }
 
-// Pills de estado — mismo patrón del moodboard de look & feel del Hub (dot +
-// pastilla de color sólido). "Éxito"/gris reusan el enfoque de las pills
-// existentes; verde y azul son aproximaciones cercanas a los swatches del
-// moodboard (info/éxito) porque todavía no existen como tokens globales de
-// Tailwind — no se tocó tailwind.config.ts/index.css desde este módulo.
-const ESTADO_PILL: Record<string, string> = {
-  activa: 'bg-[#16A34A] text-white',
-  abierto: 'bg-[#16A34A] text-white',
-  borrador: 'bg-secondary text-secondary-foreground',
-  bloqueado: 'bg-secondary text-secondary-foreground',
-  cerrada: 'bg-muted text-muted-foreground',
-  cerrado: 'bg-muted text-muted-foreground',
+// Valores exactos del moodboard de look & feel del Hub (no aproximados) —
+// Info/Éxito no existen todavía como tokens globales de Tailwind, así que
+// viven aquí como literales en vez de tocar tailwind.config.ts/index.css
+// desde este módulo. Teal/Gold sí coinciden con --primary/--secondary.
+const TEAL = '#0F3D4D';
+const INFO = '#1795D3';
+const EXITO = '#257E55';
+const GRIS = '#8b93a1';
+
+// Cerrado usa Info (no gris): un capítulo cerrado tiene resultados listos
+// para ver, no está "muerto" — bloqueado sí es el estado sin nada que hacer.
+const ESTADO_COLOR: Record<string, string> = {
+  activa: EXITO, abierto: EXITO,
+  cerrada: INFO, cerrado: INFO,
+  borrador: GRIS, bloqueado: GRIS,
 };
 
 function EstadoPill({ estado }: { estado: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${ESTADO_PILL[estado] ?? 'bg-muted text-muted-foreground'}`}>
-      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+      style={{ backgroundColor: ESTADO_COLOR[estado] ?? GRIS }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
       {estado}
     </span>
   );
@@ -89,7 +95,10 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   const loadDetalle = async (sesionId: string) => {
     const res = await getSwipeSesionDetail({ sesionId });
     if (res.found) {
-      setDetalle({ id: res.id, codigo: res.codigo, nombre: res.nombre, cliente: res.cliente, estado: res.estado, capitulos: res.capitulos ?? [] });
+      setDetalle({
+        id: res.id, codigo: res.codigo, nombre: res.nombre, cliente: res.cliente, estado: res.estado,
+        participantesCount: res.participantesCount ?? 0, capitulos: res.capitulos ?? [],
+      });
     }
   };
 
@@ -188,6 +197,8 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
     setLoadingResultadosSesion(false);
   };
 
+  const ideasTotales = detalle?.capitulos.reduce((sum, c) => sum + c.ideasCount, 0) ?? 0;
+
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
@@ -247,25 +258,56 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
         <div>
           {!detalle && <p className="text-sm text-muted-foreground">Selecciona o crea una sesión.</p>}
           {detalle && (
-            <div className="space-y-4">
-              <Card>
-                <CardHeader className="flex-row items-center justify-between space-y-0">
-                  <div>
-                    <CardTitle>{detalle.nombre}</CardTitle>
-                    <p className="text-xs text-muted-foreground">/swipe/{detalle.codigo}</p>
+            <div className="space-y-5">
+              <div
+                className="relative overflow-hidden rounded-2xl border p-5"
+                style={{ backgroundColor: `color-mix(in srgb, ${TEAL} 6%, white)`, borderColor: `color-mix(in srgb, ${TEAL} 18%, white)` }}
+              >
+                <div className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: TEAL }} />
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3.5">
+                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl shadow-md" style={{ backgroundColor: TEAL }}>
+                      <Check className="h-5 w-5 text-white" strokeWidth={2.5} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] opacity-75" style={{ color: TEAL }}>Sapience · Swipe</p>
+                      <h2 className="truncate text-xl font-bold" style={{ color: TEAL }}>{detalle.nombre}</h2>
+                      {detalle.cliente && <p className="truncate text-[13px]" style={{ color: '#4d6a72' }}>{detalle.cliente}</p>}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-shrink-0 gap-2">
                     <Button variant="outline" size="sm" onClick={() => copyLink(detalle.codigo)}>
                       <Copy className="h-3.5 w-3.5" /> Copiar link
                     </Button>
                     {detalle.capitulos.length > 0 && (
-                      <Button size="sm" onClick={handleVerResultadosTotales} disabled={loadingResultadosSesion}>
+                      <Button size="sm" style={{ backgroundColor: TEAL, color: '#fff' }} className="hover:opacity-90" onClick={handleVerResultadosTotales} disabled={loadingResultadosSesion}>
                         <Maximize2 className="h-3.5 w-3.5" /> {loadingResultadosSesion ? 'Cargando…' : 'Resultados totales'}
                       </Button>
                     )}
                   </div>
-                </CardHeader>
-              </Card>
+                </div>
+                <span
+                  className="relative mt-2.5 inline-block rounded px-2 py-0.5 font-mono text-[11px]"
+                  style={{ color: '#4d6a72', backgroundColor: 'rgba(255,255,255,0.6)' }}
+                >
+                  /swipe/{detalle.codigo}
+                </span>
+              </div>
+
+              <div className="flex gap-6 px-1">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-bold" style={{ color: TEAL }}>{detalle.capitulos.length}</span>
+                  <span className="text-xs text-muted-foreground">capítulo{detalle.capitulos.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-bold" style={{ color: TEAL }}>{detalle.participantesCount}</span>
+                  <span className="text-xs text-muted-foreground">participante{detalle.participantesCount !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-bold" style={{ color: TEAL }}>{ideasTotales}</span>
+                  <span className="text-xs text-muted-foreground">idea{ideasTotales !== 1 ? 's' : ''} totales</span>
+                </div>
+              </div>
 
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold text-foreground">Capítulos</h2>
@@ -290,25 +332,52 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                 {detalle.capitulos.length === 0 && <p className="text-sm text-muted-foreground">Sin capítulos todavía.</p>}
                 {detalle.capitulos.map((cap) => (
                   <Card key={cap.id} className={selectedCapituloId === cap.id ? 'border-primary' : ''}>
-                    <CardHeader className="flex-row items-center justify-between space-y-0 py-3">
-                      <button className="text-left" onClick={() => setSelectedCapituloId(selectedCapituloId === cap.id ? null : cap.id)}>
-                        <p className="font-medium text-foreground">{cap.nombre}</p>
-                        <div className="mt-1 flex items-center gap-2">
+                    <div className="flex items-center gap-3 p-3.5">
+                      <div className="flex flex-shrink-0">
+                        {cap.ideaThumbnails.length > 0 ? (
+                          cap.ideaThumbnails.map((url, i) => (
+                            <div
+                              key={i}
+                              className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-lg border-2 border-white bg-white shadow"
+                              style={{ marginLeft: i === 0 ? 0 : -13 }}
+                            >
+                              <img src={url} alt="" className="h-full w-full object-cover" />
+                            </div>
+                          ))
+                        ) : (
+                          <div className="h-9 w-9 flex-shrink-0 rounded-lg bg-muted" />
+                        )}
+                      </div>
+                      <button className="min-w-0 flex-1 text-left" onClick={() => setSelectedCapituloId(selectedCapituloId === cap.id ? null : cap.id)}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground">{cap.nombre}</span>
                           <EstadoPill estado={cap.estado} />
+                        </div>
+                        <div className="mt-1 flex items-center gap-2.5">
                           <span className="text-xs text-muted-foreground">{cap.ideasCount} idea{cap.ideasCount !== 1 ? 's' : ''}</span>
+                          {cap.pctAprobacion !== undefined && (
+                            <>
+                              <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+                                <div className="h-full rounded-full" style={{ width: `${cap.pctAprobacion}%`, backgroundColor: TEAL }} />
+                              </div>
+                              <span className="text-xs font-medium text-muted-foreground">{cap.pctAprobacion}% aprobación</span>
+                            </>
+                          )}
                         </div>
                       </button>
                       <Button
                         size="sm"
-                        variant={cap.estado === 'abierto' ? 'secondary' : 'default'}
+                        className="flex-shrink-0 hover:opacity-90"
+                        style={{ backgroundColor: TEAL, color: '#fff' }}
                         onClick={() => handleToggleCapituloEstado(cap)}
                       >
+                        {cap.estado === 'abierto' ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                         {cap.estado === 'abierto' ? 'Cerrar' : 'Abrir'}
                       </Button>
-                    </CardHeader>
+                    </div>
 
                     {selectedCapituloId === cap.id && (
-                      <CardContent className="space-y-5 pt-0">
+                      <CardContent className="space-y-5 border-t border-border pt-4">
                         <SwipeChapterEditor
                           capituloId={cap.id}
                           onIdeasChanged={() => selectedSesionId && loadDetalle(selectedSesionId)}
