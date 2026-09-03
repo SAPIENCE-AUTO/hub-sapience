@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
+import { medianaDe, clasificarQuadrante } from '../serverUtils/swipeQuadrante';
 
 const ideaResultadoSchema = z.object({
   id: z.string(),
@@ -11,6 +12,8 @@ const ideaResultadoSchema = z.object({
   superLikes: z.number(),
   pctPotencial: z.number(),
   score: z.number(),
+  avgMsDecision: z.number().optional(),
+  quadrante: z.enum(['consenso_rapido', 'convence_cuesta', 'rechazo_inmediato', 'duda_genuina']).optional(),
 });
 
 const capituloResultadoSchema = z.object({
@@ -41,7 +44,8 @@ export default createEndpoint({
          count(v.id) filter (where v.valor is not null) as total_votos,
          count(v.id) filter (where v.valor in ('potencial', 'super')) as potencial,
          count(v.id) filter (where v.valor = 'descarte') as descarte,
-         count(v.id) filter (where v.valor = 'super') as super_likes
+         count(v.id) filter (where v.valor = 'super') as super_likes,
+         avg(v.ms_decision) filter (where v.ms_decision is not null) as avg_ms_decision
        from swipe_capitulos c
        join swipe_ideas i on i.capitulo_id = c.id
        left join swipe_votos v on v.idea_id = i.id
@@ -88,17 +92,25 @@ export default createEndpoint({
         superLikes,
         pctPotencial,
         score: Math.round(score),
+        avgMsDecision: row.avg_ms_decision != null ? Number(row.avg_ms_decision) : undefined,
       });
     }
 
     const ordenados = [...capitulos.values()].sort((a, b) => a.capituloOrden - b.capituloOrden);
     return {
-      capitulos: ordenados.map((cap) => ({
-        capituloId: cap.capituloId,
-        capituloNombre: cap.capituloNombre,
-        totalParticipantesVotaron: participantesPorCapitulo.get(cap.capituloId) ?? 0,
-        ideas: cap.ideas.sort((a, b) => b.score - a.score),
-      })),
+      capitulos: ordenados.map((cap) => {
+        // La mediana de tiempos es POR capítulo — cada uno tiene su propio
+        // ritmo, no tiene sentido compararlo contra otro capítulo distinto.
+        const medianaMs = medianaDe(cap.ideas.map((i) => i.avgMsDecision).filter((v): v is number => v !== undefined));
+        return {
+          capituloId: cap.capituloId,
+          capituloNombre: cap.capituloNombre,
+          totalParticipantesVotaron: participantesPorCapitulo.get(cap.capituloId) ?? 0,
+          ideas: cap.ideas
+            .map((idea) => ({ ...idea, quadrante: clasificarQuadrante(idea.pctPotencial, idea.avgMsDecision, medianaMs) }))
+            .sort((a, b) => b.score - a.score),
+        };
+      }),
     };
   },
 });

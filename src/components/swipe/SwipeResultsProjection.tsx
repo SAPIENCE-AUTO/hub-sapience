@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Star, X, LayoutList, LayoutGrid, Crown } from 'lucide-react';
+import { Star, X, LayoutList, LayoutGrid, Crown, Zap, Brain, XCircle, HelpCircle } from 'lucide-react';
+
+export type SwipeQuadrante = 'consenso_rapido' | 'convence_cuesta' | 'rechazo_inmediato' | 'duda_genuina';
 
 export interface ResultadoIdea {
   id: string;
@@ -12,7 +14,16 @@ export interface ResultadoIdea {
   superLikes: number;
   pctPotencial: number;
   score: number;
+  avgMsDecision?: number;
+  quadrante?: SwipeQuadrante;
 }
+
+export const QUADRANTE_META: Record<SwipeQuadrante, { label: string; icon: typeof Zap; color: string }> = {
+  consenso_rapido: { label: 'Consenso rápido', icon: Zap, color: '#1F9D6F' },
+  convence_cuesta: { label: 'Convence, cuesta pensarlo', icon: Brain, color: '#D4A017' },
+  rechazo_inmediato: { label: 'Rechazo inmediato', icon: XCircle, color: '#8FA0A6' },
+  duda_genuina: { label: 'Duda genuina', icon: HelpCircle, color: '#3FA9C4' },
+};
 
 export interface ResultadoCapitulo {
   capituloId: string;
@@ -132,7 +143,13 @@ function ListaRanking({ ideas }: { ideas: ResultadoIdea[] }) {
               <Badges idea={idea} big />
             </div>
             <Bar pct={idea.pctPotencial} />
-            <p className="mt-1 text-[12px] text-white/40">{idea.totalVotos} voto{idea.totalVotos !== 1 ? 's' : ''}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="text-[12px] text-white/40">
+                {idea.totalVotos} voto{idea.totalVotos !== 1 ? 's' : ''}
+                {idea.avgMsDecision !== undefined && ` · ${(idea.avgMsDecision / 1000).toFixed(1)}s prom.`}
+              </p>
+              <QuadranteBadge quadrante={idea.quadrante} />
+            </div>
           </div>
         </motion.div>
       ))}
@@ -176,10 +193,22 @@ function TarjetasRanking({ ideas }: { ideas: ResultadoIdea[] }) {
               <p className="text-[12px] text-white/40">{idea.totalVotos} voto{idea.totalVotos !== 1 ? 's' : ''}</p>
               <Badges idea={idea} />
             </div>
+            <QuadranteBadge quadrante={idea.quadrante} className="mt-1.5" />
           </div>
         </motion.div>
       ))}
     </div>
+  );
+}
+
+function QuadranteBadge({ quadrante, className = '' }: { quadrante?: SwipeQuadrante; className?: string }) {
+  if (!quadrante) return null;
+  const meta = QUADRANTE_META[quadrante];
+  const Icon = meta.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${className}`} style={{ color: meta.color }}>
+      <Icon className="h-3 w-3" /> {meta.label}
+    </span>
   );
 }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
+import { medianaDe, clasificarQuadrante } from '../serverUtils/swipeQuadrante';
 
 const ideaResultadoSchema = z.object({
   id: z.string(),
@@ -11,6 +12,8 @@ const ideaResultadoSchema = z.object({
   superLikes: z.number(),
   pctPotencial: z.number(),
   score: z.number(),
+  avgMsDecision: z.number().optional(),
+  quadrante: z.enum(['consenso_rapido', 'convence_cuesta', 'rechazo_inmediato', 'duda_genuina']).optional(),
 });
 
 export default createEndpoint({
@@ -32,7 +35,8 @@ export default createEndpoint({
          count(v.id) filter (where v.valor is not null) as total_votos,
          count(v.id) filter (where v.valor in ('potencial', 'super')) as potencial,
          count(v.id) filter (where v.valor = 'descarte') as descarte,
-         count(v.id) filter (where v.valor = 'super') as super_likes
+         count(v.id) filter (where v.valor = 'super') as super_likes,
+         avg(v.ms_decision) filter (where v.ms_decision is not null) as avg_ms_decision
        from swipe_ideas i
        left join swipe_votos v on v.idea_id = i.id
        where i.capitulo_id = $1
@@ -50,29 +54,33 @@ export default createEndpoint({
     );
     const totalParticipantesVotaron = Number(participantesResult.rows[0]?.n ?? 0);
 
-    const ideas = result.rows
-      .map((row) => {
-        const potencial = Number(row.potencial ?? 0);
-        const descarte = Number(row.descarte ?? 0);
-        const superLikes = Number(row.super_likes ?? 0);
-        const totalVotos = Number(row.total_votos ?? 0);
-        const base = potencial + descarte;
-        const pctPotencial = base > 0 ? Math.round((potencial / base) * 100) : 0;
-        // Score sugerido del spec §6: % potencial + (super_likes / participantes × 0.5),
-        // en la misma escala 0-100 que pctPotencial (el 0.5 de peso se traduce a 50 puntos).
-        const score = pctPotencial + (totalParticipantesVotaron > 0 ? (superLikes / totalParticipantesVotaron) * 50 : 0);
-        return {
-          id: row.id as string,
-          titulo: row.titulo as string,
-          imagenUrl: (row.imagen_url ?? undefined) as string | undefined,
-          totalVotos,
-          potencial,
-          descarte,
-          superLikes,
-          pctPotencial,
-          score: Math.round(score),
-        };
-      })
+    const preliminar = result.rows.map((row) => {
+      const potencial = Number(row.potencial ?? 0);
+      const descarte = Number(row.descarte ?? 0);
+      const superLikes = Number(row.super_likes ?? 0);
+      const totalVotos = Number(row.total_votos ?? 0);
+      const base = potencial + descarte;
+      const pctPotencial = base > 0 ? Math.round((potencial / base) * 100) : 0;
+      // Score sugerido del spec §6: % potencial + (super_likes / participantes × 0.5),
+      // en la misma escala 0-100 que pctPotencial (el 0.5 de peso se traduce a 50 puntos).
+      const score = pctPotencial + (totalParticipantesVotaron > 0 ? (superLikes / totalParticipantesVotaron) * 50 : 0);
+      return {
+        id: row.id as string,
+        titulo: row.titulo as string,
+        imagenUrl: (row.imagen_url ?? undefined) as string | undefined,
+        totalVotos,
+        potencial,
+        descarte,
+        superLikes,
+        pctPotencial,
+        score: Math.round(score),
+        avgMsDecision: row.avg_ms_decision != null ? Number(row.avg_ms_decision) : undefined,
+      };
+    });
+
+    const medianaMs = medianaDe(preliminar.map((i) => i.avgMsDecision).filter((v): v is number => v !== undefined));
+    const ideas = preliminar
+      .map((idea) => ({ ...idea, quadrante: clasificarQuadrante(idea.pctPotencial, idea.avgMsDecision, medianaMs) }))
       .sort((a, b) => b.score - a.score);
 
     return { totalParticipantesVotaron, ideas };

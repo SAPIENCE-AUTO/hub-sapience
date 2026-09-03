@@ -11,12 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Copy, Plus, Star, Heart, X, Trash2, Pencil, Users, Maximize2 } from 'lucide-react';
-import SwipeResultsProjection from '@/components/swipe/SwipeResultsProjection';
+import SwipeResultsProjection, { QUADRANTE_META, type SwipeQuadrante } from '@/components/swipe/SwipeResultsProjection';
 
 interface SesionRow { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulosCount: number }
 interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number }
 interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number; tieneVotos: boolean }
-interface ResultadoIdea { id: string; titulo: string; imagenUrl?: string; totalVotos: number; potencial: number; descarte: number; superLikes: number; pctPotencial: number; score: number }
+interface ResultadoIdea { id: string; titulo: string; imagenUrl?: string; totalVotos: number; potencial: number; descarte: number; superLikes: number; pctPotencial: number; score: number; avgMsDecision?: number; quadrante?: SwipeQuadrante }
 interface ResultadoCapitulo { capituloId: string; capituloNombre: string; totalParticipantesVotaron: number; ideas: ResultadoIdea[] }
 interface Detalle { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulos: CapituloRow[] }
 interface VotoRow { alias: string; valor: string; msDecision?: number; createdAt: string }
@@ -488,6 +488,13 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                                   </span>
                                 </div>
                                 <Progress value={idea.pctPotencial} />
+                                {idea.quadrante && (
+                                  <div className="flex items-center gap-1 text-[11px] font-medium" style={{ color: QUADRANTE_META[idea.quadrante].color }}>
+                                    {(() => { const Icon = QUADRANTE_META[idea.quadrante].icon; return <Icon className="h-3 w-3" />; })()}
+                                    {QUADRANTE_META[idea.quadrante].label}
+                                    {idea.avgMsDecision !== undefined && ` · ${(idea.avgMsDecision / 1000).toFixed(1)}s prom.`}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
