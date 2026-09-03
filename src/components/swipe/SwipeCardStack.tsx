@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { motion, useMotionValue, useTransform, animate, type PanInfo } from 'framer-motion';
-import { Heart, Star, X } from 'lucide-react';
+import { Heart, Star, X, Undo2 } from 'lucide-react';
 
 export interface SwipeIdea {
   id: string;
@@ -34,6 +34,9 @@ export default function SwipeCardStack({ ideas, superLikesRestantes: initialSupe
   const [index, setIndex] = useState(0);
   const [superLikesRestantes, setSuperLikesRestantes] = useState(initialSuperLikes);
   const [blockedMsg, setBlockedMsg] = useState(false);
+  // Qué se votó ya por cada idea vista en esta pasada — permite "Atrás" +
+  // recalcular super-likes si la nueva decisión cambia hacia/desde 'super'.
+  const [decisiones, setDecisiones] = useState<Record<string, Valor>>({});
   const shownAtRef = useRef(Date.now());
   const topCardRef = useRef<{ fly: (valor: Valor) => void }>(null);
 
@@ -45,17 +48,35 @@ export default function SwipeCardStack({ ideas, superLikesRestantes: initialSupe
   const handleDecide = (valor: Valor) => {
     const ideaActual = ideas[index];
     if (!ideaActual) return;
+    const anterior = decisiones[ideaActual.id];
     onVote(ideaActual.id, valor, Date.now() - shownAtRef.current);
-    if (valor === 'super') setSuperLikesRestantes((n) => Math.max(0, n - 1));
+    if (anterior !== valor) {
+      if (anterior === 'super') setSuperLikesRestantes((n) => n + 1);
+      if (valor === 'super') setSuperLikesRestantes((n) => Math.max(0, n - 1));
+    }
+    setDecisiones((prev) => ({ ...prev, [ideaActual.id]: valor }));
     const next = index + 1;
     setIndex(next);
     shownAtRef.current = Date.now();
     if (next >= ideas.length) onComplete();
   };
 
+  const ideaActual = ideas[index];
+  const anteriorActual = ideaActual ? decisiones[ideaActual.id] : undefined;
+  // Reconfirmar el mismo 'super' de antes (después de un "Atrás") nunca
+  // debe bloquearse por falta de cupo — ese cupo ya está apartado por esta
+  // misma idea, no se está pidiendo uno nuevo.
+  const puedeSuper = superLikesRestantes > 0 || anteriorActual === 'super';
+
   const triggerFly = (valor: Valor) => {
-    if (valor === 'super' && superLikesRestantes <= 0) { showBlockedMsg(); return; }
+    if (valor === 'super' && !puedeSuper) { showBlockedMsg(); return; }
     topCardRef.current?.fly(valor);
+  };
+
+  const handleVolver = () => {
+    if (index === 0) return;
+    setIndex((i) => i - 1);
+    shownAtRef.current = Date.now();
   };
 
   if (index >= ideas.length) return null;
@@ -65,13 +86,23 @@ export default function SwipeCardStack({ ideas, superLikesRestantes: initialSupe
   return (
     <div className="flex h-full flex-col overscroll-none">
       <div className="flex-shrink-0 px-5 pt-3">
-        <div className="flex gap-1">
-          {ideas.map((idea, i) => (
-            <div
-              key={idea.id}
-              className={`h-1 flex-1 rounded-full transition-colors ${i < index ? 'bg-[#3FA9C4]' : i === index ? 'bg-white/70' : 'bg-white/15'}`}
-            />
-          ))}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleVolver}
+            disabled={index === 0}
+            className="flex flex-shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-white/60 transition-colors disabled:pointer-events-none disabled:opacity-0"
+            aria-label="Volver a la idea anterior"
+          >
+            <Undo2 className="h-3.5 w-3.5" /> Atrás
+          </button>
+          <div className="flex flex-1 gap-1">
+            {ideas.map((idea, i) => (
+              <div
+                key={idea.id}
+                className={`h-1 flex-1 rounded-full transition-colors ${i < index ? 'bg-[#3FA9C4]' : i === index ? 'bg-white/70' : 'bg-white/15'}`}
+              />
+            ))}
+          </div>
         </div>
         <p className="mt-2 text-center text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
           {index + 1} / {ideas.length}
@@ -85,7 +116,7 @@ export default function SwipeCardStack({ ideas, superLikesRestantes: initialSupe
               key={idea.id}
               ref={topCardRef}
               idea={idea}
-              superLikesRestantes={superLikesRestantes}
+              puedeSuper={puedeSuper}
               onDecide={handleDecide}
               onBlockedSuper={showBlockedMsg}
             />
@@ -111,7 +142,7 @@ export default function SwipeCardStack({ ideas, superLikesRestantes: initialSupe
         </button>
         <button
           onClick={() => triggerFly('super')}
-          className={`flex h-11 w-11 items-center justify-center rounded-full shadow-lg transition-transform active:scale-90 ${superLikesRestantes > 0 ? 'bg-white text-[#D4A017]' : 'bg-white/30 text-white/50'}`}
+          className={`flex h-11 w-11 items-center justify-center rounded-full shadow-lg transition-transform active:scale-90 ${puedeSuper ? 'bg-white text-[#D4A017]' : 'bg-white/30 text-white/50'}`}
           aria-label="Super like"
         >
           <Star className="h-5 w-5" fill="currentColor" />
@@ -141,10 +172,10 @@ function StaticCard({ idea, depth }: { idea: SwipeIdea; depth: number }) {
 
 const TopCard = forwardRef<{ fly: (valor: Valor) => void }, {
   idea: SwipeIdea;
-  superLikesRestantes: number;
+  puedeSuper: boolean;
   onDecide: (valor: Valor) => void;
   onBlockedSuper: () => void;
-}>(({ idea, superLikesRestantes, onDecide, onBlockedSuper }, ref) => {
+}>(({ idea, puedeSuper, onDecide, onBlockedSuper }, ref) => {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-250, 250], [-16, 16]);
@@ -166,7 +197,7 @@ const TopCard = forwardRef<{ fly: (valor: Valor) => void }, {
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     const { x: ox, y: oy } = info.offset;
     if (oy < -DRAG_THRESHOLD_Y && Math.abs(oy) > Math.abs(ox)) {
-      if (superLikesRestantes > 0) fly('super');
+      if (puedeSuper) fly('super');
       else { onBlockedSuper(); springBack(); }
       return;
     }

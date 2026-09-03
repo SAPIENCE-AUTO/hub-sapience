@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
 
 const votoSchema = z.object({
+  id: z.string(),
   alias: z.string(),
   valor: z.string(),
   msDecision: z.number().optional(),
@@ -15,7 +16,7 @@ export default createEndpoint({
   outputSchema: z.object({ votos: z.array(votoSchema) }),
   execute: async ({ input }) => {
     const result = await pool.query(
-      `select p.alias, v.valor, v.ms_decision, v.created_at
+      `select v.id, p.alias, v.valor, v.ms_decision, v.created_at
        from swipe_votos v
        join swipe_participantes p on p.id = v.participante_id
        where v.idea_id = $1
@@ -24,6 +25,7 @@ export default createEndpoint({
     );
     return {
       votos: result.rows.map((row) => ({
+        id: row.id as string,
         alias: row.alias as string,
         valor: row.valor as string,
         msDecision: (row.ms_decision ?? undefined) as number | undefined,

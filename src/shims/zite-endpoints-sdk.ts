@@ -436,6 +436,7 @@ export const updatePreworkRespuestaEstado = (input?: any): Promise<any> => call(
 export const updateSharedView = (input?: any): Promise<any> => call('updateSharedView', input);
 export const updateEjesIdea = (input?: any): Promise<any> => call('updateEjesIdea', input);
 export const updateSwipeIdea = (input?: any): Promise<any> => call('updateSwipeIdea', input);
+export const updateSwipeVoto = (input?: any): Promise<any> => call('updateSwipeVoto', input);
 export const updateUser = (input?: any): Promise<any> => call('updateUser', input);
 export const uploadProfilePhoto = (input?: any): Promise<any> => call('uploadProfilePhoto', input);
 export const uploadSupplierInvoice = (input?: any): Promise<any> => call('uploadSupplierInvoice', input);

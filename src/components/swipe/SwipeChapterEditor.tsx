@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getSwipeIdeas, createSwipeIdea, createSwipeIdeasBulk, updateSwipeIdea, moveSwipeIdea, getSwipeVotosDeIdea,
-  deleteSwipeIdea, duplicateSwipeIdea,
+  deleteSwipeIdea, duplicateSwipeIdea, updateSwipeVoto,
 } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,9 +16,10 @@ import SwipePreviewModal from './SwipePreviewModal';
 import { CardBody } from './SwipeCardStack';
 
 interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number; tieneVotos: boolean }
-interface VotoRow { alias: string; valor: string }
+interface VotoRow { id: string; alias: string; valor: string }
 
 const VALOR_LABEL: Record<string, string> = { potencial: 'Potencial', descarte: 'Descarte', super: 'Super like' };
+const VALOR_OPCIONES: Array<'potencial' | 'descarte' | 'super'> = ['potencial', 'descarte', 'super'];
 
 /**
  * Editor de capítulo: lista reordenable + alta rápida a la izquierda,
@@ -46,6 +47,7 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
 
   const [votosOpenId, setVotosOpenId] = useState<string | null>(null);
   const [votosByIdea, setVotosByIdea] = useState<Record<string, VotoRow[]>>({});
+  const [updatingVotoId, setUpdatingVotoId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [ideaToDelete, setIdeaToDelete] = useState<IdeaRow | null>(null);
   const [deletingIdea, setDeletingIdea] = useState(false);
@@ -173,6 +175,24 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
     }
   };
 
+  // Corrección manual de un voto puntual — mandatorio (ver el pedido del
+  // usuario). Los resultados agregados leen swipe_votos en vivo, así que
+  // no hace falta invalidar nada más que esta lista local de votos.
+  const handleUpdateVoto = async (ideaId: string, votoId: string, valor: 'potencial' | 'descarte' | 'super') => {
+    setUpdatingVotoId(votoId);
+    try {
+      await updateSwipeVoto({ votoId, valor });
+      setVotosByIdea((prev) => ({
+        ...prev,
+        [ideaId]: (prev[ideaId] ?? []).map((v) => (v.id === votoId ? { ...v, valor } : v)),
+      }));
+      onIdeasChanged?.();
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo corregir el voto.');
+    }
+    setUpdatingVotoId(null);
+  };
+
   const lineasDetectadas = quickAdd.split('\n').map((l) => l.trim()).filter(Boolean).length;
 
   return (
@@ -273,13 +293,28 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
                 </div>
               </div>
               {votosOpenId === idea.id && (
-                <div className="ml-2 mt-1 space-y-0.5 rounded-md border border-border bg-muted/30 px-3 py-2">
+                <div className="ml-2 mt-1 space-y-1.5 rounded-md border border-border bg-muted/30 px-3 py-2">
                   {votosByIdea[idea.id] === undefined && <p className="text-xs text-muted-foreground">Cargando…</p>}
                   {votosByIdea[idea.id]?.length === 0 && <p className="text-xs text-muted-foreground">Nadie ha votado esta idea todavía.</p>}
-                  {(votosByIdea[idea.id] ?? []).map((voto, vi) => (
-                    <div key={vi} className="flex items-center justify-between text-xs">
-                      <span className="text-foreground">{voto.alias}</span>
-                      <span className="text-muted-foreground">{VALOR_LABEL[voto.valor] ?? voto.valor}</span>
+                  {(votosByIdea[idea.id] ?? []).map((voto) => (
+                    <div key={voto.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-foreground">{voto.alias}</span>
+                      <div className="flex flex-shrink-0 items-center gap-1">
+                        {VALOR_OPCIONES.map((opcion) => (
+                          <button
+                            key={opcion}
+                            onClick={() => handleUpdateVoto(idea.id, voto.id, opcion)}
+                            disabled={updatingVotoId === voto.id}
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors disabled:opacity-50 ${
+                              voto.valor === opcion
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-transparent text-muted-foreground hover:bg-accent'
+                            }`}
+                          >
+                            {VALOR_LABEL[opcion]}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>

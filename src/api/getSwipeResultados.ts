@@ -5,6 +5,7 @@ import { medianaDe, clasificarQuadrante } from '../serverUtils/swipeQuadrante';
 const ideaResultadoSchema = z.object({
   id: z.string(),
   titulo: z.string(),
+  descripcion: z.string().optional(),
   imagenUrl: z.string().optional(),
   totalVotos: z.number(),
   potencial: z.number(),
@@ -31,7 +32,7 @@ export default createEndpoint({
       // tercera categoría aparte de aprobar/descartar, spec §2), y además
       // se cuenta solo para el bono de score y para mostrarlo aparte.
       `select
-         i.id, i.titulo, i.imagen_url,
+         i.id, i.titulo, i.descripcion, i.imagen_url,
          count(v.id) filter (where v.valor is not null) as total_votos,
          count(v.id) filter (where v.valor in ('potencial', 'super')) as potencial,
          count(v.id) filter (where v.valor = 'descarte') as descarte,
@@ -67,6 +68,7 @@ export default createEndpoint({
       return {
         id: row.id as string,
         titulo: row.titulo as string,
+        descripcion: (row.descripcion ?? undefined) as string | undefined,
         imagenUrl: (row.imagen_url ?? undefined) as string | undefined,
         totalVotos,
         potencial,

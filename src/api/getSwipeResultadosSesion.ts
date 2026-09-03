@@ -5,6 +5,7 @@ import { medianaDe, clasificarQuadrante } from '../serverUtils/swipeQuadrante';
 const ideaResultadoSchema = z.object({
   id: z.string(),
   titulo: z.string(),
+  descripcion: z.string().optional(),
   imagenUrl: z.string().optional(),
   totalVotos: z.number(),
   potencial: z.number(),
@@ -40,7 +41,7 @@ export default createEndpoint({
     const result = await pool.query(
       `select
          c.id as capitulo_id, c.nombre as capitulo_nombre, c.orden as capitulo_orden,
-         i.id, i.titulo, i.imagen_url, i.orden as idea_orden,
+         i.id, i.titulo, i.descripcion, i.imagen_url, i.orden as idea_orden,
          count(v.id) filter (where v.valor is not null) as total_votos,
          count(v.id) filter (where v.valor in ('potencial', 'super')) as potencial,
          count(v.id) filter (where v.valor = 'descarte') as descarte,
@@ -85,6 +86,7 @@ export default createEndpoint({
       capitulos.get(capId)!.ideas.push({
         id: row.id as string,
         titulo: row.titulo as string,
+        descripcion: (row.descripcion ?? undefined) as string | undefined,
         imagenUrl: (row.imagen_url ?? undefined) as string | undefined,
         totalVotos,
         potencial,

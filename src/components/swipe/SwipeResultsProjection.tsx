@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Star, X, LayoutList, LayoutGrid, Crown, Zap, Brain, XCircle, HelpCircle } from 'lucide-react';
+import { Star, X, LayoutList, LayoutGrid, Crown, Zap, Brain, XCircle, HelpCircle, Award, FileDown } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'sonner';
+import { exportGanadorasPpt } from '@/lib/exportSwipeGanadorasPpt';
 
 export type SwipeQuadrante = 'consenso_rapido' | 'convence_cuesta' | 'rechazo_inmediato' | 'duda_genuina';
 
 export interface ResultadoIdea {
   id: string;
   titulo: string;
+  descripcion?: string;
   imagenUrl?: string;
   totalVotos: number;
   potencial: number;
@@ -40,6 +44,7 @@ interface SwipeResultsProjectionProps {
 }
 
 const RANK_COLOR = ['#F2C744', '#C9D2D8', '#D89A5C']; // oro/plata/bronce — solo el top 3 se distingue
+const CHECKBOX_DARK = 'border-white/40 data-[state=checked]:bg-[#3FA9C4] data-[state=checked]:border-[#3FA9C4]';
 
 /** Entre 40% y 60% de aprobación — ni gustó ni se descartó de plano, spec §6: "suelen ser las más interesantes de discutir". */
 function esPolarizante(pct: number) {
@@ -53,16 +58,46 @@ function esPolarizante(pct: number) {
  * longitud 1) — nunca se mezclan ideas de capítulos distintos en un mismo
  * ranking, cada uno conserva el suyo, solo que pueden verse todos seguidos
  * sin salir y volver a entrar.
+ *
+ * "Seleccionar ganadoras" es un modo aparte, ortogonal a lista/tarjetas: la
+ * selección vive solo en memoria de este componente (nunca se guarda en la
+ * base) y sirve nada más para el export a PPT — cerrar la proyección la
+ * pierde, a propósito.
  */
 export default function SwipeResultsProjection({ sesionNombre, cliente, capitulos, onClose }: SwipeResultsProjectionProps) {
   const [modo, setModo] = useState<'lista' | 'tarjetas'>('lista');
+  const [seleccionando, setSeleccionando] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
+  const [exportando, setExportando] = useState(false);
+
+  const todasLasIdeas = useMemo(() => capitulos.flatMap((c) => c.ideas), [capitulos]);
+
+  const toggleSeleccion = (ideaId: string) => {
+    setSeleccionadas((prev) => {
+      const next = new Set(prev);
+      if (next.has(ideaId)) next.delete(ideaId); else next.add(ideaId);
+      return next;
+    });
+  };
+
+  const handleExportar = async () => {
+    const ideas = todasLasIdeas.filter((idea) => seleccionadas.has(idea.id));
+    if (ideas.length === 0) return;
+    setExportando(true);
+    try {
+      await exportGanadorasPpt(sesionNombre, cliente, ideas);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo exportar el PPT.');
+    }
+    setExportando(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-[linear-gradient(160deg,#14495A_0%,#0F3D4C_55%,#0A2F3B_100%)]">
       <div className="pointer-events-none absolute -right-32 -top-32 h-[420px] w-[420px] rounded-full border-[56px] border-[rgba(2,116,149,.12)]" />
       <div className="pointer-events-none absolute -bottom-40 -left-24 h-[380px] w-[380px] rounded-full border-[48px] border-[rgba(212,160,23,.08)]" />
 
-      <div className="relative flex flex-shrink-0 items-center justify-between px-10 py-8">
+      <div className="relative flex flex-shrink-0 flex-wrap items-center justify-between gap-3 px-10 py-8">
         <div>
           {cliente && <p className="text-[13px] font-bold uppercase tracking-[0.2em] text-[#6FC2DA]">{cliente}</p>}
           <h1 className="mt-1 text-[30px] font-bold leading-tight text-white">{sesionNombre}</h1>
@@ -83,6 +118,12 @@ export default function SwipeResultsProjection({ sesionNombre, cliente, capitulo
             </button>
           </div>
           <button
+            onClick={() => { setSeleccionando((v) => !v); if (seleccionando) setSeleccionadas(new Set()); }}
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${seleccionando ? 'bg-[#F2C744] text-[#0F3D4C]' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+          >
+            <Award className="h-3.5 w-3.5" /> {seleccionando ? 'Cancelar selección' : 'Seleccionar ganadoras'}
+          </button>
+          <button
             onClick={onClose}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
             aria-label="Cerrar"
@@ -92,7 +133,7 @@ export default function SwipeResultsProjection({ sesionNombre, cliente, capitulo
         </div>
       </div>
 
-      <div className="relative mx-auto w-full max-w-4xl flex-1 space-y-10 px-6 pb-16">
+      <div className="relative mx-auto w-full max-w-4xl flex-1 space-y-10 px-6 pb-28">
         {capitulos.map((cap) => (
           <section key={cap.capituloId}>
             {capitulos.length > 1 && (
@@ -106,18 +147,37 @@ export default function SwipeResultsProjection({ sesionNombre, cliente, capitulo
             {cap.ideas.length === 0 ? (
               <p className="text-[15px] text-[#8FB6C0]">Todavía no hay votos que mostrar.</p>
             ) : modo === 'lista' ? (
-              <ListaRanking ideas={cap.ideas} />
+              <ListaRanking ideas={cap.ideas} seleccionando={seleccionando} seleccionadas={seleccionadas} onToggleSeleccion={toggleSeleccion} />
             ) : (
-              <TarjetasRanking ideas={cap.ideas} />
+              <TarjetasRanking ideas={cap.ideas} seleccionando={seleccionando} seleccionadas={seleccionadas} onToggleSeleccion={toggleSeleccion} />
             )}
           </section>
         ))}
       </div>
+
+      {seleccionadas.size > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-8 z-10 flex justify-center">
+          <button
+            onClick={handleExportar}
+            disabled={exportando}
+            className="pointer-events-auto flex items-center gap-2 rounded-full bg-[#F2C744] px-6 py-3 text-[14px] font-bold text-[#0F3D4C] shadow-[0_12px_30px_rgba(0,0,0,0.35)] transition-transform hover:scale-105 disabled:opacity-70"
+          >
+            <FileDown className="h-4 w-4" />
+            {exportando ? 'Generando PPT…' : `Exportar ${seleccionadas.size} ganadora${seleccionadas.size !== 1 ? 's' : ''} a PPT`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function ListaRanking({ ideas }: { ideas: ResultadoIdea[] }) {
+interface SeleccionProps {
+  seleccionando: boolean;
+  seleccionadas: Set<string>;
+  onToggleSeleccion: (ideaId: string) => void;
+}
+
+function ListaRanking({ ideas, seleccionando, seleccionadas, onToggleSeleccion }: { ideas: ResultadoIdea[] } & SeleccionProps) {
   return (
     <div className="space-y-3">
       {ideas.map((idea, i) => (
@@ -128,6 +188,14 @@ function ListaRanking({ ideas }: { ideas: ResultadoIdea[] }) {
           transition={{ delay: i * 0.06, type: 'spring', stiffness: 300, damping: 28 }}
           className={`flex items-center gap-4 rounded-2xl p-4 ring-1 ${i === 0 ? 'bg-white/[.09] ring-[#F2C744]/40' : 'bg-white/[.05] ring-white/10'}`}
         >
+          {seleccionando && (
+            <Checkbox
+              checked={seleccionadas.has(idea.id)}
+              onCheckedChange={() => onToggleSeleccion(idea.id)}
+              className={CHECKBOX_DARK}
+              aria-label={`Marcar "${idea.titulo}" como ganadora`}
+            />
+          )}
           <div
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[15px] font-black"
             style={{ backgroundColor: i < 3 ? RANK_COLOR[i] : 'rgba(255,255,255,0.1)', color: i < 3 ? '#0A2F3B' : '#8FB6C0' }}
@@ -142,6 +210,7 @@ function ListaRanking({ ideas }: { ideas: ResultadoIdea[] }) {
               <span className="truncate text-[17px] font-semibold text-white">{idea.titulo}</span>
               <Badges idea={idea} big />
             </div>
+            {idea.descripcion && <p className="mt-0.5 truncate text-[13px] text-[#8FB6C0]">{idea.descripcion}</p>}
             <Bar pct={idea.pctPotencial} />
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
               <p className="text-[12px] text-white/40">
@@ -157,7 +226,7 @@ function ListaRanking({ ideas }: { ideas: ResultadoIdea[] }) {
   );
 }
 
-function TarjetasRanking({ ideas }: { ideas: ResultadoIdea[] }) {
+function TarjetasRanking({ ideas, seleccionando, seleccionadas, onToggleSeleccion }: { ideas: ResultadoIdea[] } & SeleccionProps) {
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {ideas.map((idea, i) => (
@@ -182,12 +251,23 @@ function TarjetasRanking({ ideas }: { ideas: ResultadoIdea[] }) {
             >
               {i === 0 ? <Crown className="h-4 w-4" fill="currentColor" /> : i + 1}
             </div>
+            {seleccionando && (
+              <div className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+                <Checkbox
+                  checked={seleccionadas.has(idea.id)}
+                  onCheckedChange={() => onToggleSeleccion(idea.id)}
+                  className={CHECKBOX_DARK}
+                  aria-label={`Marcar "${idea.titulo}" como ganadora`}
+                />
+              </div>
+            )}
           </div>
           <div className="p-4">
             <div className="flex items-center justify-between gap-2">
               <span className="truncate text-[15px] font-semibold text-white">{idea.titulo}</span>
               <span className="flex-shrink-0 text-[17px] font-bold text-white">{idea.pctPotencial}%</span>
             </div>
+            {idea.descripcion && <p className="mt-1 text-[12.5px] leading-snug text-[#8FB6C0] line-clamp-2">{idea.descripcion}</p>}
             <Bar pct={idea.pctPotencial} />
             <div className="mt-2 flex items-center justify-between">
               <p className="text-[12px] text-white/40">{idea.totalVotos} voto{idea.totalVotos !== 1 ? 's' : ''}</p>
