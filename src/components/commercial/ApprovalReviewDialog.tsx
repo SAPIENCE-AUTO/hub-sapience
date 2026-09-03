@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
-  getApprovalPreview, approveDeal,
+  getApprovalPreview, approveDeal, getProjects,
   GetApprovalPreviewOutputType, GetDealsOutputType,
 } from 'zite-endpoints-sdk';
+import { useProject } from '@/context/ProjectContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -144,6 +145,7 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
   const [currency, setCurrency] = useState('MXN');
   const [selected, setSelected] = useState<Map<string, Set<string>>>(new Map());
   const [createProject, setCreateProject] = useState(true);
+  const { setProjects } = useProject();
 
   useEffect(() => {
     if (!open || !deal.id) return;
@@ -194,6 +196,13 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
         ? `✓ Deal aprobado — Proyecto ${res.projectCode} creado${notifMsg}`
         : `✓ Deal aprobado`;
       toast.success(successMsg);
+      // El proyecto recién creado no aparecía en el buscador/selector global
+      // hasta un refresh completo — Layout.tsx solo carga `projects` una vez
+      // por sesión (ver ProjectContext), y esta ruta de creación (aprobar un
+      // deal) nunca pasa por ProjectsPage.tsx, que sí se refresca sola.
+      if (createProject && res.projectCode) {
+        getProjects({}).then(d => setProjects(d.projects)).catch(() => {});
+      }
       onApproved({ projectCode: res.projectCode, projectId: res.projectId, quotedCost: res.quotedCost, notificationsSent: res.notificationsSent });
       onClose();
     } catch (e: unknown) {
