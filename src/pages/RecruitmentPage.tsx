@@ -376,8 +376,9 @@ async function exportRecruitmentExcel(
 }
 
 // ── Recruitment Table ─────────────────────────────────────────────────────────
-const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSaveField, onEdit, onDelete, onBulkDelete, onUpdateStatus, onSendNDA, onQuickCreate, onCreateGroup, dynCols, groupDynCols, columnFilters, setColFilter, colUniqueValues, onDuplicateClick, badgeMap, hiddenColumns, onRowsChange, sortColumn, sortDirection, toggleSort, onDuplicateGroup, onGroupStructureChanged, onRefresh, linkedEventsMap, projectCode, recruitmentBoardId, onLinkedEventsRefresh, onCreateEventForGroup, expandedGroups, setExpandedGroups, activeGroupFilter }: {
+const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSaveField, onEdit, onDelete, onBulkDelete, onUpdateStatus, onSendNDA, onQuickCreate, onCreateGroup, dynCols, groupDynCols, columnFilters, setColFilter, colUniqueValues, onDuplicateClick, badgeMap, hiddenColumns, onRowsChange, sortColumn, sortDirection, toggleSort, onDuplicateGroup, onGroupStructureChanged, onRefresh, linkedEventsMap, projectCode, recruitmentBoardId, onLinkedEventsRefresh, onCreateEventForGroup, expandedGroups, setExpandedGroups, activeGroupFilter, pendingRowGroup }: {
   rows: Row[];
+  pendingRowGroup: Record<string, string>;
   onSaveName: (id: string, name: string) => void;
   onSaveField: (id: string, field: 'email' | 'phone' | 'idNumber', value: string) => void;
   onEdit: (row: Row) => void;
@@ -741,15 +742,18 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   const rowGroupMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const r of topLevel) {
+      let matched = false;
       for (const g of groups) {
         if (groupDynCols.getCellVal(r.id, g.id)?.textValue === '1') {
           map.set(r.id, g.id);
+          matched = true;
           break;
         }
       }
+      if (!matched && pendingRowGroup[r.id]) map.set(r.id, pendingRowGroup[r.id]);
     }
     return map;
-  }, [topLevel, groups, groupDynCols.getCellVal]);
+  }, [topLevel, groups, groupDynCols.getCellVal, pendingRowGroup]);
 
   const getRowGroupId = (rowId: string) => rowGroupMap.get(rowId) ?? null;
 
@@ -2205,6 +2209,14 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
   const { user } = useAuth();
   const presence = useProjectPresence({ projectCode: selectedProject, pageName: 'recruitment', enabled: !!selectedProject && !!user, user: user ?? undefined });
   const [rows,        setRows]        = useState<Row[]>([]);
+  // Grupo "optimista" de una fila recién creada, puramente de despliegue —
+  // nunca se escribe al servidor. quickCreate() no puede escribir la celda
+  // de membresía contra el tempId (dejaría una celda huérfana si falla la
+  // creación de la fila, ver comentario ahí), así que hay una ventana real
+  // — el viaje de red de saveRecruitmentRow — donde la fila ya existe pero
+  // su celda de grupo real todavía no. Sin este mapa, rowGroupMap la muestra
+  // en "Sin grupo" y luego salta al grupo correcto, un glitch visible.
+  const [pendingRowGroup, setPendingRowGroup] = useState<Record<string, string>>({});
   const [boards,      setBoards]      = useState<string[]>([]);
   const [boardObjects, setBoardObjects] = useState<BoardObj[]>([]);
   const [activeBoardId, setActiveBoardId] = useState('');
@@ -2795,10 +2807,29 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
     // duplicateGroup.ts con "invalid input syntax for type uuid"). Se
     // asigna una sola vez, abajo, ya con el id real de saveRecruitmentRow.
     setRows(prev => [...prev, { id: tempId, rowName: name, participantName: name, boardName: activeBoardName, boardId: activeBoardId, status: 'Pendiente', level: 0 } as Row]);
+    // Grupo optimista, solo de despliegue — ver comentario en la declaración
+    // de pendingRowGroup. Se migra del tempId al id real más abajo.
+    if (groupId) setPendingRowGroup(prev => ({ ...prev, [tempId]: groupId }));
     try {
       const res = await saveRecruitmentRow({ rowName: name, participantName: name, projectCode: selectedProject ?? undefined, boardId: activeBoardId, boardName: activeBoardName, status: 'Pendiente', level: 0 });
-      if (res.id) setRows(prev => prev.map(r => r.id === tempId ? { ...r, id: res.id } : r));
-      if (groupId && res.id) await groupDynCols.setCellVal(res.id, groupId, { textValue: '1' });
+      if (res.id) {
+        setRows(prev => prev.map(r => r.id === tempId ? { ...r, id: res.id } : r));
+        if (groupId) {
+          setPendingRowGroup(prev => {
+            const { [tempId]: _drop, ...rest } = prev;
+            return { ...rest, [res.id]: groupId };
+          });
+        }
+      }
+      if (groupId && res.id) {
+        await groupDynCols.setCellVal(res.id, groupId, { textValue: '1' });
+        // La celda real ya está en cellMap (setCellVal la escribe de forma
+        // optimista antes de persistir) — el fallback ya no hace falta.
+        setPendingRowGroup(prev => {
+          const { [res.id]: _drop, ...rest } = prev;
+          return rest;
+        });
+      }
       if (res.id) {
         publishRecruitmentRowsChanged({
           projectCode: selectedProject ?? '',
@@ -2807,7 +2838,14 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
           changeType: 'created',
         }).catch(() => {});
       }
-    } catch { toast.error('Error al crear'); setRows(prev => prev.filter(r => r.id !== tempId)); }
+    } catch {
+      toast.error('Error al crear');
+      setRows(prev => prev.filter(r => r.id !== tempId));
+      setPendingRowGroup(prev => {
+        const { [tempId]: _drop, ...rest } = prev;
+        return rest;
+      });
+    }
   };
 
   // R2-B: publish groups uses activeBoardId (UUID)
@@ -3375,6 +3413,7 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
             onUpdateStatus={updateStatus}
             onSendNDA={sendNDA}
             onQuickCreate={quickCreate}
+            pendingRowGroup={pendingRowGroup}
             onCreateGroup={createGroup}
             dynCols={dynCols}
             groupDynCols={groupDynCols}
