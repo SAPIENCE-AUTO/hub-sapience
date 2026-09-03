@@ -276,6 +276,7 @@ export const getSwipeCapitulo = (input?: any): Promise<any> => call('getSwipeCap
 export const getSwipeEstado = (input?: any): Promise<any> => call('getSwipeEstado', input);
 export const getSwipeIdeas = (input?: any): Promise<any> => call('getSwipeIdeas', input);
 export const getSwipeResultados = (input?: any): Promise<any> => call('getSwipeResultados', input);
+export const getSwipeResultadosSesion = (input?: any): Promise<any> => call('getSwipeResultadosSesion', input);
 export const getSwipeSesionDetail = (input?: any): Promise<any> => call('getSwipeSesionDetail', input);
 export const getSwipeSesiones = (input?: any): Promise<any> => call('getSwipeSesiones', input);
 export const getSwipeVotosDeIdea = (input?: any): Promise<any> => call('getSwipeVotosDeIdea', input);

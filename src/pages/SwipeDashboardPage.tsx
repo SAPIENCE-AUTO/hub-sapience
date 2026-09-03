@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getSwipeSesiones, createSwipeSesion, deleteSwipeSesion, getSwipeSesionDetail, createSwipeCapitulo,
-  getSwipeIdeas, createSwipeIdea, updateSwipeIdea, getSwipeVotosDeIdea, setSwipeCapituloEstado, getSwipeResultados,
+  getSwipeIdeas, createSwipeIdea, updateSwipeIdea, getSwipeVotosDeIdea, setSwipeCapituloEstado,
+  getSwipeResultados, getSwipeResultadosSesion,
 } from 'zite-endpoints-sdk';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ interface SesionRow { id: string; codigo: string; nombre: string; cliente?: stri
 interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number }
 interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number; tieneVotos: boolean }
 interface ResultadoIdea { id: string; titulo: string; imagenUrl?: string; totalVotos: number; potencial: number; descarte: number; superLikes: number; pctPotencial: number; score: number }
+interface ResultadoCapitulo { capituloId: string; capituloNombre: string; totalParticipantesVotaron: number; ideas: ResultadoIdea[] }
 interface Detalle { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulos: CapituloRow[] }
 interface VotoRow { alias: string; valor: string; msDecision?: number; createdAt: string }
 
@@ -51,7 +53,8 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingSesion, setDeletingSesion] = useState(false);
 
-  const [projectionOpen, setProjectionOpen] = useState(false);
+  const [projectionCapitulos, setProjectionCapitulos] = useState<ResultadoCapitulo[] | null>(null);
+  const [loadingResultadosSesion, setLoadingResultadosSesion] = useState(false);
 
   const [newCapOpen, setNewCapOpen] = useState(false);
   const [newCapNombre, setNewCapNombre] = useState('');
@@ -243,6 +246,18 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
     navigator.clipboard.writeText(url).then(() => toast.success('Link copiado'));
   };
 
+  const handleVerResultadosTotales = async () => {
+    if (!detalle) return;
+    setLoadingResultadosSesion(true);
+    try {
+      const res = await getSwipeResultadosSesion({ sesionId: detalle.id });
+      setProjectionCapitulos(res.capitulos ?? []);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudieron cargar los resultados.');
+    }
+    setLoadingResultadosSesion(false);
+  };
+
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
@@ -309,9 +324,16 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                     <CardTitle>{detalle.nombre}</CardTitle>
                     <p className="text-xs text-muted-foreground">/swipe/{detalle.codigo}</p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => copyLink(detalle.codigo)}>
-                    <Copy className="h-3.5 w-3.5" /> Copiar link
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => copyLink(detalle.codigo)}>
+                      <Copy className="h-3.5 w-3.5" /> Copiar link
+                    </Button>
+                    {detalle.capitulos.length > 0 && (
+                      <Button size="sm" onClick={handleVerResultadosTotales} disabled={loadingResultadosSesion}>
+                        <Maximize2 className="h-3.5 w-3.5" /> {loadingResultadosSesion ? 'Cargando…' : 'Resultados totales'}
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
               </Card>
 
@@ -440,7 +462,15 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                               <h3 className="text-sm font-semibold text-foreground">
                                 Resultados · {resultados.totalParticipantesVotaron} participante{resultados.totalParticipantesVotaron !== 1 ? 's' : ''} {resultados.totalParticipantesVotaron !== 1 ? 'votaron' : 'votó'}
                               </h3>
-                              <Button size="sm" variant="outline" onClick={() => setProjectionOpen(true)}>
+                              <Button
+                                size="sm" variant="outline"
+                                onClick={() => setProjectionCapitulos([{
+                                  capituloId: cap.id,
+                                  capituloNombre: cap.nombre,
+                                  totalParticipantesVotaron: resultados.totalParticipantesVotaron,
+                                  ideas: resultados.ideas,
+                                }])}
+                              >
                                 <Maximize2 className="h-3.5 w-3.5" /> Proyectar
                               </Button>
                             </div>
@@ -511,14 +541,12 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
         </DialogContent>
       </Dialog>
 
-      {projectionOpen && resultados && detalle && (
+      {projectionCapitulos && detalle && (
         <SwipeResultsProjection
           sesionNombre={detalle.nombre}
           cliente={detalle.cliente}
-          capituloNombre={detalle.capitulos.find((c) => c.id === selectedCapituloId)?.nombre ?? ''}
-          totalParticipantesVotaron={resultados.totalParticipantesVotaron}
-          ideas={resultados.ideas}
-          onClose={() => setProjectionOpen(false)}
+          capitulos={projectionCapitulos}
+          onClose={() => setProjectionCapitulos(null)}
         />
       )}
     </div>
