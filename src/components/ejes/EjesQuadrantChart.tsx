@@ -1,6 +1,7 @@
 import {
-  ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
+  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts';
+import { PELIGRO } from '@/lib/toolColors';
 
 export interface EjesIdeaResultado {
   id: string;
@@ -31,7 +32,7 @@ interface EjesQuadrantChartProps {
 
 const RADIO_BASE = 5;
 const RADIO_MAX = 13;
-const RADIO_SELECCIONADO = 15;
+const RADIO_SELECCIONADA = 14;
 
 function radioPorEvaluaciones(n: number): number {
   return Math.min(RADIO_MAX, RADIO_BASE + n * 1.3);
@@ -44,13 +45,11 @@ function radioPorEvaluaciones(n: number): number {
  * SVG. Las `ReferenceLine` al punto medio de cada eje son las que dividen
  * el plano en los 4 cuadrantes.
  *
- * El tamaño de cada punto-promedio ya no viene de `ZAxis` (no se puede
- * mezclar con el resaltado manual de la idea seleccionada sin pelearse por
- * el mismo dominio de tamaños) — se calcula a mano vía un `shape` custom,
- * lo que de paso permite dibujar más grande y con anillo blanco el punto de
- * la idea que el facilitador seleccionó, encima de sus puntitos grises de
- * evaluación individual (que van en un `Scatter` aparte, dibujado antes
- * para quedar detrás).
+ * Modo detalle (`detalleIdeaId` presente): el resto de las ideas se oculta
+ * por completo (no solo se atenúa) para no competir visualmente con los
+ * puntitos grises de evaluación individual — solo queda el punto promedio
+ * de la idea seleccionada, en rojo. El tamaño de cada punto-promedio ya no
+ * viene de `ZAxis` — se calcula a mano vía un `shape` custom.
  */
 export default function EjesQuadrantChart({
   ejeXLabel, ejeXMin, ejeXMax, ejeYLabel, ejeYMin, ejeYMax, ideas, height = 320,
@@ -58,7 +57,8 @@ export default function EjesQuadrantChart({
 }: EjesQuadrantChartProps) {
   const midX = (ejeXMin + ejeXMax) / 2;
   const midY = (ejeYMin + ejeYMax) / 2;
-  const scatterData = ideas.map((idea) => ({ ...idea, x: idea.avgX, y: idea.avgY }));
+  const ideasVisibles = detalleIdeaId ? ideas.filter((idea) => idea.id === detalleIdeaId) : ideas;
+  const scatterData = ideasVisibles.map((idea) => ({ ...idea, x: idea.avgX, y: idea.avgY }));
   const puntosIndividuales = (detalleEvaluaciones ?? []).map((ev) => ({ x: ev.valorX, y: ev.valorY }));
   const stroke = gridColor ?? 'hsl(var(--border))';
   const fill = textColor ?? 'hsl(var(--muted-foreground))';
@@ -78,7 +78,7 @@ export default function EjesQuadrantChart({
         <ReferenceLine x={midX} stroke={stroke} strokeDasharray="4 4" />
         <ReferenceLine y={midY} stroke={stroke} strokeDasharray="4 4" />
         <Tooltip
-          cursor={{ strokeDasharray: '3 3' }}
+          cursor={false}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null;
             const p = payload[0].payload as EjesIdeaResultado;
@@ -105,17 +105,17 @@ export default function EjesQuadrantChart({
           data={scatterData}
           shape={(props: any) => {
             const seleccionada = props.payload?.id === detalleIdeaId;
-            const r = seleccionada ? RADIO_SELECCIONADO : radioPorEvaluaciones(props.payload?.totalEvaluaciones ?? 0);
+            const r = seleccionada ? RADIO_SELECCIONADA : radioPorEvaluaciones(props.payload?.totalEvaluaciones ?? 0);
             return (
               <circle
                 cx={props.cx} cy={props.cy} r={r}
-                fill={dotColor} fillOpacity={0.85}
-                stroke={seleccionada ? '#fff' : 'none'} strokeWidth={seleccionada ? 2.5 : 0}
+                fill={seleccionada ? PELIGRO : dotColor} fillOpacity={0.9}
                 style={{ cursor: onIdeaClick ? 'pointer' : undefined }}
               />
             );
           }}
           onClick={(entry: any) => onIdeaClick?.(entry)}
+          isAnimationActive={false}
         />
       </ScatterChart>
     </ResponsiveContainer>
