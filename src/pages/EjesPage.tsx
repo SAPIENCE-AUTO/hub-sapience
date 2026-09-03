@@ -1,0 +1,268 @@
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useParams } from 'react-router-dom';
+import { getEjesEstado, getEjesTablero, joinEjesSesion, submitEjesEvaluacion } from 'zite-endpoints-sdk';
+import EjesEvaluacionSliders, { type EjesIdea } from '@/components/ejes/EjesEvaluacionSliders';
+
+// Mismo logo que SwipePage.tsx/ObservationRoomPage.tsx/LoginPage.tsx.
+const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png';
+
+interface StoredParticipante { participanteId: string; alias: string; deviceToken: string }
+
+interface EstadoSesion {
+  found: boolean;
+  estadoSesion?: string;
+  nombre?: string;
+  cliente?: string;
+  tableroActivo?: { id: string; nombre: string; descripcion?: string; totalIdeas: number } | null;
+}
+
+interface TableroCargado {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  ideas: EjesIdea[];
+  ejeXLabel: string; ejeXMin: number; ejeXMax: number;
+  ejeYLabel: string; ejeYMin: number; ejeYMax: number;
+  cuadranteAltoAltoLabel?: string; cuadranteBajoAltoLabel?: string;
+  cuadranteBajoBajoLabel?: string; cuadranteAltoBajoLabel?: string;
+}
+
+type Phase = 'loading' | 'notfound' | 'join' | 'waiting' | 'intro' | 'evaluando' | 'done';
+
+function storageKey(codigo: string) {
+  return `ejes_participante_${codigo}`;
+}
+
+/**
+ * Página pública `/ejes/:codigo` — hermana de <Layout> en App.tsx, nunca
+ * pasa por useAuth(). Mismo esqueleto que SwipePage.tsx (estado `undefined`
+ * = cargando, `{found:false}` = código inválido, device token en
+ * localStorage por código), cambiando el stack de swipe por
+ * EjesEvaluacionSliders (2 sliders, decisión ya confirmada con el usuario).
+ */
+export default function EjesPage() {
+  const { codigo = '' } = useParams();
+  const [participante, setParticipante] = useState<StoredParticipante | null>(null);
+  const [estado, setEstado] = useState<EstadoSesion | undefined>(undefined);
+  const [tablero, setTablero] = useState<TableroCargado | null>(null);
+  const [phase, setPhase] = useState<Phase>('loading');
+  const completedRef = useRef<Set<string>>(new Set());
+
+  const [aliasInput, setAliasInput] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState('');
+
+  useEffect(() => {
+    const raw = localStorage.getItem(storageKey(codigo));
+    if (raw) {
+      try { setParticipante(JSON.parse(raw)); } catch { /* localStorage corrupto, se ignora */ }
+    }
+  }, [codigo]);
+
+  const loadEstado = async () => {
+    try {
+      const res = await getEjesEstado({ codigo });
+      setEstado(res);
+    } catch {
+      setEstado({ found: false });
+    }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadEstado(); }, [codigo]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadEstado();
+    }, 4000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codigo]);
+
+  useEffect(() => {
+    if (!participante || !estado?.found || !estado.tableroActivo) return;
+    const tabId = estado.tableroActivo.id;
+    if (completedRef.current.has(tabId) || tablero?.id === tabId) return;
+
+    let cancelled = false;
+    getEjesTablero({ tableroId: tabId }).then((res) => {
+      if (cancelled || !res.found) return;
+      (res.ideas ?? []).forEach((idea: EjesIdea) => {
+        if (idea.imagenUrl) { const img = new Image(); img.src = idea.imagenUrl; }
+      });
+      setTablero({
+        id: tabId, nombre: res.nombre, descripcion: res.descripcion, ideas: res.ideas ?? [],
+        ejeXLabel: res.ejeXLabel, ejeXMin: res.ejeXMin, ejeXMax: res.ejeXMax,
+        ejeYLabel: res.ejeYLabel, ejeYMin: res.ejeYMin, ejeYMax: res.ejeYMax,
+        cuadranteAltoAltoLabel: res.cuadranteAltoAltoLabel, cuadranteBajoAltoLabel: res.cuadranteBajoAltoLabel,
+        cuadranteBajoBajoLabel: res.cuadranteBajoBajoLabel, cuadranteAltoBajoLabel: res.cuadranteAltoBajoLabel,
+      });
+    });
+    return () => { cancelled = true; };
+  }, [participante, estado?.tableroActivo?.id, estado?.found, tablero?.id]);
+
+  useEffect(() => {
+    if (estado === undefined) { setPhase('loading'); return; }
+    if (!estado.found) { setPhase('notfound'); return; }
+    if (!participante) { setPhase('join'); return; }
+    if (!estado.tableroActivo) {
+      setPhase(estado.estadoSesion === 'cerrada' ? 'done' : 'waiting');
+      return;
+    }
+    if (completedRef.current.has(estado.tableroActivo.id)) { setPhase('waiting'); return; }
+    if (tablero?.id !== estado.tableroActivo.id) { setPhase('loading'); return; }
+    setPhase((prev) => (prev === 'evaluando' ? 'evaluando' : 'intro'));
+  }, [estado, participante, tablero]);
+
+  const handleJoin = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!aliasInput.trim()) return;
+    setJoinError('');
+    setJoining(true);
+    try {
+      const deviceToken = crypto.randomUUID();
+      const res = await joinEjesSesion({ codigo, alias: aliasInput.trim(), deviceToken });
+      if (!res.found || !res.participanteId) {
+        setJoinError('Este código no corresponde a ninguna sesión.');
+        setJoining(false);
+        return;
+      }
+      const stored: StoredParticipante = { participanteId: res.participanteId, alias: aliasInput.trim(), deviceToken };
+      localStorage.setItem(storageKey(codigo), JSON.stringify(stored));
+      setParticipante(stored);
+    } catch (err) {
+      setJoinError((err as Error)?.message || 'No se pudo entrar a la sesión.');
+    }
+    setJoining(false);
+  };
+
+  const handleEvaluar = (ideaId: string, valorX: number, valorY: number, msDecision: number) => {
+    if (!participante) return;
+    submitEjesEvaluacion({ participanteId: participante.participanteId, ideaId, valorX, valorY, msDecision }).catch(() => {});
+  };
+
+  const handleComplete = () => {
+    if (tablero) completedRef.current.add(tablero.id);
+    setPhase('waiting');
+  };
+
+  if (phase === 'loading') return <CenterMessage>Cargando…</CenterMessage>;
+  if (phase === 'notfound') return <CenterMessage>Este código no corresponde a ninguna sesión.</CenterMessage>;
+
+  if (phase === 'join') {
+    return (
+      <JoinScreen
+        nombre={estado?.nombre}
+        cliente={estado?.cliente}
+        value={aliasInput}
+        onChange={setAliasInput}
+        onSubmit={handleJoin}
+        joining={joining}
+        error={joinError}
+      />
+    );
+  }
+
+  if (phase === 'done') {
+    return (
+      <CenterMessage>
+        <div className="space-y-2">
+          <p className="text-lg font-semibold text-[#0F3D4D]">¡Gracias por participar!</p>
+          <p>La sesión ha terminado.</p>
+        </div>
+      </CenterMessage>
+    );
+  }
+
+  if (phase === 'waiting') {
+    return <CenterMessage>Listo. Esperando al siguiente tablero…</CenterMessage>;
+  }
+
+  if (phase === 'intro' && tablero) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-[#0F3D4D] px-6 text-center text-white">
+        <img src={LOGO_URL} alt="Sapience" className="mb-8 h-7 w-auto" />
+        <h1 className="text-2xl font-bold">{tablero.nombre}</h1>
+        {tablero.descripcion && <p className="mt-3 max-w-sm text-[15px] text-[#8FB6C0]">{tablero.descripcion}</p>}
+        <p className="mt-4 text-sm text-[#3FA9C4]">
+          {tablero.ideas.length} ideas · {tablero.ejeXLabel} × {tablero.ejeYLabel}
+        </p>
+        <button
+          onClick={() => setPhase('evaluando')}
+          className="mt-9 rounded-full bg-[#027495] px-10 py-3.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#025F7A]"
+        >
+          Empezar
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === 'evaluando' && tablero) {
+    return (
+      <div className="h-dvh overscroll-none bg-[#0F3D4D]">
+        <EjesEvaluacionSliders
+          ideas={tablero.ideas}
+          ejeXLabel={tablero.ejeXLabel} ejeXMin={tablero.ejeXMin} ejeXMax={tablero.ejeXMax}
+          ejeYLabel={tablero.ejeYLabel} ejeYMin={tablero.ejeYMin} ejeYMax={tablero.ejeYMax}
+          cuadranteAltoAltoLabel={tablero.cuadranteAltoAltoLabel}
+          cuadranteBajoAltoLabel={tablero.cuadranteBajoAltoLabel}
+          cuadranteBajoBajoLabel={tablero.cuadranteBajoBajoLabel}
+          cuadranteAltoBajoLabel={tablero.cuadranteAltoBajoLabel}
+          onEvaluar={handleEvaluar}
+          onComplete={handleComplete}
+        />
+      </div>
+    );
+  }
+
+  return <CenterMessage>Cargando…</CenterMessage>;
+}
+
+function CenterMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-[#F2F7F8] px-6 text-center text-sm text-[#6E8388]">
+      {children}
+    </div>
+  );
+}
+
+function JoinScreen({
+  nombre, cliente, value, onChange, onSubmit, joining, error,
+}: {
+  nombre?: string;
+  cliente?: string;
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: (e: FormEvent) => void;
+  joining: boolean;
+  error: string;
+}) {
+  return (
+    <div className="flex min-h-dvh flex-col bg-[#0F3D4D] px-6 pb-10 pt-14 text-white">
+      <img src={LOGO_URL} alt="Sapience" className="h-7 w-auto self-start" />
+      <div className="flex flex-1 flex-col justify-center">
+        {nombre && (
+          <p className="mb-1 text-[13px] font-semibold uppercase tracking-[0.14em] text-[#6FC2DA]">{cliente ?? 'Sapience'}</p>
+        )}
+        <h1 className="mb-2 text-[26px] font-bold leading-tight">{nombre ?? 'Sesión de Ejes'}</h1>
+        <p className="mb-8 text-[15px] text-[#8FB6C0]">Escribe cómo quieres que te vean en esta sesión.</p>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <input
+            required autoFocus maxLength={40}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Tu alias"
+            className="w-full rounded-[10px] border-[1.5px] border-white/15 bg-white/5 px-4 py-3.5 text-[16px] text-white outline-none placeholder:text-white/40 focus:border-[#3FA9C4]"
+          />
+          {error && <p className="text-[13px] text-[#F2A19B]">{error}</p>}
+          <button
+            type="submit" disabled={joining}
+            className="w-full rounded-[10px] bg-[#027495] px-5 py-3.5 text-[15px] font-semibold text-white transition-colors hover:enabled:bg-[#025F7A] disabled:opacity-60"
+          >
+            {joining ? 'Entrando…' : 'Entrar'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

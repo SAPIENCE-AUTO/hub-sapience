@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench } from 'lucide-react';
 import { getRecruitmentSummary, getTasks, getProjectTeamsFiles, getMessages, getSwipeSesiones } from 'zite-endpoints-sdk';
 import { computeGanttSegments, GanttData } from './ganttMath';
-import { TEAL, TEAL_2, GOLD, INFO, EXITO, NEUTRAL, ALERTA, EstadoPill } from '../swipe/swipeColors';
+import { TEAL, TEAL_2, GOLD, INFO, EXITO, NEUTRAL, ALERTA, EstadoPill } from '../../lib/toolColors';
 
 // Paleta de acento por tarjeta — mismos 6 tonos del sistema decidido en el
 // moodboard del Hub, sin inventar hues nuevos. El desglose de Reclutamiento

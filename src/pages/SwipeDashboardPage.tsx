@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Copy, Plus, Star, Trash2, Maximize2, Check, Play, Pause } from 'lucide-react';
 import SwipeResultsProjection, { QUADRANTE_META, type SwipeQuadrante } from '@/components/swipe/SwipeResultsProjection';
 import SwipeChapterEditor from '@/components/swipe/SwipeChapterEditor';
-import { TEAL, EstadoPill } from '@/components/swipe/swipeColors';
+import { TEAL, EstadoPill } from '@/lib/toolColors';
 
 interface SesionRow { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulosCount: number }
 interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number; ideaThumbnails: string[]; pctAprobacion?: number }

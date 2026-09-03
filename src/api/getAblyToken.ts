@@ -23,6 +23,7 @@ export default createEndpoint({
       if (ch.startsWith('board:')) return true;
       if (ch.startsWith('purchases:')) return true;
       if (ch.startsWith('observation:')) return true;
+      if (ch.startsWith('ejes:')) return true;
       if (ch.startsWith('user:')) return ch === myUserChannel;
       return false;
     });

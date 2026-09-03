@@ -29,6 +29,7 @@ import MigrationRunnerPage from './pages/MigrationRunnerPage';
 import SharpliTestPage from './pages/SharpliTestPage';
 import ObservationRoomPage from './pages/ObservationRoomPage';
 import SwipePage from './pages/SwipePage';
+import EjesPage from './pages/EjesPage';
 
 // ── Error boundary ────────────────────────────────────────────────────────────
 interface EBState { hasError: boolean; message: string }
@@ -78,6 +79,7 @@ export default function App() {
               <Route path="/portal/:token" element={<SupplierPortalPage />} />
               <Route path="/s/:slug" element={<ObservationRoomPage />} />
               <Route path="/swipe/:codigo" element={<SwipePage />} />
+              <Route path="/ejes/:codigo" element={<EjesPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/" element={<Layout />}>
                 <Route index element={null} />
