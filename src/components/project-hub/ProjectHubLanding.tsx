@@ -163,22 +163,22 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
           className="cursor-pointer overflow-hidden rounded-xl"
           style={{ backgroundColor: TEAL_2 }}
         >
-          <div className="flex items-center gap-2.5 px-4 pt-4 pb-1.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/15"><BarChart2 className="w-4 h-4" style={{ color: GOLD }} /></div>
-            <span className="text-base font-semibold text-white">Timelines</span>
+          <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-white/15"><BarChart2 className="w-3.5 h-3.5" style={{ color: GOLD }} /></div>
+            <span className="text-sm font-semibold text-white">Timelines</span>
             {gantt && (
               <span className="ml-auto text-xs text-white/60 font-mono">
                 {fmtDate(gantt.rangeStart.toISOString())} — {fmtDate(gantt.rangeEnd.toISOString())} · {gantt.segments.length} fases
               </span>
             )}
           </div>
-          {gantt === undefined && <div className="h-20" />}
-          {gantt === null && <p className="px-4 pb-4 pt-1 text-xs text-white/60">Aún no hay fechas cargadas en el timeline</p>}
+          {gantt === undefined && <div className="h-16" />}
+          {gantt === null && <p className="px-4 pb-3 pt-1 text-xs text-white/60">Aún no hay fechas cargadas en el timeline</p>}
           {gantt && (
-            <div className="px-4 pb-4 pt-2">
+            <div className="px-4 pb-3 pt-1">
               {/* Regla: inicio de cada semana (lunes), alineada con las líneas verticales de cada fila */}
-              <div className="flex items-center gap-3 mb-1.5">
-                <div className="w-40 flex-shrink-0" />
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-36 flex-shrink-0" />
                 <div className="relative flex-1 h-3">
                   {weekTicks.map((t, i) => (
                     <span key={i} className="absolute text-[10px] text-white/50 whitespace-nowrap font-mono"
@@ -188,25 +188,24 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                   ))}
                 </div>
               </div>
-              <div className="flex flex-col gap-2 max-h-[240px] overflow-y-auto">
+              <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto">
                 {gantt.segments.map((seg, i) => {
                   const color = statusColor(seg, now);
                   return (
                     <div key={`${seg.name}-${i}`} className="flex items-center gap-3">
-                      <div className="w-40 flex-shrink-0">
-                        <p className="text-[13px] text-white truncate font-medium" title={seg.name}>{seg.name}</p>
-                        <p className="text-[10px] text-white/50 font-mono">{fmtRange(seg.startDate, seg.endDate)}</p>
-                      </div>
-                      <div className="relative flex-1 h-6">
+                      <p className="w-36 flex-shrink-0 text-[12px] text-white truncate" title={seg.name}>
+                        {seg.name} <span className="text-white/40 font-mono text-[10px]">· {fmtRange(seg.startDate, seg.endDate)}</span>
+                      </p>
+                      <div className="relative flex-1 h-4">
                         {weekTicks.map((t, i2) => (
                           <div key={i2} className="absolute top-0 bottom-0 w-px bg-white/10" style={{ left: `${t.pct}%` }} />
                         ))}
                         {todayPct !== null && (
                           <div className="absolute top-0 bottom-0 w-px border-l border-dashed z-10" style={{ left: `${todayPct}%`, borderColor: GOLD }} />
                         )}
-                        <div className="absolute top-1/2 -translate-y-1/2 h-2.5 w-full rounded-full bg-white/10" />
+                        <div className="absolute top-1/2 -translate-y-1/2 h-2 w-full rounded-full bg-white/10" />
                         <div
-                          className="absolute top-1/2 -translate-y-1/2 h-2.5 rounded-full"
+                          className="absolute top-1/2 -translate-y-1/2 h-2 rounded-full"
                           style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, backgroundColor: color ?? 'rgba(255,255,255,.25)' }}
                         />
                       </div>
@@ -221,21 +220,17 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* ── Reclutamiento ── */}
           <div onClick={() => onOpenTab('reclutamiento')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-            <div className="px-3.5 pt-3 pb-3" style={{ backgroundColor: TEAL }}>
-              <div className="flex items-center gap-2 mb-2.5">
-                <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0 bg-white/20"><Users className="w-3.5 h-3.5 text-white" /></div>
+            <div className="px-3.5 py-2.5" style={{ backgroundColor: TEAL }}>
+              <div className="flex items-center gap-2">
+                <div className="w-[22px] h-[22px] rounded-md flex items-center justify-center flex-shrink-0 bg-white/20"><Users className="w-3 h-3 text-white" /></div>
                 <span className="text-sm font-medium text-white">Reclutamiento</span>
+                {recruitment && <span className="ml-auto text-xl font-semibold font-mono leading-none text-white">{recruitment.totalParticipants}</span>}
               </div>
-              {recruitment ? (
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold font-mono leading-none text-white">{recruitment.totalParticipants}</span>
-                  <span className="text-xs text-white/70">
-                    participantes · {recruitment.boards.reduce((n, b) => n + b.groups.length, 0)} grupos
-                    {recruitment.boards.length > 1 ? ` · ${recruitment.boards.length} tableros` : ''}
-                  </span>
-                </div>
-              ) : (
-                <div className="h-8" />
+              {recruitment && (
+                <p className="text-[11px] text-white/70 mt-1">
+                  participantes · {recruitment.boards.reduce((n, b) => n + b.groups.length, 0)} grupos
+                  {recruitment.boards.length > 1 ? ` · ${recruitment.boards.length} tableros` : ''}
+                </p>
               )}
             </div>
             {recruitment && recruitment.boards.length > 1 && (
@@ -278,19 +273,13 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
 
           {/* ── Calendario ── */}
           <div onClick={() => onOpenActividades('calendarios')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-            <div className="px-3.5 pt-3 pb-3" style={{ backgroundColor: INFO }}>
-              <div className="flex items-center gap-2 mb-2.5">
-                <div className="w-[26px] h-[26px] rounded-lg flex items-center justify-center flex-shrink-0 bg-white/20"><CalendarDays className="w-3.5 h-3.5 text-white" /></div>
+            <div className="px-3.5 py-2.5" style={{ backgroundColor: INFO }}>
+              <div className="flex items-center gap-2">
+                <div className="w-[22px] h-[22px] rounded-md flex items-center justify-center flex-shrink-0 bg-white/20"><CalendarDays className="w-3 h-3 text-white" /></div>
                 <span className="text-sm font-medium text-white">Calendario</span>
+                {events && <span className="ml-auto text-xl font-semibold font-mono leading-none text-white">{events.length}</span>}
               </div>
-              {events ? (
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold font-mono leading-none text-white">{events.length}</span>
-                  <span className="text-xs text-white/70">sesiones</span>
-                </div>
-              ) : (
-                <div className="h-8" />
-              )}
+              {events && <p className="text-[11px] text-white/70 mt-1">sesiones</p>}
             </div>
             {events && events.length > 0 && (
               <div className="max-h-[150px] overflow-y-auto px-3.5">
