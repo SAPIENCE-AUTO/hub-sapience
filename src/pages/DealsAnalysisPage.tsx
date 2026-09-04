@@ -196,13 +196,22 @@ export default function DealsAnalysisPage() {
     setInput('');
     setLoading(true);
     try {
-      const res = await chatDealsAnalysis({
-        messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
-      });
+      // El shim no expone abort/timeout propio — sin este race, un colgado
+      // real (backend caído, red muerta) deja "Analizando..." para siempre
+      // sin ninguna señal. La llamada de fondo puede seguir corriendo, pero
+      // la UI deja de esperarla y le da al usuario algo que hacer.
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('La respuesta tardó demasiado. Intenta de nuevo.')), 45_000)
+      );
+      const res = await Promise.race([
+        chatDealsAnalysis({ messages: nextMessages.map(m => ({ role: m.role, content: m.content })) }),
+        timeout,
+      ]);
       setMessages(prev => [...prev, { role: 'assistant', content: res.text, table: res.table, html: res.html }]);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al analizar');
-      setMessages(prev => [...prev, { role: 'assistant', content: 'No pude generar el análisis. Intenta de nuevo.' }]);
+      const message = err instanceof Error ? err.message : 'Error al analizar';
+      toast.error(message);
+      setMessages(prev => [...prev, { role: 'assistant', content: message }]);
     } finally {
       setLoading(false);
     }
