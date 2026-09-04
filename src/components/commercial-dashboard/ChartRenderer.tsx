@@ -32,8 +32,13 @@ export default function ChartRenderer({ widget, deals, dateRef }: Props) {
   const [drillDown, setDrillDown] = useState<{ title: string; deals: Deal[] } | null>(null);
 
   function handleBarClick(entry: any) {
-    if (!entry?.activePayload?.[0]) return;
-    const label = entry.activePayload[0].payload?.label;
+    // Recharts v3 quitó "activePayload" del objeto que llega al onClick del
+    // contenedor (BarChart/LineChart) — el evento ahora trae "activeLabel"
+    // directo (la categoría del eje X), que es exactamente lo que ya
+    // buscábamos adentro de activePayload[0].payload.label. Sin este cambio
+    // el guard de abajo siempre truena y el drill-down nunca abre.
+    const label = entry?.activeLabel;
+    if (label === undefined) return;
     const point = data.find(d => d.label === label);
     if (point?.deals?.length) {
       setDrillDown({ title: `${widget.name} — ${label}`, deals: point.deals });
