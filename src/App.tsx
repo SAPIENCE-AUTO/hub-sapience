@@ -16,6 +16,7 @@ import ProjectsPage from './pages/ProjectsPage';
 import ProjectHubPage from './pages/ProjectHubPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import CommercialDashboardPage from './pages/CommercialDashboardPage';
+import DealsAnalysisPage from './pages/DealsAnalysisPage';
 import ProjectCostsPage from './pages/ProjectCostsPage';
 import ChatPage from './pages/ChatPage';
 import SharedViewPage from './pages/SharedViewPage';
@@ -94,6 +95,7 @@ export default function App() {
 
                 <Route path="comercial/crm"       element={<CommercialPage />} />
                 <Route path="comercial/dashboard" element={<CommercialDashboardPage />} />
+                <Route path="comercial/analisis-ia" element={<DealsAnalysisPage />} />
                 <Route path="comercial/cotizaciones" element={<CotizacionesPage />} />
 
                 <Route path="operacion/proyectos"              element={<ProjectsPage />} />

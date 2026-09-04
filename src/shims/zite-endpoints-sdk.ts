@@ -148,6 +148,7 @@ export const backfillExchangeRates = (input?: any): Promise<any> => call('backfi
 export const bulkDeletePayments = (input?: any): Promise<any> => call('bulkDeletePayments', input);
 export const bulkUpdatePayments = (input?: any): Promise<any> => call('bulkUpdatePayments', input);
 export const cancelPurchaseOrder = (input?: any): Promise<any> => call('cancelPurchaseOrder', input);
+export const chatDealsAnalysis = (input?: any): Promise<any> => call('chatDealsAnalysis', input);
 export const checkImageWeb = (input?: any): Promise<any> => call('checkImageWeb', input);
 export const checkNewSubmissions = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('checkNewSubmissions', input);
 export const cleanupDuplicateCellValues = (input?: any): Promise<any> => call('cleanupDuplicateCellValues', input);

@@ -8,7 +8,7 @@ import {
   FolderKanban, ChevronDown, ChevronRight, Search,
   Plus, X, TrendingUp, Building2, DollarSign, LayoutGrid,
   FileText, ShoppingCart, Truck, FileSpreadsheet,
-  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, FlaskConical, ListTodo,
+  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, FlaskConical, ListTodo, Sparkles,
 } from 'lucide-react';
 import { useProject } from '../context/ProjectContext';
 import { useAuth } from 'zite-auth-sdk';
@@ -97,6 +97,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/comercial/crm',          icon: Briefcase,       label: 'CRM / Deals' },
       { to: '/comercial/dashboard',    icon: BarChart3,       label: 'Dashboard comercial' },
       { to: '/comercial/cotizaciones', icon: FileSpreadsheet, label: 'Cotizaciones' },
+      { to: '/comercial/analisis-ia',  icon: Sparkles,        label: 'Análisis IA', roles: ['Owner'] },
     ],
   },
   {
@@ -212,7 +213,9 @@ export function canSeeItem(item: NavItem, user?: UserWithAccess) {
       (user as { purchaseLevel?: string }).purchaseLevel === 'Socios' ||
       (user as { purchaseLevel?: string }).purchaseLevel === 'Finanzas';
   }
-  return true;
+  // Lista de roles real (no un símbolo mágico) — ítem restringido a esos
+  // roles exactos, ej. roles: ['Owner'] para algo de un solo dueño.
+  return !!user && item.roles.includes(user.role ?? '');
 }
 
 function getSectionForPath(path: string): string | null {
