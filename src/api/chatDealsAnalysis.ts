@@ -53,9 +53,18 @@ function yearOf(dateStr: unknown): number | null {
 // "exchangeRate" propio (fijado al momento del deal), con 20 de respaldo
 // si el deal no tiene exchangeRate capturado. Se reutiliza tal cual para
 // que el total consolidado de este módulo no invente su propio criterio.
+//
+// Confirmado en vivo (Danone 2026 saliendo en ~$18.7M cuando lo real son
+// ~$5M): un puñado de deals no tienen "currency" capturado en absoluto
+// (campo vacío, ni "MXN" ni "USD"). Antes, cualquier cosa que no empezara
+// con "MXN" caía al branch de conversión con el respaldo ×20 — un deal de
+// $690,000 sin moneda se convertía en $13,800,000. La moneda por default
+// de la agencia es MXN (ver DATOS en el prompt de sistema), así que sin
+// moneda registrada se asume MXN, no una divisa extranjera a convertir.
 function toMxn(currency: unknown, clientPrice: unknown, exchangeRate: unknown): number {
   const price = Number(clientPrice) || 0;
-  if (String(currency).startsWith('MXN')) return price;
+  const cur = typeof currency === 'string' ? currency : '';
+  if (!cur || cur.startsWith('MXN')) return price;
   const rate = Number(exchangeRate);
   return price * (Number.isFinite(rate) && rate > 0 ? rate : 20);
 }
@@ -103,7 +112,7 @@ function buildRevenueSummary(deals: any[]): string {
     const currency = d.currency || '(sin moneda)';
     const price = Number(d.clientPrice) || 0;
     const cost = Number(d.quotedCost) || 0;
-    const priceMxn = toMxn(currency, d.clientPrice, d.exchangeRate);
+    const priceMxn = toMxn(d.currency, d.clientPrice, d.exchangeRate);
 
     bump(byCurrency, `${clientName}|${year}|${bucket}|${currency}`, { client: clientName, year, bucket, currency }, price, cost);
     bump(totalMxn, `${clientName}|${year}|${bucket}`, { client: clientName, year, bucket, currency: 'TODAS (convertido a MXN)' }, priceMxn, cost);
