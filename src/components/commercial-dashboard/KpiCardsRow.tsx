@@ -6,7 +6,7 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { fmtMetric } from './RankingTableWidget';
 
 const KPI_DEFS: { metric: MetricKey; label: string; chartVar: string; wonOnly?: boolean }[] = [
-  { metric: 'revenue', label: 'Revenue', chartVar: '--chart-1', wonOnly: true },
+  { metric: 'revenue', label: 'Revenue', chartVar: '--chart-1' },
   { metric: 'dealCount', label: 'Deals ganados', chartVar: '--chart-2', wonOnly: true },
   { metric: 'avgTicket', label: 'Ticket promedio', chartVar: '--chart-3' },
   { metric: 'conversionRate', label: 'Conversión', chartVar: '--chart-4' },

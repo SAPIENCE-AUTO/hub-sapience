@@ -110,7 +110,7 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   compareMode: 'previous',
 };
 
-export const DEFAULT_DATE_REFERENCE = 'proposalDate' as const;
+export const DEFAULT_DATE_REFERENCE = 'approvalDate' as const;
 
 export const DEFAULT_WIDGETS: WidgetConfig[] = [
   {

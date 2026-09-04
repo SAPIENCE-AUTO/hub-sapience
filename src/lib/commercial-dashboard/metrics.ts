@@ -68,14 +68,26 @@ export function calcConversionRate(deals: Deal[]): number {
   return base.filter(d => d.phase === 'Ganado').length / base.length;
 }
 
+/**
+ * Money metrics only make sense for realized business: a deal still in Prospecto/
+ * Cotización/Negociación hasn't earned any revenue yet, and Perdido never will.
+ * dealCount and conversionRate need the full funnel, so they're excluded.
+ */
+const WON_ONLY_METRICS: ReadonlySet<MetricKey> = new Set(['revenue', 'cost', 'margin', 'avgTicket']);
+
+function scopeToMetric(deals: Deal[], metric: MetricKey): Deal[] {
+  return WON_ONLY_METRICS.has(metric) ? deals.filter(d => d.phase === 'Ganado') : deals;
+}
+
 export function calcMetric(deals: Deal[], metric: MetricKey): number {
+  const scoped = scopeToMetric(deals, metric);
   switch (metric) {
-    case 'revenue': return calcRevenue(deals);
-    case 'cost': return calcCost(deals);
-    case 'margin': return calcMargin(deals);
-    case 'avgTicket': return calcAvgTicket(deals);
-    case 'dealCount': return deals.length;
-    case 'conversionRate': return calcConversionRate(deals);
+    case 'revenue': return calcRevenue(scoped);
+    case 'cost': return calcCost(scoped);
+    case 'margin': return calcMargin(scoped);
+    case 'avgTicket': return calcAvgTicket(scoped);
+    case 'dealCount': return scoped.length;
+    case 'conversionRate': return calcConversionRate(scoped);
     default: return 0;
   }
 }
@@ -95,16 +107,17 @@ export function filterDealsByCurrency(deals: Deal[], currency?: 'all' | 'MXN' | 
 export function calcMetricInCurrency(deals: Deal[], metric: MetricKey, currency?: 'all' | 'MXN' | 'USD'): number {
   if (!currency || currency === 'all') return calcMetric(deals, metric);
   // Specific currency — use raw amounts without exchange-rate conversion
+  const scoped = scopeToMetric(deals, metric);
   switch (metric) {
-    case 'revenue': return deals.reduce((s, d) => s + (d.clientPrice ?? 0), 0);
-    case 'cost': return deals.reduce((s, d) => s + (d.quotedCost ?? 0), 0);
-    case 'margin': return deals.reduce((s, d) => s + (d.clientPrice ?? 0) - (d.quotedCost ?? 0), 0);
+    case 'revenue': return scoped.reduce((s, d) => s + (d.clientPrice ?? 0), 0);
+    case 'cost': return scoped.reduce((s, d) => s + (d.quotedCost ?? 0), 0);
+    case 'margin': return scoped.reduce((s, d) => s + (d.clientPrice ?? 0) - (d.quotedCost ?? 0), 0);
     case 'avgTicket': {
-      const w = deals.filter(d => (d.clientPrice ?? 0) > 0);
+      const w = scoped.filter(d => (d.clientPrice ?? 0) > 0);
       return w.length === 0 ? 0 : w.reduce((s, d) => s + (d.clientPrice ?? 0), 0) / w.length;
     }
-    case 'dealCount': return deals.length;
-    case 'conversionRate': return calcConversionRate(deals);
+    case 'dealCount': return scoped.length;
+    case 'conversionRate': return calcConversionRate(scoped);
     default: return 0;
   }
 }
