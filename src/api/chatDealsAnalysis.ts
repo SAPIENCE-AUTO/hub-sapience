@@ -112,16 +112,27 @@ export default createEndpoint({
       max_tokens: 16384,
     });
 
-    let parsed: { text?: string; table?: { headers: string[]; rows: string[][] } | null; html?: string | null };
+    let parsed: { text?: string; table?: { headers?: unknown[]; rows?: unknown[][] } | null; html?: string | null };
     try {
       parsed = JSON.parse(completion.choices[0].message.content ?? '{}');
     } catch {
       parsed = { text: 'No se pudo generar el análisis. Intenta reformular la pregunta.', table: null, html: null };
     }
 
+    // El modelo a veces regresa números/booleanos/null crudos en una celda
+    // (ej. una columna de conteo) en vez de string — el outputSchema exige
+    // string estricto y STRICT_OUTPUT truena el endpoint completo en ese
+    // caso (confirmado en vivo: "expected string, received number" en
+    // table.rows[N][1]). Se normaliza aquí en vez de confiar en que el
+    // prompt lo evite siempre.
+    const toStr = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
+    const table = parsed.table
+      ? { headers: (parsed.table.headers ?? []).map(toStr), rows: (parsed.table.rows ?? []).map(row => row.map(toStr)) }
+      : null;
+
     return {
       text: parsed.text ?? 'No se pudo generar el análisis. Intenta reformular la pregunta.',
-      table: parsed.table ?? null,
+      table,
       html: parsed.html ?? null,
     };
   },
