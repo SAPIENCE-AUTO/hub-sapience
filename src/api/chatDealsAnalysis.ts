@@ -56,7 +56,18 @@ Reglas:
 - "text" siempre lleva contenido — nunca lo dejes vacío, aunque también incluyas table/html.
 - "table" solo si el usuario pidió (o claramente se beneficia de) un desglose tabular.
 - "html" solo si el usuario pidió una gráfica/visualización, o la pregunta se presta obviamente a una. Si no aplica, usa null — no fuerces una gráfica en cada respuesta.
-- Cuando generes "html": debe ser un documento HTML COMPLETO y autocontenido (con <!doctype html>), que cargue Chart.js desde este CDN exacto: <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script> — no uses otra librería, otra versión ni otro CDN (esta versión y ruta están verificadas contra cdnjs; cualquier otra puede no existir y dar 404, dejando la gráfica en blanco sin ningún error visible). El gráfico SIEMPRE debe dibujarse en un elemento <canvas> (Chart.js lo hace por defecto) — esto es un requisito técnico del sistema que lo va a mostrar, no solo una preferencia visual. Usa colores planos y legibles, fondo blanco, tamaño responsivo (canvas dentro de un contenedor con width:100%).
+- Cuando generes "html": debe ser un documento HTML COMPLETO y autocontenido (con <!doctype html>), que cargue Chart.js desde este CDN exacto: <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script> — no uses otra librería, otra versión ni otro CDN (esta versión y ruta están verificadas contra cdnjs; cualquier otra puede no existir y dar 404, dejando la gráfica en blanco sin ningún error visible). El gráfico SIEMPRE debe dibujarse en un elemento <canvas> (Chart.js lo hace por defecto) — esto es un requisito técnico del sistema que lo va a mostrar, no solo una preferencia visual.
+
+DISEÑO DE LA GRÁFICA — esto no es opcional ni cosmético, la gráfica representa a la marca de Sapience y NUNCA debe verse como un ejemplo default de tutorial:
+- Tipografía: carga Inter de Google Fonts (<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">) y úsala en todo el documento (font-family: 'Inter', sans-serif en el body). Los números de los ejes/leyendas van en JetBrains Mono si quieres distinguir datos de texto (opcional, Inter para todo también es válido).
+- Paleta — usa EXCLUSIVAMENTE estos colores de marca, nunca el azul/rojo/verde default de Chart.js: Teal #0F3D4D, Teal oscuro #0A303D, Gold #F4C025, Info #1795D3, Éxito #257E55, Neutral #5B687B. Para una sola serie usa Teal sólido; para varias series/categorías, rota entre Teal, Gold, Info, Éxito, Neutral en ese orden — nunca un color aleatorio ni el set por default de la librería.
+- Fondo blanco (#ffffff) o gris muy claro (#F7F9FA), nunca transparente ni gris de Chart.js por default.
+- Título del gráfico: usa el plugin de título de Chart.js (plugins.title) con fontSize 16-18, bold, color Teal — nunca dejar la gráfica sin título.
+- Ejes: gridlines sutiles (color rgba(15,61,77,0.08) o similar, casi invisibles) — nunca las líneas grises gruesas por default. Etiquetas de eje en gris neutral (#5B687B), tamaño 12-13px.
+- Barras: bordes redondeados si Chart.js lo soporta (borderRadius: 6 en el dataset), sin borde grueso ni sombra genérica.
+- Leyenda: solo si hay más de una serie/categoría — si es una sola serie, quita la leyenda (plugins.legend.display: false) en vez de mostrar una leyenda de un solo ítem, que se ve redundante.
+- Tamaño: canvas dentro de un contenedor con width:100%, max-width:700px, margin:auto, y padding de al menos 16px alrededor para que no se pegue a los bordes del iframe.
+- Contraste y pulido general: esto debe verse como una pieza de un dashboard de analytics real y cuidado (piensa Stripe, Linear), no como el ejemplo de la página de documentación de Chart.js.
 - Sé específico con números reales calculados de los datos — nunca inventes cifras.`;
 
 export default createEndpoint({
