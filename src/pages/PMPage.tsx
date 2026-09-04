@@ -316,8 +316,18 @@ export default function PMPage({ initialSection = 'timelines' }: { initialSectio
         if (matchesCalGroup) calGroupDynCols.softReload();
         return;
       }
-      if (matchesTaskGroup) taskGroupDynCols.refreshColumns();
-      if (matchesCalGroup) calGroupDynCols.refreshColumns();
+      // 'structure' (grupo creado/borrado, no solo membresía) puede haber
+      // mandado tasks/eventos del grupo a la papelera (deleteBoardColumn.ts
+      // con tableType) — sin este refetch, la lista en memoria seguía
+      // mostrando esas filas como "sin grupo" hasta el siguiente reload.
+      if (matchesTaskGroup) {
+        taskGroupDynCols.refreshColumns();
+        fetchTasksOnly().then(setTasks);
+      }
+      if (matchesCalGroup) {
+        calGroupDynCols.refreshColumns();
+        fetchEventsOnly().then(setEvents);
+      }
     },
     onRecruitmentRowsChanged: async (payload) => {
       console.log('[pm] rows changed via Ably', payload);
