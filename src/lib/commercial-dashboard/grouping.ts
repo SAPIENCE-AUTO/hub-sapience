@@ -1,10 +1,11 @@
 import { Deal, GroupByKey, DateReference } from './types';
 import { PHASE_ORDER } from './constants';
+import { getEffectiveDate } from './filters';
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 function getDateKey(d: Deal, dateRef: DateReference, groupBy: 'month' | 'quarter' | 'year'): string {
-  const dateStr = dateRef === 'approvalDate' ? d.approvalDate : d.proposalDate;
+  const dateStr = getEffectiveDate(d, dateRef);
   if (!dateStr) return 'Sin fecha';
   const [y, m] = dateStr.split('-').map(Number);
   if (groupBy === 'year') return `${y}`;
@@ -13,7 +14,7 @@ function getDateKey(d: Deal, dateRef: DateReference, groupBy: 'month' | 'quarter
 }
 
 function getDateSortKey(d: Deal, dateRef: DateReference): string {
-  return (dateRef === 'approvalDate' ? d.approvalDate : d.proposalDate) ?? '0000-00';
+  return getEffectiveDate(d, dateRef) ?? '0000-00';
 }
 
 export function getGroupKey(d: Deal, groupBy: GroupByKey, dateRef: DateReference): string {
@@ -38,7 +39,7 @@ export function getGroupKey(d: Deal, groupBy: GroupByKey, dateRef: DateReference
 /** Returns just the time unit label without the year (e.g. "Ene" instead of "Ene 2024"). Used for year-comparison charts. */
 export function getGroupKeyStripped(d: Deal, groupBy: GroupByKey, dateRef: DateReference): string {
   if (groupBy === 'month' || groupBy === 'quarter') {
-    const dateStr = dateRef === 'approvalDate' ? d.approvalDate : d.proposalDate;
+    const dateStr = getEffectiveDate(d, dateRef);
     if (!dateStr) return 'Sin fecha';
     const [, m] = dateStr.split('-').map(Number);
     if (groupBy === 'month') return MONTH_NAMES[m - 1];
@@ -92,7 +93,7 @@ export function fillTimeSeries(
   dateRef: DateReference
 ): Map<string, Deal[]> {
   const dates = deals
-    .map(d => (dateRef === 'approvalDate' ? d.approvalDate : d.proposalDate))
+    .map(d => getEffectiveDate(d, dateRef))
     .filter((s): s is string => !!s)
     .sort();
   if (dates.length === 0) return data;

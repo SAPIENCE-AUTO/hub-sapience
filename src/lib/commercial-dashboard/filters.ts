@@ -61,12 +61,25 @@ export function getPreviousPeriod(period: DashboardPeriod, compareMode: KpiCompa
   return null;
 }
 
+/**
+ * Effective date for a deal under a given reference: prefers the selected field
+ * (approvalDate/proposalDate), falling back to the other one when it's missing.
+ * Without this, deals that only have one of the two dates populated (e.g. approved
+ * directly without ever capturing a proposal date) silently disappear from any
+ * date-filtered view or time-series grouping.
+ */
+export function getEffectiveDate(d: Deal, dateRef: DateReference): string | undefined {
+  const primary = dateRef === 'approvalDate' ? d.approvalDate : d.proposalDate;
+  const fallback = dateRef === 'approvalDate' ? d.proposalDate : d.approvalDate;
+  return primary ?? fallback ?? undefined;
+}
+
 export function applyFilters(deals: Deal[], filters: DashboardFilters, dateRef: DateReference): Deal[] {
   const { startDate, endDate } = getPeriodRange(filters.period);
 
   return deals.filter(d => {
     if (startDate || endDate) {
-      const dateStr = dateRef === 'approvalDate' ? d.approvalDate : d.proposalDate;
+      const dateStr = getEffectiveDate(d, dateRef);
       if (!dateStr) return false;
       if (startDate && dateStr < startDate) return false;
       if (endDate && dateStr > endDate) return false;

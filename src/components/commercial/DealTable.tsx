@@ -104,7 +104,7 @@ function DealRow({ deal, onDealClick, onApprove }: {
       <td className="px-3 py-2.5 text-muted-foreground max-w-32 truncate">{deal.tematica || '—'}</td>
       <td className="px-3 py-2.5 whitespace-nowrap">{fmtMoney(deal.quotedCost, sym)}</td>
       <td className="px-3 py-2.5 font-medium whitespace-nowrap">{fmtMoney(deal.clientPrice, sym)}</td>
-      <td className="px-3 py-2.5 text-muted-foreground text-xs whitespace-nowrap">{deal.currency?.split(' ')[0] || '—'}</td>
+      <td className="px-3 py-2.5 text-muted-foreground text-xs whitespace-nowrap">{(deal.currency ?? 'MXN 🇲🇽').split(' ')[0]}</td>
       <td className="px-3 py-2.5 text-muted-foreground text-xs whitespace-nowrap">
         {deal.proposalDate ? formatLocalDate(deal.proposalDate) : '—'}
       </td>
