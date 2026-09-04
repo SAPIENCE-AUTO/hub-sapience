@@ -95,6 +95,7 @@ export function calcMetric(deals: Deal[], metric: MetricKey): number {
 /** Filter deals by a widget-level currency preference */
 export function filterDealsByCurrency(deals: Deal[], currency?: 'all' | 'MXN' | 'USD'): Deal[] {
   if (!currency || currency === 'all') return deals;
+  if (currency === 'MXN') return deals.filter(d => !d.currency || d.currency.startsWith('MXN'));
   return deals.filter(d => d.currency?.startsWith(currency));
 }
 
