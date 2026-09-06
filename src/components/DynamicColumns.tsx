@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback, useContext, createContext, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from 'zite-auth-sdk';
+import { uploadFile } from 'zite-file-upload-sdk';
 import { getTeamMembers, GetTeamMembersOutputType } from 'zite-endpoints-sdk';
 
 type TeamMember = GetTeamMembersOutputType['members'][0];
@@ -43,7 +44,7 @@ import {
   ChevronDownCircle, User, Mail, Phone, Paperclip, MousePointerClick,
   Square as LucideIcon, ArrowLeftFromLine, ArrowRightFromLine, GripVertical,
   Pipette, Calculator, MapPin, ExternalLink, GaugeCircle, Highlighter, Copy, Link2, Search,
-  CheckCircle2, AlertTriangle,
+  CheckCircle2, AlertTriangle, Upload,
 } from 'lucide-react';
 import { executeButtonAction, getStreetViewUrl, checkImageWeb } from 'zite-endpoints-sdk';
 import { ColumnFilterPopover } from './ColumnFilterPopover';
@@ -1275,10 +1276,21 @@ function MapsDialog({ address, mapsUrl }: { address: string; mapsUrl: string }) 
 }
 
 // ── File type helpers ─────────────────────────────────────────────────────────
+// "heic"/"heif" — formato nativo de cámara de iPhone — confirmado en el
+// histórico de Fillout: 200+ fotos de participantes llegan así. Ningún
+// navegador excepto Safari puede decodificarlo en un <img> normal, por eso
+// FilePreviewDialog las convierte a JPEG en el navegador antes de mostrarlas
+// (ver isHeic/handleHeicPreview más abajo) en vez de solo reclasificarlas.
+function isHeic(url: string): boolean {
+  const path = url.split('?')[0].split('#')[0].toLowerCase();
+  const ext = path.split('.').pop() ?? '';
+  return ext === 'heic' || ext === 'heif';
+}
+
 function getFileType(url: string): 'image' | 'video' | 'pdf' | 'other' {
   const path = url.split('?')[0].split('#')[0].toLowerCase();
   const ext = path.split('.').pop() ?? '';
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) return 'image';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'heic', 'heif'].includes(ext)) return 'image';
   if (['mp4', 'mov', 'webm', 'ogg'].includes(ext)) return 'video';
   if (ext === 'pdf') return 'pdf';
   return 'other';
@@ -1308,6 +1320,44 @@ function FilePreviewDialog({ open, onOpenChange, url, fileName }: {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<WebCheckResult | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
+
+  // HEIC no lo decodifica ningún navegador salvo Safari — se convierte a JPEG
+  // en el navegador (heic2any, WASM) antes de mostrarlo. displayUrl es la URL
+  // original para todo lo demás, o el blob ya convertido para HEIC.
+  const [heicUrl, setHeicUrl] = useState<string | null>(null);
+  const [heicError, setHeicError] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const needsHeicConvert = open && fileType === 'image' && isHeic(url);
+
+  useEffect(() => {
+    if (!needsHeicConvert) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setConverting(true);
+    setHeicError(false);
+    (async () => {
+      try {
+        const heic2any = (await import('heic2any')).default;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('fetch falló');
+        const blob = await resp.blob();
+        const converted = await heic2any({ blob, toType: 'image/jpeg', quality: 0.9 });
+        const jpegBlob = Array.isArray(converted) ? converted[0] : converted;
+        objectUrl = URL.createObjectURL(jpegBlob);
+        if (!cancelled) setHeicUrl(objectUrl);
+      } catch {
+        if (!cancelled) setHeicError(true);
+      } finally {
+        if (!cancelled) setConverting(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [needsHeicConvert, url]);
+
+  const displayUrl = needsHeicConvert ? heicUrl : url;
 
   const handleCheck = async () => {
     if (checking) return;
@@ -1395,12 +1445,28 @@ function FilePreviewDialog({ open, onOpenChange, url, fileName }: {
           </div>
         </DialogHeader>
         <div className="flex items-center justify-center bg-muted/20 overflow-auto p-4" style={{ minHeight: 300, maxHeight: '80vh' }}>
-          {fileType === 'image' && (
+          {fileType === 'image' && needsHeicConvert && converting && (
+            <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Convirtiendo foto HEIC…
+            </div>
+          )}
+          {fileType === 'image' && needsHeicConvert && !converting && heicError && (
+            <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground text-center max-w-sm">
+              <AlertTriangle className="w-5 h-5" />
+              No se pudo convertir esta foto (formato HEIC de iPhone).
+              <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                Descargar el archivo original
+              </a>
+            </div>
+          )}
+          {fileType === 'image' && displayUrl && !converting && !heicError && (
             <img
-              src={url}
+              src={displayUrl}
               alt={title}
               className="max-w-full object-contain rounded-md shadow-sm"
               style={{ maxHeight: '75vh' }}
+              onError={needsHeicConvert ? () => setHeicError(true) : undefined}
             />
           )}
           {fileType === 'video' && (
@@ -1436,8 +1502,27 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
   const [tempVal, setTempVal] = useState('');
   const [suggActiveIdx, setSuggActiveIdx] = useState(-1);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const type = col.columnType ?? 'Texto';
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // A pedido explícito: antes solo se podía pegar una URL a mano en columnas
+  // "Archivo" — la única forma real de meter una foto era que llegara vía
+  // Fillout. Ahora también se puede subir un archivo propio (mismo endpoint
+  // /api/upload y Supabase Storage que ya usan Gastos/OCs/Documentos).
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const { fileUrl } = await uploadFile({ data: file, filename: file.name, folder: 'recruitment' });
+      onSave({ fileUrl });
+      setEditing(false);
+    } catch {
+      toast.error('Error al subir el archivo');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     if (editing && type === 'Fecha') {
@@ -1532,6 +1617,38 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
           }}
           className="h-7 w-full min-w-0 text-xs"
         />
+        {type === 'Archivo' && (
+          <>
+            {pos && createPortal(
+              <button
+                type="button"
+                // onMouseDown (no onClick) para que dispare antes del onBlur
+                // del Input de arriba — si no, el blur cierra la edición
+                // (commit + setEditing(false)) antes de que el click llegue a
+                // abrir el selector de archivos.
+                onMouseDown={e => { e.preventDefault(); if (!uploading) fileInputRef.current?.click(); }}
+                disabled={uploading}
+                title="Subir un archivo propio"
+                style={{ position: 'fixed', top: pos.top - 24, left: pos.left + pos.width - 20, zIndex: 9999 }}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-50 bg-background rounded p-0.5"
+              >
+                {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              </button>,
+              document.body
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*,.pdf,.heic,.heif"
+              className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) handleFileUpload(file);
+              }}
+            />
+          </>
+        )}
         {filteredSuggs.length > 0 && pos && createPortal(
           <div
             style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}

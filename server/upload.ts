@@ -23,6 +23,11 @@ const MAX_SIZE = 50 * 1024 * 1024;
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  // Formato nativo de cámara de iPhone — rechazarlo aquí bloqueaba la subida
+  // directa de fotos de participantes antes de siquiera llegar al problema
+  // de que el navegador no las puede previsualizar (ver DynamicColumns.tsx,
+  // FilePreviewDialog: se convierten a JPEG del lado del cliente al verlas).
+  'image/heic', 'image/heif',
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
