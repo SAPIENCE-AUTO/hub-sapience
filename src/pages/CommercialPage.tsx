@@ -1,17 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from 'zite-auth-sdk';
 import { getDeals, GetDealsOutputType, saveDeal } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { LayoutGrid, Table2, Plus, TrendingUp, Search, X, ChevronDown, CalendarRange, Check } from 'lucide-react';
+import { LayoutGrid, Table2, Plus, TrendingUp, Search, X, ChevronDown, CalendarRange, Check, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import DealKanban from '../components/commercial/DealKanban';
 import DealTable from '../components/commercial/DealTable';
 import DealDetailSheet from '../components/commercial/DealDetailSheet';
 import { PHASE_COLOR_MAP, PHASES, CURRENCIES } from '../components/commercial/dealUtils';
+import { exportDealsExcel } from '../lib/exportDealsExcel';
+
+// Exclusivo para Sergio, a su pedido explícito — no es un rol, es una
+// excepción puntual para esta sola persona (mismo patrón que
+// TOOLS_ALLOWED_EMAILS en ProjectHubPage.tsx). Todo lo que exporta ya lo
+// puede ver este usuario en pantalla (getDeals no cambia), así que basta
+// con ocultar el botón en el front — no hay un endpoint nuevo que proteger.
+const EXPORT_EXCEL_ALLOWED_EMAILS = ['sergio@sapience.com.mx'];
 
 
 type Deal = GetDealsOutputType['deals'][0];
@@ -19,6 +28,9 @@ type Deal = GetDealsOutputType['deals'][0];
 const emptyDeal: Deal = { id: '', dealName: undefined, phase: 'Prospecto', client: undefined, projectType: undefined, tematica: undefined, owner: undefined, proposalDate: undefined, approvalDate: undefined, currency: 'MXN 🇲🇽', clientPrice: undefined, taxesPct: undefined, retencionesPct: undefined, quotedCost: undefined, notes: undefined };
 
 export default function CommercialPage() {
+  const { user } = useAuth();
+  const canExportExcel = !!(user?.email && EXPORT_EXCEL_ALLOWED_EMAILS.includes(user.email));
+  const [exporting, setExporting] = useState(false);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'kanban' | 'table'>('table');
@@ -103,6 +115,18 @@ export default function CommercialPage() {
     );
   };
 
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const count = await exportDealsExcel(filteredDeals);
+      toast.success(`Se exportaron ${count} deal${count === 1 ? '' : 's'} a Excel`);
+    } catch {
+      toast.error('Error al exportar a Excel');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
@@ -120,6 +144,12 @@ export default function CommercialPage() {
               <Table2 className="w-4 h-4" /> Tabla
             </Button>
           </div>
+          {canExportExcel && (
+            <Button variant="outline" onClick={handleExportExcel} disabled={exporting} className="gap-2">
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+              Exportar a Excel
+            </Button>
+          )}
           <Button onClick={() => setSelectedDeal({ ...emptyDeal })} className="gap-2">
             <Plus className="w-4 h-4" /> Nuevo Deal
           </Button>
