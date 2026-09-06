@@ -1304,6 +1304,82 @@ function getFileLabel(url: string): string {
   return '🔗 Ver archivo';
 }
 
+// Cuando una pregunta de Fillout de "subir varios archivos" trae 2+ fotos,
+// la ingesta (syncFilloutResponses.ts / filloutNativeWebhook.ts /
+// checkNewSubmissions.ts) las guarda como JSON de array en vez del string
+// "url1, url2" de antes (que el visor no podía separar). Con 1 solo archivo
+// se sigue guardando como string plano, sin cambios — por eso el check es
+// "empieza con [ y parsea a un array de 2+ strings", nunca confundible con
+// una URL real.
+function parseMultiFileUrls(raw: string): string[] | null {
+  const s = raw.trim();
+  if (!s.startsWith('[')) return null;
+  try {
+    const parsed = JSON.parse(s);
+    if (Array.isArray(parsed) && parsed.length > 1 && parsed.every((v): v is string => typeof v === 'string' && v.length > 0)) {
+      return parsed;
+    }
+  } catch { /* no era JSON — se trata como URL normal */ }
+  return null;
+}
+
+function MultiFileCell({ urls, onEdit }: { urls: string[]; onEdit: () => void }) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  return (
+    <div className="h-full min-w-0 flex items-center gap-1.5 px-1 overflow-hidden group/archivo">
+      <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto">
+        {urls.map((u, i) => {
+          const t = getFileType(u);
+          const icon = t === 'image' ? '🖼' : t === 'video' ? '🎬' : t === 'pdf' ? '📄' : '🔗';
+          // Igual que la celda de un solo archivo: solo image/video/pdf abren
+          // el preview dialog — 'other' (sin extensión reconocible) va a un
+          // link directo, para nunca abrir un dialog en blanco.
+          if (t === 'other') {
+            return (
+              <a
+                key={i}
+                href={u}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="text-primary hover:underline text-xs flex-shrink-0"
+                title={u}
+              >
+                {icon} {i + 1}
+              </a>
+            );
+          }
+          return (
+            <button
+              key={i}
+              onClick={e => { e.stopPropagation(); setOpenIndex(i); }}
+              className="text-primary hover:underline text-xs flex-shrink-0"
+              title={u}
+            >
+              {icon} {i + 1}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        onClick={e => { e.stopPropagation(); onEdit(); }}
+        className="flex-shrink-0 opacity-0 group-hover/archivo:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded"
+        title="Editar"
+      >
+        <Pencil className="w-3 h-3" />
+      </button>
+      {openIndex !== null && (
+        <FilePreviewDialog
+          open={openIndex !== null}
+          onOpenChange={o => { if (!o) setOpenIndex(null); }}
+          url={urls[openIndex]}
+          fileName={`Archivo ${openIndex + 1} de ${urls.length}`}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── File preview dialog ───────────────────────────────────────────────────────
 type WebCheckResult = {
   pages: { url: string; title?: string }[];
@@ -1695,6 +1771,10 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
 
   if (type === 'Archivo') {
     const url = value?.fileUrl ?? value?.textValue ?? '';
+    const multiUrls = url ? parseMultiFileUrls(url) : null;
+    if (multiUrls) {
+      return <MultiFileCell urls={multiUrls} onEdit={() => { setTempVal(url); setEditing(true); }} />;
+    }
     if (url) {
       const fType = getFileType(url);
       const canPreview = fType !== 'other';

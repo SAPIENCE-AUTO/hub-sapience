@@ -47,7 +47,15 @@ const toText = (rawVal: unknown): string => {
   if (typeof rawVal === 'number' || typeof rawVal === 'boolean') return String(rawVal);
   if (Array.isArray(rawVal)) {
     if (rawVal.length > 0 && typeof rawVal[0] === 'object' && rawVal[0] !== null && 'url' in rawVal[0]) {
-      return rawVal.map((f: any) => f.url ?? f.filename ?? '').filter(Boolean).join(', ');
+      // Antes se unían con ", " sin importar cuántos archivos trajera la
+      // pregunta — una columna "Archivo" solo sabe mostrar UNA url, así que
+      // con 2+ fotos el visor recibía "url1, url2" como si fuera una sola
+      // (imagen rota / link roto). Con 1 archivo se guarda igual que antes
+      // (string plano, compatible con todo lo que ya lee este campo); con
+      // 2+ se guarda como JSON de array — DynamicColumns.tsx lo detecta y
+      // renderiza cada archivo por separado.
+      const urls = rawVal.map((f: any) => f.url ?? f.filename ?? '').filter(Boolean);
+      return urls.length > 1 ? JSON.stringify(urls) : (urls[0] ?? '');
     }
     return rawVal.map(v => String(v)).filter(Boolean).join(', ');
   }

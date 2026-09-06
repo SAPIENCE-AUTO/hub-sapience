@@ -54,7 +54,11 @@ const toText = (rawVal: unknown): string => {
   if (typeof rawVal === 'number' || typeof rawVal === 'boolean') return String(rawVal);
   if (Array.isArray(rawVal)) {
     if (rawVal.length > 0 && typeof rawVal[0] === 'object' && rawVal[0] !== null && 'url' in rawVal[0]) {
-      return rawVal.map((f: any) => f.url ?? f.filename ?? '').filter(Boolean).join(', ');
+      // Ver comentario gemelo en syncFilloutResponses.ts: 1 archivo = string
+      // plano (compatible con lo existente); 2+ = JSON de array, que
+      // DynamicColumns.tsx detecta y renderiza por separado.
+      const urls = rawVal.map((f: any) => f.url ?? f.filename ?? '').filter(Boolean);
+      return urls.length > 1 ? JSON.stringify(urls) : (urls[0] ?? '');
     }
     return rawVal.map(v => String(v)).filter(Boolean).join(', ');
   }

@@ -93,6 +93,19 @@ export function cellDisplayValue(cell: DynCellValue | undefined, colType: string
   if (colType === 'Checkbox') return cell.booleanValue != null ? (cell.booleanValue ? 'Sí' : 'No') : '';
   if (colType === 'Número' || colType === 'Rating') return cell.numberValue != null ? String(cell.numberValue) : '';
   if (colType === 'Fecha' || colType === 'Datetime') return cell.dateValue ? cell.dateValue.split('T')[0] : '';
+  if (colType === 'Archivo') {
+    // Columna con 2+ archivos (ver DynamicColumns.tsx: parseMultiFileUrls) —
+    // se guarda como JSON de array. Sin este check, un export/orden/búsqueda
+    // mostraría el JSON crudo ("["https://...","https://..."]") en vez de
+    // algo legible.
+    const raw = (cell.fileUrl ?? cell.textValue ?? '').trim();
+    if (raw.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 1) return `${parsed.length} archivos: ${parsed.join(', ')}`;
+      } catch { /* no era JSON — se muestra tal cual abajo */ }
+    }
+  }
   return formatAddressText(cell.textValue);
 }
 
