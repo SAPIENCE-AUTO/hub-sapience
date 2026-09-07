@@ -66,6 +66,10 @@ export interface NavItem {
   icon: LucideIcon;
   label: string;
   roles?: string[];
+  // Aparte de roles: para permisos que viven en purchaseLevel en vez de role
+  // (p.ej. 'Finanzas' — ver canSeeItem, mismo criterio que ya usa
+  // approveExpense.ts). Se evalúa en OR contra roles, no en vez de.
+  purchaseLevels?: string[];
 }
 
 export interface NavSection {
@@ -119,7 +123,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/admin/proveedores', icon: Truck,        label: 'Proveedores' },
       { to: '/admin/pagos',       icon: CreditCard,   label: 'Pagos a proveedores' },
       { to: '/admin/facturas-proveedores', icon: ReceiptText, label: 'Facturas de proveedores' },
-      { to: '/admin/cobranza',    icon: FileText,     label: 'Cobranza' },
+      { to: '/admin/cobranza',    icon: FileText,     label: 'Cobranza', roles: ['Owner'], purchaseLevels: ['Finanzas'] },
       { to: '/admin/gastos',      icon: ReceiptText,  label: 'Comprobación de gastos' },
     ],
   },
@@ -205,17 +209,24 @@ export function canSeeSection(section: NavSection, user?: UserWithAccess) {
 }
 
 export function canSeeItem(item: NavItem, user?: UserWithAccess) {
-  if (!item.roles) return true;
-  if (item.roles.includes('__admin__')) return isAdmin(user);
-  if (item.roles.includes('__settings__')) {
+  if (!item.roles && !item.purchaseLevels) return true;
+  if (item.roles?.includes('__admin__')) return isAdmin(user);
+  if (item.roles?.includes('__settings__')) {
     if (!user) return false;
     return user.role === 'Owner' || user.role === 'Socio' ||
       (user as { purchaseLevel?: string }).purchaseLevel === 'Socios' ||
       (user as { purchaseLevel?: string }).purchaseLevel === 'Finanzas';
   }
+  if (!user) return false;
   // Lista de roles real (no un símbolo mágico) — ítem restringido a esos
   // roles exactos, ej. roles: ['Owner'] para algo de un solo dueño.
-  return !!user && item.roles.includes(user.role ?? '');
+  const roleOk = item.roles ? item.roles.includes(user.role ?? '') : false;
+  // purchaseLevels: para permisos que no viven en role (p.ej. 'Finanzas' —
+  // Cobranza es Owner O Finanzas, no algo expresable solo con roles).
+  const levelOk = item.purchaseLevels
+    ? item.purchaseLevels.includes((user as { purchaseLevel?: string }).purchaseLevel ?? '')
+    : false;
+  return roleOk || levelOk;
 }
 
 function getSectionForPath(path: string): string | null {

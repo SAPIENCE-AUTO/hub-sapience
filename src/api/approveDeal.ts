@@ -111,6 +111,20 @@ export default createEndpoint({
         },
       });
       collectionProcessId = collectionProcess.id;
+
+      // collection_audit_log vive fuera del ORM (tabla nueva, ver
+      // server/scripts/add-cobranza-tables.ts) — insert crudo, mismo patrón
+      // que Ejes/Prework para sus propias tablas.
+      await pool.query(
+        `insert into collection_audit_log (collection_process_id, action, user_email, user_name, project_code)
+         values ($1, 'Creado', $2, $3, $4)`,
+        [
+          collectionProcessId,
+          context.user!.email,
+          [context.user!.firstName, context.user!.lastName].filter(Boolean).join(' ') || context.user!.email,
+          projectCode ?? null,
+        ],
+      );
     } else {
       // ── 4b. Update deal (phase, approvalDate, quotedCost only) ───────────────
       await Deals.update({

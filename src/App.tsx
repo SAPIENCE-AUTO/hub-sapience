@@ -17,6 +17,7 @@ import ProjectHubPage from './pages/ProjectHubPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import CommercialDashboardPage from './pages/CommercialDashboardPage';
 import DealsAnalysisPage from './pages/DealsAnalysisPage';
+import CobranzaPage from './pages/CobranzaPage';
 import ProjectCostsPage from './pages/ProjectCostsPage';
 import ChatPage from './pages/ChatPage';
 import SharedViewPage from './pages/SharedViewPage';
@@ -110,7 +111,7 @@ export default function App() {
                 <Route path="admin/proveedores" element={<SuppliersPage />} />
                 <Route path="admin/pagos"       element={<PaymentsPage />} />
                 <Route path="admin/facturas-proveedores" element={<SupplierInvoicesPage />} />
-                <Route path="admin/cobranza"    element={<PlaceholderPage title="Cobranza" description="Control de facturas emitidas a clientes y seguimiento de cobros pendientes." icon="📋" />} />
+                <Route path="admin/cobranza"    element={<CobranzaPage />} />
                 <Route path="finanzas/cotizaciones" element={<Navigate to="/comercial/cotizaciones" replace />} />
                 <Route path="admin/usuarios"   element={<Navigate to="/configuracion" replace />} />
 
