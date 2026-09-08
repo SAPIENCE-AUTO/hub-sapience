@@ -122,7 +122,21 @@ export default createEndpoint({
   execute: async ({ input, context }) => {
     const { id, oldProjectCode, projectCode, additionalOldCodes, fullName, status, client, tematica, startDate, endDate, description, lider, analistas, moderadores, asistentes, muestra, muestraImagen, instruccionesDeAnalisis, dealVinculado } = input;
     const now = new Date().toISOString();
-    const updateFields: Record<string, any> = { projectCode, fullName, status, client, tematica, startDate, endDate, description };
+    // Cada campo se agrega SOLO si vino en el input — un update parcial (p.ej.
+    // ProjectsPage.tsx editando una sola celda inline) no debe borrar los
+    // demás. Antes este objeto siempre traía las 7 llaves aunque el caller no
+    // las mandara; `undefined` en un valor de `record` se vuelve `NULL` en el
+    // UPDATE (ver unwrapRecord en server/compat/model.ts) — cada edición de
+    // una sola celda machacaba las otras 6 a NULL. Mismo patrón que ya usan
+    // muestra/analistas/etc. justo abajo.
+    const updateFields: Record<string, any> = { projectCode };
+    if (fullName !== undefined) updateFields.fullName = fullName;
+    if (status !== undefined) updateFields.status = status;
+    if (client !== undefined) updateFields.client = client;
+    if (tematica !== undefined) updateFields.tematica = tematica;
+    if (startDate !== undefined) updateFields.startDate = startDate;
+    if (endDate !== undefined) updateFields.endDate = endDate;
+    if (description !== undefined) updateFields.description = description;
     if (muestra !== undefined) updateFields.muestra = muestra;
     if (muestraImagen !== undefined) updateFields.muestraImagen = muestraImagen;
     if (instruccionesDeAnalisis !== undefined) updateFields.instruccionesDeAnalisis = instruccionesDeAnalisis;
