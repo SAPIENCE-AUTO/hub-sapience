@@ -59,6 +59,13 @@ CHECK_EXTRA = {
 EXTRA_COLUMNS = {
     'Tasks': [('deletedAt', 'deleted_at', 'timestamptz', 'datetime'),
               ('deletedBy', 'deleted_by', 'text', 'text')],
+    # Cobranza v2 (sep 2026): el arranque manual de un proceso ("Iniciar
+    # proceso de cobranza") pide días de crédito del cliente para calcular la
+    # fecha tentativa de pago (fecha de factura + días de crédito) — campo que
+    # Zite nunca tuvo porque Collection Processes tampoco existía con este
+    # alcance ahí. La migración sobre la tabla ya existente vive en
+    # server/scripts/add-collection-credit-days.ts (ALTER TABLE, no se ejecuta sola).
+    'CollectionProcesses': [('creditDays', 'credit_days', 'integer', 'number')],
 }
 
 # Índice único agregado directamente en Supabase después de la carga inicial

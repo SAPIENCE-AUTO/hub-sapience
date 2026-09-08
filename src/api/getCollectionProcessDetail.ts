@@ -6,6 +6,16 @@ function firstLinkId(v: unknown): string | undefined {
   return (v as string | undefined) ?? undefined;
 }
 
+// Ver comentario gemelo en getCollectionProcesses.ts.
+function computeEffectiveStatus(status: string | undefined, scheduledPaymentDate: string | undefined): string {
+  if (status === 'Pagado') return 'Pagado';
+  if (scheduledPaymentDate) {
+    const today = new Date().toISOString().split('T')[0];
+    if (scheduledPaymentDate.split('T')[0] < today) return 'Atrasado';
+  }
+  return status ?? 'Al día';
+}
+
 const attachmentSchema = z.object({
   id: z.string(),
   docType: z.string(),
@@ -44,7 +54,9 @@ export default createEndpoint({
     scheduledPaymentDate: z.string().optional(),
     paidAt: z.string().optional(),
     invoiceNumber: z.string().optional(),
+    creditDays: z.number().optional(),
     status: z.string().optional(),
+    effectiveStatus: z.string().optional(),
     notes: z.string().optional(),
     responsibleUserId: z.string().optional(),
     responsibleUserName: z.string().optional(),
@@ -103,7 +115,9 @@ export default createEndpoint({
       scheduledPaymentDate: record.scheduledPaymentDate,
       paidAt: record.paidAt,
       invoiceNumber: record.invoiceNumber,
+      creditDays: record.creditDays,
       status: record.status,
+      effectiveStatus: computeEffectiveStatus(record.status, record.scheduledPaymentDate),
       notes: record.notes,
       responsibleUserId,
       responsibleUserName: responsibleUser ? [responsibleUser.firstName, responsibleUser.lastName].filter(Boolean).join(' ') : undefined,

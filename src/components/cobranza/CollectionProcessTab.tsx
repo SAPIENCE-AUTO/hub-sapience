@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { History, Loader2, Save } from 'lucide-react';
-import { getCollectionProcessDetail, saveCollectionProcess, getTeamMembers, GetTeamMembersOutputType } from 'zite-endpoints-sdk';
+import { History, Loader2, Save, Landmark } from 'lucide-react';
+import { getCollectionProcesses, getCollectionProcessDetail, saveCollectionProcess, getTeamMembers, GetTeamMembersOutputType } from 'zite-endpoints-sdk';
+import { useAuth } from 'zite-auth-sdk';
 import CollectionAttachmentsSection, { CollectionAttachment } from './CollectionAttachmentsSection';
+import StartCollectionProcessDialog from './StartCollectionProcessDialog';
 import { toast } from 'sonner';
 import { fmtCurrency } from '../../lib/format';
 
@@ -50,19 +51,19 @@ function FlowStepper({ phase }: { phase?: string }) {
         const state = i < idx ? 'done' : i === idx ? 'active' : 'pending';
         const isLast = i === FLOW_PHASES.length - 1;
         return (
-          <div key={step} className="flex items-start flex-1 min-w-[64px]">
+          <div key={step} className="flex items-start flex-1 min-w-[76px]">
             <div className="flex flex-col items-center flex-shrink-0">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 text-[10px] font-bold transition-colors ${
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 text-[11px] font-bold transition-colors ${
                 state === 'done' ? 'bg-primary border-primary text-primary-foreground' :
                 state === 'active' ? 'bg-background border-primary text-primary' :
                 'bg-background border-muted-foreground/25 text-muted-foreground/50'
               }`}>{state === 'done' ? '✓' : i + 1}</div>
-              <span className={`text-[9px] mt-1 font-medium text-center leading-tight px-0.5 ${
+              <span className={`text-[10px] mt-1.5 font-medium text-center leading-tight px-0.5 ${
                 state === 'done' ? 'text-primary' : state === 'active' ? 'text-foreground font-semibold' : 'text-muted-foreground/60'
               }`}>{step}</span>
             </div>
             {!isLast && (
-              <div className={`flex-1 h-0.5 mt-3 mx-1 rounded-full transition-colors ${
+              <div className={`flex-1 h-0.5 mt-3.5 mx-1 rounded-full transition-colors ${
                 i < idx ? 'bg-primary' : 'bg-muted-foreground/15'
               }`} />
             )}
@@ -93,8 +94,7 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
 
 type AuditEntry = { id: string; timestamp?: string; action: string; userEmail?: string; userName?: string; comments?: string };
 
-function AuditLog({ entries, loading }: { entries: AuditEntry[]; loading: boolean }) {
-  if (loading) return <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>;
+function AuditLog({ entries }: { entries: AuditEntry[] }) {
   if (entries.length === 0) return <p className="text-sm text-muted-foreground italic">Sin historial disponible</p>;
   return (
     <div className="relative pl-1">
@@ -124,147 +124,235 @@ function AuditLog({ entries, loading }: { entries: AuditEntry[]; loading: boolea
   );
 }
 
+function SectionCard({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/20">
+        {icon}
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
 type Detail = Awaited<ReturnType<typeof getCollectionProcessDetail>>;
 
 interface Props {
-  id: string | null;
-  open: boolean;
-  onClose: () => void;
-  canEdit: boolean;
-  userEmail: string;
-  onUpdated?: () => void;
+  projectCode: string;
+  client?: string;
 }
 
-export default function CollectionDetailSheet({ id, open, onClose, canEdit, userEmail, onUpdated }: Props) {
+export default function CollectionProcessTab({ projectCode, client }: Props) {
+  const { user } = useAuth();
+  const canEdit = user?.role === 'Owner' || user?.purchaseLevel === 'Finanzas';
+
+  const [processId, setProcessId] = useState<string | null | undefined>(undefined);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [saving, setSaving] = useState(false);
+  const [startDialogOpen, setStartDialogOpen] = useState(false);
 
   // Campos editables locales
   const [phase, setPhase] = useState('');
   const [status, setStatus] = useState('');
   const [scheduledPaymentDate, setScheduledPaymentDate] = useState('');
+  // true solo cuando la persona edita el campo a mano en esta sesión — si se
+  // manda siempre el valor actual (aunque no se haya tocado), saveCollectionProcess.ts
+  // lo interpreta como un ajuste manual explícito y nunca vuelve a recalcularlo
+  // solo con factura+días de crédito (confirmado en vivo: tras el primer guardado
+  // con fecha ya poblada, cambiar los días de crédito dejaba de mover la fecha).
+  const [scheduledPaymentDateDirty, setScheduledPaymentDateDirty] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceCreatedAt, setInvoiceCreatedAt] = useState('');
+  const [creditDays, setCreditDays] = useState('');
   const [notes, setNotes] = useState('');
   const [responsibleUserId, setResponsibleUserId] = useState('');
 
+  const loadProcessId = useCallback(async () => {
+    const d = await getCollectionProcesses({ projectCode });
+    setProcessId(d.processes[0]?.id ?? null);
+  }, [projectCode]);
+
+  useEffect(() => { loadProcessId(); }, [loadProcessId]);
+
+  // Único punto que sincroniza los campos editables con lo que manda el
+  // servidor — se usa tanto en la carga inicial como después de guardar, para
+  // que valores calculados del lado del servidor (p.ej. scheduledPaymentDate
+  // recalculada por saveCollectionProcess.ts) se reflejen sin recargar la
+  // página (confirmado en vivo: sin esto, "Guardar cambios" dejaba la fecha
+  // programada en blanco aunque el backend ya la había calculado bien).
+  const hydrateFields = (d: Detail) => {
+    setDetail(d);
+    setPhase(d.phase ?? 'Por iniciar');
+    setStatus(d.status ?? 'Al día');
+    setScheduledPaymentDate(d.scheduledPaymentDate ? d.scheduledPaymentDate.split('T')[0] : '');
+    setScheduledPaymentDateDirty(false);
+    setInvoiceNumber(d.invoiceNumber ?? '');
+    setInvoiceCreatedAt(d.invoiceCreatedAt ? d.invoiceCreatedAt.split('T')[0] : '');
+    setCreditDays(d.creditDays != null ? String(d.creditDays) : '');
+    setNotes(d.notes ?? '');
+    setResponsibleUserId(d.responsibleUserId ?? '');
+  };
+
   useEffect(() => {
-    if (!open || !id) return;
+    if (!processId) return;
     setLoading(true);
-    Promise.all([getCollectionProcessDetail({ id }), getTeamMembers({})])
+    Promise.all([getCollectionProcessDetail({ id: processId }), getTeamMembers({})])
       .then(([d, teamRes]) => {
-        setDetail(d);
+        hydrateFields(d);
         setMembers(teamRes.members);
-        setPhase(d.phase ?? 'Por iniciar');
-        setStatus(d.status ?? 'Al día');
-        setScheduledPaymentDate(d.scheduledPaymentDate ? d.scheduledPaymentDate.split('T')[0] : '');
-        setInvoiceNumber(d.invoiceNumber ?? '');
-        setNotes(d.notes ?? '');
-        setResponsibleUserId(d.responsibleUserId ?? '');
       })
       .catch(() => setDetail(null))
       .finally(() => setLoading(false));
-  }, [open, id]);
+  }, [processId]);
 
   const refreshDetail = async () => {
-    if (!id) return;
-    const d = await getCollectionProcessDetail({ id });
-    setDetail(d);
+    if (!processId) return;
+    const d = await getCollectionProcessDetail({ id: processId });
+    hydrateFields(d);
   };
 
   const handleSave = async () => {
-    if (!id || !detail) return;
+    if (!processId || !detail) return;
     setSaving(true);
     try {
       await saveCollectionProcess({
-        id,
+        id: processId,
         phase,
         status,
-        scheduledPaymentDate: scheduledPaymentDate || undefined,
+        scheduledPaymentDate: scheduledPaymentDateDirty ? (scheduledPaymentDate || undefined) : undefined,
         invoiceNumber: invoiceNumber || undefined,
+        invoiceCreatedAt: invoiceCreatedAt || undefined,
+        creditDays: creditDays !== '' ? Number(creditDays) : undefined,
         notes: notes || undefined,
         responsibleUser: responsibleUserId || undefined,
       });
       toast.success('Proceso de cobranza actualizado');
       await refreshDetail();
-      onUpdated?.();
     } catch (err: unknown) {
       toast.error((err as Error).message ?? 'Error al guardar');
     }
     setSaving(false);
   };
 
-  if (!id) return null;
+  if (processId === undefined) {
+    return (
+      <div className="p-6 space-y-3 max-w-4xl">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  if (processId === null) {
+    return (
+      <div className="p-10 flex flex-col items-center justify-center text-center gap-3 max-w-md mx-auto">
+        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <Landmark className="w-6 h-6 text-primary" />
+        </div>
+        <div>
+          <p className="text-sm font-medium">Este proyecto todavía no tiene proceso de cobranza</p>
+          <p className="text-xs text-muted-foreground mt-1">Arráncalo cuando el proyecto se entregue: número y fecha de factura, días de crédito, y la factura misma.</p>
+        </div>
+        {canEdit && (
+          <Button className="mt-2 gap-1.5" onClick={() => setStartDialogOpen(true)}>
+            <Landmark className="w-3.5 h-3.5" />
+            Iniciar proceso de cobranza
+          </Button>
+        )}
+        <StartCollectionProcessDialog
+          projectCode={projectCode}
+          client={client}
+          open={startDialogOpen}
+          onClose={() => setStartDialogOpen(false)}
+          onCreated={loadProcessId}
+        />
+      </div>
+    );
+  }
 
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
-        <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
-          {loading || !detail ? (
-            <Skeleton className="h-6 w-64" />
-          ) : (
-            <>
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground font-mono mb-0.5">{detail.projectCode ?? 'Sin proyecto'}</p>
-                  <DialogTitle className="text-base leading-tight line-clamp-1">{detail.client ?? detail.dealName ?? 'Sin cliente'}</DialogTitle>
-                </div>
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${STATUS_STYLES[detail.status ?? ''] ?? 'bg-muted text-muted-foreground'}`}>
-                  {detail.status ?? 'Al día'}
-                </span>
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-4xl mx-auto p-6 space-y-5">
+        {loading || !detail ? (
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        ) : (
+          <>
+            {/* Encabezado: cliente / monto / estatus */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground font-mono mb-0.5">{detail.projectCode ?? projectCode}</p>
+                <h2 className="text-lg font-bold leading-tight">{detail.client ?? detail.dealName ?? 'Sin cliente'}</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">{fmtCurrency(detail.collectionAmount, detail.currency)} por cobrar</p>
               </div>
-              <div className="mt-4"><FlowStepper phase={detail.phase} /></div>
-            </>
-          )}
-        </DialogHeader>
+              <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0 ${STATUS_STYLES[detail.effectiveStatus ?? detail.status ?? ''] ?? 'bg-muted text-muted-foreground'}`}>
+                {detail.effectiveStatus ?? detail.status ?? 'Al día'}
+              </span>
+            </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-          {loading || !detail ? (
-            <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : (
-            <>
+            {/* Stepper */}
+            <div className="rounded-xl border border-border bg-card px-5 py-4">
+              <FlowStepper phase={detail.phase} />
+            </div>
+
+            {/* Resumen de solo lectura */}
+            <SectionCard title="Resumen">
               <div className="grid grid-cols-3 gap-x-6 gap-y-4">
                 <InfoRow label="Deal" value={detail.dealName} />
                 <InfoRow label="Monto cotizado" value={fmtCurrency(detail.quotedAmount, detail.currency)} />
                 <InfoRow label="Monto a cobrar" value={fmtCurrency(detail.collectionAmount, detail.currency)} />
                 <InfoRow label="Proforma creada" value={fmtDate(detail.proformaCreatedAt)} />
                 <InfoRow label="Proforma enviada" value={fmtDate(detail.proformaSentAt)} />
-                <InfoRow label="Factura creada" value={fmtDate(detail.invoiceCreatedAt)} />
                 <InfoRow label="Factura enviada" value={fmtDate(detail.invoiceSentAt)} />
                 <InfoRow label="Subida al portal" value={fmtDate(detail.portalUploadedAt)} />
                 <InfoRow label="GR / Migo" value={fmtDate(detail.grMigoAt)} />
                 <InfoRow label="Pagado el" value={fmtDate(detail.paidAt)} />
               </div>
+            </SectionCard>
 
-              {/* Campos editables */}
-              <div className="grid grid-cols-2 gap-4 bg-muted/20 rounded-lg p-4">
+            {/* Datos y edición */}
+            <SectionCard title="Datos y edición">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Fase</label>
                   <Select value={phase} onValueChange={setPhase} disabled={!canEdit}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>{PHASES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Estatus</label>
                   <Select value={status} onValueChange={setStatus} disabled={!canEdit}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>{STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Fecha programada de pago</label>
-                  <Input type="date" className="h-8 text-sm" value={scheduledPaymentDate} onChange={e => setScheduledPaymentDate(e.target.value)} disabled={!canEdit} />
+                  <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Folio de factura</label>
+                  <Input className="h-9 text-sm" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} disabled={!canEdit} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Folio de factura</label>
-                  <Input className="h-8 text-sm" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} disabled={!canEdit} />
+                  <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Fecha de factura</label>
+                  <Input type="date" className="h-9 text-sm" value={invoiceCreatedAt} onChange={e => setInvoiceCreatedAt(e.target.value)} disabled={!canEdit} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Días de crédito</label>
+                  <Input type="number" min={0} className="h-9 text-sm" value={creditDays} onChange={e => setCreditDays(e.target.value)} disabled={!canEdit} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Fecha programada de pago</label>
+                  <Input type="date" className="h-9 text-sm" value={scheduledPaymentDate} onChange={e => { setScheduledPaymentDate(e.target.value); setScheduledPaymentDateDirty(true); }} disabled={!canEdit} />
+                  <p className="text-[10px] text-muted-foreground">Se recalcula sola con factura + días de crédito si la dejas vacía.</p>
                 </div>
                 <div className="space-y-1.5 col-span-2">
                   <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Responsable</label>
                   <Select value={responsibleUserId || '__none__'} onValueChange={v => setResponsibleUserId(v === '__none__' ? '' : v)} disabled={!canEdit}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Sin asignar" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Sin asignar</SelectItem>
                       {members.map(m => (
@@ -275,38 +363,36 @@ export default function CollectionDetailSheet({ id, open, onClose, canEdit, user
                 </div>
                 <div className="space-y-1.5 col-span-2">
                   <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Notas</label>
-                  <Textarea rows={2} className="text-sm resize-none" value={notes} onChange={e => setNotes(e.target.value)} disabled={!canEdit} />
+                  <Textarea rows={3} className="text-sm resize-none" value={notes} onChange={e => setNotes(e.target.value)} disabled={!canEdit} />
                 </div>
-                {canEdit && (
-                  <div className="col-span-2 flex justify-end">
-                    <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={saving}>
-                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      {saving ? 'Guardando...' : 'Guardar cambios'}
-                    </Button>
-                  </div>
-                )}
               </div>
+              {canEdit && (
+                <div className="flex justify-end mt-5 pt-4 border-t border-border">
+                  <Button className="gap-1.5" onClick={handleSave} disabled={saving}>
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {saving ? 'Guardando...' : 'Guardar cambios'}
+                  </Button>
+                </div>
+              )}
+            </SectionCard>
 
+            <SectionCard title="Documentos">
               <CollectionAttachmentsSection
-                collectionProcessId={id}
+                collectionProcessId={processId}
                 attachments={detail.attachments as CollectionAttachment[]}
                 loading={false}
                 canManage={canEdit}
-                userEmail={userEmail}
+                userEmail={user?.email ?? ''}
                 onChange={atts => setDetail(prev => prev ? { ...prev, attachments: atts } : prev)}
               />
+            </SectionCard>
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <History className="w-3.5 h-3.5 text-muted-foreground" />
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Historial de cambios</p>
-                </div>
-                <AuditLog entries={detail.auditLog} loading={false} />
-              </div>
-            </>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            <SectionCard title="Historial de cambios" icon={<History className="w-3.5 h-3.5 text-muted-foreground" />}>
+              <AuditLog entries={detail.auditLog} />
+            </SectionCard>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

@@ -1,8 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench } from 'lucide-react';
-import { getRecruitmentSummary, getTasks, getProjectTeamsFiles, getMessages, getSwipeSesiones } from 'zite-endpoints-sdk';
+import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench, Landmark } from 'lucide-react';
+import { getRecruitmentSummary, getTasks, getProjectTeamsFiles, getMessages, getSwipeSesiones, getCollectionProcesses } from 'zite-endpoints-sdk';
 import { computeGanttSegments, GanttData } from './ganttMath';
 import { TEAL, TEAL_2, GOLD, INFO, EXITO, NEUTRAL, ALERTA, EstadoPill } from '../../lib/toolColors';
+import { fmtCurrency } from '../../lib/format';
+import { Button } from '@/components/ui/button';
+import StartCollectionProcessDialog from '../cobranza/StartCollectionProcessDialog';
 
 // Paleta de acento por tarjeta — mismos 6 tonos del sistema decidido en el
 // moodboard del Hub, sin inventar hues nuevos. El desglose de Reclutamiento
@@ -28,9 +31,13 @@ interface ProjectHubLandingProps {
   projectId?: string;
   canSeeBudget: boolean;
   canSeeTools: boolean;
-  onOpenTab: (tab: 'reclutamiento' | 'presupuesto' | 'documentos' | 'chat' | 'tools') => void;
+  canSeeCobranza: boolean;
+  client?: string;
+  onOpenTab: (tab: 'reclutamiento' | 'presupuesto' | 'documentos' | 'chat' | 'tools' | 'cobranza') => void;
   onOpenActividades: (section: PmSection) => void;
 }
+
+type CollectionSummary = { phase?: string; effectiveStatus?: string; collectionAmount?: number; currency?: string } | null;
 
 type SwipeSesionItem = { id: string; nombre: string; estado: string };
 
@@ -79,7 +86,7 @@ function statusColor(seg: { status?: string; startDate: string; endDate: string 
   return null;
 }
 
-export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSeeTools, onOpenTab, onOpenActividades }: ProjectHubLandingProps) {
+export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSeeTools, canSeeCobranza, client, onOpenTab, onOpenActividades }: ProjectHubLandingProps) {
   const [recruitment, setRecruitment] = useState<RecruitmentSummary | null>(null);
   const [events, setEvents] = useState<EventItem[] | null>(null);
   const [gantt, setGantt] = useState<GanttData | null | undefined>(undefined);
@@ -87,13 +94,22 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
   const [teamsLinked, setTeamsLinked] = useState(true);
   const [messages, setMessages] = useState<MessageItem[] | null>(null);
   const [swipeSesiones, setSwipeSesiones] = useState<SwipeSesionItem[] | null>(null);
+  const [collection, setCollection] = useState<CollectionSummary | undefined>(undefined);
+  const [startDialogOpen, setStartDialogOpen] = useState(false);
+
+  const loadCollection = () => {
+    if (!canSeeCobranza) return;
+    getCollectionProcesses({ projectCode }).then(d => setCollection(d.processes[0] ?? null)).catch(() => setCollection(null));
+  };
 
   useEffect(() => {
-    setRecruitment(null); setEvents(null); setGantt(undefined); setFolders(null); setMessages(null); setSwipeSesiones(null);
+    setRecruitment(null); setEvents(null); setGantt(undefined); setFolders(null); setMessages(null); setSwipeSesiones(null); setCollection(undefined);
 
     if (canSeeTools && projectId) {
       getSwipeSesiones({ proyectoId: projectId }).then((d) => setSwipeSesiones(d.sesiones ?? [])).catch(() => setSwipeSesiones([]));
     }
+
+    if (canSeeCobranza) loadCollection();
 
     getRecruitmentSummary({ projectCode }).then(setRecruitment).catch(() => setRecruitment({ totalParticipants: 0, boards: [] }));
 
@@ -125,7 +141,7 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
     }).catch(() => { setTeamsLinked(false); setFolders([]); });
 
     getMessages({ channel: projectCode, limit: 3 }).then(d => setMessages(d.messages ?? [])).catch(() => setMessages([]));
-  }, [projectCode, projectId, canSeeTools]);
+  }, [projectCode, projectId, canSeeTools, canSeeCobranza]);
 
   const now = Date.now();
 
@@ -326,6 +342,36 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
             </div>
           )}
 
+          {/* ── Cobranza ── */}
+          {canSeeCobranza && (
+            <div
+              onClick={() => { if (collection) onOpenTab('cobranza'); else setStartDialogOpen(true); }}
+              className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden"
+            >
+              <ColorHead color={TEAL} icon={<Landmark className="w-3.5 h-3.5" />} label="Cobranza" />
+              <div className="px-3.5 py-3">
+                {collection === undefined && <div className="h-4" />}
+                {collection === null && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">Aún no se ha iniciado</span>
+                    <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 flex-shrink-0" onClick={e => { e.stopPropagation(); setStartDialogOpen(true); }}>
+                      Iniciar
+                    </Button>
+                  </div>
+                )}
+                {collection && (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{collection.phase ?? 'Por iniciar'}</p>
+                      <p className="text-[11px] text-muted-foreground">{collection.effectiveStatus ?? 'Al día'}</p>
+                    </div>
+                    <span className="text-sm font-semibold font-mono flex-shrink-0">{fmtCurrency(collection.collectionAmount, collection.currency)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Presupuesto ── */}
           {canSeeBudget && (
             <div onClick={() => onOpenTab('presupuesto')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
@@ -375,6 +421,16 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
           </div>
         </div>
       </div>
+
+      {canSeeCobranza && (
+        <StartCollectionProcessDialog
+          projectCode={projectCode}
+          client={client}
+          open={startDialogOpen}
+          onClose={() => setStartDialogOpen(false)}
+          onCreated={loadCollection}
+        />
+      )}
     </div>
   );
 }

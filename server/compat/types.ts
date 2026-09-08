@@ -678,6 +678,7 @@ export interface CollectionProcessesRecordType {
   status?: string;
   notes?: string;
   responsibleUser?: string[];
+  creditDays?: number;
   createdAt?: string;
   updatedAt?: string;
 }

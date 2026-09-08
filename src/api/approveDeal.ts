@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   createEndpoint, Deals, Cotizaciones, CotizacionLineItems, Projects, Boards, Tasks,
-  ChatConversations, Messages, Users, ZiteError, CollectionProcesses, pool,
+  ChatConversations, Messages, Users, ZiteError, pool,
 } from '../../server/compat';
 import { parseMembers } from '../lib/chatJson';
 import { publishEvent, safeUserChannel } from '../lib/ably';
@@ -14,7 +14,7 @@ const DEFAULT_TASKS = [
 
 export default createEndpoint({
   authenticated: true,
-  description: 'Approve a deal: marks it Ganado, approves included cotizaciones, creates project + collection process, sends per-rubro DM notifications with optional line item filtering',
+  description: 'Approve a deal: marks it Ganado, approves included cotizaciones, creates project, sends per-rubro DM notifications with optional line item filtering. El proceso de cobranza ya NO se crea aquí — arranca manualmente al entregar (ver startCollectionProcess.ts)',
   inputSchema: z.object({
     dealId: z.string(),
     createProject: z.boolean().optional(),
@@ -27,7 +27,6 @@ export default createEndpoint({
     success: z.boolean(),
     projectCode: z.string().optional(),
     projectId: z.string().optional(),
-    collectionProcessId: z.string().optional(),
     notificationsSent: z.number(),
     quotedCost: z.number(),
   }),
@@ -52,7 +51,6 @@ export default createEndpoint({
 
     let projectCode: string | undefined;
     let newProjectId: string | undefined;
-    let collectionProcessId: string | undefined;
 
     if (shouldCreateProject) {
       // ── 3. Create project ────────────────────────────────────────────────────
@@ -96,35 +94,13 @@ export default createEndpoint({
         record: { phase: 'Ganado', approvalDate: today, quotedCost } as any,
       });
 
-      // ── 5. Create collection process record ──────────────────────────────────
-      const rawCurrency = (deal.currency ?? 'MXN').replace(/ 🇲🇽| 🇺🇸| 🇪🇺/g, '').trim();
-      const collectionProcess = await CollectionProcesses.create({
-        record: {
-          projectCode,
-          deal: [input.dealId],
-          client: deal.client,
-          currency: rawCurrency as any,
-          quotedAmount: deal.clientPrice ?? 0,
-          collectionAmount: deal.clientPrice ?? 0,
-          phase: 'Por iniciar',
-          status: 'Al día',
-        },
-      });
-      collectionProcessId = collectionProcess.id;
-
-      // collection_audit_log vive fuera del ORM (tabla nueva, ver
-      // server/scripts/add-cobranza-tables.ts) — insert crudo, mismo patrón
-      // que Ejes/Prework para sus propias tablas.
-      await pool.query(
-        `insert into collection_audit_log (collection_process_id, action, user_email, user_name, project_code)
-         values ($1, 'Creado', $2, $3, $4)`,
-        [
-          collectionProcessId,
-          context.user!.email,
-          [context.user!.firstName, context.user!.lastName].filter(Boolean).join(' ') || context.user!.email,
-          projectCode ?? null,
-        ],
-      );
+      // Cobranza v2 (sep 2026): ya NO se crea aquí. Sergio corrigió el diseño
+      // original — el proceso de cobranza debe arrancar cuando se ENTREGA el
+      // proyecto, no cuando se aprueba el deal (son momentos distintos), y
+      // debe ser una acción manual ("Iniciar proceso de cobranza" en el Hub
+      // del Proyecto, ver startCollectionProcess.ts), no automática. Los
+      // procesos que este bloque ya había creado antes de la corrección se
+      // dejan tal cual (no se borran, per decisión explícita).
     } else {
       // ── 4b. Update deal (phase, approvalDate, quotedCost only) ───────────────
       await Deals.update({
@@ -196,7 +172,6 @@ export default createEndpoint({
         success: true,
         projectCode,
         projectId: newProjectId,
-        collectionProcessId,
         notificationsSent: 0,
         quotedCost,
       };
@@ -308,7 +283,6 @@ export default createEndpoint({
       success: true,
       projectCode,
       projectId: newProjectId,
-      collectionProcessId,
       notificationsSent,
       quotedCost,
     };

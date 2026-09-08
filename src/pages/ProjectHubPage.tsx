@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign, Wrench } from 'lucide-react';
+import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign, Wrench, Landmark } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProjectHubLanding } from '../components/project-hub/ProjectHubLanding';
 import { ProjectToolsTab } from '../components/project-hub/ProjectToolsTab';
@@ -16,19 +16,21 @@ import ChatPage from './ChatPage';
 import ProjectDocuments from '../components/ProjectDocuments';
 import ProjectMinutas from '../components/ProjectMinutas';
 import ProjectBudgetTab from '../components/pm/ProjectBudgetTab';
+import CollectionProcessTab from '../components/cobranza/CollectionProcessTab';
 import { saveProject, getProjects } from 'zite-endpoints-sdk';
 import type { GetProjectsOutputType } from 'zite-endpoints-sdk';
 import { uploadFile } from 'zite-file-upload-sdk';
 import { toast } from 'sonner';
 
 type Project = GetProjectsOutputType['projects'][0];
-type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos' | 'tools';
+type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos' | 'tools' | 'cobranza';
 type PmSection = 'timelines' | 'calendarios';
 
 const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'reclutamiento', label: 'Reclutamiento', icon: Users },
   { id: 'actividades',   label: 'Actividades',   icon: Activity },
   { id: 'presupuesto',   label: 'Presupuesto',   icon: DollarSign },
+  { id: 'cobranza',      label: 'Cobranza',       icon: Landmark },
   { id: 'chat',          label: 'Chat',           icon: MessageSquare },
   { id: 'documentos',    label: 'Documentos',     icon: FileText },
   { id: 'tools',         label: 'Tools',          icon: Wrench },
@@ -59,7 +61,7 @@ export default function ProjectHubPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { selectedProject, setSelectedProject, projects, setProjects, projectsLoading } = useProject();
   const { tab: initialTab, section: initialPmSection } = resolveInitialTab(searchParams.get('tab'));
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
@@ -101,17 +103,27 @@ export default function ProjectHubPage() {
 
   const canSeeTools = !!(user?.email && TOOLS_ALLOWED_EMAILS.includes(user.email));
 
+  // Mismo criterio que el resto del módulo de Cobranza (getCollectionProcesses.ts
+  // et al.): Owner o purchaseLevel Finanzas, no un gate por role solamente.
+  const canSeeCobranza = !!(user?.role === 'Owner' || user?.purchaseLevel === 'Finanzas');
+
   const visibleTabs = ALL_TABS.filter(t =>
     (t.id !== 'presupuesto' || canSeeBudget) &&
-    (t.id !== 'tools' || canSeeTools),
+    (t.id !== 'tools' || canSeeTools) &&
+    (t.id !== 'cobranza' || canSeeCobranza),
   );
 
-  // Reset active tab if it's no longer visible (p.ej. se perdió el acceso a Presupuesto)
+  // Reset active tab if it's no longer visible (p.ej. se perdió el acceso a Presupuesto).
+  // Ojo: mientras `authLoading` es true, `user` todavía es null y todos los gates de
+  // permiso (canSeeBudget/canSeeTools/canSeeCobranza) dan falso — sin este guard, un
+  // link directo a "?tab=cobranza"/"?tab=presupuesto" se resetea a "hub" antes de que
+  // el usuario real termine de cargar (confirmado en vivo con el link nuevo de Cobranza).
   useEffect(() => {
+    if (authLoading) return;
     if (activeTab !== 'hub' && !visibleTabs.find(t => t.id === activeTab)) {
       setActiveTab('hub');
     }
-  }, [canSeeBudget, canSeeTools]);
+  }, [authLoading, canSeeBudget, canSeeTools, canSeeCobranza]);
 
   const goToActividades = (section: PmSection) => { setPmSection(section); setActiveTab('actividades'); };
 
@@ -245,6 +257,8 @@ export default function ProjectHubPage() {
                 projectId={project?.id}
                 canSeeBudget={canSeeBudget}
                 canSeeTools={canSeeTools}
+                canSeeCobranza={canSeeCobranza}
+                client={project?.client}
                 onOpenTab={setActiveTab}
                 onOpenActividades={goToActividades}
               />
@@ -255,6 +269,9 @@ export default function ProjectHubPage() {
               <div className="h-full overflow-y-auto">
                 <ProjectBudgetTab projectCode={projectId ?? ''} />
               </div>
+            )}
+            {activeTab === 'cobranza'      && (
+              <CollectionProcessTab projectCode={projectId ?? ''} client={project?.client} />
             )}
             {activeTab === 'chat'          && <ChatPage projectOnly projectChannel={projectId} />}
             {activeTab === 'documentos'    && (

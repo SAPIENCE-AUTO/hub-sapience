@@ -13,6 +13,12 @@ const PHASE_TIMESTAMP_FIELD: Record<string, string> = {
   'GR / Migo': 'grMigoAt',
 };
 
+function addDays(iso: string, days: number): string {
+  const d = new Date(iso.split('T')[0] + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
 async function logAudit(params: { collectionProcessId: string; action: string; userEmail: string; userName: string; comments?: string; projectCode?: string }) {
   await pool.query(
     `insert into collection_audit_log (collection_process_id, action, user_email, user_name, comments, project_code)
@@ -30,6 +36,8 @@ export default createEndpoint({
     status: z.string().optional(),
     scheduledPaymentDate: z.string().optional(),
     invoiceNumber: z.string().optional(),
+    invoiceCreatedAt: z.string().optional(),
+    creditDays: z.number().optional(),
     notes: z.string().optional(),
     responsibleUser: z.string().optional(),
   }),
@@ -49,8 +57,25 @@ export default createEndpoint({
 
     if (input.scheduledPaymentDate !== undefined) record.scheduledPaymentDate = input.scheduledPaymentDate;
     if (input.invoiceNumber !== undefined) record.invoiceNumber = input.invoiceNumber;
+    if (input.invoiceCreatedAt !== undefined) record.invoiceCreatedAt = input.invoiceCreatedAt;
+    if (input.creditDays !== undefined) record.creditDays = input.creditDays;
     if (input.notes !== undefined) record.notes = input.notes;
     if (input.responsibleUser !== undefined) record.responsibleUser = [input.responsibleUser];
+
+    // Los 20 procesos legacy (creados antes de que Cobranza pidiera folio/
+    // fecha/días de crédito al arrancar) se completan a mano desde la
+    // pestaña — en cuanto quedan invoiceCreatedAt + creditDays completos
+    // (los que se acaban de mandar, o los que ya estaban guardados), la
+    // fecha tentativa se recalcula sola, igual que hace startCollectionProcess.ts,
+    // salvo que este mismo request ya traiga una fecha explícita (no se pisa
+    // un ajuste manual intencional).
+    if (input.scheduledPaymentDate === undefined) {
+      const invoiceDate = input.invoiceCreatedAt ?? current.invoiceCreatedAt;
+      const creditDays = input.creditDays ?? current.creditDays;
+      if (invoiceDate && creditDays != null) {
+        record.scheduledPaymentDate = addDays(invoiceDate, creditDays);
+      }
+    }
 
     const phaseChanged = input.phase !== undefined && input.phase !== current.phase;
     if (phaseChanged) {

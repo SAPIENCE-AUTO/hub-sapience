@@ -16,6 +16,7 @@ const processSchema = z.object({
   paidAt: z.string().optional(),
   invoiceNumber: z.string().optional(),
   status: z.string().optional(),
+  effectiveStatus: z.string().optional(),
   responsibleUserId: z.string().optional(),
   responsibleUserName: z.string().optional(),
   createdAt: z.string().optional(),
@@ -26,6 +27,20 @@ const processSchema = z.object({
 function firstLinkId(v: unknown): string | undefined {
   if (Array.isArray(v)) return v[0];
   return (v as string | undefined) ?? undefined;
+}
+
+// "status" es 100% manual y por default siempre "Al día" — confirmado en
+// vivo que los 20 procesos reales seguían diciendo "Al día" aunque llevan
+// meses sin moverse. effectiveStatus lo corrige SOLO cuando hay dato real
+// para hacerlo (scheduledPaymentDate ya calculada y vencida) — si no hay
+// fecha todavía (procesos legacy sin completar), no se inventa un atraso.
+function computeEffectiveStatus(status: string | undefined, scheduledPaymentDate: string | undefined): string {
+  if (status === 'Pagado') return 'Pagado';
+  if (scheduledPaymentDate) {
+    const today = new Date().toISOString().split('T')[0];
+    if (scheduledPaymentDate.split('T')[0] < today) return 'Atrasado';
+  }
+  return status ?? 'Al día';
 }
 
 export default createEndpoint({
@@ -94,6 +109,7 @@ export default createEndpoint({
           paidAt: r.paidAt,
           invoiceNumber: r.invoiceNumber,
           status: r.status,
+          effectiveStatus: computeEffectiveStatus(r.status, r.scheduledPaymentDate),
           responsibleUserId,
           responsibleUserName: responsibleUserId ? userNameById.get(responsibleUserId) : undefined,
           createdAt: r.createdAt,

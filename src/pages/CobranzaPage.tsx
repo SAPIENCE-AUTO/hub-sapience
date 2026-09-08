@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from 'zite-auth-sdk';
 import { getCollectionProcesses, GetCollectionProcessesOutputType } from 'zite-endpoints-sdk';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Landmark } from 'lucide-react';
-import CollectionDetailSheet from '../components/cobranza/CollectionDetailSheet';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { fmtCurrency } from '../lib/format';
 
 type CollectionProcess = GetCollectionProcessesOutputType['processes'][0];
@@ -33,14 +34,58 @@ function fmtDate(d?: string) {
   return new Date(d.split('T')[0] + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Barras por mes de fecha tentativa de pago — solo MXN (mezclar monedas en
+// una sola barra confundiría más de lo que ayudaría; USD queda fuera del
+// alcance de esta vista descriptiva, igual que StatsBar ya lo separa).
+function MonthlyChart({ processes }: { processes: CollectionProcess[] }) {
+  const data = useMemo(() => {
+    const byMonth = new Map<string, number>();
+    for (const p of processes) {
+      if (!p.scheduledPaymentDate || !p.currency?.startsWith('MXN')) continue;
+      const month = p.scheduledPaymentDate.split('T')[0].slice(0, 7);
+      byMonth.set(month, (byMonth.get(month) ?? 0) + (p.collectionAmount ?? 0));
+    }
+    return [...byMonth.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, amount]) => ({
+        month,
+        label: new Date(month + '-02T12:00:00').toLocaleDateString('es-MX', { month: 'short', year: '2-digit' }),
+        amount,
+      }));
+  }, [processes]);
+
+  if (data.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl px-5 py-8 mb-6 text-center text-sm text-muted-foreground">
+        Sin fechas de pago capturadas todavía — la gráfica se llena conforme se inician procesos con factura y días de crédito.
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl px-5 py-4 mb-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Cobranza por mes (MXN, según fecha tentativa de pago)</p>
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={data} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={v => fmtCurrency(v, 'MXN')} width={80} />
+          <Tooltip formatter={(v: number) => fmtCurrency(v, 'MXN')} labelFormatter={l => `Mes: ${l}`} />
+          <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function StatsBar({ processes }: { processes: CollectionProcess[] }) {
-  const totalMxn = processes.filter(p => p.currency?.startsWith('MXN') && p.status !== 'Pagado').reduce((s, p) => s + (p.collectionAmount ?? 0), 0);
-  const totalUsd = processes.filter(p => p.currency?.startsWith('USD') && p.status !== 'Pagado').reduce((s, p) => s + (p.collectionAmount ?? 0), 0);
-  const atrasados = processes.filter(p => p.status === 'Atrasado');
-  const pagados = processes.filter(p => p.status === 'Pagado').length;
+  const totalMxn = processes.filter(p => p.currency?.startsWith('MXN') && p.effectiveStatus !== 'Pagado').reduce((s, p) => s + (p.collectionAmount ?? 0), 0);
+  const totalUsd = processes.filter(p => p.currency?.startsWith('USD') && p.effectiveStatus !== 'Pagado').reduce((s, p) => s + (p.collectionAmount ?? 0), 0);
+  const atrasados = processes.filter(p => p.effectiveStatus === 'Atrasado');
+  const pagados = processes.filter(p => p.effectiveStatus === 'Pagado').length;
 
   const stats = [
-    { label: 'Procesos activos', value: processes.filter(p => p.status !== 'Pagado').length, sub: `${pagados} pagados`, color: 'text-foreground' },
+    { label: 'Procesos activos', value: processes.filter(p => p.effectiveStatus !== 'Pagado').length, sub: `${pagados} pagados`, color: 'text-foreground' },
     { label: 'Por cobrar (MXN)', value: fmtCurrency(totalMxn, 'MXN'), sub: totalUsd > 0 ? `+ ${fmtCurrency(totalUsd, 'USD')}` : 'Sin pendientes en USD', color: 'text-primary' },
     { label: 'Atrasados', value: atrasados.length, sub: atrasados.length > 0 ? 'Requieren atención' : 'Sin atrasos', color: atrasados.length > 0 ? 'text-destructive' : 'text-muted-foreground' },
   ];
@@ -60,12 +105,12 @@ function StatsBar({ processes }: { processes: CollectionProcess[] }) {
 
 export default function CobranzaPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [processes, setProcesses] = useState<CollectionProcess[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterPhase, setFilterPhase] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -89,7 +134,7 @@ export default function CobranzaPage() {
         if (!match) return false;
       }
       if (filterPhase && p.phase !== filterPhase) return false;
-      if (filterStatus && p.status !== filterStatus) return false;
+      if (filterStatus && p.effectiveStatus !== filterStatus) return false;
       return true;
     });
   }, [processes, search, filterPhase, filterStatus]);
@@ -115,6 +160,7 @@ export default function CobranzaPage() {
       </div>
 
       {!loading && <StatsBar processes={processes} />}
+      {!loading && <MonthlyChart processes={processes} />}
 
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative min-w-[200px] flex-1 max-w-xs">
@@ -157,7 +203,11 @@ export default function CobranzaPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.map(p => (
-                <tr key={p.id} className="hover:bg-muted/20 cursor-pointer transition-colors" onClick={() => setSelectedId(p.id)}>
+                <tr
+                  key={p.id}
+                  className="hover:bg-muted/20 cursor-pointer transition-colors"
+                  onClick={() => p.projectCode && navigate(`/operacion/proyectos/${p.projectCode}?tab=cobranza`)}
+                >
                   <td className="px-4 py-2.5 whitespace-nowrap font-medium">{p.projectCode ?? '—'}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">{p.client ?? '—'}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
@@ -166,8 +216,8 @@ export default function CobranzaPage() {
                     </span>
                   </td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_STYLES[p.status ?? ''] ?? 'bg-muted text-muted-foreground'}`}>
-                      {p.status ?? 'Al día'}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_STYLES[p.effectiveStatus ?? ''] ?? 'bg-muted text-muted-foreground'}`}>
+                      {p.effectiveStatus ?? 'Al día'}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-right tabular-nums font-medium">{fmtCurrency(p.collectionAmount, p.currency)}</td>
@@ -179,15 +229,6 @@ export default function CobranzaPage() {
           </table>
         </div>
       )}
-
-      <CollectionDetailSheet
-        id={selectedId}
-        open={selectedId !== null}
-        onClose={() => setSelectedId(null)}
-        canEdit={user?.role === 'Owner' || user?.purchaseLevel === 'Finanzas'}
-        userEmail={user?.email ?? ''}
-        onUpdated={load}
-      />
     </div>
   );
 }

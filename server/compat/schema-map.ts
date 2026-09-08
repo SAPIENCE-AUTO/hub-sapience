@@ -764,6 +764,7 @@ export const SCHEMA: Record<string, TableDef> = {
       status: { col: 'status', kind: 'text' },
       notes: { col: 'notes', kind: 'text' },
       responsibleUser: { col: 'responsible_user_id', kind: 'link', target: 'users' },
+      creditDays: { col: 'credit_days', kind: 'number' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },

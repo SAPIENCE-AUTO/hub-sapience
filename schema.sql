@@ -860,6 +860,7 @@ create table collection_processes (
   status                        text,
   notes                         text,
   responsible_user_id           uuid references users(id) on delete set null,
+  credit_days                   integer,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now(),
   constraint collection_processes_currency_chk check ("currency" is null or "currency" in ('MXN', 'USD', 'EUR')),
