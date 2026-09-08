@@ -219,6 +219,7 @@ async function exportRecruitmentExcel(
   groupDynCols: DynCols,
   boardName: string,
   includeGroupKeys: Set<string>,
+  selectedColumnIds: Set<string>,
 ): Promise<number> {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
@@ -231,9 +232,12 @@ async function exportRecruitmentExcel(
   if (!hiddenColumns.has('phone')) fixedCols.push({ key: 'phone', label: 'Tel\u00E9fono' });
   if (!hiddenColumns.has('idNumber')) fixedCols.push({ key: 'idNumber', label: 'ID / Doc' });
   if (!hiddenColumns.has('status')) fixedCols.push({ key: 'status', label: 'Estado' });
+  // Solo las columnas elegidas en el di\u00E1logo de exportar \u2014 con tableros de
+  // cientos de columnas (formularios de Fillout), exportar "todo lo visible"
+  // por default ya no aplica: el usuario arma la lista columna por columna.
   const visibleDyn = [...dynCols.columns]
     .sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0))
-    .filter(c => !hiddenColumns.has(c.id));
+    .filter(c => !hiddenColumns.has(c.id) && selectedColumnIds.has(c.id));
   // Sin columna "Grupo": el grupo ya se ve en la fila de secci\u00F3n de cada bloque \u2014 como
   // columna aparte solo repet\u00EDa el mismo dato en cada fila ("se est\u00E1 colando").
   // exportLabel (alias guardado por columna) tiene prioridad sobre columnName —
@@ -2733,10 +2737,10 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
     return opts;
   }, [boardRows, groupDynCols.columns, groupDynCols.getCellVal]);
 
-  const handleExportExcel = async (selectedGroupKeys: Set<string>) => {
+  const handleExportExcel = async (selectedGroupKeys: Set<string>, selectedColumnIds: Set<string>) => {
     setExportingExcel(true);
     try {
-      const n = await exportRecruitmentExcel(boardRows, hiddenColumns, dynCols, groupDynCols, activeBoardName, selectedGroupKeys);
+      const n = await exportRecruitmentExcel(boardRows, hiddenColumns, dynCols, groupDynCols, activeBoardName, selectedGroupKeys, selectedColumnIds);
       toast.success(`${n} filas exportadas a Excel`);
     } catch {
       toast.error('Error al generar el Excel');

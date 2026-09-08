@@ -22,18 +22,20 @@ interface Props {
   groups: ExportGroupOption[];
   dynCols: DynCols;
   hiddenColumns: Set<string>;
-  onConfirm: (selectedKeys: Set<string>) => void;
+  onConfirm: (selectedGroupKeys: Set<string>, selectedColumnIds: Set<string>) => void;
 }
 
 export function ExportRecruitmentGroupsDialog({ open, onOpenChange, groups, dynCols, hiddenColumns, onConfirm }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [labels, setLabels] = useState<Record<string, string>>({});
-  // Columnas con el input de nombre "activo" — marcada = tiene (o va a tener)
-  // un nombre de exportación propio. Con tableros de cientos de columnas,
-  // mostrar un input editable por cada una de una sola vez abruma y confunde
-  // (Sergio, sep 2026) — solo se muestra expandida la que el usuario
-  // explícitamente activa, más las que ya tenían un nombre guardado de antes.
-  const [renamingCols, setRenamingCols] = useState<Set<string>>(new Set());
+  // Columnas marcadas = van al Excel. Marcar una también abre su input de
+  // nombre ahí mismo (Sergio, sep 2026: "que vayamos seleccionando qué
+  // columnas van a ir al excel y conforme se van seleccionando, que vaya
+  // abriéndose la posibilidad de ponerle nombre") — una sola decisión, no dos
+  // listas separadas. Arranca vacío cada vez que se abre (a propósito, por
+  // pedido explícito): con tableros de cientos de columnas es mejor construir
+  // la exportación eligiendo las que importan que partir de todas marcadas.
+  const [selectedCols, setSelectedCols] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
   // Mismo criterio de "visible" que usa el export real (RecruitmentPage.tsx) —
@@ -42,21 +44,17 @@ export function ExportRecruitmentGroupsDialog({ open, onOpenChange, groups, dynC
     .sort((a, b) => (a.columnOrder ?? 0) - (b.columnOrder ?? 0))
     .filter(c => !hiddenColumns.has(c.id));
 
-  // Al abrir: todos los grupos marcados (exportar "todo" es el caso común);
-  // los inputs de nombre arrancan colapsados, salvo las columnas que ya
-  // tenían un alias guardado (esas se ven activas de entrada, para no
-  // esconder que ya tienen uno puesto).
+  // Al abrir: todos los grupos marcados (excluir grupos sigue siendo la
+  // excepción), pero ninguna columna — los inputs de nombre se precargan con
+  // el alias ya guardado (o el nombre real) por si se marcan, pero no se
+  // muestran hasta que el usuario decide incluir esa columna.
   useEffect(() => {
     if (!open) return;
     setSelected(new Set(groups.map(g => g.key)));
+    setSelectedCols(new Set());
     const initialLabels: Record<string, string> = {};
-    const initialRenaming = new Set<string>();
-    for (const c of visibleCols) {
-      initialLabels[c.id] = c.exportLabel || c.columnName || '';
-      if ((c.exportLabel ?? '').trim() !== '') initialRenaming.add(c.id);
-    }
+    for (const c of visibleCols) initialLabels[c.id] = c.exportLabel || c.columnName || '';
     setLabels(initialLabels);
-    setRenamingCols(initialRenaming);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, groups]);
 
@@ -68,33 +66,33 @@ export function ExportRecruitmentGroupsDialog({ open, onOpenChange, groups, dynC
 
   const allSelected = selected.size === groups.length;
 
-  // Desmarcar una columna significa "ya no quiero un nombre propio para
-  // esta" — vuelve a mostrar el nombre real de la columna en el Excel.
-  const toggleRenaming = (colId: string) => setRenamingCols(prev => {
+  const toggleCol = (colId: string) => setSelectedCols(prev => {
     const n = new Set(prev);
     n.has(colId) ? n.delete(colId) : n.add(colId);
     return n;
   });
+  const allColsSelected = visibleCols.length > 0 && selectedCols.size === visibleCols.length;
 
   const handleExport = async () => {
     setSaving(true);
     try {
-      // Solo guarda las columnas cuyo nombre de exportación de verdad cambió
-      // respecto al que ya estaba — evita escrituras de más al exportar sin
-      // tocar nada. Una columna desmarcada siempre manda '' (limpia el alias).
+      // Solo guarda el nombre de las columnas incluidas y cuyo valor de
+      // verdad cambió — una columna que se deja fuera de este export NO
+      // pierde el nombre que ya tuviera guardado (excluirla de un export no
+      // es lo mismo que borrarle el alias).
       const changed = visibleCols.filter(c => {
-        const effective = renamingCols.has(c.id) ? (labels[c.id] ?? '').trim() : '';
+        if (!selectedCols.has(c.id)) return false;
+        const effective = (labels[c.id] ?? '').trim();
         return effective !== (c.exportLabel || '');
       });
-      await Promise.all(changed.map(c => {
-        const effective = renamingCols.has(c.id) ? (labels[c.id] ?? '').trim() : '';
-        return dynCols.updateColumn(c.id, { exportLabel: effective });
-      }));
+      await Promise.all(changed.map(c =>
+        dynCols.updateColumn(c.id, { exportLabel: (labels[c.id] ?? '').trim() }),
+      ));
     } catch {
       // El export sigue con lo que ya haya en memoria aunque falle el guardado del alias.
     }
     setSaving(false);
-    onConfirm(selected);
+    onConfirm(selected, selectedCols);
     onOpenChange(false);
   };
 
@@ -103,24 +101,34 @@ export function ExportRecruitmentGroupsDialog({ open, onOpenChange, groups, dynC
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Exportar a Excel</DialogTitle>
-          <DialogDescription>Elige qué grupos incluir y cómo quieres que se llame cada columna en el archivo.</DialogDescription>
+          <DialogDescription>Elige qué columnas y qué grupos incluir en el archivo.</DialogDescription>
         </DialogHeader>
 
         {visibleCols.length > 0 && (
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 px-1">
-              <Tags className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">Nombres de columna para el Excel</span>
-              <span className="text-[11px] text-muted-foreground/70">— marca las que quieras renombrar</span>
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex items-center justify-between gap-2 px-1 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Tags className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="text-xs font-medium text-muted-foreground truncate">Columnas para el Excel</span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-xs text-muted-foreground">{selectedCols.size} de {visibleCols.length}</span>
+                <Button
+                  variant="ghost" size="sm" className="h-7 text-xs"
+                  onClick={() => setSelectedCols(allColsSelected ? new Set() : new Set(visibleCols.map(c => c.id)))}
+                >
+                  {allColsSelected ? 'Ninguna' : 'Todas'}
+                </Button>
+              </div>
             </div>
             <div className="max-h-56 overflow-y-auto space-y-0.5 border border-border rounded-md p-1.5">
               {visibleCols.map(c => {
-                const active = renamingCols.has(c.id);
+                const active = selectedCols.has(c.id);
                 return (
                   <div key={c.id} className="rounded-md hover:bg-muted/60">
-                    <label className="flex items-center gap-2.5 px-2 py-1.5 cursor-pointer">
-                      <Checkbox checked={active} onCheckedChange={() => toggleRenaming(c.id)} />
-                      <span className="text-sm flex-1 truncate" title={c.columnName}>{c.columnName}</span>
+                    <label className="flex items-center gap-2.5 px-2 py-1.5 cursor-pointer min-w-0">
+                      <Checkbox checked={active} onCheckedChange={() => toggleCol(c.id)} className="flex-shrink-0" />
+                      <span className="text-sm flex-1 min-w-0 truncate" title={c.columnName}>{c.columnName}</span>
                     </label>
                     {active && (
                       <div className="pl-9 pr-2 pb-1.5 -mt-0.5">
@@ -153,15 +161,15 @@ export function ExportRecruitmentGroupsDialog({ open, onOpenChange, groups, dynC
           {groups.map(g => (
             <label
               key={g.key}
-              className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted/60 cursor-pointer"
+              className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted/60 cursor-pointer min-w-0"
             >
-              <Checkbox checked={selected.has(g.key)} onCheckedChange={() => toggle(g.key)} />
+              <Checkbox checked={selected.has(g.key)} onCheckedChange={() => toggle(g.key)} className="flex-shrink-0" />
               <span
                 className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: g.key === NO_GROUP_KEY ? 'hsl(var(--muted-foreground))' : getGroupColor(g.colorId) }}
               />
-              <span className="text-sm flex-1 truncate">{g.name}</span>
-              <span className="text-xs text-muted-foreground">{g.count}</span>
+              <span className="text-sm flex-1 min-w-0 truncate">{g.name}</span>
+              <span className="text-xs text-muted-foreground flex-shrink-0">{g.count}</span>
             </label>
           ))}
         </div>
