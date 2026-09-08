@@ -374,6 +374,7 @@ export const rejectPurchaseOrder = (input?: any): Promise<any> => call('rejectPu
 export const renameBoard = (input?: any): Promise<any> => call('renameBoard', input);
 export const renameChatConversation = (input?: any): Promise<any> => call('renameChatConversation', input);
 export const reorderInternalViews = (input?: any): Promise<any> => call('reorderInternalViews', input);
+export const reorderMisPendientes = (input?: any): Promise<any> => call('reorderMisPendientes', input);
 export const reorderRecruitmentRows = (input?: any): Promise<any> => call('reorderRecruitmentRows', input);
 export const reorderTasks = (input?: any): Promise<any> => call('reorderTasks', input);
 export const restoreFromTrash = (input?: any): Promise<any> => call('restoreFromTrash', input);
@@ -612,6 +613,7 @@ export type RejectExpenseOutputType = any;
 export type RejectPurchaseOrderOutputType = any;
 export type RenameBoardOutputType = any;
 export type ReorderInternalViewsOutputType = any;
+export type ReorderMisPendientesOutputType = any;
 export type ReorderRecruitmentRowsOutputType = any;
 export type ReorderTasksOutputType = any;
 export type RestoreFromTrashOutputType = any;

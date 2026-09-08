@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMisPendientes, saveMisPendiente, deleteMisPendiente, getPendienteCorreoBody, ensurePendienteNotasBlock } from 'zite-endpoints-sdk';
+import { getMisPendientes, saveMisPendiente, deleteMisPendiente, getPendienteCorreoBody, ensurePendienteNotasBlock, reorderMisPendientes } from 'zite-endpoints-sdk';
 import { useProject } from '../context/ProjectContext';
-import { useDynamicColumns } from '../hooks/useDynamicColumns';
+import { useDynamicColumns, type DynCellValue } from '../hooks/useDynamicColumns';
 import { DynamicColumnHeaders, DynamicColumnCells } from '../components/DynamicColumns';
 import { GroupPicker } from '../components/table/GroupPicker';
 import { GroupSectionHeader } from '../components/table/GroupSectionHeader';
@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import BlockNoteDocEditor from '@/components/docblock/BlockNoteDocEditor';
 import SearchableSelect from '@/components/SearchableSelect';
-import { Plus, Trash2, Mail, ListTodo, FolderKanban, ChevronsDownUp, ChevronsUpDown, X, EyeOff, Eye, Loader2, AlertCircle, NotebookPen } from 'lucide-react';
+import { Plus, Trash2, Mail, ListTodo, FolderKanban, ChevronsDownUp, ChevronsUpDown, X, EyeOff, Eye, Loader2, AlertCircle, NotebookPen, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Pendiente {
@@ -30,6 +30,7 @@ interface Pendiente {
   correoRecibidoAt: string | null;
   fechaLimite: string | null;
   completedAt: string | null;
+  rowOrder: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -57,6 +58,22 @@ export default function MisPendientesPage() {
   const [newTaskNames, setNewTaskNames] = useState<Record<string, string>>({});
   const [detailItem, setDetailItem] = useState<Pendiente | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+
+  // ── Drag-and-drop de filas (reordenar pendientes) — overlay sin re-render por
+  // pixel, adaptado de RecruitmentPage.tsx (mismo patrón, sin virtualización ni
+  // columnas de duplicado, que no aplican aquí).
+  const [dragRowId, setDragRowId] = useState<string | null>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const dropTargetRef = useRef<{ rowId: string; position: 'before' | 'after' } | null>(null);
+  const dropLineRef = useRef<HTMLDivElement>(null);
+  const dragRowIdRef = useRef<string | null>(null);
+  const dragClientYRef = useRef<number>(0);
+  const rafIdRef = useRef<number | null>(null);
+
+  const hideDropLine = () => { if (dropLineRef.current) dropLineRef.current.style.opacity = '0'; };
+  const cancelRaf = () => {
+    if (rafIdRef.current !== null) { cancelAnimationFrame(rafIdRef.current); rafIdRef.current = null; }
+  };
 
   // Filtros
   const [projectFilter, setProjectFilter] = useState('');
@@ -134,10 +151,14 @@ export default function MisPendientesPage() {
     try {
       const res = await saveMisPendiente({ titulo });
       if (groupId) await groupDynCols.setCellVal(res.id, groupId, { textValue: '1' });
+      // Optimista: mismo criterio "al final de todo" que ya usa el backend al
+      // crear (server/api/saveMisPendiente.ts) — evita que el item salte de
+      // posición cuando llegue el siguiente refresh y traiga el rowOrder real.
+      const nextOrder = Math.max(0, ...items.map(i => i.rowOrder ?? 0)) + 1000;
       setItems(prev => [{
         id: res.id, titulo, notasBlockId: null, status: 'Pendiente', fuente: 'manual', proyectoCode: null,
         correoAsunto: null, correoRemitente: null, correoRecibidoAt: null, fechaLimite: null,
-        completedAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        completedAt: null, rowOrder: nextOrder, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }, ...prev]);
     } catch {
       toast.error('Error al guardar el pendiente');
@@ -203,6 +224,7 @@ export default function MisPendientesPage() {
   }
   const sortRows = (rows: Pendiente[]) => [...rows].sort((a, b) =>
     (a.status === 'Resuelto' ? 1 : 0) - (b.status === 'Resuelto' ? 1 : 0) ||
+    (a.rowOrder ?? 0) - (b.rowOrder ?? 0) ||
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
@@ -213,6 +235,106 @@ export default function MisPendientesPage() {
     if (!dragGroupId || dragGroupId === targetGroupId || targetGroupId === '__none__') { setDragGroupId(null); setDropTargetId(null); setDropSide(null); return; }
     try { await groupDynCols.reorderColumns(dragGroupId, targetGroupId, dropSide ?? 'right'); } catch { toast.error('Error al reordenar'); }
     setDragGroupId(null); setDropTargetId(null); setDropSide(null);
+  };
+
+  // Soltar un pendiente sobre otro — reordena dentro de la misma área, o
+  // mueve + reordena si el objetivo está en otra área (mismo comportamiento
+  // que RecruitmentPage.tsx, reutilizando el mismo motor de grupos).
+  const handleRowOnRowDrop = async (draggedId: string, targetItem: Pendiente, position: 'before' | 'after') => {
+    const targetGroupId = groupOf(targetItem.id) ?? '__none__';
+    const draggedGroupId = groupOf(draggedId) ?? '__none__';
+    const draggedItem = items.find(i => i.id === draggedId);
+    if (!draggedItem) return;
+
+    const sortedGroup = [...(grouped[targetGroupId] ?? [])]
+      .sort((a, b) => (a.rowOrder ?? 0) - (b.rowOrder ?? 0))
+      .filter(i => i.id !== draggedId);
+
+    const targetIdx = sortedGroup.findIndex(i => i.id === targetItem.id);
+    const insertIdx = position === 'before' ? Math.max(0, targetIdx) : targetIdx + 1;
+    sortedGroup.splice(insertIdx, 0, { ...draggedItem });
+
+    const updates = sortedGroup.map((i, idx) => ({ id: i.id, rowOrder: (idx + 1) * 1000 }));
+    const orderMap = new Map(updates.map(u => [u.id, u.rowOrder]));
+    setItems(prev => prev.map(i => orderMap.has(i.id) ? { ...i, rowOrder: orderMap.get(i.id)! } : i));
+
+    if (draggedGroupId !== targetGroupId) {
+      const ops: Array<{ rowId: string; colId: string; value: DynCellValue }> = [];
+      for (const g of groupDynCols.columns) {
+        if (groupDynCols.getCellVal(draggedId, g.id)?.textValue === '1') ops.push({ rowId: draggedId, colId: g.id, value: {} });
+      }
+      if (targetGroupId !== '__none__') ops.push({ rowId: draggedId, colId: targetGroupId, value: { textValue: '1' } });
+      if (ops.length > 0) groupDynCols.batchSetCellVals(ops);
+    }
+
+    try {
+      await reorderMisPendientes({ updates });
+    } catch {
+      toast.error('Error al reordenar');
+    }
+  };
+
+  // ── Drag delegado al contenedor de la tabla — una línea de drop calculada por
+  // geometría en vivo, sin re-render por cada dragover (RAF-throttled).
+  const containerDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('rowid')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    dragClientYRef.current = e.clientY;
+    if (rafIdRef.current !== null) return;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const container = tableContainerRef.current;
+      const dropLine = dropLineRef.current;
+      const draggedId = dragRowIdRef.current;
+      if (!container || !dropLine || !draggedId) return;
+
+      const clientY = dragClientYRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const candidates = Array.from(container.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'))
+        .filter(tr => tr.getAttribute('data-row-id') !== draggedId);
+      if (candidates.length === 0) { hideDropLine(); return; }
+
+      let targetId = candidates[candidates.length - 1].getAttribute('data-row-id')!;
+      let position: 'before' | 'after' = 'after';
+      let lineY = candidates[candidates.length - 1].getBoundingClientRect().bottom;
+
+      for (const tr of candidates) {
+        const rect = tr.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        if (clientY < mid) { targetId = tr.getAttribute('data-row-id')!; position = 'before'; lineY = rect.top; break; }
+      }
+
+      dropTargetRef.current = { rowId: targetId, position };
+      const localY = lineY - containerRect.top + container.scrollTop;
+      dropLine.style.transform = `translateY(${localY - 1.5}px)`;
+      dropLine.style.opacity = '1';
+    });
+  };
+
+  const containerDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('rowid')) return;
+    e.preventDefault();
+    const srcRowId = e.dataTransfer.getData('rowId');
+    const cur = dropTargetRef.current;
+    dropTargetRef.current = null;
+    cancelRaf();
+    hideDropLine();
+    dragRowIdRef.current = null;
+    setDragRowId(null);
+    if (!srcRowId || !cur) return;
+    const targetItem = items.find(i => i.id === cur.rowId);
+    if (!targetItem || srcRowId === targetItem.id) return;
+    handleRowOnRowDrop(srcRowId, targetItem, cur.position);
+  };
+
+  const containerDragLeave = (e: React.DragEvent) => {
+    const container = tableContainerRef.current;
+    if (container && !container.contains(e.relatedTarget as Node)) {
+      dropTargetRef.current = null;
+      cancelRaf();
+      hideDropLine();
+    }
   };
 
   const hasActiveFilters = !!projectFilter || groupFilter.size > 0;
@@ -226,7 +348,7 @@ export default function MisPendientesPage() {
     const done = item.status === 'Resuelto';
     const overdue = !done && isOverdue(item.fechaLimite);
     return (
-      <tr key={item.id} className="group" data-row-id={item.id}>
+      <tr key={item.id} className={`group${dragRowId === item.id ? ' opacity-25' : ''}`} data-row-id={item.id}>
         <td className="h-9 pl-2 group-hover:bg-muted bg-card" style={{ position: 'sticky', left: 0, zIndex: 10, borderBottom: cellBorder }}>
           <div className="flex items-center gap-1.5 h-full">
             <Checkbox checked={done} onCheckedChange={() => toggleStatus(item)} className="h-3.5 w-3.5" />
@@ -235,6 +357,22 @@ export default function MisPendientesPage() {
         </td>
         <td className="px-2 py-0 h-9 overflow-hidden group-hover:bg-muted border-r border-border/40 bg-card" style={{ position: 'sticky', left: 40, zIndex: 10, borderBottom: cellBorder }}>
           <div className="flex items-center gap-1.5 w-full h-full">
+            <div
+              draggable
+              onDragStart={e => {
+                e.stopPropagation();
+                e.dataTransfer.setData('rowId', item.id);
+                e.dataTransfer.effectAllowed = 'move';
+                setDragRowId(item.id);
+                dragRowIdRef.current = item.id;
+              }}
+              onDragEnd={() => { dragRowIdRef.current = null; cancelRaf(); hideDropLine(); setDragRowId(null); dropTargetRef.current = null; }}
+              onClick={e => e.stopPropagation()}
+              className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground transition-all flex-shrink-0"
+              title="Arrastrar para reordenar"
+            >
+              <GripVertical className="w-3 h-3" />
+            </div>
             {editingTitleId === item.id ? (
               <InlineInput value={item.titulo} onSave={v => updateTitulo(item, v)} onCancel={() => setEditingTitleId(null)} className="flex-1" />
             ) : (
@@ -336,7 +474,25 @@ export default function MisPendientesPage() {
       {!ready ? (
         <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-9 w-full rounded" />)}</div>
       ) : (
-        <div className="bg-card border rounded-lg overflow-auto max-h-[calc(100vh-280px)]" style={{ position: 'relative' }}>
+        <div
+          ref={tableContainerRef}
+          className="bg-card border rounded-lg overflow-auto max-h-[calc(100vh-280px)]"
+          style={{ position: 'relative', overscrollBehavior: 'contain' }}
+          onDragOver={containerDragOver}
+          onDrop={containerDrop}
+          onDragLeave={containerDragLeave}
+        >
+          {/* Línea de drop — posicionada con transform, sin impacto en el layout de la tabla */}
+          <div
+            ref={dropLineRef}
+            style={{
+              position: 'absolute', left: 0, right: 0, height: 3,
+              pointerEvents: 'none', opacity: 0, zIndex: 50,
+              background: 'hsl(var(--primary))', borderRadius: 9999,
+              boxShadow: '0 0 10px hsl(var(--primary) / 0.6)',
+              willChange: 'transform, opacity',
+            }}
+          />
           <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: totalWidth, minWidth: '100%' }}>
             <colgroup>
               <col style={{ width: 40 }} />

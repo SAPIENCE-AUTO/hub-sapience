@@ -54,9 +54,15 @@ export default createEndpoint({
 
     if (!input.titulo?.trim()) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Título requerido' });
 
+    // row_order: al final de todo (contador global, no por área) — como cada
+    // área siempre ordena su propio subconjunto por row_order, un valor
+    // global creciente ya deja el pendiente nuevo al final de cualquier área
+    // en la que termine, sin necesitar saber el área todavía en este punto
+    // (se asigna aparte, vía CellValues, igual que ya hace quickCreate).
     const { rows } = await pool.query(
-      `insert into pendientes_personales (user_id, titulo, status, fuente, fecha_limite, proyecto_code)
-       values ($1, $2, 'Pendiente', 'manual', $3, $4)
+      `insert into pendientes_personales (user_id, titulo, status, fuente, fecha_limite, proyecto_code, row_order)
+       values ($1, $2, 'Pendiente', 'manual', $3, $4,
+               (select coalesce(max(row_order), 0) + 1000 from pendientes_personales where user_id = $1))
        returning id`,
       [userId, input.titulo.trim(), input.fechaLimite || null, input.proyectoCode || null],
     );

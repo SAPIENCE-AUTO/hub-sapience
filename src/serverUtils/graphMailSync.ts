@@ -38,8 +38,9 @@ export async function syncFlaggedEmails(userId: string, userEmail: string): Prom
   for (const msg of messages) {
     const remitente = msg.from?.emailAddress?.address ?? null;
     const result = await pool.query(
-      `insert into pendientes_personales (user_id, titulo, status, fuente, correo_message_id, correo_asunto, correo_remitente, correo_recibido_at)
-       values ($1, $2, 'Pendiente', 'correo', $3, $4, $5, $6)
+      `insert into pendientes_personales (user_id, titulo, status, fuente, correo_message_id, correo_asunto, correo_remitente, correo_recibido_at, row_order)
+       values ($1, $2, 'Pendiente', 'correo', $3, $4, $5, $6,
+               (select coalesce(max(row_order), 0) + 1000 from pendientes_personales where user_id = $1))
        on conflict (user_id, correo_message_id) where correo_message_id is not null do nothing
        returning id`,
       [userId, msg.subject || '(sin asunto)', msg.id, msg.subject ?? null, remitente, msg.receivedDateTime ?? null],

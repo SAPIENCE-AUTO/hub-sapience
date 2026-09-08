@@ -46,6 +46,7 @@ export default createEndpoint({
       correoRecibidoAt: z.string().nullable(),
       fechaLimite: z.string().nullable(),
       completedAt: z.string().nullable(),
+      rowOrder: z.number(),
       createdAt: z.string(),
       updatedAt: z.string(),
     })),
@@ -68,10 +69,10 @@ export default createEndpoint({
       ensurePendientesBoard(userId),
       pool.query(
         `select id, titulo, notas_block_id, status, fuente, proyecto_code, correo_asunto, correo_remitente,
-                correo_recibido_at, fecha_limite, completed_at, created_at, updated_at
+                correo_recibido_at, fecha_limite, completed_at, row_order, created_at, updated_at
            from pendientes_personales
           where user_id = $1
-          order by (status = 'Resuelto') asc, created_at desc
+          order by (status = 'Resuelto') asc, row_order asc, created_at desc
           limit 500`,
         [userId],
       ),
@@ -92,6 +93,7 @@ export default createEndpoint({
         correoRecibidoAt: r.correo_recibido_at ? new Date(r.correo_recibido_at).toISOString() : null,
         fechaLimite: r.fecha_limite ? new Date(r.fecha_limite).toISOString().slice(0, 10) : null,
         completedAt: r.completed_at ? new Date(r.completed_at).toISOString() : null,
+        rowOrder: r.row_order,
         createdAt: new Date(r.created_at).toISOString(),
         updatedAt: new Date(r.updated_at).toISOString(),
       })),
