@@ -245,6 +245,7 @@ export interface BoardColumnsRecordType {
   columnOrder?: number;
   deletedAt?: string;
   deletedBy?: string;
+  exportLabel?: string;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -728,7 +728,7 @@ export function useDynamicColumns(boardId: string, seedRows?: SeedRow[], options
     await withColSaveLimit(() => saveBoardColumn({ id: colId, columnName: newName, boardId, columnType: col.columnType, optionsJson: col.optionsJson, columnOrder: col.columnOrder }));
   };
 
-  const updateColumn = async (colId: string, updates: { columnName?: string; columnType?: string; optionsJson?: string }) => {
+  const updateColumn = async (colId: string, updates: { columnName?: string; columnType?: string; optionsJson?: string; exportLabel?: string }) => {
     const col = columns.find(c => c.id === colId);
     if (!col) return;
     const merged = { ...col, ...updates };
@@ -742,6 +742,13 @@ export function useDynamicColumns(boardId: string, seedRows?: SeedRow[], options
       columnType: merged.columnType ?? col.columnType ?? '',
       optionsJson: merged.optionsJson ?? col.optionsJson,
       columnOrder: merged.columnOrder ?? col.columnOrder ?? 0,
+      // Sin fallback a col.exportLabel a propósito: a diferencia de los demás
+      // campos, "borrar el nombre de exportación" (volver al nombre real de la
+      // columna) es una acción válida — updates.exportLabel === '' debe viajar
+      // tal cual, nunca recaer en el valor viejo. merged.exportLabel ya trae el
+      // valor correcto por el spread de arriba cuando esta llamada no toca el
+      // campo (updates sin exportLabel → merged.exportLabel = col.exportLabel).
+      exportLabel: merged.exportLabel,
     }));
   };
 

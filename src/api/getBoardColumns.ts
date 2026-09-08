@@ -29,6 +29,7 @@ export default createEndpoint({
         columnType: z.string().optional(),
         optionsJson: z.string().optional(),
         columnOrder: z.number().optional(),
+        exportLabel: z.string().optional(),
       }),
     ),
   }),

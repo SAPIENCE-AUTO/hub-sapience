@@ -287,6 +287,7 @@ create table board_columns (
   column_order                  numeric,
   deleted_at                    text,
   deleted_by                    text,
+  export_label                  text,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now()
 );

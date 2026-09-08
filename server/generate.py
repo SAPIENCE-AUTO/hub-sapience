@@ -66,6 +66,14 @@ EXTRA_COLUMNS = {
     # alcance ahí. La migración sobre la tabla ya existente vive en
     # server/scripts/add-collection-credit-days.ts (ALTER TABLE, no se ejecuta sola).
     'CollectionProcesses': [('creditDays', 'credit_days', 'integer', 'number')],
+    # Exportar Reclutamiento (sep 2026): alias de columna solo para el encabezado
+    # del Excel/CSV exportado — el nombre real de la columna (columnName, lo que
+    # se ve en el grid) no cambia. Separado de optionsJson a propósito: esa
+    # columna tiene forma distinta según columnType (arreglo para Select/Status,
+    # objeto para Fórmula/Botón), meterle una clave más ahí sería frágil. La
+    # migración sobre la tabla ya existente vive en
+    # server/scripts/add-board-column-export-label.ts (ALTER TABLE, no se ejecuta sola).
+    'BoardColumns': [('exportLabel', 'export_label', 'text', 'text')],
 }
 
 # Índice único agregado directamente en Supabase después de la carga inicial

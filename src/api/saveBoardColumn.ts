@@ -14,10 +14,11 @@ export default createEndpoint({
     columnType: z.string().optional(),
     optionsJson: z.string().optional(),
     columnOrder: z.number().optional(),
+    exportLabel: z.string().optional(),
   }),
   outputSchema: z.object({ success: z.boolean(), id: z.string() }),
   execute: async ({ input }) => {
-    const { id, boardId: inputBoardId, columnName, columnType, optionsJson, columnOrder } = input;
+    const { id, boardId: inputBoardId, columnName, columnType, optionsJson, columnOrder, exportLabel } = input;
 
     // ── Phase 1: Parse suffix ───────────────────────────────────────────
     let suffix = '' as '' | '::groups' | '::children';
@@ -57,6 +58,7 @@ export default createEndpoint({
       if (columnType !== undefined) updateRecord.columnType = columnType;
       if (optionsJson !== undefined) updateRecord.optionsJson = optionsJson;
       if (columnOrder !== undefined) updateRecord.columnOrder = columnOrder;
+      if (exportLabel !== undefined) updateRecord.exportLabel = exportLabel;
 
       await BoardColumns.update({ id, record: updateRecord });
       console.log(`[saveBoardColumn] action=updated id=${id} boardId=${writeBoardId} columnName=${columnName}`);
@@ -96,6 +98,7 @@ export default createEndpoint({
       if (columnType !== undefined) updateFields.columnType = columnType;
       if (optionsJson !== undefined) updateFields.optionsJson = optionsJson;
       if (columnOrder !== undefined) updateFields.columnOrder = columnOrder;
+      if (exportLabel !== undefined) updateFields.exportLabel = exportLabel;
 
       if (Object.keys(updateFields).length > 0) {
         await BoardColumns.update({ id: existing.id, record: updateFields });
@@ -110,6 +113,7 @@ export default createEndpoint({
       if (columnType !== undefined) moveRecord.columnType = columnType;
       if (optionsJson !== undefined) moveRecord.optionsJson = optionsJson;
       if (columnOrder !== undefined) moveRecord.columnOrder = columnOrder;
+      if (exportLabel !== undefined) moveRecord.exportLabel = exportLabel;
 
       await BoardColumns.update({ id: existing.id, record: moveRecord });
       console.log(`[saveBoardColumn] action=moved from=${legacyBoardId} to=${writeBoardId} columnName=${columnName}`);
@@ -121,6 +125,7 @@ export default createEndpoint({
     if (columnType !== undefined) createRecord.columnType = columnType;
     if (optionsJson !== undefined) createRecord.optionsJson = optionsJson;
     if (columnOrder !== undefined) createRecord.columnOrder = columnOrder;
+    if (exportLabel !== undefined) createRecord.exportLabel = exportLabel;
 
     const created = await BoardColumns.create({ record: createRecord });
     console.log(`[saveBoardColumn] action=created id=${created.id} boardId=${writeBoardId} columnName=${columnName}`);

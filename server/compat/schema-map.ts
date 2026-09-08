@@ -276,6 +276,7 @@ export const SCHEMA: Record<string, TableDef> = {
       columnOrder: { col: 'column_order', kind: 'number' },
       deletedAt: { col: 'deleted_at', kind: 'text' },
       deletedBy: { col: 'deleted_by', kind: 'text' },
+      exportLabel: { col: 'export_label', kind: 'text' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },

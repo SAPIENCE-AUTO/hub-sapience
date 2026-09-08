@@ -111,7 +111,7 @@ function exportRecruitmentCsv(
   const headers = [
     ...fixedCols.map(c => c.label),
     'Grupo',
-    ...visibleDyn.map(c => c.columnName ?? ''),
+    ...visibleDyn.map(c => c.exportLabel || c.columnName || ''),
   ];
 
   // Determine group for each top-level row
@@ -236,7 +236,10 @@ async function exportRecruitmentExcel(
     .filter(c => !hiddenColumns.has(c.id));
   // Sin columna "Grupo": el grupo ya se ve en la fila de secci\u00F3n de cada bloque \u2014 como
   // columna aparte solo repet\u00EDa el mismo dato en cada fila ("se est\u00E1 colando").
-  const headers = [...fixedCols.map(c => c.label), ...visibleDyn.map(c => c.columnName ?? '')];
+  // exportLabel (alias guardado por columna) tiene prioridad sobre columnName —
+  // con `||` en vez de `??` a propósito: un exportLabel vacío (tras borrarlo)
+  // debe caer también al nombre real, no quedarse en blanco.
+  const headers = [...fixedCols.map(c => c.label), ...visibleDyn.map(c => c.exportLabel || c.columnName || '')];
   const colCount = headers.length;
 
   // \u2500\u2500 Filas agrupadas (se calculan antes del encabezado para poder mostrar
@@ -3583,6 +3586,8 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
         open={exportExcelDialogOpen}
         onOpenChange={setExportExcelDialogOpen}
         groups={exportGroupOptions}
+        dynCols={dynCols}
+        hiddenColumns={hiddenColumns}
         onConfirm={handleExportExcel}
       />
 
