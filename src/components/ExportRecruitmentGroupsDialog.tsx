@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Tags } from 'lucide-react';
+import { saveBoardColumn } from 'zite-endpoints-sdk';
 import { getGroupColor } from './table/tableUtils';
 import type { DynCols } from './DynamicColumns';
 
@@ -22,7 +23,7 @@ interface Props {
   groups: ExportGroupOption[];
   dynCols: DynCols;
   hiddenColumns: Set<string>;
-  onConfirm: (selectedGroupKeys: Set<string>, selectedColumnIds: Set<string>) => void;
+  onConfirm: (selectedGroupKeys: Set<string>, selectedColumnIds: Set<string>, columnLabels: Record<string, string>) => void;
 }
 
 export function ExportRecruitmentGroupsDialog({ open, onOpenChange, groups, dynCols, hiddenColumns, onConfirm }: Props) {
@@ -75,24 +76,49 @@ export function ExportRecruitmentGroupsDialog({ open, onOpenChange, groups, dynC
 
   const handleExport = async () => {
     setSaving(true);
+    // El nombre que de verdad se usa para ESTE export sale de acá directo (lo
+    // que hay en los inputs ahora mismo) — no depende de que dynCols.columns
+    // ya haya absorbido el guardado antes de que el export arme los
+    // encabezados. Esa dependencia era el bug: el guardado y la lectura para
+    // el Excel corrían por dos caminos separados (uno vía red, otro vía un
+    // estado de React que tarda un render en propagarse), así que a veces el
+    // archivo salía con el nombre viejo aunque el guardado sí hubiera
+    // funcionado — o al revés.
+    const columnLabels: Record<string, string> = {};
+    for (const c of visibleCols) {
+      if (selectedCols.has(c.id)) columnLabels[c.id] = (labels[c.id] ?? '').trim();
+    }
     try {
       // Solo guarda el nombre de las columnas incluidas y cuyo valor de
       // verdad cambió — una columna que se deja fuera de este export NO
       // pierde el nombre que ya tuviera guardado (excluirla de un export no
       // es lo mismo que borrarle el alias).
-      const changed = visibleCols.filter(c => {
-        if (!selectedCols.has(c.id)) return false;
-        const effective = (labels[c.id] ?? '').trim();
-        return effective !== (c.exportLabel || '');
-      });
-      await Promise.all(changed.map(c =>
-        dynCols.updateColumn(c.id, { exportLabel: (labels[c.id] ?? '').trim() }),
-      ));
+      const changed = visibleCols.filter(c => selectedCols.has(c.id) && columnLabels[c.id] !== (c.exportLabel || ''));
+      if (changed.length > 0) {
+        // saveBoardColumn directo (no dynCols.updateColumn): usa los campos
+        // de `c`, que ya vienen frescos de este mismo render, en vez de un
+        // lookup en el estado interno del hook que podía estar
+        // desactualizado si el diálogo llevaba un rato abierto — esa
+        // desactualización es lo que a veces hacía que el guardado ni
+        // siquiera se disparara.
+        await Promise.all(changed.map(c => saveBoardColumn({
+          id: c.id,
+          columnName: c.columnName ?? '',
+          boardId: c.boardId ?? '',
+          columnType: c.columnType,
+          optionsJson: c.optionsJson,
+          columnOrder: c.columnOrder,
+          exportLabel: columnLabels[c.id],
+        })));
+        // Refresca dynCols desde el servidor para que la próxima vez que se
+        // abra este diálogo (sin recargar la página) ya se vea el nombre guardado.
+        await dynCols.refreshColumns();
+      }
     } catch {
-      // El export sigue con lo que ya haya en memoria aunque falle el guardado del alias.
+      // El export sigue con lo que ya haya en los inputs aunque falle el guardado del alias.
     }
     setSaving(false);
-    onConfirm(selected, selectedCols);
+    onConfirm(selected, selectedCols, columnLabels);
     onOpenChange(false);
   };
 

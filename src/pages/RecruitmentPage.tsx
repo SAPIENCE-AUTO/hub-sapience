@@ -220,6 +220,7 @@ async function exportRecruitmentExcel(
   boardName: string,
   includeGroupKeys: Set<string>,
   selectedColumnIds: Set<string>,
+  columnLabels: Record<string, string>,
 ): Promise<number> {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
@@ -242,8 +243,11 @@ async function exportRecruitmentExcel(
   // columna aparte solo repet\u00EDa el mismo dato en cada fila ("se est\u00E1 colando").
   // exportLabel (alias guardado por columna) tiene prioridad sobre columnName —
   // con `||` en vez de `??` a propósito: un exportLabel vacío (tras borrarlo)
-  // debe caer también al nombre real, no quedarse en blanco.
-  const headers = [...fixedCols.map(c => c.label), ...visibleDyn.map(c => c.exportLabel || c.columnName || '')];
+  // debe caer también al nombre real, no quedarse en blanco. columnLabels
+  // (lo que el diálogo tenía en los inputs al momento de exportar) manda
+  // sobre c.exportLabel — c.exportLabel puede venir de un dynCols.columns
+  // que todavía no absorbió el guardado que este mismo export acaba de hacer.
+  const headers = [...fixedCols.map(c => c.label), ...visibleDyn.map(c => columnLabels[c.id] || c.exportLabel || c.columnName || '')];
   const colCount = headers.length;
 
   // \u2500\u2500 Filas agrupadas (se calculan antes del encabezado para poder mostrar
@@ -2737,10 +2741,10 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
     return opts;
   }, [boardRows, groupDynCols.columns, groupDynCols.getCellVal]);
 
-  const handleExportExcel = async (selectedGroupKeys: Set<string>, selectedColumnIds: Set<string>) => {
+  const handleExportExcel = async (selectedGroupKeys: Set<string>, selectedColumnIds: Set<string>, columnLabels: Record<string, string>) => {
     setExportingExcel(true);
     try {
-      const n = await exportRecruitmentExcel(boardRows, hiddenColumns, dynCols, groupDynCols, activeBoardName, selectedGroupKeys, selectedColumnIds);
+      const n = await exportRecruitmentExcel(boardRows, hiddenColumns, dynCols, groupDynCols, activeBoardName, selectedGroupKeys, selectedColumnIds, columnLabels);
       toast.success(`${n} filas exportadas a Excel`);
     } catch {
       toast.error('Error al generar el Excel');
