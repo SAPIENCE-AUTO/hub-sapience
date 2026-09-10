@@ -219,6 +219,15 @@ export async function fetchCalendarExcelData(input: {
 
   // ── Bucket events into groups ──────────────────────────────────────────
   const topLevelEvents = events.filter(e => !e.parentEventId);
+  // Orden cronológico dentro de cada grupo — sin esto las filas salían en el
+  // orden crudo que regresaba Postgres (sin ORDER BY), no por fecha. Eventos
+  // sin fecha van al final (no hay criterio de orden posible para ellos).
+  topLevelEvents.sort((a, b) => {
+    if (!a.eventDate && !b.eventDate) return 0;
+    if (!a.eventDate) return 1;
+    if (!b.eventDate) return -1;
+    return new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
+  });
   const groupBuckets   = new Map<string, typeof events>();
   for (const g of activeGroupCols) groupBuckets.set(g.id, []);
   const ungrouped: typeof events = [];
