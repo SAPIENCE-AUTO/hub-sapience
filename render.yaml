@@ -68,7 +68,17 @@ services:
         sync: false
       - key: ZITE_N8N_CALENDAR_WEBHOOK_URL
         sync: false
+      # ZITE_N8N_TIMELINE_WEBHOOK_URL ya no se usa (sep 2026) —
+      # sendTimelineToWebhook.ts llama directo a gantt-service (Render) y sube
+      # a Teams vía Graph, mismo patrón que ya tenía Calendario. El valor
+      # puede seguir en el dashboard de Render sin problema si no se borra a
+      # mano; esta entrada solo deja de declararlo como necesario aquí.
       - key: ZITE_N8N_TIMELINE_WEBHOOK_URL
+        sync: false
+      # URL pública del servicio gantt-service en Render (repo
+      # SAPIENCE-AUTO/gantt-service) — genera el .xlsx del Timeline vía
+      # POST /gantt-xlsx. Ver sendTimelineToWebhook.ts.
+      - key: GANTT_SERVICE_URL
         sync: false
       # Sala de observación — Token ID/Secret de un Access Token de Mux, y el
       # Webhook Secret del endpoint que apunte a /api/webhooks/mux.

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { createEndpoint, Tasks, Projects, BoardColumns, CellValues, Documents, Users, Boards } from '../../server/compat';
+import { createEndpoint, Tasks, Projects, BoardColumns, CellValues, Documents, Boards } from '../../server/compat';
+import { buildSapienceDocumentName } from '../serverUtils/documentNaming';
+import { uploadFileToTeamsChannel } from '../serverUtils/teamsFileUpload';
+
+const TIMELINE_FOLDER = 'TIMELINE';
+const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 // Convert HSL (0-360, 0-100, 0-100) to hex string
 function hslToHex(h: number, s: number, l: number): string {
@@ -34,23 +39,12 @@ function colorIdToHex(colorId: string | null | undefined): string {
   return hsl ? hslToHex(...hsl) : '#6B7280';
 }
 
-// Map internal column types to monday.com-compatible types
-function mapColType(type: string | null | undefined): string {
-  switch (type) {
-    case 'Status':        return 'status';
-    case 'Fecha':         return 'date';
-    case 'Persona':       return 'people';
-    case 'Color':         return 'color_picker';
-    case 'Texto':         return 'text';
-    case 'Número':        return 'numbers';
-    case 'Número entero': return 'numbers';
-    default:              return (type ?? 'text').toLowerCase();
-  }
-}
+interface GanttTask { name: string; start: string; end: string; color?: string | null }
+interface GanttGroup { name: string; tasks: GanttTask[]; header_color?: string }
 
 export default createEndpoint({
   authenticated: true,
-  description: 'Sends project tasks grouped by group to n8n webhook for timeline/Excel generation',
+  description: 'Genera el Excel de Timeline llamando directo a gantt-service (Render) y lo sube a Teams vía Graph — ya no depende de n8n',
   inputSchema: z.object({
     projectCode: z.string(),
     boardName: z.string().optional(),
@@ -65,8 +59,8 @@ export default createEndpoint({
     version: z.string().optional(),
   }),
   execute: async ({ input }) => {
-    const webhookUrl = process.env.ZITE_N8N_TIMELINE_WEBHOOK_URL ?? '';
-    if (!webhookUrl) throw new Error('Webhook URL not configured');
+    const ganttServiceUrl = (process.env.GANTT_SERVICE_URL ?? '').replace(/\/$/, '');
+    if (!ganttServiceUrl) throw new Error('GANTT_SERVICE_URL no configurada');
 
     // ── Resolve board identity: UUID-first, legacy fallback ────────────────
     let resolvedBoardId: string;
@@ -109,33 +103,20 @@ export default createEndpoint({
     }
 
     // Fetch everything in parallel
-    const [tasksResult, projectResult, colRes, cellRes, groupColRes, groupCellRes, usersResult] = await Promise.all([
+    const [tasksResult, projectResult, colRes, cellRes, groupColRes, groupCellRes] = await Promise.all([
       Tasks.findAll({ filters: taskFilters as any, limit: 500 }),
       Projects.findOne({ filters: { projectCode: input.projectCode } }),
       BoardColumns.findAll({ filters: { boardId } as any, limit: 200 }),
       CellValues.findAll({ filters: { boardId } as any, limit: 2000 }),
       BoardColumns.findAll({ filters: { boardId: groupBoardId } as any, limit: 100 }),
       CellValues.findAll({ filters: { boardId: groupBoardId } as any, limit: 2000 }),
-      Users.findAll({ limit: 200, fields: ['firstName', 'lastName', 'email'] }),
     ]);
 
     // ── Version counter ───────────────────────────────────────────────────
     const autoVersion = (boardRecord?.timelineVersion ?? 0) + 1;
     const versionStr  = input.version ?? String(autoVersion);
 
-    // Build ID→name map for resolving Persona cell values
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const userById = new Map(usersResult.records.map(u => [u.id, u]));
-    const resolvePersona = (val: string | null | undefined): string => {
-      if (!val) return '';
-      if (!UUID_RE.test(val)) return val; // legacy: already a name
-      const u = userById.get(val);
-      return u ? ([u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || val) : val;
-    };
-
     const tasks       = tasksResult.records.filter(t => !t.deletedAt);
-    const projectName = projectResult?.fullName || input.projectCode;
-    const now         = new Date().toISOString();
 
     // Build title: "{tematica} - {boardName}" or just "{boardName}" if no tematica
     const tematica    = (projectResult as any)?.tematica ?? '';
@@ -173,24 +154,11 @@ export default createEndpoint({
       return undefined;
     }
 
-    // Deduped columns for board schema (last one wins on duplicate names)
+    // Deduped columns (last one wins on duplicate names) — solo hace falta ya
+    // para encontrar la columna "Color" por tipo cuando no se llama literal "Color".
     const deduped = new Map<string, typeof activeCols[0]>();
     for (const col of activeCols) {
       deduped.set((col.columnName ?? col.id).toLowerCase().trim(), col);
-    }
-
-    const boardColumns: { id: string; title: string; type: string }[] = [
-      { id: 'name', title: 'Name', type: 'name' },
-      ...Array.from(deduped.values()).map(col => ({
-        id: col.id,
-        title: col.columnName ?? col.id,
-        type: mapColType(col.columnType),
-      })),
-    ];
-
-    const hasCronograma = deduped.has('cronograma') || deduped.has('cronograma general');
-    if (!hasCronograma) {
-      boardColumns.push({ id: 'cronograma_calc', title: 'Cronograma', type: 'timeline' });
     }
 
     // ── Group columns & membership ──────────────────────────────────────────
@@ -210,63 +178,32 @@ export default createEndpoint({
       }
     }
 
-    // ── Build task subitem ──────────────────────────────────────────────────
-    function buildSubitem(t: typeof tasks[0]) {
-      const startCell      = resolveCell(t.id, 'Inicio');
-      const endCell        = resolveCell(t.id, 'Fin');
-      const statusCell     = resolveCell(t.id, 'Estado');
-      const responsableCell = resolveCell(t.id, 'Responsable');
-      // Resolve color: match by name "Color" OR by columnType === 'Color'
+    // ── Build a gantt-service task from a Hub task ──────────────────────────
+    // gantt-service exige start/end (no acepta vacío) — una tarea sin ninguna
+    // fecha no se puede dibujar como barra, se omite del Gantt en vez de
+    // tronar la generación de todo el archivo.
+    function toGanttTask(t: typeof tasks[0]): GanttTask | null {
+      const startCell = resolveCell(t.id, 'Inicio');
+      const endCell   = resolveCell(t.id, 'Fin');
       const colorColByType = Array.from(deduped.values()).find(c => c.columnType === 'Color');
-      const colorCell      = resolveCell(t.id, 'Color') ??
+      const colorCell = resolveCell(t.id, 'Color') ??
         (colorColByType ? cellsByTaskCol.get(t.id)?.get(colorColByType.id) : undefined);
 
-      const startDate  = startCell?.dateValue?.split('T')[0]  || t.startDate?.split('T')[0]  || '';
-      const endDate    = endCell?.dateValue?.split('T')[0]    || t.endDate?.split('T')[0]    || '';
-      const status     = statusCell?.textValue  || t.status     || '';
-      const assignedTo = resolvePersona(responsableCell?.textValue || t.assignedTo || '');
-      const color      = colorCell?.textValue   || null;
+      const startDate = startCell?.dateValue?.split('T')[0] || t.startDate?.split('T')[0] || '';
+      const endDate   = endCell?.dateValue?.split('T')[0]   || t.endDate?.split('T')[0]   || '';
+      if (!startDate && !endDate) return null;
 
-      const cronText  = startDate && endDate ? `${startDate} - ${endDate}` : (startDate || endDate || '');
-      const cronValue = startDate || endDate
-        ? JSON.stringify({ to: endDate || startDate, from: startDate || endDate, changed_at: now })
-        : null;
-
-      const column_values = Array.from(deduped.values()).map(col => {
-        const colType     = mapColType(col.columnType);
-        const cell        = cellsByTaskCol.get(t.id)?.get(col.id);
-        const colNameLower = (col.columnName ?? '').toLowerCase().trim();
-
-        if (colNameLower === 'inicio') {
-          return { id: col.id, text: startDate, value: startDate ? JSON.stringify({ date: startDate, changed_at: now }) : null, type: colType };
-        }
-        if (colNameLower === 'fin') {
-          return { id: col.id, text: endDate, value: endDate ? JSON.stringify({ date: endDate, changed_at: now }) : null, type: colType };
-        }
-        if (colNameLower === 'estado') {
-          return { id: col.id, text: status, value: status ? JSON.stringify({ index: 0, post_id: null, changed_at: now }) : null, type: colType };
-        }
-        if (colNameLower === 'responsable' || colType === 'people') {
-          return { id: col.id, text: assignedTo, value: assignedTo ? JSON.stringify({ changed_at: now, personsAndTeams: [{ id: assignedTo, kind: 'person' }] }) : null, type: colType };
-        }
-        if (colNameLower === 'color' || colType === 'color_picker') {
-          return { id: col.id, text: color, value: color ? JSON.stringify({ color, changed_at: now }) : null, type: colType };
-        }
-        const text = cell?.textValue || cell?.dateValue?.split('T')[0] || '';
-        return { id: col.id, text, value: text || null, type: colType };
-      });
-
-      if (!hasCronograma) {
-        column_values.push({ id: 'cronograma_calc', text: cronText, value: cronValue, type: 'timeline' });
-      }
-
-      return { id: t.id, name: t.taskName ?? '', column_values };
+      return {
+        name: t.taskName ?? '',
+        start: startDate || endDate,
+        end: endDate || startDate,
+        color: colorCell?.textValue || null,
+      };
     }
 
     // ── Bucket tasks into groups ────────────────────────────────────────────
     const topLevelTasks = tasks.filter(t => !t.parentTaskId);
 
-    // One bucket per group (in order), plus a catch-all for ungrouped
     const groupBuckets = new Map<string, typeof tasks>();
     for (const g of activeGroupCols) groupBuckets.set(g.id, []);
     const ungrouped: typeof tasks = [];
@@ -294,74 +231,78 @@ export default createEndpoint({
         return da < db ? -1 : da > db ? 1 : 0;
       });
 
-    // ── Build items array ───────────────────────────────────────────────────
-    // Ungrouped tasks go FIRST (chronological), then named groups (each chronological)
-    const boardDef = { id: boardId, columns: boardColumns };
+    // ── Build groups array for gantt-service ────────────────────────────────
+    // Ungrouped primero (con header en blanco, gris — mismo criterio visual
+    // que ya tenía el flujo viejo), luego los grupos con nombre en su orden.
+    const ganttGroups: GanttGroup[] = [];
 
-    const items: object[] = [];
-
-    // 1. Ungrouped tasks at the top (with empty header)
     if (ungrouped.length > 0 || activeGroupCols.length === 0) {
-      items.push({
-        id: 'ungrouped',
+      ganttGroups.push({
         name: ' ',
-        color: null,
-        color_hex: '#6B7280',
-        board: boardDef,
-        column_values: [],
-        subitems: sortByStartDate(ungrouped).map(buildSubitem),
+        header_color: '#6B7280',
+        tasks: sortByStartDate(ungrouped).map(toGanttTask).filter((t): t is GanttTask => t !== null),
       });
     }
 
-    // 2. Named groups, each with tasks sorted by start date
     for (const g of activeGroupCols) {
-      const bucket   = groupBuckets.get(g.id) ?? [];
-      const colorId  = g.columnType ?? null;
-      items.push({
-        id: g.id,
+      const bucket = groupBuckets.get(g.id) ?? [];
+      ganttGroups.push({
         name: g.columnName ?? 'Sin nombre',
-        color: colorId,
-        color_hex: colorIdToHex(colorId),
-        board: boardDef,
-        column_values: [],
-        subitems: sortByStartDate(bucket).map(buildSubitem),
+        header_color: colorIdToHex(g.columnType ?? null),
+        tasks: sortByStartDate(bucket).map(toGanttTask).filter((t): t is GanttTask => t !== null),
       });
     }
 
-    const payload = {
-      project: projectName,
-      title: titleStr,
-      version: versionStr,
-      logo_url: 'https://i.postimg.cc/hjCKc6D1/logo-sapience-transparente.png',
-      items,
-    };
+    // Nombre completo ("PROYECTO - temática - Sapience - nombre y versión")
+    // para el archivo en Teams/SharePoint — mismo criterio que ya usa el
+    // Excel de Calendario (sendCalendarToWebhook.ts).
+    const fileName = `${buildSapienceDocumentName({ projectCode: input.projectCode, tematica, docLabel: `${boardLabel} - V${versionStr}` })}.xlsx`;
 
     try {
-      const res = await fetch(webhookUrl, {
+      // ── Generar el .xlsx llamando directo a gantt-service (Render) ───────
+      const ganttRes = await fetch(`${ganttServiceUrl}/gantt-xlsx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          title: titleStr,
+          groups: ganttGroups,
+          logo_url: 'https://i.postimg.cc/hjCKc6D1/logo-sapience-transparente.png',
+          version_info: versionStr,
+          file_name: fileName,
+        }),
       });
+      if (!ganttRes.ok) {
+        const errText = await ganttRes.text().catch(() => '');
+        throw new Error(`gantt-service respondió ${ganttRes.status}: ${errText}`);
+      }
+      const excelBuffer = Buffer.from(await ganttRes.arrayBuffer());
 
-      if (!res.ok) throw new Error(`Webhook responded with ${res.status}`);
-
-      let body: Record<string, any> = {};
-      try { body = await res.json(); } catch { /* not JSON */ }
-
-      // Resolve file URL from any common field name n8n might return
-      const resolvedFileUrl: string | undefined =
-        body.fileUrl ?? body.file_url ?? body.url ??
-        body.webUrl  ?? body.pdfUrl   ?? undefined;
+      // ── Subir a SharePoint vía Graph (carpeta TIMELINE del canal) —
+      // best-effort: si el proyecto no tiene canal vinculado o Graph falla,
+      // el timeline se generó igual, solo se pierde la copia en SharePoint. ──
+      let resolvedFileUrl: string | undefined;
+      const channelUrl = (projectResult as any)?.teamsChannelUrl as string | undefined;
+      if (projectResult && (projectResult as any).teamsChannelStatus === 'Listo' && channelUrl) {
+        try {
+          resolvedFileUrl = await uploadFileToTeamsChannel(channelUrl, TIMELINE_FOLDER, fileName, excelBuffer, XLSX_CONTENT_TYPE);
+        } catch (e) {
+          console.log('No se pudo subir el timeline a SharePoint:', e);
+        }
+      }
 
       const updatedAt = new Date().toISOString();
 
-      if (body.status === 'success' && resolvedFileUrl) {
-        if (projectResult?.id) {
-          try {
-            await Projects.update({ id: projectResult.id, record: { timelineStatus: 'Listo', timelineUrl: resolvedFileUrl, timelineUpdatedAt: updatedAt } });
-          } catch { /* best-effort */ }
-        }
-        // Save document record
+      if (projectResult?.id) {
+        // timelineUrl solo se agrega si de verdad hay uno — mandarlo como
+        // `undefined` explícito se vuelve NULL en el UPDATE (mismo bug que ya
+        // se corrigió en saveProject.ts) y borraría la URL de una subida
+        // anterior cada vez que esta subida en particular fallara.
+        const updateFields: Record<string, unknown> = { timelineStatus: 'Listo', timelineUpdatedAt: updatedAt };
+        if (resolvedFileUrl) updateFields.timelineUrl = resolvedFileUrl;
+        try { await Projects.update({ id: projectResult.id, record: updateFields }); } catch { /* best-effort */ }
+      }
+
+      if (resolvedFileUrl) {
         try {
           const today = new Date().toISOString().split('T')[0];
           await Documents.create({
@@ -374,21 +315,13 @@ export default createEndpoint({
             },
           });
         } catch { /* best-effort */ }
-        // Persist version counter in Board record
-        if (boardRecord?.id) {
-          try { await Boards.update({ id: boardRecord.id, record: { timelineVersion: autoVersion } as any }); } catch { /* best-effort */ }
-        }
-        return { success: true, taskCount: tasks.length, timelineStatus: 'Listo', fileUrl: resolvedFileUrl, version: versionStr };
-      } else {
-        if (projectResult?.id) {
-          await Projects.update({ id: projectResult.id, record: { timelineStatus: 'Error', timelineUpdatedAt: updatedAt } });
-        }
-        // Still persist version counter even on n8n error
-        if (boardRecord?.id) {
-          try { await Boards.update({ id: boardRecord.id, record: { timelineVersion: autoVersion } as any }); } catch { /* best-effort */ }
-        }
-        return { success: true, taskCount: tasks.length, timelineStatus: 'Error', version: versionStr };
       }
+
+      if (boardRecord?.id) {
+        try { await Boards.update({ id: boardRecord.id, record: { timelineVersion: autoVersion } as any }); } catch { /* best-effort */ }
+      }
+
+      return { success: true, taskCount: tasks.length, timelineStatus: 'Listo', fileUrl: resolvedFileUrl, version: versionStr };
     } catch (err) {
       if (projectResult?.id) {
         try { await Projects.update({ id: projectResult.id, record: { timelineStatus: 'Error', timelineUpdatedAt: new Date().toISOString() } }); } catch { /* best-effort */ }

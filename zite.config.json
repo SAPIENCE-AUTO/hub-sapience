@@ -38,7 +38,10 @@
       "description": "URL del webhook de n8n para generar Excel de calendarios y subirlo a SharePoint"
     },
     "ZITE_N8N_TIMELINE_WEBHOOK_URL": {
-      "description": "URL del webhook de n8n para crear/actualizar timelines en Excel"
+      "description": "Ya no se usa (sep 2026) — Timeline ahora llama directo a gantt-service (GANTT_SERVICE_URL) y sube a Teams vía Graph. URL del webhook de n8n para crear/actualizar timelines en Excel"
+    },
+    "GANTT_SERVICE_URL": {
+      "description": "URL pública del servicio gantt-service en Render (repo SAPIENCE-AUTO/gantt-service) que genera el .xlsx del Timeline"
     },
     "ZITE_N8N_TEAMS_WEBHOOK_URL": {
       "description": "URL del webhook de n8n para crear canales en Microsoft Teams"
