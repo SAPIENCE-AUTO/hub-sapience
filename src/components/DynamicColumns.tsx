@@ -71,6 +71,25 @@ export function formatAddressText(raw: string | null | undefined): string {
   return raw;
 }
 
+// Detecta si una celda de texto es, ella sola, un link (no una frase que
+// mencione una URL) — así una columna "Texto" normal (no "Link") puede
+// pegarse con una URL y abrirse en otra pestaña sin tener que cambiar el
+// tipo de columna. Exige protocolo o "www." explícito para no marcar como
+// link cualquier texto con un punto (p.ej. "Sí." o "v1.2").
+function detectLinkHref(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed || /\s/.test(trimmed)) return null;
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : (/^www\./i.test(trimmed) ? `https://${trimmed}` : null);
+  if (!candidate) return null;
+  try {
+    const u = new URL(candidate);
+    return u.hostname.includes('.') ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
 export type DynCols = ReturnType<typeof useDynamicColumns>;
 type DynCol = DynCols['columns'][0];
 type CellVal = Parameters<DynCols['setCellVal']>[2];
@@ -1843,6 +1862,25 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
           onClick={() => { setTempVal(url); setEditing(true); }}
           className="flex-shrink-0 opacity-0 group-hover/link:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded"
           title="Editar link"
+        >
+          <Pencil className="w-3 h-3" />
+        </button>
+      </div>
+    );
+  }
+
+  const detectedUrl = type === 'Texto' ? detectLinkHref(rawText) : null;
+  if (detectedUrl) {
+    return (
+      <div className="h-full min-w-0 flex items-center gap-1 px-1 overflow-hidden group/textlink">
+        <a href={detectedUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+          className="text-primary hover:underline truncate text-xs flex-1 min-w-0" title={detectedUrl}>
+          {display}
+        </a>
+        <button
+          onClick={() => { setTempVal(getEditValue()); setEditing(true); }}
+          className="flex-shrink-0 opacity-0 group-hover/textlink:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded"
+          title="Editar texto"
         >
           <Pencil className="w-3 h-3" />
         </button>
