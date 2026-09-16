@@ -70,6 +70,10 @@ export interface NavItem {
   // (p.ej. 'Finanzas' — ver canSeeItem, mismo criterio que ya usa
   // approveExpense.ts). Se evalúa en OR contra roles, no en vez de.
   purchaseLevels?: string[];
+  // Para algo que es de una persona específica, no de un rol/nivel (p.ej.
+  // Mis Pendientes, restringido a Sergio a petición suya — sep 2026). Se
+  // evalúa en OR contra roles/purchaseLevels, mismo criterio.
+  emails?: string[];
 }
 
 export interface NavSection {
@@ -89,7 +93,7 @@ export const NAV_SECTIONS: NavSection[] = [
     icon: ListTodo,
     roles: ALL_ROLES,
     items: [
-      { to: '/mis-pendientes', icon: ListTodo, label: 'Mis Pendientes' },
+      { to: '/mis-pendientes', icon: ListTodo, label: 'Mis Pendientes', emails: ['sergio@sapience.com.mx'] },
     ],
   },
   {
@@ -209,7 +213,7 @@ export function canSeeSection(section: NavSection, user?: UserWithAccess) {
 }
 
 export function canSeeItem(item: NavItem, user?: UserWithAccess) {
-  if (!item.roles && !item.purchaseLevels) return true;
+  if (!item.roles && !item.purchaseLevels && !item.emails) return true;
   if (item.roles?.includes('__admin__')) return isAdmin(user);
   if (item.roles?.includes('__settings__')) {
     if (!user) return false;
@@ -226,7 +230,11 @@ export function canSeeItem(item: NavItem, user?: UserWithAccess) {
   const levelOk = item.purchaseLevels
     ? item.purchaseLevels.includes((user as { purchaseLevel?: string }).purchaseLevel ?? '')
     : false;
-  return roleOk || levelOk;
+  // emails: restringido a personas específicas, no a un rol/nivel.
+  const emailOk = item.emails
+    ? item.emails.includes((user as { email?: string }).email ?? '')
+    : false;
+  return roleOk || levelOk || emailOk;
 }
 
 function getSectionForPath(path: string): string | null {

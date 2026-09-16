@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from 'zite-auth-sdk';
 import { getMisPendientes, saveMisPendiente, deleteMisPendiente, getPendienteCorreoBody, ensurePendienteNotasBlock, reorderMisPendientes } from 'zite-endpoints-sdk';
 import { useProject } from '../context/ProjectContext';
 import { useDynamicColumns, type DynCellValue } from '../hooks/useDynamicColumns';
@@ -43,8 +44,17 @@ function isOverdue(fechaLimite: string | null): boolean {
   return new Date(fechaLimite + 'T23:59:59') < new Date();
 }
 
+// Restringido a Sergio a petición suya (sep 2026) — nadie más del equipo
+// usaba este módulo (0 pendientes de otros usuarios en pendientes_personales).
+// El gate real está aquí y en Layout.tsx (nav item con `emails`) — no hace
+// falta tocar el backend: cada endpoint ya escribe/lee scoped a
+// context.user!.id, así que ni siquiera navegando directo a la URL alguien
+// vería los pendientes de otra persona.
+const MIS_PENDIENTES_ALLOWED_EMAILS = ['sergio@sapience.com.mx'];
+
 export default function MisPendientesPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { projects } = useProject();
   const [items, setItems] = useState<Pendiente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -424,6 +434,17 @@ export default function MisPendientesPage() {
       </tr>
     );
   };
+
+  // Este módulo solo aparece en el nav para Sergio (Layout.tsx), pero el
+  // guard real está en los endpoints (scoped a context.user!.id) — esto es
+  // un candado de UI adicional por si alguien navega directo a la URL.
+  if (user && !MIS_PENDIENTES_ALLOWED_EMAILS.includes(user.email ?? '')) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">No tienes permisos para ver este módulo.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-4">
