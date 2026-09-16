@@ -60,17 +60,20 @@ function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string })
       // texto) — es esa versión la que Outlook detecta al pegar y muestra
       // el nombre en vez del link completo. ClipboardItem con ambos tipos
       // deja que cada destino elija: Outlook toma el HTML, un campo de
-      // texto plano toma el texto normal.
+      // texto plano toma el texto normal. El texto plano también lleva el
+      // nombre del archivo (antes solo llevaba la URL cruda, sin nomenclatura
+      // visible) para destinos que no soportan HTML (Slack, un campo de texto).
+      const plainText = `${file.name}\n${res.url}`;
       const html = `<a href="${res.url}">${file.name}</a>`;
       try {
         await navigator.clipboard.write([
           new ClipboardItem({
-            'text/plain': new Blob([res.url], { type: 'text/plain' }),
+            'text/plain': new Blob([plainText], { type: 'text/plain' }),
             'text/html': new Blob([html], { type: 'text/html' }),
           }),
         ]);
       } catch {
-        await navigator.clipboard.writeText(res.url);
+        await navigator.clipboard.writeText(plainText);
       }
       toast.success(res.scope === 'anonymous' ? 'Link público copiado' : 'Link copiado (solo visible para el equipo de Sapience)');
     } catch (err) {
