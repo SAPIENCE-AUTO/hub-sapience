@@ -38,9 +38,20 @@ export default createEndpoint({
     }),
   }),
   execute: async ({ input }) => {
-    // Only fetch the fields needed for the list view — NO attachments
+    // Only fetch the fields needed for the list view — NO attachments.
+    // sorts + un limit generoso son necesarios los dos: sin `sorts`, `findAll`
+    // no manda ORDER BY (ver model.ts) y Postgres regresa en el orden de scan
+    // que se le ocurra — con la tabla ya en 500+ filas, un `limit` sin orden
+    // se pone a recortar filas AL AZAR, no las más viejas. Confirmado en vivo:
+    // una factura subida el 12-sep-2026 (tabla en 517 filas) no aparecía aquí
+    // por esto exacto, aunque sí estaba bien guardada y ligada a su OC.
+    // Sin límite de verdad no se puede: server/compat/model.ts pone un tope
+    // duro (MAX_LIMIT = 10_000) a propósito, como red de seguridad contra
+    // queries sin paginar en toda la app — 10,000 es lo más alto que se puede
+    // pedir, y da margen amplio sobre las 517 filas de hoy.
     const invResult = await SupplierInvoices.findAll({
-      limit: 500,
+      limit: 10_000,
+      sorts: [{ field: 'uploadDate', direction: 'desc' }],
       fields: [
         'invoiceNumber', 'supplierId', 'supplierName', 'poId', 'poNumber',
         'amount', 'currency', 'status', 'uploadDate', 'uploadedBy', 'projectCode',
