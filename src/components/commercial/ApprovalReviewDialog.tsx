@@ -199,9 +199,18 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
       // El proyecto recién creado no aparecía en el buscador/selector global
       // hasta un refresh completo — Layout.tsx solo carga `projects` una vez
       // por sesión (ver ProjectContext), y esta ruta de creación (aprobar un
-      // deal) nunca pasa por ProjectsPage.tsx, que sí se refresca sola.
+      // deal) nunca pasa por ProjectsPage.tsx, que sí se refresca sola. Se
+      // espera este refresh (antes se disparaba sin esperar) porque si no,
+      // hay una carrera real: el diálogo se cerraba y el usuario ya podía
+      // abrir el buscador antes de que este fetch regresara, viendo la
+      // lista vieja sin el proyecto nuevo.
       if (createProject && res.projectCode) {
-        getProjects({}).then(d => setProjects(d.projects)).catch(() => {});
+        try {
+          const d = await getProjects({});
+          setProjects(d.projects);
+        } catch (err) {
+          console.error('No se pudo refrescar la lista de proyectos tras aprobar el deal:', err);
+        }
       }
       onApproved({ projectCode: res.projectCode, projectId: res.projectId, quotedCost: res.quotedCost, notificationsSent: res.notificationsSent });
       onClose();
