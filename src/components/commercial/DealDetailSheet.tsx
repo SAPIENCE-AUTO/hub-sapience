@@ -4,9 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, GetDealsOutputType } from 'zite-endpoints-sdk';
+import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, linkProjectDeal, GetDealsOutputType } from 'zite-endpoints-sdk';
 import { toast } from 'sonner';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Link2 } from 'lucide-react';
 import { PHASES, PHASE_COLOR_MAP } from './dealUtils';
 import DealGeneralTab from './DealGeneralTab';
 import CotizacionesTab from './CotizacionesTab';
@@ -50,25 +50,53 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
   // mostrar el botón de más mientras se resuelve — mostrarlo de más, aunque
   // sea un instante, es el hueco que antes generaba proyectos duplicados.
   const [linkedProject, setLinkedProject] = useState<{ id: string; projectCode?: string } | null>(null);
+  // 'linked' = vínculo formal (Projects.dealVinculado, ver linkProjectDeal.ts).
+  // 'candidate' = encontramos un proyecto con el mismo nombre pero SIN
+  // vincular todavía — pasa cuando el proyecto ya existía de antes (creado a
+  // mano, sin pasar por "Aprobar Deal"). undefined = sin ningún match.
+  const [matchType, setMatchType] = useState<'linked' | 'candidate' | undefined>(undefined);
   const [checkingProject, setCheckingProject] = useState(true);
-  // El botón cubre los dos casos que antes eran dos flujos separados (el
-  // banner "Listo para aprobar" antes de Ganado, y el fallback "Crear
-  // Proyecto" para cuando ya estaba Ganado pero sin proyecto) — el único
-  // criterio real que importa es "¿ya existe el proyecto?", sin importar la
-  // fase actual.
-  const canApprove = !!localDeal.id && !checkingProject && !linkedProject;
+  const [candidateDialogOpen, setCandidateDialogOpen] = useState(false);
+  // Si dicen "no, es otro proyecto" no hay que seguir insistiendo con la
+  // misma sugerencia en esta sesión — se resetea al abrir un deal distinto.
+  const [candidateDismissed, setCandidateDismissed] = useState(false);
+  const [linkingCandidate, setLinkingCandidate] = useState(false);
+  // El botón "Aprobar Deal" (crea un proyecto nuevo) cubre los dos casos que
+  // antes eran dos flujos separados (el banner "Listo para aprobar" antes de
+  // Ganado, y el fallback "Crear Proyecto" para cuando ya estaba Ganado pero
+  // sin proyecto) — pero solo tiene sentido mostrarlo cuando de verdad no hay
+  // ya un proyecto correspondiente: ni vinculado, ni un candidato sin
+  // resolver (mientras esté sin resolver, se fuerza a decidir esa sugerencia
+  // primero, para no terminar creando un duplicado por accidente).
+  const canApprove = !!localDeal.id && !checkingProject && (!linkedProject || (matchType === 'candidate' && candidateDismissed));
 
   // Sync when parent deal changes (e.g. new deal opened)
   useEffect(() => { setLocalDeal(deal); }, [deal]);
 
   useEffect(() => {
-    if (!localDeal.id) { setLinkedProject(null); setCheckingProject(false); return; }
+    setCandidateDismissed(false);
+    if (!localDeal.id) { setLinkedProject(null); setMatchType(undefined); setCheckingProject(false); return; }
     setCheckingProject(true);
     getProjectForDeal({ dealId: localDeal.id })
-      .then(d => setLinkedProject(d.project))
-      .catch(() => setLinkedProject(null))
+      .then(d => { setLinkedProject(d.project); setMatchType(d.matchType); })
+      .catch(() => { setLinkedProject(null); setMatchType(undefined); })
       .finally(() => setCheckingProject(false));
   }, [localDeal.id]);
+
+  const handleLinkCandidate = async () => {
+    if (!linkedProject || !localDeal.id) return;
+    setLinkingCandidate(true);
+    try {
+      await linkProjectDeal({ projectId: linkedProject.id, dealId: localDeal.id });
+      setMatchType('linked');
+      toast.success(`Deal vinculado al proyecto "${linkedProject.projectCode ?? linkedProject.id}"`);
+      setCandidateDialogOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo vincular el proyecto');
+    } finally {
+      setLinkingCandidate(false);
+    }
+  };
 
   const handleDealSaved = (updated: Deal) => {
     setLocalDeal(updated);
@@ -88,7 +116,13 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
     onDealUpdated(updated);
     try {
       await saveDeal({ id: localDeal.id, phase: newPhase });
-      if (newPhase === 'Ganado' && prevPhase !== 'Ganado') setPendingApprove({ dealId: localDeal.id });
+      if (newPhase === 'Ganado' && prevPhase !== 'Ganado') {
+        setPendingApprove({ dealId: localDeal.id });
+        // Justo al pasar a Ganado es cuando más importa no dejar pasar un
+        // posible duplicado — si ya se había visto la sugerencia y se
+        // descartó, no se vuelve a interrumpir con lo mismo.
+        if (matchType === 'candidate' && !candidateDismissed) setCandidateDialogOpen(true);
+      }
     } catch {
       toast.error('Error al actualizar la fase');
       setLocalDeal(prev => ({ ...prev, phase: prevPhase }));
@@ -103,6 +137,7 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
     setLocalDeal(updated);
     onDealUpdated(updated);
     setLinkedProject({ id: res.projectId, projectCode: res.projectCode });
+    setMatchType('linked');
     setApprovalReviewOpen(false);
   };
 
@@ -128,6 +163,31 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Estado del vínculo con un proyecto — visible siempre que
+                    se abra el deal, sin importar la pestaña, para que se
+                    sepa de entrada si ya está vinculado o si hay que
+                    resolver una sugerencia antes de poder aprobar. */}
+                {!checkingProject && matchType === 'linked' && linkedProject && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-white/10 text-white/80"
+                    title={`Proyecto vinculado: ${linkedProject.projectCode ?? linkedProject.id}`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {linkedProject.projectCode ?? 'Vinculado'}
+                  </span>
+                )}
+                {!checkingProject && matchType === 'candidate' && !candidateDismissed && linkedProject && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCandidateDialogOpen(true)}
+                    className="h-7 gap-1.5 text-xs bg-transparent text-white border-white/30 hover:bg-white/10"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    ¿Vincular a "{linkedProject.projectCode}"?
+                  </Button>
+                )}
+
                 {/* "Aprobar Deal" — vive en el header, no en la pestaña
                     General, para que se pueda aprobar y crear el proyecto
                     estando en cualquier pestaña (p.ej. Cotizaciones). Cubre
@@ -178,7 +238,7 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
 
           {isNew ? (
             <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
-              <DealGeneralTab deal={localDeal} onSaved={handleDealSaved} onDeleted={onDeleted} existingClients={existingClients} linkedProject={linkedProject} checkingProject={checkingProject} />
+              <DealGeneralTab deal={localDeal} onSaved={handleDealSaved} onDeleted={onDeleted} existingClients={existingClients} linkedProject={matchType === 'linked' ? linkedProject : null} checkingProject={checkingProject} />
             </div>
           ) : (
             <Tabs defaultValue="general" className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -191,7 +251,7 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
               </TabsList>
               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
                 <TabsContent value="general" className="mt-0 data-[state=inactive]:hidden" forceMount>
-                  <DealGeneralTab deal={localDeal} onSaved={handleDealSaved} onDeleted={onDeleted} existingClients={existingClients} linkedProject={linkedProject} checkingProject={checkingProject} />
+                  <DealGeneralTab deal={localDeal} onSaved={handleDealSaved} onDeleted={onDeleted} existingClients={existingClients} linkedProject={matchType === 'linked' ? linkedProject : null} checkingProject={checkingProject} />
                 </TabsContent>
                 <TabsContent value="cotizaciones" className="mt-0 data-[state=inactive]:hidden" forceMount>
                   <CotizacionesTab
@@ -255,6 +315,30 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
               }}
             >
               {approvingCotizaciones ? 'Aprobando...' : 'Sí, aprobar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Ya existe un proyecto con el mismo nombre que este deal, sin
+          vincular todavía — se ofrece vincularlo en vez de crear uno nuevo
+          al aprobar. Se abre solo (además de poder abrirse a mano desde el
+          botón del header) justo al pasar el deal a Ganado, que es el
+          momento en el que más importa no terminar duplicando el proyecto. */}
+      <AlertDialog open={candidateDialogOpen} onOpenChange={o => !o && setCandidateDialogOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Vincular este deal al proyecto "{linkedProject?.projectCode}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ya existe un proyecto con el mismo nombre que este deal. Vincularlo evita crear un proyecto duplicado al aprobar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setCandidateDismissed(true); setCandidateDialogOpen(false); }}>
+              No, es otro proyecto
+            </AlertDialogCancel>
+            <AlertDialogAction disabled={linkingCandidate} onClick={handleLinkCandidate}>
+              {linkingCandidate ? 'Vinculando...' : 'Sí, vincular'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
