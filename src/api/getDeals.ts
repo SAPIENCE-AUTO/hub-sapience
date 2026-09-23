@@ -28,7 +28,15 @@ export default createEndpoint({
   inputSchema: z.object({}),
   outputSchema: z.object({ deals: z.array(DealOut) }),
   execute: async () => {
-    const result = await Deals.findAll({});
+    // limit + sorts explícitos por el mismo motivo que ya se corrigió en
+    // getSupplierInvoices.ts/getProjects.ts: sin sorts, findAll no manda
+    // ORDER BY (ver model.ts) y Postgres puede recortar cualquier subconjunto
+    // una vez que la tabla supera el límite — hoy Deals tiene ~431 filas
+    // (bien debajo del default de 1000), así que todavía no muerde, pero es
+    // el mismo patrón exacto que sí causó un bug real en Facturas de
+    // proveedor esta sesión. Se corrige preventivamente antes de que Deals
+    // crezca lo suficiente para que sí importe.
+    const result = await Deals.findAll({ limit: 10_000, sorts: [{ field: 'createdAt', direction: 'desc' }] });
     return {
       deals: result.records.map((d, i) => ({
         rowIndex: i,
