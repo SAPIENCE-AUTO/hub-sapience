@@ -190,7 +190,7 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
                         size="sm"
                         variant="outline"
                         onClick={() => setCandidateDialogOpen(true)}
-                        className="h-7 gap-1.5 text-xs bg-transparent text-white border-white/30 hover:bg-white/10"
+                        className="h-7 gap-1.5 text-xs bg-transparent text-white border-white/30 hover:bg-white/10 hover:text-white"
                       >
                         <Link2 className="w-3.5 h-3.5" />
                         ¿Vincular a "{linkedProject.projectCode}"?
