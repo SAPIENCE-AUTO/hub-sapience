@@ -30,6 +30,11 @@ export default createEndpoint({
     currency: z.string(),
     dealName: z.string().optional(),
     projectCode: z.string().optional(),
+    // Para el diálogo "Vincular a Deal" (exclusivo de Sergio, ver
+    // linkProjectDeal.ts): projectId + config actual para prellenarlo.
+    projectId: z.string().optional(),
+    dealId: z.string().optional(),
+    visibleBudgetRubros: z.array(z.string()).nullable().optional(),
   }),
   execute: async ({ input, context }) => {
     const user = context.user!;
@@ -121,7 +126,19 @@ export default createEndpoint({
       return ai - bi;
     });
 
-    const visibleRubros = canSeeAll ? sortedRubroNames : sortedRubroNames.filter(r => userRubros.includes(r));
+    // Override por proyecto (Vincular a Deal, exclusivo de Sergio — ver
+    // linkProjectDeal.ts): además del rubro asignado al usuario, el proyecto
+    // puede acotar cuáles de esos rubros son visibles aquí. Sin configurar
+    // (null) = todos visibles, mismo comportamiento que antes de que
+    // existiera este campo — no hay regresión para proyectos ya vinculados.
+    let projectVisibleRubros: string[] | null = null;
+    if (project.visibleBudgetRubros) {
+      try { projectVisibleRubros = JSON.parse(project.visibleBudgetRubros); } catch { /* valor corrupto, tratar como sin configurar */ }
+    }
+
+    const visibleRubros = canSeeAll
+      ? sortedRubroNames
+      : sortedRubroNames.filter(r => userRubros.includes(r) && (projectVisibleRubros === null || projectVisibleRubros.includes(r)));
 
     const rubros = visibleRubros.map(rubroName => {
       const items = rubroItemsMap.get(rubroName) ?? [];
@@ -149,6 +166,7 @@ export default createEndpoint({
       canSeeAll, rubros,
       totals: { cotizado: totalCotizado, conMarkup: totalConMarkup },
       personas, currency, dealName, projectCode: project.projectCode ?? input.projectCode,
+      projectId: project.id, dealId, visibleBudgetRubros: projectVisibleRubros,
     };
   },
 });

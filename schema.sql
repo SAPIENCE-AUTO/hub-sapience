@@ -732,6 +732,7 @@ create table projects (
   last_analysis_at              timestamptz,
   created_by                    text,
   created_at                    timestamptz,
+  visible_budget_rubros         text,
   updated_at                    timestamptz not null default now(),
   constraint projects_status_chk check ("status" is null or "status" in ('Prospecto', 'En curso', 'Finalizado', 'Cancelado', 'Activo', 'Stand by')),
   constraint projects_timeline_status_chk check ("timeline_status" is null or "timeline_status" in ('Pendiente', 'Listo', 'Error')),

@@ -4,8 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { saveDeal, approveSelectedCotizaciones, GetDealsOutputType } from 'zite-endpoints-sdk';
+import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, GetDealsOutputType } from 'zite-endpoints-sdk';
 import { toast } from 'sonner';
+import { CheckCircle2 } from 'lucide-react';
 import { PHASES, PHASE_COLOR_MAP } from './dealUtils';
 import DealGeneralTab from './DealGeneralTab';
 import CotizacionesTab from './CotizacionesTab';
@@ -16,7 +17,6 @@ import ApprovalReviewDialog from './ApprovalReviewDialog';
 
 type Deal = GetDealsOutputType['deals'][0];
 
-const APPROVE_PHASES = ['Cotización enviada', 'Negociación'];
 const PHASE_KEYS = PHASES.map(p => p.key);
 
 interface Props {
@@ -34,17 +34,41 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
   const [phaseSelectOpen, setPhaseSelectOpen] = useState(false);
   // Al pasar a "Ganado" por aquí (dropdown del header, ej. arrastrando en el
   // kanban o eligiéndolo directo) — a diferencia del botón "Aprobar Deal" de
-  // DealGeneralTab, que ya crea el proyecto — se ofrece aprobar de una vez las
+  // arriba, que ya crea el proyecto — se ofrece aprobar de una vez las
   // cotizaciones marcadas "Incluida", igual que hacía este mismo diálogo
   // cuando vivía dentro de DealGeneralTab.
   const [pendingApprove, setPendingApprove] = useState<{ dealId: string } | null>(null);
   const [approvingCotizaciones, setApprovingCotizaciones] = useState(false);
   const isNew = !deal.id;
   const phaseColor = PHASE_COLOR_MAP[localDeal.phase ?? ''] ?? 'hsl(var(--muted-foreground))';
-  const canApprove = !!localDeal.id && APPROVE_PHASES.includes(localDeal.phase ?? '');
+
+  // "¿Ya tiene proyecto?" — vive aquí (no en DealGeneralTab) para que el
+  // botón "Aprobar Deal" quede en el header, visible sin importar en qué tab
+  // estés (mismo razonamiento que ya llevó el badge de fase para acá). Deals
+  // no tiene columna de vuelta hacia Projects, así que hay que preguntarle a
+  // Projects directamente (ver getProjectForDeal.ts). checkingProject evita
+  // mostrar el botón de más mientras se resuelve — mostrarlo de más, aunque
+  // sea un instante, es el hueco que antes generaba proyectos duplicados.
+  const [linkedProject, setLinkedProject] = useState<{ id: string; projectCode?: string } | null>(null);
+  const [checkingProject, setCheckingProject] = useState(true);
+  // El botón cubre los dos casos que antes eran dos flujos separados (el
+  // banner "Listo para aprobar" antes de Ganado, y el fallback "Crear
+  // Proyecto" para cuando ya estaba Ganado pero sin proyecto) — el único
+  // criterio real que importa es "¿ya existe el proyecto?", sin importar la
+  // fase actual.
+  const canApprove = !!localDeal.id && !checkingProject && !linkedProject;
 
   // Sync when parent deal changes (e.g. new deal opened)
   useEffect(() => { setLocalDeal(deal); }, [deal]);
+
+  useEffect(() => {
+    if (!localDeal.id) { setLinkedProject(null); setCheckingProject(false); return; }
+    setCheckingProject(true);
+    getProjectForDeal({ dealId: localDeal.id })
+      .then(d => setLinkedProject(d.project))
+      .catch(() => setLinkedProject(null))
+      .finally(() => setCheckingProject(false));
+  }, [localDeal.id]);
 
   const handleDealSaved = (updated: Deal) => {
     setLocalDeal(updated);
@@ -72,12 +96,13 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
     }
   };
 
-  const handleApprovalSuccess = (res: { projectCode: string; projectId: string; quotedCost: number; notificationsSent: number }) => {
+  const handleApprovalSuccess = (res: { projectCode: string; projectId: string; quotedCost: number }) => {
     const today = new Date().toISOString().split('T')[0];
     const updated: Deal = { ...localDeal, phase: 'Ganado', approvalDate: today, quotedCost: res.quotedCost };
     (updated as any).projects = [res.projectId];
     setLocalDeal(updated);
     onDealUpdated(updated);
+    setLinkedProject({ id: res.projectId, projectCode: res.projectCode });
     setApprovalReviewOpen(false);
   };
 
@@ -102,40 +127,58 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
                 )}
               </div>
 
-              {/* Fase — visible siempre, editable independiente de en qué tab
-                  estés (antes vivía como un <Select> más dentro de "General",
-                  mezclado con los datos de creación). Mismo patrón de badge
-                  clickeable que InlineStatus en ProjectsPage.tsx. Pastilla
-                  blanca (en vez del tinte del color sobre fondo claro) para
-                  que se lea bien sobre el header navy. */}
-              {!isNew && (
-                <Select
-                  value={localDeal.phase ?? 'Prospecto'}
-                  onValueChange={handlePhaseChange}
-                  open={phaseSelectOpen}
-                  onOpenChange={setPhaseSelectOpen}
-                >
-                  <SelectTrigger className="h-auto border-none shadow-none p-0 gap-0 focus:ring-0 bg-transparent w-auto flex-shrink-0">
-                    <button
-                      onClick={() => setPhaseSelectOpen(true)}
-                      className="hover:opacity-90 transition-opacity px-2.5 py-1 rounded-full text-xs font-semibold bg-white"
-                      style={{ color: phaseColor }}
-                      title="Click para cambiar de fase"
-                    >
-                      {localDeal.phase ?? 'Prospecto'}
-                    </button>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PHASE_KEYS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* "Aprobar Deal" — vive en el header, no en la pestaña
+                    General, para que se pueda aprobar y crear el proyecto
+                    estando en cualquier pestaña (p.ej. Cotizaciones). Cubre
+                    tanto "todavía no está Ganado" como "ya está Ganado pero
+                    sin proyecto" — antes eran dos botones/flujos distintos. */}
+                {canApprove && (
+                  <Button
+                    size="sm"
+                    onClick={() => setApprovalReviewOpen(true)}
+                    className="h-7 gap-1.5 text-xs bg-white text-[#0F3D4C] hover:bg-white/90"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Aprobar Deal
+                  </Button>
+                )}
+
+                {/* Fase — visible siempre, editable independiente de en qué tab
+                    estés (antes vivía como un <Select> más dentro de "General",
+                    mezclado con los datos de creación). Mismo patrón de badge
+                    clickeable que InlineStatus en ProjectsPage.tsx. Pastilla
+                    blanca (en vez del tinte del color sobre fondo claro) para
+                    que se lea bien sobre el header navy. */}
+                {!isNew && (
+                  <Select
+                    value={localDeal.phase ?? 'Prospecto'}
+                    onValueChange={handlePhaseChange}
+                    open={phaseSelectOpen}
+                    onOpenChange={setPhaseSelectOpen}
+                  >
+                    <SelectTrigger className="h-auto border-none shadow-none p-0 gap-0 focus:ring-0 bg-transparent w-auto flex-shrink-0">
+                      <button
+                        onClick={() => setPhaseSelectOpen(true)}
+                        className="hover:opacity-90 transition-opacity px-2.5 py-1 rounded-full text-xs font-semibold bg-white"
+                        style={{ color: phaseColor }}
+                        title="Click para cambiar de fase"
+                      >
+                        {localDeal.phase ?? 'Prospecto'}
+                      </button>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PHASE_KEYS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </div>
           </DialogHeader>
 
           {isNew ? (
             <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
-              <DealGeneralTab deal={localDeal} onSaved={handleDealSaved} onDeleted={onDeleted} existingClients={existingClients} />
+              <DealGeneralTab deal={localDeal} onSaved={handleDealSaved} onDeleted={onDeleted} existingClients={existingClients} linkedProject={linkedProject} checkingProject={checkingProject} />
             </div>
           ) : (
             <Tabs defaultValue="general" className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -148,7 +191,7 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
               </TabsList>
               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
                 <TabsContent value="general" className="mt-0 data-[state=inactive]:hidden" forceMount>
-                  <DealGeneralTab deal={localDeal} onSaved={handleDealSaved} onDeleted={onDeleted} existingClients={existingClients} />
+                  <DealGeneralTab deal={localDeal} onSaved={handleDealSaved} onDeleted={onDeleted} existingClients={existingClients} linkedProject={linkedProject} checkingProject={checkingProject} />
                 </TabsContent>
                 <TabsContent value="cotizaciones" className="mt-0 data-[state=inactive]:hidden" forceMount>
                   <CotizacionesTab

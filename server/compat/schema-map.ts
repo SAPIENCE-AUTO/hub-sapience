@@ -64,6 +64,7 @@ export const SCHEMA: Record<string, TableDef> = {
       lastAnalysisAt: { col: 'last_analysis_at', kind: 'datetime' },
       createdBy: { col: 'created_by', kind: 'text' },
       createdAt: { col: 'created_at', kind: 'datetime' },
+      visibleBudgetRubros: { col: 'visible_budget_rubros', kind: 'text' },
       updatedAt: { col: 'updated_at', kind: 'datetime' },
       analistas: { col: 'analistas', kind: 'linkMany', join: 'projects_analistas', selfCol: 'project_id', otherCol: 'user_id' },
       moderadores: { col: 'moderadores', kind: 'linkMany', join: 'projects_moderadores', selfCol: 'project_id', otherCol: 'user_id' },

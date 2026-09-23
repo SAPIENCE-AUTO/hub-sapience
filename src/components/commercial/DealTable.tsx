@@ -183,7 +183,7 @@ export default function DealTable({ deals, onDealClick, onDealApproved }: DealTa
     else { setSortField(field); setSortDir('desc'); }
   };
 
-  const handleApprovalSuccess = (res: { projectCode: string; projectId: string; quotedCost: number; notificationsSent: number }) => {
+  const handleApprovalSuccess = (res: { projectCode: string; projectId: string; quotedCost: number }) => {
     if (!approvingDeal) return;
     const today = new Date().toISOString().split('T')[0];
     const updated: Deal = { ...approvingDeal, phase: 'Ganado', approvalDate: today, quotedCost: res.quotedCost };

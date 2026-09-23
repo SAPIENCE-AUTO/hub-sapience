@@ -53,6 +53,7 @@ export interface ProjectsRecordType {
   lastAnalysisAt?: string;
   createdBy?: string;
   createdAt?: string;
+  visibleBudgetRubros?: string;
   updatedAt?: string;
   analistas?: string[];
   moderadores?: string[];

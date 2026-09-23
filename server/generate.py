@@ -74,6 +74,19 @@ EXTRA_COLUMNS = {
     # migración sobre la tabla ya existente vive en
     # server/scripts/add-board-column-export-label.ts (ALTER TABLE, no se ejecuta sola).
     'BoardColumns': [('exportLabel', 'export_label', 'text', 'text')],
+    # Vínculo Proyecto↔Deal con permisos granulares (sep 2026): vincular un
+    # proyecto a un deal (para ver su presupuesto por rubro) pasó a ser una
+    # acción manual y exclusiva de Sergio (ver linkProjectDeal.ts) — al
+    # vincular, elige explícitamente qué rubros de presupuesto quedan
+    # visibles para ese proyecto (además del filtro normal por
+    # cotizacionRubros del usuario, ver getProjectBudget.ts). JSON
+    # stringified array de nombres de rubro, mismo criterio que ya usa
+    # Boards.excelColumnsJson — null/vacío = sin configurar, se trata como
+    # "todos visibles" (comportamiento de antes, sin regresión para
+    # proyectos ya vinculados). La migración sobre la tabla ya existente
+    # vive en server/scripts/add-projects-visible-budget-rubros.ts (ALTER
+    # TABLE, no se ejecuta sola).
+    'Projects': [('visibleBudgetRubros', 'visible_budget_rubros', 'text', 'text')],
 }
 
 # Índice único agregado directamente en Supabase después de la carga inicial

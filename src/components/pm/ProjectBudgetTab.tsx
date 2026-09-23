@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from 'zite-auth-sdk';
 import { getProjectBudget, GetProjectBudgetOutputType } from 'zite-endpoints-sdk';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronDown, ChevronUp, User, Wallet } from 'lucide-react';
+import LinkProjectDealDialog from './LinkProjectDealDialog';
+
+// Vincular un proyecto a un deal (y elegir qué rubros de presupuesto son
+// visibles) es exclusivo de Sergio — ver linkProjectDeal.ts, que también
+// valida esto del lado del servidor. Este gate de UI es solo cosmético.
+const LINK_DEAL_ALLOWED_EMAILS = ['sergio@sapience.com.mx'];
 
 type BudgetData = GetProjectBudgetOutputType;
 type RubroData = BudgetData['rubros'][0];
@@ -105,14 +112,18 @@ function RubroBlock({ rubro, currency }: { rubro: RubroData; currency: string })
 }
 
 export default function ProjectBudgetTab({ projectCode }: { projectCode: string }) {
+  const { user } = useAuth();
   const [data, setData] = useState<BudgetData | null>(null);
   const [loading, setLoading] = useState(true);
+  const canLinkDeal = !!(user as { email?: string } | null)?.email && LINK_DEAL_ALLOWED_EMAILS.includes((user as { email?: string }).email!);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!projectCode) return;
     setLoading(true);
     getProjectBudget({ projectCode }).then(setData).catch(() => {}).finally(() => setLoading(false));
   }, [projectCode]);
+
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return (
     <div className="p-6 space-y-4 max-w-4xl">
@@ -130,13 +141,32 @@ export default function ProjectBudgetTab({ projectCode }: { projectCode: string 
       <p className="text-sm text-muted-foreground/70 max-w-xs">
         Este proyecto no tiene cotizaciones incluidas con líneas de presupuesto, o no tienes acceso a ningún rubro.
       </p>
+      {canLinkDeal && data?.projectId && (
+        <LinkProjectDealDialog
+          projectId={data.projectId}
+          currentDealId={data.dealId}
+          currentVisibleRubros={data.visibleBudgetRubros ?? null}
+          onLinked={load}
+        />
+      )}
     </div>
   );
 
-  const { currency, rubros, totals, canSeeAll } = data;
+  const { currency, rubros, totals, canSeeAll, projectId, dealId, visibleBudgetRubros } = data;
 
   return (
     <div className="p-6 space-y-5 max-w-4xl">
+      {canLinkDeal && projectId && (
+        <div className="flex justify-end">
+          <LinkProjectDealDialog
+            projectId={projectId}
+            currentDealId={dealId}
+            currentVisibleRubros={visibleBudgetRubros ?? null}
+            onLinked={load}
+          />
+        </div>
+      )}
+
       {canSeeAll && (
         <div className="grid grid-cols-2 gap-4">
           <SummaryCard label="Presupuesto cotizado (sin markup)" value={fmtAmt(totals.cotizado, currency)} />

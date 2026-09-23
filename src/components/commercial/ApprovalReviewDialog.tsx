@@ -21,7 +21,6 @@ interface ApprovalResult {
   projectCode?: string;
   projectId?: string;
   quotedCost: number;
-  notificationsSent: number;
 }
 
 interface Props {
@@ -189,11 +188,8 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
         lineItemIds: [...(selected.get(r.rubroName) ?? new Set<string>())],
       }));
       const res = await approveDeal({ dealId: deal.id, createProject, selectedLineItems });
-      const notifMsg = res.notificationsSent > 0
-        ? ` · ${res.notificationsSent} notificación${res.notificationsSent !== 1 ? 'es' : ''} enviada${res.notificationsSent !== 1 ? 's' : ''}`
-        : '';
       const successMsg = createProject
-        ? `✓ Deal aprobado — Proyecto ${res.projectCode} creado${notifMsg}`
+        ? `✓ Deal aprobado — Proyecto ${res.projectCode} creado`
         : `✓ Deal aprobado`;
       toast.success(successMsg);
       // El proyecto recién creado no aparecía en el buscador/selector global
@@ -212,7 +208,7 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
           console.error('No se pudo refrescar la lista de proyectos tras aprobar el deal:', err);
         }
       }
-      onApproved({ projectCode: res.projectCode, projectId: res.projectId, quotedCost: res.quotedCost, notificationsSent: res.notificationsSent });
+      onApproved({ projectCode: res.projectCode, projectId: res.projectId, quotedCost: res.quotedCost });
       onClose();
     } catch (e: unknown) {
       toast.error((e as { message?: string })?.message ?? 'Error al aprobar el deal');
@@ -237,7 +233,7 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
             Aprobar deal: {deal.dealName || 'Sin nombre'}
           </DialogTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            Selecciona qué líneas de cotización se enviarán a cada responsable. Solo las marcadas aparecerán en los mensajes y en el presupuesto.
+            Selecciona qué líneas de cotización cuentan para el presupuesto del proyecto. Solo las marcadas aparecerán ahí.
           </p>
         </DialogHeader>
 
@@ -306,7 +302,7 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
               <Button onClick={handleApprove} disabled={approving || loading} className="gap-1.5">
                 {approving
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Aprobando...</>
-                  : <><CheckCircle2 className="w-4 h-4" /> {createProject ? 'Aprobar y notificar' : 'Aprobar'}</>
+                  : <><CheckCircle2 className="w-4 h-4" /> Aprobar</>
                 }
               </Button>
             </div>
