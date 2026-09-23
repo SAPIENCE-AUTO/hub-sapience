@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, linkProjectDeal, GetDealsOutputType } from 'zite-endpoints-sdk';
 import { toast } from 'sonner';
@@ -177,15 +178,43 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
                   </span>
                 )}
                 {!checkingProject && matchType === 'candidate' && !candidateDismissed && linkedProject && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCandidateDialogOpen(true)}
-                    className="h-7 gap-1.5 text-xs bg-transparent text-white border-white/30 hover:bg-white/10"
-                  >
-                    <Link2 className="w-3.5 h-3.5" />
-                    ¿Vincular a "{linkedProject.projectCode}"?
-                  </Button>
+                  // Popover, no AlertDialog — es una decisión chica (sí/no)
+                  // y un modal con su propio overlay oscuro encima del sheet
+                  // (que ya tiene su header oscuro) se sentía como que la
+                  // pantalla se apagaba dos veces. Sigue siendo controlado
+                  // (open/onOpenChange) para poder abrirse solo al pasar a
+                  // Ganado, no solo con el click del botón.
+                  <Popover open={candidateDialogOpen} onOpenChange={setCandidateDialogOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setCandidateDialogOpen(true)}
+                        className="h-7 gap-1.5 text-xs bg-transparent text-white border-white/30 hover:bg-white/10"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                        ¿Vincular a "{linkedProject.projectCode}"?
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-80 text-foreground">
+                      <p className="text-sm font-semibold">¿Vincular este deal al proyecto "{linkedProject.projectCode}"?</p>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        Ya existe un proyecto con el mismo nombre que este deal. Vincularlo evita crear un proyecto duplicado al aprobar.
+                      </p>
+                      <div className="flex justify-end gap-2 mt-3">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => { setCandidateDismissed(true); setCandidateDialogOpen(false); }}
+                        >
+                          No, es otro
+                        </Button>
+                        <Button size="sm" disabled={linkingCandidate} onClick={handleLinkCandidate}>
+                          {linkingCandidate ? 'Vinculando...' : 'Sí, vincular'}
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 )}
 
                 {/* "Aprobar Deal" — vive en el header, no en la pestaña
@@ -320,29 +349,6 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Ya existe un proyecto con el mismo nombre que este deal, sin
-          vincular todavía — se ofrece vincularlo en vez de crear uno nuevo
-          al aprobar. Se abre solo (además de poder abrirse a mano desde el
-          botón del header) justo al pasar el deal a Ganado, que es el
-          momento en el que más importa no terminar duplicando el proyecto. */}
-      <AlertDialog open={candidateDialogOpen} onOpenChange={o => !o && setCandidateDialogOpen(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Vincular este deal al proyecto "{linkedProject?.projectCode}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Ya existe un proyecto con el mismo nombre que este deal. Vincularlo evita crear un proyecto duplicado al aprobar.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setCandidateDismissed(true); setCandidateDialogOpen(false); }}>
-              No, es otro proyecto
-            </AlertDialogCancel>
-            <AlertDialogAction disabled={linkingCandidate} onClick={handleLinkCandidate}>
-              {linkingCandidate ? 'Vinculando...' : 'Sí, vincular'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
