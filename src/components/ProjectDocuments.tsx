@@ -39,9 +39,13 @@ async function getShareUrl(driveId: string, itemId: string): Promise<{ url: stri
 // mailto: abre el cliente de correo que el usuario tenga configurado por
 // default (Outlook, en esta organización) con el link ya armado en el
 // cuerpo — el usuario revisa destinatarios y da enviar, la app nunca manda
-// el correo por su cuenta.
-function openMailWithLink(subject: string, bodyLines: string[]) {
-  const params = new URLSearchParams({ subject, body: bodyLines.join('\n') });
+// el correo por su cuenta. El body de un mailto: es texto plano (no hay
+// forma de que el nombre del archivo sea un hipervínculo clicable ahí), así
+// que el link va DENTRO de una frase en vez de en su propia línea aparte del
+// nombre — a petición explícita de Sergio, que antes se veían como dos
+// elementos sueltos (nombre y luego la URL cruda).
+function openMailWithLink(subject: string, body: string) {
+  const params = new URLSearchParams({ subject, body });
   window.location.href = `mailto:?${params.toString().replace(/\+/g, '%20')}`;
 }
 
@@ -88,7 +92,7 @@ function TeamsFileCard({ file, driveId }: { file: TeamsFile; driveId?: string })
     setMailing(true);
     try {
       const res = await getShareUrl(driveId, file.id);
-      openMailWithLink(file.name, [file.name, res.url]);
+      openMailWithLink(file.name, `Te comparto el archivo "${file.name}": ${res.url}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo generar el link');
     } finally {
@@ -145,7 +149,7 @@ function TeamsFolderSection({ folder, driveId }: { folder: TeamsFolder; driveId?
     setMailing(true);
     try {
       const res = await getShareUrl(driveId, folder.id);
-      openMailWithLink(folder.name, [folder.name, res.url]);
+      openMailWithLink(folder.name, `Te comparto la carpeta "${folder.name}": ${res.url}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo generar el link');
     } finally {

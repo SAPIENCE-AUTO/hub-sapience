@@ -386,7 +386,19 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
           <div onClick={() => onOpenTab('documentos')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
             <ColorHead color={NEUTRAL} icon={<FileText className="w-3.5 h-3.5" />} label="Documentos" />
             <div className="px-3.5 py-3">
-              {!teamsLinked && <p className="text-xs text-muted-foreground">Sin carpetas vinculadas</p>}
+              {!teamsLinked && (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">Sin canal de Teams vinculado</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs flex-shrink-0"
+                    onClick={e => { e.stopPropagation(); onOpenTab('documentos'); }}
+                  >
+                    Crear / vincular canal
+                  </Button>
+                </div>
+              )}
               {teamsLinked && folders && folders.length === 0 && <p className="text-xs text-muted-foreground">Sin archivos aún</p>}
               {teamsLinked && folders && folders.length > 0 && (
                 <div className="flex flex-wrap gap-4">
