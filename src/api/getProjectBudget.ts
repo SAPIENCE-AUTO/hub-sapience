@@ -104,9 +104,17 @@ export default createEndpoint({
       }
     }
 
-    // Filter: only items included in budget with a non-zero total
+    // Filter: solo líneas con total > 0, incluidas en el presupuesto. Un
+    // deal solo vinculado (no aprobado) — flujo nuevo, ver linkProjectDeal.ts
+    // — nunca pasó por la curaduría de "Aprobar Deal" que estampa
+    // includedInBudget por línea, así que ese campo queda undefined para
+    // toda su cotización; tratarlo como "no incluida" (en vez de "sin
+    // decidir") dejaba el presupuesto vacío para cualquier deal vinculado
+    // sin aprobar. includedInBudget !== false, no === true: si sí se aprobó
+    // con curaduría, ahí sí manda esa selección explícita (puede excluir
+    // líneas puntuales).
     const budgetLineItems = allLineItems.filter(li => {
-      if (!li.includedInBudget) return false;
+      if (li.includedInBudget === false) return false;
       const total = Number(li.cantidad ?? 1) * Number(li.componentes ?? 1) * Number(li.unitCost ?? 0);
       return total > 0;
     });
