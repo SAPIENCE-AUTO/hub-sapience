@@ -5,7 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, linkProjectDeal, getCotizaciones, GetDealsOutputType } from 'zite-endpoints-sdk';
+import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, linkProjectDeal, getCotizaciones, approveDeal, getProjects, GetDealsOutputType } from 'zite-endpoints-sdk';
+import { useProject } from '@/context/ProjectContext';
 import { toast } from 'sonner';
 import { CheckCircle2, Link2 } from 'lucide-react';
 import { PHASES, PHASE_COLOR_MAP } from './dealUtils';
@@ -33,6 +34,14 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
   const [localDeal, setLocalDeal] = useState<Deal>(deal);
   const [approvalReviewOpen, setApprovalReviewOpen] = useState(false);
   const [phaseSelectOpen, setPhaseSelectOpen] = useState(false);
+  // Con el deal ya Ganado, lo único que falta es crear el proyecto — nada
+  // que "aprobar" ni líneas de cotización que seleccionar (eso ya se
+  // resolvió, o no aplica). Un popover chico de un botón en vez de reabrir
+  // el diálogo grande de revisión, que confundía a quien no diseñó el
+  // proceso (no sabía qué decidir ahí).
+  const [createProjectPopoverOpen, setCreateProjectPopoverOpen] = useState(false);
+  const [creatingProjectDirect, setCreatingProjectDirect] = useState(false);
+  const { setProjects } = useProject();
   // Al pasar a "Ganado" por aquí (dropdown del header, ej. arrastrando en el
   // kanban o eligiéndolo directo) — a diferencia del botón "Aprobar Deal" de
   // arriba, que ya crea el proyecto — se ofrece aprobar de una vez las
@@ -154,6 +163,30 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
     setApprovalReviewOpen(false);
   };
 
+  const handleCreateProjectDirect = async () => {
+    if (!localDeal.id) return;
+    setCreatingProjectDirect(true);
+    try {
+      const res = await approveDeal({ dealId: localDeal.id, createProject: true });
+      toast.success(`✓ Proyecto ${res.projectCode} creado`);
+      setLinkedProject({ id: res.projectId, projectCode: res.projectCode });
+      setMatchType('linked');
+      // Mismo motivo que en ApprovalReviewDialog.tsx: sin este refresh, el
+      // proyecto no aparece en el buscador global hasta un reload completo.
+      try {
+        const d = await getProjects({});
+        setProjects(d.projects);
+      } catch (err) {
+        console.error('No se pudo refrescar la lista de proyectos tras crear el proyecto:', err);
+      }
+      setCreateProjectPopoverOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al crear el proyecto');
+    } finally {
+      setCreatingProjectDirect(false);
+    }
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={o => !o && onClose()}>
@@ -232,19 +265,48 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
                 {/* "Aprobar Deal" / "Crear Proyecto" — vive en el header, no
                     en la pestaña General, para que se pueda hacer estando en
                     cualquier pestaña (p.ej. Cotizaciones). Cubre tanto
-                    "todavía no está Ganado" como "ya está Ganado pero sin
-                    proyecto" — antes eran dos botones/flujos distintos. La
-                    etiqueta cambia según el caso: si ya está Ganado, hablar
-                    de "aprobar" junto al badge que ya dice "Ganado" era
-                    confuso — lo único que falta ahí es crear el proyecto. */}
-                {canApprove && (
+                    "todavía no está Ganado" (abre el diálogo de revisión
+                    completo — ahí sí aplica seleccionar líneas de cotización)
+                    como "ya está Ganado pero sin proyecto" (un popover chico
+                    de un solo botón — nada que decidir, nada que "aprobar";
+                    el diálogo grande ahí solo confundía, sobre todo a quien
+                    no diseñó el proceso). */}
+                {canApprove && localDeal.phase === 'Ganado' && (
+                  <Popover open={createProjectPopoverOpen} onOpenChange={setCreateProjectPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        size="sm"
+                        onClick={() => setCreateProjectPopoverOpen(true)}
+                        className="h-7 gap-1.5 text-xs bg-white text-[#0F3D4C] hover:bg-white/90"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Crear Proyecto
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-72 text-foreground">
+                      <p className="text-sm font-semibold">¿Crear el proyecto para este deal?</p>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        Se creará con tableros y tareas por defecto.
+                      </p>
+                      <div className="flex justify-end gap-2 mt-3">
+                        <Button size="sm" variant="ghost" onClick={() => setCreateProjectPopoverOpen(false)}>
+                          Cancelar
+                        </Button>
+                        <Button size="sm" disabled={creatingProjectDirect} onClick={handleCreateProjectDirect}>
+                          {creatingProjectDirect ? 'Creando...' : 'Crear Proyecto'}
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+                {canApprove && localDeal.phase !== 'Ganado' && (
                   <Button
                     size="sm"
                     onClick={() => setApprovalReviewOpen(true)}
                     className="h-7 gap-1.5 text-xs bg-white text-[#0F3D4C] hover:bg-white/90"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    {localDeal.phase === 'Ganado' ? 'Crear Proyecto' : 'Aprobar Deal'}
+                    Aprobar Deal
                   </Button>
                 )}
 

@@ -72,6 +72,28 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
   }, [isNew, user?.id]);
   const [confirmDel, setConfirmDel] = useState(false);
 
+  // DealDetailSheet.tsx reusa la misma instancia del sheet al abrir un deal
+  // distinto sin cerrarlo primero (mismo patrón que su propio
+  // `setLocalDeal(deal)` en un useEffect keyed en `deal`) — sin este mismo
+  // reset aquí, el formulario se quedaba mostrando los datos del deal
+  // ANTERIOR mientras el resto del sheet (header, badge de fase) ya mostraba
+  // el nuevo. Un blur en ese estado guardaría el texto viejo sobre el deal
+  // nuevo (mismo id correcto, valor incorrecto) — bug real, no solo visual.
+  useEffect(() => {
+    const initial = {
+      dealName: deal.dealName ?? '',
+      client: deal.client ?? '',
+      projectType: deal.projectType ?? '',
+      tematica: deal.tematica ?? '',
+      notes: deal.notes ?? '',
+      approvalDate: deal.approvalDate ? deal.approvalDate.slice(0, 10) : '',
+    };
+    setForm(initial);
+    savedValues.current = initial;
+    setOwner((Array.isArray(deal.owner) ? deal.owner[0] : deal.owner) ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deal.id]);
+
   useEffect(() => {
     getUsers({}).then(d => setUsers(d.users));
   }, []);
