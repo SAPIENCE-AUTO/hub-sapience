@@ -146,6 +146,13 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
   const [createProject, setCreateProject] = useState(true);
   const { setProjects } = useProject();
 
+  // Si el deal ya está "Ganado" (se marcó aparte, con el badge del header),
+  // este diálogo ya no tiene nada que aprobar — lo único que falta es crear
+  // el proyecto. Evita la confusión de un botón "Aprobar Deal" al lado de un
+  // badge que ya dice "Ganado", y de paso deja de ofrecer la opción de NO
+  // crear proyecto (no tendría caso abrir esto para eso).
+  const alreadyGanado = deal.phase === 'Ganado';
+
   useEffect(() => {
     if (!open || !deal.id) return;
     setLoading(true);
@@ -181,16 +188,19 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
 
   const handleApprove = async () => {
     if (!deal.id) return;
+    const createProjectNow = alreadyGanado ? true : createProject;
     setApproving(true);
     try {
       const selectedLineItems = rubros.map(r => ({
         rubroName: r.rubroName,
         lineItemIds: [...(selected.get(r.rubroName) ?? new Set<string>())],
       }));
-      const res = await approveDeal({ dealId: deal.id, createProject, selectedLineItems });
-      const successMsg = createProject
-        ? `✓ Deal aprobado — Proyecto ${res.projectCode} creado`
-        : `✓ Deal aprobado`;
+      const res = await approveDeal({ dealId: deal.id, createProject: createProjectNow, selectedLineItems });
+      const successMsg = alreadyGanado
+        ? `✓ Proyecto ${res.projectCode} creado`
+        : createProjectNow
+          ? `✓ Deal aprobado — Proyecto ${res.projectCode} creado`
+          : `✓ Deal aprobado`;
       toast.success(successMsg);
       // El proyecto recién creado no aparecía en el buscador/selector global
       // hasta un refresh completo — Layout.tsx solo carga `projects` una vez
@@ -200,7 +210,7 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
       // hay una carrera real: el diálogo se cerraba y el usuario ya podía
       // abrir el buscador antes de que este fetch regresara, viendo la
       // lista vieja sin el proyecto nuevo.
-      if (createProject && res.projectCode) {
+      if (createProjectNow && res.projectCode) {
         try {
           const d = await getProjects({});
           setProjects(d.projects);
@@ -230,7 +240,7 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
         <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <CheckCircle2 className="w-4 h-4 text-primary" />
-            Aprobar deal: {deal.dealName || 'Sin nombre'}
+            {alreadyGanado ? `Crear proyecto: ${deal.dealName || 'Sin nombre'}` : `Aprobar deal: ${deal.dealName || 'Sin nombre'}`}
           </DialogTitle>
           <p className="text-xs text-muted-foreground mt-1">
             Selecciona qué líneas de cotización cuentan para el presupuesto del proyecto. Solo las marcadas aparecerán ahí.
@@ -247,7 +257,9 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
               <div className="py-12 text-center space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">Sin líneas de cotización</p>
                 <p className="text-xs text-muted-foreground">No hay cotizaciones incluidas con líneas de presupuesto en este deal.</p>
-                <p className="text-xs text-muted-foreground">Aún puedes aprobar — se creará el proyecto y el proceso de cobranza.</p>
+                <p className="text-xs text-muted-foreground">
+                  {alreadyGanado ? 'Aún puedes crear el proyecto.' : 'Aún puedes aprobar — se creará el proyecto.'}
+                </p>
               </div>
             ) : (
               <Accordion type="multiple" defaultValue={rubros.map(r => r.rubroName)}>
@@ -268,24 +280,28 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
 
         {/* Footer */}
         <div className="px-6 py-4 border-t flex-shrink-0 bg-muted/20 space-y-3">
-          <div className="flex items-start gap-2">
-            <Checkbox
-              id="create-project-checkbox"
-              checked={createProject}
-              onCheckedChange={v => setCreateProject(v === true)}
-              className="mt-0.5"
-            />
-            <div>
-              <label htmlFor="create-project-checkbox" className="text-sm font-medium cursor-pointer">
-                Crear proyecto automáticamente
-              </label>
-              <p className="text-xs text-muted-foreground">
-                {createProject
-                  ? 'Se creará un proyecto con tableros y tareas por defecto'
-                  : 'Solo se aprobará el deal, sin crear proyecto ni proceso de cobranza'}
-              </p>
+          {/* Con el deal ya Ganado no tiene caso preguntar si crear el
+              proyecto — es lo único que este diálogo hace en ese caso. */}
+          {!alreadyGanado && (
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="create-project-checkbox"
+                checked={createProject}
+                onCheckedChange={v => setCreateProject(v === true)}
+                className="mt-0.5"
+              />
+              <div>
+                <label htmlFor="create-project-checkbox" className="text-sm font-medium cursor-pointer">
+                  Crear proyecto automáticamente
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  {createProject
+                    ? 'Se creará un proyecto con tableros y tareas por defecto'
+                    : 'Solo se aprobará el deal, sin crear proyecto'}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               {totalItems > 0 && (
@@ -301,8 +317,8 @@ export default function ApprovalReviewDialog({ open, onClose, deal, onApproved }
               <Button variant="ghost" onClick={onClose} disabled={approving}>Cancelar</Button>
               <Button onClick={handleApprove} disabled={approving || loading} className="gap-1.5">
                 {approving
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Aprobando...</>
-                  : <><CheckCircle2 className="w-4 h-4" /> Aprobar</>
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> {alreadyGanado ? 'Creando...' : 'Aprobando...'}</>
+                  : <><CheckCircle2 className="w-4 h-4" /> {alreadyGanado ? 'Crear Proyecto' : 'Aprobar'}</>
                 }
               </Button>
             </div>

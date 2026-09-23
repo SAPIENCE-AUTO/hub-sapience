@@ -229,11 +229,14 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
                   </Popover>
                 )}
 
-                {/* "Aprobar Deal" — vive en el header, no en la pestaña
-                    General, para que se pueda aprobar y crear el proyecto
-                    estando en cualquier pestaña (p.ej. Cotizaciones). Cubre
-                    tanto "todavía no está Ganado" como "ya está Ganado pero
-                    sin proyecto" — antes eran dos botones/flujos distintos. */}
+                {/* "Aprobar Deal" / "Crear Proyecto" — vive en el header, no
+                    en la pestaña General, para que se pueda hacer estando en
+                    cualquier pestaña (p.ej. Cotizaciones). Cubre tanto
+                    "todavía no está Ganado" como "ya está Ganado pero sin
+                    proyecto" — antes eran dos botones/flujos distintos. La
+                    etiqueta cambia según el caso: si ya está Ganado, hablar
+                    de "aprobar" junto al badge que ya dice "Ganado" era
+                    confuso — lo único que falta ahí es crear el proyecto. */}
                 {canApprove && (
                   <Button
                     size="sm"
@@ -241,7 +244,7 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
                     className="h-7 gap-1.5 text-xs bg-white text-[#0F3D4C] hover:bg-white/90"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    Aprobar Deal
+                    {localDeal.phase === 'Ganado' ? 'Crear Proyecto' : 'Aprobar Deal'}
                   </Button>
                 )}
 
