@@ -46,6 +46,22 @@ export default function CommercialDashboardPage() {
     if (!authLoading && user) loadData();
   }, [authLoading, user]);
 
+  // Aprobar un deal (o editar su precio) desde el CRM u otra pestaña no
+  // avisa a este dashboard de ninguna forma — sin esto, alguien puede volver
+  // a esta pestaña después de aprobar algo y seguir viendo los números de
+  // antes sin ninguna señal de que están desactualizados. Silencioso (sin
+  // toast) para no ser molesto cada vez que se cambia de pestaña — el botón
+  // "Actualizar" de arriba sigue ahí para forzarlo a mano y confirmar que sí
+  // funcionó.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') refreshDeals(true);
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function runBackfill(silent = false) {
     setBackfilling(true);
     try {
@@ -62,6 +78,22 @@ export default function CommercialDashboardPage() {
     } finally {
       setBackfilling(false);
     }
+  }
+
+  // El dashboard carga los deals UNA sola vez al montar (ver useEffect de
+  // abajo) y nunca se entera si algo cambia después — aprobar un deal desde
+  // el CRM, o desde otra pestaña, no dispara ningún refetch aquí. A
+  // diferencia de loadData(), esto NO llama applyView(): reaplicar la vista
+  // default resetearía los filtros que el usuario ya haya cambiado a mano.
+  const [refreshing, setRefreshing] = useState(false);
+  async function refreshDeals(silent = false) {
+    setRefreshing(true);
+    try {
+      const d = await getDeals({});
+      setDeals(d.deals);
+      if (!silent) toast.success('Datos actualizados');
+    } catch { if (!silent) toast.error('Error al actualizar los datos'); }
+    finally { setRefreshing(false); }
   }
 
   async function loadData() {
@@ -145,6 +177,9 @@ export default function CommercialDashboardPage() {
             onSelectView={applyView}
             onViewsChange={setViews}
           />
+          <Button variant="ghost" size="sm" className="gap-1.5" disabled={refreshing} onClick={() => refreshDeals()} title="Vuelve a cargar los deals — este dashboard no se actualiza solo cuando algo cambia en otro lado">
+            <RefreshCcw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> Actualizar
+          </Button>
           <Button variant="ghost" size="sm" className="gap-1.5" disabled={backfilling} onClick={() => runBackfill(false)}>
             <RefreshCcw className={`w-4 h-4 ${backfilling ? 'animate-spin' : ''}`} /> Actualizar TC
           </Button>
