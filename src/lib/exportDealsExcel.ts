@@ -2,7 +2,7 @@ import type { GetDealsOutputType } from 'zite-endpoints-sdk';
 
 type Deal = GetDealsOutputType['deals'][0];
 
-const COLUMNS: { key: keyof Deal; label: string }[] = [
+const COLUMNS: { key: keyof Deal; label: string; type?: 'date' }[] = [
   { key: 'dealName', label: 'Deal' },
   { key: 'client', label: 'Cliente' },
   { key: 'phase', label: 'Fase' },
@@ -20,16 +20,33 @@ const COLUMNS: { key: keyof Deal; label: string }[] = [
   { key: 'exchangeRate', label: 'Tipo de cambio' },
   { key: 'empresaOperadora', label: 'Empresa operadora' },
   { key: 'puntoDeContacto', label: 'Punto de contacto' },
-  { key: 'fechaDeBrief', label: 'Fecha de brief' },
-  { key: 'proposalDate', label: 'Fecha de propuesta' },
-  { key: 'approvalDate', label: 'Fecha de aprobación' },
-  { key: 'fechaPerdida', label: 'Fecha perdida' },
+  { key: 'fechaDeBrief', label: 'Fecha de brief', type: 'date' },
+  { key: 'proposalDate', label: 'Fecha de propuesta', type: 'date' },
+  { key: 'approvalDate', label: 'Fecha de aprobación', type: 'date' },
+  { key: 'fechaPerdida', label: 'Fecha perdida', type: 'date' },
   { key: 'notes', label: 'Notas' },
 ];
 
-function cellValue(deal: Deal, key: keyof Deal): string | number {
+// Los campos de fecha llegan del backend como string ISO ("2026-08-17" o con
+// hora) — antes se escribían con String(v), que Excel guarda como texto
+// (no se puede ordenar/filtrar/formatear como fecha). new Date(...) a secas
+// interpreta "2026-08-17" como medianoche UTC y la corre un día hacia atrás
+// en cualquier huso al oeste de UTC (mismo bug ya visto y corregido en
+// ProjectHubLanding.tsx) — se arma la fecha en LOCAL a partir de sus partes.
+function toExcelDate(iso: string): Date | null {
+  const datePart = iso.split('T')[0];
+  const m = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+function cellValue(deal: Deal, key: keyof Deal, type: 'date' | undefined): string | number | Date {
   const v = deal[key] as unknown;
   if (v === null || v === undefined) return '';
+  if (type === 'date' && typeof v === 'string') {
+    const d = toExcelDate(v);
+    if (d) return d;
+  }
   if (Array.isArray(v)) return v.join(', ');
   if (typeof v === 'number') return v;
   return String(v);
@@ -85,12 +102,13 @@ export async function exportDealsExcel(deals: Deal[]): Promise<number> {
   for (const deal of deals) {
     const dataRow = ws.getRow(r);
     COLUMNS.forEach((c, i) => {
-      const v = cellValue(deal, c.key);
+      const v = cellValue(deal, c.key, c.type);
       const cell = dataRow.getCell(i + 1);
       cell.value = v;
+      if (c.type === 'date' && v instanceof Date) cell.numFmt = 'dd/mm/yyyy';
       cell.border = { top: cellBorder, left: cellBorder, bottom: cellBorder, right: cellBorder };
       cell.font = { size: 9 };
-      colMaxLen[i] = Math.max(colMaxLen[i], String(v).length);
+      colMaxLen[i] = Math.max(colMaxLen[i], v instanceof Date ? 10 : String(v).length);
     });
     r++;
   }

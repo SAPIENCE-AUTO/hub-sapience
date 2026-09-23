@@ -115,10 +115,13 @@ export default function CommercialPage() {
     );
   };
 
-  const handleExportExcel = async () => {
+  const [exportPopoverOpen, setExportPopoverOpen] = useState(false);
+
+  const handleExportExcel = async (source: Deal[]) => {
+    setExportPopoverOpen(false);
     setExporting(true);
     try {
-      const count = await exportDealsExcel(filteredDeals);
+      const count = await exportDealsExcel(source);
       toast.success(`Se exportaron ${count} deal${count === 1 ? '' : 's'} a Excel`);
     } catch {
       toast.error('Error al exportar a Excel');
@@ -145,10 +148,25 @@ export default function CommercialPage() {
             </Button>
           </div>
           {canExportExcel && (
-            <Button variant="outline" onClick={handleExportExcel} disabled={exporting} className="gap-2">
-              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-              Exportar a Excel
-            </Button>
+            <Popover open={exportPopoverOpen} onOpenChange={setExportPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" disabled={exporting} className="gap-2" onClick={() => setExportPopoverOpen(true)}>
+                  {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                  Exportar a Excel
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72">
+                <p className="text-sm font-semibold">¿Qué quieres exportar?</p>
+                <div className="flex flex-col gap-2 mt-3">
+                  <Button variant="outline" className="justify-start" onClick={() => handleExportExcel(filteredDeals)}>
+                    Vista actual ({filteredDeals.length})
+                  </Button>
+                  <Button variant="outline" className="justify-start" onClick={() => handleExportExcel(deals)}>
+                    Toda la base ({deals.length})
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
           <Button onClick={() => setSelectedDeal({ ...emptyDeal })} className="gap-2">
             <Plus className="w-4 h-4" /> Nuevo Deal
