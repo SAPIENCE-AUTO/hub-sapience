@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, linkProjectDeal, GetDealsOutputType } from 'zite-endpoints-sdk';
+import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, linkProjectDeal, getCotizaciones, GetDealsOutputType } from 'zite-endpoints-sdk';
 import { toast } from 'sonner';
 import { CheckCircle2, Link2 } from 'lucide-react';
 import { PHASES, PHASE_COLOR_MAP } from './dealUtils';
@@ -118,7 +118,19 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
     try {
       await saveDeal({ id: localDeal.id, phase: newPhase });
       if (newPhase === 'Ganado' && prevPhase !== 'Ganado') {
-        setPendingApprove({ dealId: localDeal.id });
+        // Solo preguntar si de verdad queda algo por aprobar — si ya se
+        // habían aprobado las cotizaciones a mano desde la pestaña
+        // Cotizaciones (o no hay ninguna "Incluida"), no tiene caso volver
+        // a interrumpir con la misma pregunta.
+        try {
+          const { cotizaciones } = await getCotizaciones({ dealId: localDeal.id });
+          const pending = cotizaciones.some(c => c.included && c.status !== 'Aprobada');
+          if (pending) setPendingApprove({ dealId: localDeal.id });
+        } catch {
+          // Si falla la consulta, mejor preguntar de más que quedarse sin
+          // aprobar cotizaciones que sí lo necesitaban.
+          setPendingApprove({ dealId: localDeal.id });
+        }
         // Justo al pasar a Ganado es cuando más importa no dejar pasar un
         // posible duplicado — si ya se había visto la sugerencia y se
         // descartó, no se vuelve a interrumpir con lo mismo.
