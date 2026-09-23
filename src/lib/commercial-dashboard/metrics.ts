@@ -2,7 +2,7 @@ import { Deal, MetricKey } from './types';
 import { DashboardPeriod } from './types';
 import { getPreviousPeriod } from './filters';
 
-function toMXN(deal: Deal): { revenue: number; cost: number } {
+export function toMXN(deal: Deal): { revenue: number; cost: number } {
   const isMXN = !deal.currency || deal.currency.startsWith('MXN');
   const rate = isMXN ? 1 : (deal.exchangeRate ?? 20);
   return {

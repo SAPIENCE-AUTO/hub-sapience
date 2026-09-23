@@ -14,6 +14,9 @@ import DealTable from '../components/commercial/DealTable';
 import DealDetailSheet from '../components/commercial/DealDetailSheet';
 import { PHASE_COLOR_MAP, PHASES, CURRENCIES } from '../components/commercial/dealUtils';
 import { exportDealsExcel } from '../lib/exportDealsExcel';
+import { toMXN } from '../lib/commercial-dashboard/metrics';
+import { getEffectiveDate } from '../lib/commercial-dashboard/filters';
+import type { DateReference } from '../lib/commercial-dashboard/types';
 
 // Exclusivo para Sergio, a su pedido explícito — no es un rol, es una
 // excepción puntual para esta sola persona (mismo patrón que
@@ -43,11 +46,21 @@ export default function CommercialPage() {
   const [filterCurrency, setFilterCurrency] = useState<string>('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+  // A cuál fecha aplica el rango de arriba — mismo concepto y mismos dos
+  // valores que ya usa el Dashboard Comercial (CommercialDashboardFilters.tsx),
+  // con fallback a la otra fecha si la elegida viene vacía (getEffectiveDate).
+  const [dateRef, setDateRef] = useState<DateReference>('proposalDate');
+  // Monto — se compara en MXN (mismo toMXN que ya usa el Dashboard para
+  // Revenue) para que un filtro de "más de $1M" tenga sentido sin importar
+  // si el deal está en MXN o USD.
+  const [filterAmountMin, setFilterAmountMin] = useState('');
+  const [filterAmountMax, setFilterAmountMax] = useState('');
 
   // Popover open state
   const [clientOpen, setClientOpen] = useState(false);
   const [phaseOpen, setPhaseOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+  const [amountOpen, setAmountOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -77,7 +90,7 @@ export default function CommercialPage() {
     [deals]
   );
 
-  const hasFilters = !!search || !!filterClient || filterPhases.length > 0 || !!filterCurrency || !!filterDateFrom || !!filterDateTo;
+  const hasFilters = !!search || !!filterClient || filterPhases.length > 0 || !!filterCurrency || !!filterDateFrom || !!filterDateTo || !!filterAmountMin || !!filterAmountMax;
 
   const clearFilters = () => {
     setSearch('');
@@ -86,6 +99,8 @@ export default function CommercialPage() {
     setFilterCurrency('');
     setFilterDateFrom('');
     setFilterDateTo('');
+    setFilterAmountMin('');
+    setFilterAmountMax('');
   };
 
   const filteredDeals = useMemo(() => {
@@ -103,11 +118,24 @@ export default function CommercialPage() {
       if (filterClient && d.client !== filterClient) return false;
       if (filterPhases.length > 0 && !filterPhases.includes(d.phase ?? '')) return false;
       if (filterCurrency && d.currency !== filterCurrency) return false;
-      if (filterDateFrom && d.proposalDate && d.proposalDate < filterDateFrom) return false;
-      if (filterDateTo && d.proposalDate && d.proposalDate > filterDateTo) return false;
+      // Mismo criterio de siempre: un deal sin la fecha elegida no se
+      // excluye por el filtro (antes era así para proposalDate a secas;
+      // getEffectiveDate solo cambia CUÁL fecha se usa, no esa leniencia).
+      if (filterDateFrom || filterDateTo) {
+        const dateStr = getEffectiveDate(d, dateRef);
+        if (dateStr) {
+          if (filterDateFrom && dateStr < filterDateFrom) return false;
+          if (filterDateTo && dateStr > filterDateTo) return false;
+        }
+      }
+      if (filterAmountMin || filterAmountMax) {
+        const amountMXN = toMXN(d).revenue;
+        if (filterAmountMin && amountMXN < Number(filterAmountMin)) return false;
+        if (filterAmountMax && amountMXN > Number(filterAmountMax)) return false;
+      }
       return true;
     });
-  }, [deals, search, filterClient, filterPhases, filterCurrency, filterDateFrom, filterDateTo]);
+  }, [deals, search, filterClient, filterPhases, filterCurrency, filterDateFrom, filterDateTo, dateRef, filterAmountMin, filterAmountMax]);
 
   const togglePhase = (phase: string) => {
     setFilterPhases(prev =>
@@ -276,11 +304,27 @@ export default function CommercialPage() {
               <CalendarRange className="w-4 h-4" />
               {filterDateFrom || filterDateTo
                 ? `${filterDateFrom || '…'} → ${filterDateTo || '…'}`
-                : 'Fecha de propuesta'}
+                : dateRef === 'approvalDate' ? 'Fecha de ganada' : 'Fecha de propuesta'}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-3 space-y-3" align="start">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fecha de propuesta</p>
+            {/* Mismo par de valores/etiquetas que ya usa el Dashboard Comercial
+                (CommercialDashboardFilters.tsx) para no inventar otro criterio
+                de "cuál fecha cuenta". */}
+            <div className="flex rounded-md border overflow-hidden text-xs">
+              <button
+                onClick={() => setDateRef('proposalDate')}
+                className={`flex-1 py-1.5 font-medium transition-colors ${dateRef === 'proposalDate' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                📅 Propuesta
+              </button>
+              <button
+                onClick={() => setDateRef('approvalDate')}
+                className={`flex-1 py-1.5 font-medium transition-colors ${dateRef === 'approvalDate' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                ✅ Ganada
+              </button>
+            </div>
             <div className="space-y-2">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Desde</label>
@@ -294,6 +338,36 @@ export default function CommercialPage() {
             {(filterDateFrom || filterDateTo) && (
               <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }} className="text-xs text-muted-foreground hover:text-foreground">
                 Limpiar fechas
+              </button>
+            )}
+          </PopoverContent>
+        </Popover>
+
+        {/* Monto — en MXN equivalente (mismo toMXN del Dashboard) para que el
+            rango tenga sentido sin importar si el deal es MXN o USD. */}
+        <Popover open={amountOpen} onOpenChange={setAmountOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={`h-9 gap-1.5 font-normal ${(filterAmountMin || filterAmountMax) ? 'border-primary text-primary' : ''}`}>
+              {filterAmountMin || filterAmountMax
+                ? `$${filterAmountMin || '0'} → $${filterAmountMax || '…'}`
+                : 'Monto'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-3 space-y-3" align="start">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Monto (MXN equivalente)</p>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Mínimo</label>
+                <Input type="number" placeholder="0" className="h-8 text-sm" value={filterAmountMin} onChange={e => setFilterAmountMin(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Máximo</label>
+                <Input type="number" placeholder="Sin tope" className="h-8 text-sm" value={filterAmountMax} onChange={e => setFilterAmountMax(e.target.value)} />
+              </div>
+            </div>
+            {(filterAmountMin || filterAmountMax) && (
+              <button onClick={() => { setFilterAmountMin(''); setFilterAmountMax(''); }} className="text-xs text-muted-foreground hover:text-foreground">
+                Limpiar monto
               </button>
             )}
           </PopoverContent>
