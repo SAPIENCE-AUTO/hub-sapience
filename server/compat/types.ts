@@ -54,6 +54,7 @@ export interface ProjectsRecordType {
   createdBy?: string;
   createdAt?: string;
   visibleBudgetRubros?: string;
+  clientId?: string[];
   updatedAt?: string;
   analistas?: string[];
   moderadores?: string[];
@@ -72,6 +73,7 @@ export interface CRMItemsRecordType {
   revenue?: number;
   assignedTo?: string;
   notes?: string;
+  clientId?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -280,6 +282,7 @@ export interface InvoicesRecordType {
   status?: string;
   pdfUrl?: string;
   notes?: string;
+  clientId?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -478,6 +481,7 @@ export interface DealsRecordType {
   fechaPerdida?: string;
   gerente?: string;
   exchangeRate?: number;
+  clientId?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -681,6 +685,7 @@ export interface CollectionProcessesRecordType {
   notes?: string;
   responsibleUser?: string[];
   creditDays?: number;
+  clientId?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -703,6 +708,14 @@ export interface MigrationLogRecordType {
   status?: string;
   durationSeconds?: number;
   runBy?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ClientsRecordType {
+  id: string;
+  name?: string;
+  sharpliClientId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

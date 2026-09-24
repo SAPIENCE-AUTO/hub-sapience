@@ -65,6 +65,7 @@ export const SCHEMA: Record<string, TableDef> = {
       createdBy: { col: 'created_by', kind: 'text' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       visibleBudgetRubros: { col: 'visible_budget_rubros', kind: 'text' },
+      clientId: { col: 'client_id', kind: 'link', target: 'clients' },
       updatedAt: { col: 'updated_at', kind: 'datetime' },
       analistas: { col: 'analistas', kind: 'linkMany', join: 'projects_analistas', selfCol: 'project_id', otherCol: 'user_id' },
       moderadores: { col: 'moderadores', kind: 'linkMany', join: 'projects_moderadores', selfCol: 'project_id', otherCol: 'user_id' },
@@ -85,6 +86,7 @@ export const SCHEMA: Record<string, TableDef> = {
       revenue: { col: 'revenue', kind: 'number' },
       assignedTo: { col: 'assigned_to', kind: 'text' },
       notes: { col: 'notes', kind: 'text' },
+      clientId: { col: 'client_id', kind: 'link', target: 'clients' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },
@@ -316,6 +318,7 @@ export const SCHEMA: Record<string, TableDef> = {
       status: { col: 'status', kind: 'text' },
       pdfUrl: { col: 'pdf_url', kind: 'text' },
       notes: { col: 'notes', kind: 'text' },
+      clientId: { col: 'client_id', kind: 'link', target: 'clients' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },
@@ -538,6 +541,7 @@ export const SCHEMA: Record<string, TableDef> = {
       fechaPerdida: { col: 'fecha_perdida', kind: 'date' },
       gerente: { col: 'gerente', kind: 'text' },
       exchangeRate: { col: 'exchange_rate', kind: 'number' },
+      clientId: { col: 'client_id', kind: 'link', target: 'clients' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },
@@ -767,6 +771,7 @@ export const SCHEMA: Record<string, TableDef> = {
       notes: { col: 'notes', kind: 'text' },
       responsibleUser: { col: 'responsible_user_id', kind: 'link', target: 'users' },
       creditDays: { col: 'credit_days', kind: 'number' },
+      clientId: { col: 'client_id', kind: 'link', target: 'clients' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },
@@ -793,6 +798,16 @@ export const SCHEMA: Record<string, TableDef> = {
       status: { col: 'status', kind: 'text' },
       durationSeconds: { col: 'duration_seconds', kind: 'number' },
       runBy: { col: 'run_by_id', kind: 'link', target: 'users' },
+      createdAt: { col: 'created_at', kind: 'datetime' },
+      updatedAt: { col: 'updated_at', kind: 'datetime' }
+    },
+  },
+  Clients: {
+    table: 'clients',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      name: { col: 'name', kind: 'text' },
+      sharpliClientId: { col: 'sharpli_client_id', kind: 'text' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },

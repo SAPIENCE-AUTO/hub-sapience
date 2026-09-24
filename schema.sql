@@ -61,25 +61,6 @@ create table users (
 );
 create trigger users_set_updated before update on users for each row execute function set_updated_at();
 
--- ─── CRM Items ─────────────────────────────────────────────────
-create table crm_items (
-  id                            uuid primary key default gen_random_uuid(),
-  item_name                     text,
-  project_code                  text,
-  client                        text,
-  status                        text,
-  proposal_date                 date,
-  contract_date                 date,
-  budget                        numeric(14,2),
-  revenue                       numeric(14,2),
-  assigned_to                   text,
-  notes                         text,
-  created_at                    timestamptz not null default now(),
-  updated_at                    timestamptz not null default now(),
-  constraint crm_items_status_chk check ("status" is null or "status" in ('Prospecto', 'Propuesta enviada', 'Negociación', 'Ganado', 'Perdido'))
-);
-create trigger crm_items_set_updated before update on crm_items for each row execute function set_updated_at();
-
 -- ─── Participants ──────────────────────────────────────────────
 create table participants (
   id                            uuid primary key default gen_random_uuid(),
@@ -320,28 +301,6 @@ create table cell_values (
 );
 create trigger cell_values_set_updated before update on cell_values for each row execute function set_updated_at();
 
--- ─── Invoices ──────────────────────────────────────────────────
-create table invoices (
-  id                            uuid primary key default gen_random_uuid(),
-  invoice_number                text,
-  project_code                  text,
-  client                        text,
-  type                          text,
-  amount                        numeric(14,2),
-  currency                      text,
-  issue_date                    date,
-  due_date                      date,
-  status                        text,
-  pdf_url                       text,
-  notes                         text,
-  created_at                    timestamptz not null default now(),
-  updated_at                    timestamptz not null default now(),
-  constraint invoices_type_chk check ("type" is null or "type" in ('Factura', 'Nota de crédito')),
-  constraint invoices_currency_chk check ("currency" is null or "currency" in ('MXN', 'USD')),
-  constraint invoices_status_chk check ("status" is null or "status" in ('Pendiente', 'Pagada', 'Vencida', 'Cancelada'))
-);
-create trigger invoices_set_updated before update on invoices for each row execute function set_updated_at();
-
 -- ─── Payments ──────────────────────────────────────────────────
 create table payments (
   id                            uuid primary key default gen_random_uuid(),
@@ -567,6 +526,59 @@ create table calendar_audit_logs (
 );
 create trigger calendar_audit_logs_set_updated before update on calendar_audit_logs for each row execute function set_updated_at();
 
+-- ─── Clients ───────────────────────────────────────────────────
+create table clients (
+  id                            uuid primary key default gen_random_uuid(),
+  name                          text,
+  sharpli_client_id             uuid,
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now()
+);
+create trigger clients_set_updated before update on clients for each row execute function set_updated_at();
+
+-- ─── CRM Items ─────────────────────────────────────────────────
+create table crm_items (
+  id                            uuid primary key default gen_random_uuid(),
+  item_name                     text,
+  project_code                  text,
+  client                        text,
+  status                        text,
+  proposal_date                 date,
+  contract_date                 date,
+  budget                        numeric(14,2),
+  revenue                       numeric(14,2),
+  assigned_to                   text,
+  notes                         text,
+  client_id                     uuid references clients(id) on delete set null,
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now(),
+  constraint crm_items_status_chk check ("status" is null or "status" in ('Prospecto', 'Propuesta enviada', 'Negociación', 'Ganado', 'Perdido'))
+);
+create trigger crm_items_set_updated before update on crm_items for each row execute function set_updated_at();
+
+-- ─── Invoices ──────────────────────────────────────────────────
+create table invoices (
+  id                            uuid primary key default gen_random_uuid(),
+  invoice_number                text,
+  project_code                  text,
+  client                        text,
+  type                          text,
+  amount                        numeric(14,2),
+  currency                      text,
+  issue_date                    date,
+  due_date                      date,
+  status                        text,
+  pdf_url                       text,
+  notes                         text,
+  client_id                     uuid references clients(id) on delete set null,
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now(),
+  constraint invoices_type_chk check ("type" is null or "type" in ('Factura', 'Nota de crédito')),
+  constraint invoices_currency_chk check ("currency" is null or "currency" in ('MXN', 'USD')),
+  constraint invoices_status_chk check ("status" is null or "status" in ('Pendiente', 'Pagada', 'Vencida', 'Cancelada'))
+);
+create trigger invoices_set_updated before update on invoices for each row execute function set_updated_at();
+
 -- ─── PO Audit Log ──────────────────────────────────────────────
 create table po_audit_logs (
   id                            uuid primary key default gen_random_uuid(),
@@ -623,6 +635,7 @@ create table deals (
   fecha_perdida                 date,
   gerente                       text,
   exchange_rate                 numeric,
+  client_id                     uuid references clients(id) on delete set null,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now(),
   constraint deals_phase_chk check ("phase" is null or "phase" in ('Prospecto', 'Brief recibido', 'Cotización enviada', 'Negociación', 'Ganado', 'Perdido')),
@@ -733,6 +746,7 @@ create table projects (
   created_by                    text,
   created_at                    timestamptz,
   visible_budget_rubros         text,
+  client_id                     uuid references clients(id) on delete set null,
   updated_at                    timestamptz not null default now(),
   constraint projects_status_chk check ("status" is null or "status" in ('Prospecto', 'En curso', 'Finalizado', 'Cancelado', 'Activo', 'Stand by')),
   constraint projects_timeline_status_chk check ("timeline_status" is null or "timeline_status" in ('Pendiente', 'Listo', 'Error')),
@@ -863,6 +877,7 @@ create table collection_processes (
   notes                         text,
   responsible_user_id           uuid references users(id) on delete set null,
   credit_days                   integer,
+  client_id                     uuid references clients(id) on delete set null,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now(),
   constraint collection_processes_currency_chk check ("currency" is null or "currency" in ('MXN', 'USD', 'EUR')),
@@ -973,6 +988,11 @@ create index on messages (channel, sent_at);
 -- las demás (se vio en vivo: 250 de 462 Shared Views rechazadas por esto).
 create unique index shared_views_token_uniq on shared_views (token) where token is not null and token <> '';
 create unique index on users (lower(email));
+-- clients es tabla nueva (no viene de Zite, ver comentario en EXTRA_TABLES
+-- más arriba) — case-insensitive y con trim por el mismo motivo que
+-- projects_project_code_uniq: el backfill de clients junta nombres que hoy
+-- solo difieren en mayúsculas/espacios ("Landor" vs "LANDOR").
+create unique index clients_name_uniq on clients (lower(trim(name)));
 
 -- El código filtra participantes con `contains`, que en Postgres es
 -- ILIKE '%…%' y no aprovecha un btree. Requiere trigram.

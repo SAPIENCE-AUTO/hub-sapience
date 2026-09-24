@@ -65,7 +65,22 @@ EXTRA_COLUMNS = {
     # Zite nunca tuvo porque Collection Processes tampoco existía con este
     # alcance ahí. La migración sobre la tabla ya existente vive en
     # server/scripts/add-collection-credit-days.ts (ALTER TABLE, no se ejecuta sola).
-    'CollectionProcesses': [('creditDays', 'credit_days', 'integer', 'number')],
+    # Tabla Clients (sep 2026, ver más abajo EXTRA_TABLES): "cliente" vivía
+    # como texto libre suelto en estas 5 tablas (Deals, Projects, CRMItems,
+    # Invoices, CollectionProcesses) — mismo cliente escrito de formas
+    # distintas en cada una, sin ID, sin poder homologar con la tabla
+    # `clients` real que ya tiene Sharpli. `clientId` es un link normal más
+    # (kind='link', igual que cualquier FK derivada de Zite) — el texto
+    # `client` original se deja intacto en las 5 tablas para no romper nada
+    # que ya lo lea; `clientId` es aditivo. La migración sobre las tablas ya
+    # existentes vive en server/scripts/add-clients-table.ts (CREATE TABLE +
+    # 5x ALTER TABLE, no se ejecuta sola) y el backfill de datos reales en
+    # server/scripts/backfill-clients.ts.
+    'Deals': [('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
+    'CRMItems': [('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
+    'Invoices': [('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
+    'CollectionProcesses': [('creditDays', 'credit_days', 'integer', 'number'),
+                             ('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
     # Exportar Reclutamiento (sep 2026): alias de columna solo para el encabezado
     # del Excel/CSV exportado — el nombre real de la columna (columnName, lo que
     # se ve en el grid) no cambia. Separado de optionsJson a propósito: esa
@@ -86,7 +101,10 @@ EXTRA_COLUMNS = {
     # proyectos ya vinculados). La migración sobre la tabla ya existente
     # vive en server/scripts/add-projects-visible-budget-rubros.ts (ALTER
     # TABLE, no se ejecuta sola).
-    'Projects': [('visibleBudgetRubros', 'visible_budget_rubros', 'text', 'text')],
+    # `clientId` (sep 2026): ver comentario grande junto a 'Deals' más arriba
+    # en este mismo dict — tabla Clients nueva, homologada con Sharpli.
+    'Projects': [('visibleBudgetRubros', 'visible_budget_rubros', 'text', 'text'),
+                 ('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
 }
 
 # Índice único agregado directamente en Supabase después de la carga inicial
@@ -178,12 +196,47 @@ for t in tables:
         elif opts and ty == 'multiple_select':
             v = ", ".join("'" + o.replace("'", "''") + "'" for o in opts)
             checks.append(f"  constraint {T}_{col}_chk check ({q(col)} is null or {q(col)} <@ array[{v}]::text[])")
-    for prop, col, pg, kind in EXTRA_COLUMNS.get(model(t['name']), []):
-        add(prop, col, pg, kind)
+    for entry in EXTRA_COLUMNS.get(model(t['name']), []):
+        # 4-tupla: columna escalar de siempre. 5-tupla: agrega `extra`, para
+        # que una EXTRA_COLUMNS pueda ser un link real (ver `clientId` en
+        # Deals/Projects/CRMItems/Invoices/CollectionProcesses más arriba) y
+        # no solo texto/número/fecha como todas las anteriores.
+        prop, col, pg, kind = entry[:4]
+        add(prop, col, pg, kind, entry[4] if len(entry) > 4 else None)
     add('createdAt', 'created_at', 'timestamptz', 'datetime', 'now')
     add('updatedAt', 'updated_at', 'timestamptz', 'datetime', 'now')
     many = {mm['prop']: mm for mm in m2m.values() if mm['owner']['id'] == t['id']}
     canon[model(t['name'])] = dict(table=T, cols=cols, checks=checks, notes=notes, many=many, name=t['name'])
+
+# ── tablas que no vienen del export de Zite ──────────────────────────────
+# Clients (sep 2026): primera tabla que no sale de Zite — homologa el
+# concepto de "cliente" que hoy vive disperso como texto libre en Deals,
+# Projects, CRMItems, Invoices y CollectionProcesses (mismo cliente escrito
+# distinto en cada tabla, sin ID) con la tabla `clients` real que ya tiene
+# Sharpli. `sharpliClientId` guarda ese UUID cuando hay match — null si el
+# cliente no existe en Sharpli o no se ha homologado todavía. Entra a `canon`
+# igual que cualquier tabla de Zite para que el resto del pipeline (orden
+# topológico, schema-map.ts, types.ts) no tenga que tratarla distinto; el
+# CREATE TABLE real sobre la base ya existente vive en
+# server/scripts/add-clients-table.ts (no se ejecuta solo), y el backfill de
+# los ~60 nombres de cliente ya en uso hoy en server/scripts/backfill-clients.ts.
+EXTRA_TABLES = {
+    'Clients': dict(
+        table='clients',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='name', col='name', pg='text', kind='text', extra=None),
+            dict(prop='sharpliClientId', col='sharpli_client_id', pg='uuid', kind='text', extra=None),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+            dict(prop='updatedAt', col='updated_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[],
+        notes=[],
+        many={},
+        name='Clients',
+    ),
+}
+canon.update(EXTRA_TABLES)
 
 # ── orden topológico ────────────────────────────────────────────────────
 order, left = [], list(canon.items())
@@ -301,6 +354,11 @@ create index on messages (channel, sent_at);
 -- las demás (se vio en vivo: 250 de 462 Shared Views rechazadas por esto).
 create unique index shared_views_token_uniq on shared_views (token) where token is not null and token <> '';
 create unique index on users (lower(email));
+-- clients es tabla nueva (no viene de Zite, ver comentario en EXTRA_TABLES
+-- más arriba) — case-insensitive y con trim por el mismo motivo que
+-- projects_project_code_uniq: el backfill de clients junta nombres que hoy
+-- solo difieren en mayúsculas/espacios ("Landor" vs "LANDOR").
+create unique index clients_name_uniq on clients (lower(trim(name)));
 
 -- El código filtra participantes con `contains`, que en Postgres es
 -- ILIKE '%…%' y no aprovecha un btree. Requiere trigram.

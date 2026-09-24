@@ -63,6 +63,7 @@ export const CalendarAuditLog = createModel(pool, 'CalendarAuditLog');
 export const CollectionProcesses = createModel(pool, 'CollectionProcesses');
 export const RubroAssignments = createModel(pool, 'RubroAssignments');
 export const MigrationLog = createModel(pool, 'MigrationLog');
+export const Clients = createModel(pool, 'Clients');
 
-export const MODELS = { Users, Projects, CRMItems, Participants, RecruitmentRows, Suppliers, PurchaseOrders, POLineItems, Tasks, CalendarEvents, Messages, BoardColumns, CellValues, Invoices, Payments, Documents, Boards, SharedViews, ChatConversations, BillingEntities, SupplierInvoices, ApprovalLimits, POAuditLog, PoAttachments, AppSettings, Deals, Cotizaciones, CotizacionLineItems, DealDocuments, DocumentBlocks, PettyCashFunds, Expenses, ExpenseAuditLog, ExpenseComments, TaskComments, ExpenseLineItems, CommercialDashboardViews, CalendarAuditLog, CollectionProcesses, RubroAssignments, MigrationLog } as const;
+export const MODELS = { Users, Projects, CRMItems, Participants, RecruitmentRows, Suppliers, PurchaseOrders, POLineItems, Tasks, CalendarEvents, Messages, BoardColumns, CellValues, Invoices, Payments, Documents, Boards, SharedViews, ChatConversations, BillingEntities, SupplierInvoices, ApprovalLimits, POAuditLog, PoAttachments, AppSettings, Deals, Cotizaciones, CotizacionLineItems, DealDocuments, DocumentBlocks, PettyCashFunds, Expenses, ExpenseAuditLog, ExpenseComments, TaskComments, ExpenseLineItems, CommercialDashboardViews, CalendarAuditLog, CollectionProcesses, RubroAssignments, MigrationLog, Clients } as const;
 export type * from './types';
