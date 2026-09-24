@@ -14,6 +14,7 @@ export interface MeetingRecording {
   subject?: string;
   status?: string;
   meetingStart?: string;
+  meetingType?: string;
   createdAt?: string;
   muxPlaybackId?: string;
   assemblyTranscriptId?: string;
@@ -144,6 +145,9 @@ export default function MeetingRecordingDetailDialog({ recording, open, onClose 
                 {tab === 'resumen' && (
                   <MeetingSummaryPanel
                     meetingRecordingId={recording.id}
+                    subject={recording.subject}
+                    meetingStart={recording.meetingStart}
+                    savedMeetingType={recording.meetingType}
                     transcript={recording.transcript}
                     summaryJson={summaryJson}
                     onSummaryChange={setSummaryJson}

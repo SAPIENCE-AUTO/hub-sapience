@@ -215,6 +215,7 @@ export const filloutNativeWebhook = (input?: any): Promise<any> => call('fillout
 export const filloutWebhook = (input?: any): Promise<any> => call('filloutWebhook', input);
 export const fixCellData = (input?: any): Promise<any> => call('fixCellData', input);
 export const fixOrphanedCellValues = (input?: any): Promise<any> => call('fixOrphanedCellValues', input);
+export const generateMeetingEmail = (input?: any): Promise<any> => call('generateMeetingEmail', input);
 export const generateMeetingSummary = (input?: any): Promise<any> => call('generateMeetingSummary', input);
 export const generatePoPdf = (input?: any): Promise<any> => call('generatePoPdf', input);
 export const generateSupplierToken = (input?: any): Promise<any> => call('generateSupplierToken', input);
