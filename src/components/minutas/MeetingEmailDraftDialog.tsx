@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Copy, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import { markdownToHtml, copyRichText, escapeHtml } from '@/lib/markdownToHtml';
 
 interface EmailDraft { subject: string; body: string }
 
@@ -35,12 +36,17 @@ export default function MeetingEmailDraftDialog({ meetingRecordingId, emailType,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailType, meetingRecordingId]);
 
-  const copyAll = () => {
+  // Copia con formato real (negritas, viñetas) — el cuerpo que regresa
+  // generateMeetingEmail.ts ya viene en Markdown ligero a propósito, para
+  // que esto lo convierta a HTML y Outlook/Gmail lo peguen con viñetas y
+  // negritas de verdad en vez de asteriscos y guiones literales.
+  const copyAll = async () => {
     if (!draft) return;
-    navigator.clipboard.writeText(`Asunto: ${draft.subject}\n\n${draft.body}`).then(
-      () => toast.success('Correo copiado'),
-      () => toast.error('No se pudo copiar — el navegador bloqueó el acceso al portapapeles'),
-    );
+    const html = `<p><strong>Asunto:</strong> ${escapeHtml(draft.subject)}</p>${markdownToHtml(draft.body)}`;
+    const plain = `Asunto: ${draft.subject}\n\n${draft.body}`;
+    const ok = await copyRichText(html, plain);
+    if (ok) toast.success('Correo copiado');
+    else toast.error('No se pudo copiar — el navegador bloqueó el acceso al portapapeles');
   };
 
   return (
@@ -66,7 +72,10 @@ export default function MeetingEmailDraftDialog({ meetingRecordingId, emailType,
               <label className="text-xs font-medium text-muted-foreground">Cuerpo</label>
               <Textarea value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} className="mt-1 min-h-[280px] text-sm" />
             </div>
-            <p className="text-xs text-muted-foreground">Es un borrador — revísalo, ajústalo y envíalo desde tu correo.</p>
+            <p className="text-xs text-muted-foreground">
+              Es un borrador — revísalo, ajústalo y envíalo desde tu correo. Los "-" y "**texto**" se pegan como
+              viñetas y negritas reales al copiarlo.
+            </p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={onClose}>Cerrar</Button>
               <Button size="sm" onClick={copyAll}><Copy className="h-3.5 w-3.5 mr-1.5" /> Copiar correo</Button>

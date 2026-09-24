@@ -11,18 +11,29 @@ const EmailSchema = z.object({ subject: z.string(), body: z.string() });
 // síntesis en vez de repetirlo. Nunca se envía nada — regresa un borrador
 // que la UI muestra para copiar/editar, el envío real lo hace el usuario
 // desde su propio cliente de correo.
+// "al mail que se genera le falta como formato... bullets, negritas...
+// (no emoticones ni emojis ni nada)" (Sergio) — el cuerpo ahora pide
+// Markdown ligero (el mismo subset que ya produce meetingSummaryPrompts.ts):
+// el borrador se copia con markdownToHtml/copyRichText (MeetingEmailDraftDialog.tsx)
+// para que Outlook/Gmail peguen viñetas y negritas reales, no asteriscos y
+// guiones literales — el Markdown crudo es lo que se ve en el textarea al
+// editar, que es la única razón por la que no se pide HTML directo aquí.
+const FORMAT_RULE = `Formato del "body": Markdown ligero — viñetas con "-", **negritas** solo en lo más importante de cada punto, un salto de línea en blanco entre párrafos o bloques. NO uses encabezados (#/##), NO uses emojis ni emoticones de ningún tipo, NO uses HTML.`;
+
 const EMAIL_PROMPTS: Record<'interno' | 'cliente', string> = {
   interno: `Eres un analista de Sapience redactando un correo interno de seguimiento después de una junta, dirigido al equipo.
 
 Con base ÚNICAMENTE en el resumen y los acuerdos de la junta que se te dan (ya validados por el equipo, no inventes nada nuevo ni agregues información que no esté ahí), redacta un correo que:
 1. Recuerde en una o dos líneas el objetivo o tema de la junta.
-2. Liste los acuerdos/pendientes como una lista clara, con el responsable si se conoce.
+2. Liste los acuerdos/pendientes como viñetas, con el responsable si se conoce.
 3. Cierre con los próximos pasos, si el resumen los menciona.
 
 Tono directo y profesional, como lo escribiría un compañero de equipo — no un reporte formal ni un correo genérico de "buenos días equipo". No repitas el resumen completo, solo lo esencial para que alguien que no fue a la junta sepa qué se decidió y qué le toca hacer.
 
+${FORMAT_RULE}
+
 Responde ÚNICAMENTE con un objeto JSON (sin texto antes ni después, sin \`\`\`):
-{ "subject": "asunto breve y descriptivo", "body": "cuerpo del correo en texto plano, con saltos de línea (\\n) donde corresponda, sin HTML ni Markdown" }`,
+{ "subject": "asunto breve y descriptivo", "body": "cuerpo del correo en Markdown ligero, con \\n\\n entre bloques" }`,
 
   cliente: `Eres un analista de Sapience (agencia de investigación de mercados) redactando un correo de seguimiento para el CLIENTE después de una junta con él.
 
@@ -33,8 +44,10 @@ Con base ÚNICAMENTE en el resumen y los acuerdos de la junta que se te dan (ya 
 
 NO incluyas información interna de Sapience que no le corresponda ver al cliente (por ejemplo, roles internos del equipo, riesgos operativos internos o desacuerdos entre el equipo de Sapience). Tono profesional y cordial.
 
+${FORMAT_RULE}
+
 Responde ÚNICAMENTE con un objeto JSON (sin texto antes ni después, sin \`\`\`):
-{ "subject": "asunto breve y descriptivo", "body": "cuerpo del correo en texto plano, con saltos de línea (\\n) donde corresponda, sin HTML ni Markdown" }`,
+{ "subject": "asunto breve y descriptivo", "body": "cuerpo del correo en Markdown ligero, con \\n\\n entre bloques" }`,
 };
 
 export default createEndpoint({

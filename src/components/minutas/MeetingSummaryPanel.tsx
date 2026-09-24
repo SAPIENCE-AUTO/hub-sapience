@@ -5,9 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Markdown } from '@/components/markdown';
-import { Sparkles, Loader2, Calendar, Copy, ClipboardCheck, Mail } from 'lucide-react';
+import { Sparkles, Loader2, Calendar, Copy, ClipboardCheck, Mail, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { getSectionIcon } from './sectionIcons';
+import { getSectionMeta } from './sectionIcons';
+import { markdownToHtml, copyRichText } from '@/lib/markdownToHtml';
 import MeetingEmailDraftDialog from './MeetingEmailDraftDialog';
 
 const MEETING_TYPES = [
@@ -43,11 +44,13 @@ function headingText(children: ReactNode): string {
 // pieza nueva que Sharpli no tiene — acuerdos con checkbox. meetingType se
 // elige aquí (no antes) porque no se conoce hasta que alguien clasifica la
 // junta; regenerar con otro tipo es solo volver a elegir y dar clic de nuevo.
-// "quisiera poder usar este resumen/minuta como base para trabajar" (Sergio)
-// agregó los botones de copiar y de redactar correo — y "que el formato
-// fuera más lindo" agregó el header con tipo/fecha y un ícono por sección,
-// emparejado por palabra clave contra el set fijo de encabezados que usan
-// los 5 prompts (ver sectionIcons.tsx).
+// "quisiera poder usar este resumen/minuta como base para trabajar...
+// copiar minuta... copiar action items" (Sergio) agregó los botones de
+// copiar (minuta con formato real vía markdownToHtml, acuerdos y
+// transcripción en texto plano) y de redactar correo — y "que el formato
+// fuera más lindo... le falta color" agregó el header con tipo/fecha y un
+// ícono con color por sección, emparejado por palabra clave contra el set
+// fijo de encabezados que usan los 5 prompts (ver sectionIcons.tsx).
 export default function MeetingSummaryPanel({
   meetingRecordingId, subject, meetingStart, savedMeetingType, transcript, summaryJson, onSummaryChange,
 }: {
@@ -111,6 +114,17 @@ export default function MeetingSummaryPanel({
     copyToClipboard(text, 'Acuerdos copiados');
   };
 
+  // Copia la minuta con formato real (negritas, viñetas) — a diferencia de
+  // copyToClipboard, que pega texto plano tal cual, esto convierte el
+  // Markdown del resumen a HTML para que Word/Outlook/Gmail lo peguen con
+  // viñetas y negritas de verdad, no asteriscos y guiones literales.
+  const copyMinuta = async () => {
+    if (!summaryJson) return;
+    const ok = await copyRichText(markdownToHtml(summaryJson.resumen), summaryJson.resumen);
+    if (ok) toast.success('Minuta copiada');
+    else toast.error('No se pudo copiar — el navegador bloqueó el acceso al portapapeles');
+  };
+
   if (!summaryJson) {
     if (!transcript?.trim()) {
       return <p className="text-muted-foreground text-sm">Esta minuta todavía no tiene transcripción lista.</p>;
@@ -145,11 +159,14 @@ export default function MeetingSummaryPanel({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button size="sm" variant="outline" onClick={copyTranscript} disabled={!transcript?.trim()}>
-            <Copy className="h-3.5 w-3.5 mr-1.5" /> Transcripción
+          <Button size="sm" variant="outline" onClick={copyMinuta}>
+            <FileText className="h-3.5 w-3.5 mr-1.5" /> Minuta
           </Button>
           <Button size="sm" variant="outline" onClick={copyAcuerdos} disabled={!summaryJson.acuerdos.length}>
-            <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" /> Acuerdos
+            <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" /> Action items
+          </Button>
+          <Button size="sm" variant="outline" onClick={copyTranscript} disabled={!transcript?.trim()}>
+            <Copy className="h-3.5 w-3.5 mr-1.5" /> Transcripción
           </Button>
           <Button size="sm" variant="outline" onClick={() => setEmailDraftType('interno')}>
             <Mail className="h-3.5 w-3.5 mr-1.5" /> Email interno
@@ -163,10 +180,12 @@ export default function MeetingSummaryPanel({
       <Markdown
         components={{
           h2: ({ children }) => {
-            const Icon = getSectionIcon(headingText(children));
+            const { icon: Icon, iconClass, bgClass } = getSectionMeta(headingText(children));
             return (
               <h2 className="flex items-center gap-2">
-                <Icon className="h-4 w-4 text-primary shrink-0" />
+                <span className={`inline-flex items-center justify-center h-6 w-6 rounded-md shrink-0 ${bgClass}`}>
+                  <Icon className={`h-3.5 w-3.5 ${iconClass}`} />
+                </span>
                 <span>{children}</span>
               </h2>
             );
