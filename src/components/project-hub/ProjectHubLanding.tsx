@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench, Landmark } from 'lucide-react';
+import { SharpliIcon } from '../SharpliIcon';
 import { getRecruitmentSummary, getTasks, getProjectTeamsFiles, getMessages, getSwipeSesiones, getCollectionProcesses } from 'zite-endpoints-sdk';
 import { computeGanttSegments, GanttData } from './ganttMath';
 import { TEAL, TEAL_2, GOLD, INFO, EXITO, NEUTRAL, ALERTA, EstadoPill } from '../../lib/toolColors';
@@ -33,7 +34,7 @@ interface ProjectHubLandingProps {
   canSeeTools: boolean;
   canSeeCobranza: boolean;
   client?: string;
-  onOpenTab: (tab: 'reclutamiento' | 'presupuesto' | 'documentos' | 'chat' | 'tools' | 'cobranza') => void;
+  onOpenTab: (tab: 'reclutamiento' | 'presupuesto' | 'documentos' | 'chat' | 'tools' | 'cobranza' | 'sharpli') => void;
   onOpenActividades: (section: PmSection) => void;
 }
 
@@ -429,6 +430,14 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* ── Sharpli ── */}
+          <div onClick={() => onOpenTab('sharpli')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
+            <ColorHead color={INFO} icon={<SharpliIcon className="w-3.5 h-3.5" />} label="Sharpli" />
+            <div className="px-3.5 py-3">
+              <span className="text-xs text-muted-foreground">Ver detalle</span>
             </div>
           </div>
         </div>

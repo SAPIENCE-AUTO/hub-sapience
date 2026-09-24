@@ -57,6 +57,9 @@
     },
     "ZITE_GOOGLE_MAPS_API_KEY": {
       "description": "API Key de Google Maps para mostrar Street View en el popover de direcciones"
+    },
+    "ZITE_EMBED_SECRET": {
+      "description": "Secreto HMAC-SHA256 para firmar los tokens de embed de Sharpli (nav 'Sharpli' y pestaña por proyecto) — debe coincidir con el secreto configurado del lado de Sharpli"
     }
   },
   "seoSettings": {

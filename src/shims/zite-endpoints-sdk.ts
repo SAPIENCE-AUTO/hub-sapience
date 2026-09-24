@@ -304,6 +304,8 @@ export const getReferenceOptions = (input?: any): Promise<any> => call('getRefer
 export const getRubroAssignments = (input?: any): Promise<any> => call('getRubroAssignments', input);
 export const getSharedViewData = (input?: any): Promise<any> => call('getSharedViewData', input);
 export const getSharedViews = (input?: any): Promise<any> => call('getSharedViews', input);
+export const getSharpliAppToken = (input?: any): Promise<any> => call('getSharpliAppToken', input);
+export const getSharpliProjectToken = (input?: any): Promise<any> => call('getSharpliProjectToken', input);
 export const getStreetViewUrl = (input?: any): Promise<any> => call('getStreetViewUrl', input);
 export const getSupplierInvoiceById = (input?: any): Promise<any> => call('getSupplierInvoiceById', input);
 export const getSupplierInvoices = (input?: any): Promise<any> => call('getSupplierInvoices', input);

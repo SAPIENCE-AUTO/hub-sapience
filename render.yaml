@@ -120,6 +120,11 @@ services:
         value: /opt/render/project/src/.cache/puppeteer
       # NO agregar VITE_MOCK_USER aquí — si se define en true, se salta toda
       # la autenticación real (ver server/auth.ts). Debe quedar ausente.
+      # Sharpli — firma HMAC de los tokens de embed (nav "Sharpli" y pestaña
+      # por proyecto). Debe coincidir con el secreto configurado del lado de
+      # Sharpli, o el handshake postMessage nunca entrega un token válido.
+      - key: ZITE_EMBED_SECRET
+        sync: false
 
   # Frontend Vite — build estático servido por el CDN de Render.
   - type: web

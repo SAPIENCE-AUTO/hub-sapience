@@ -12,6 +12,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "server", "run", "dev"],
       "port": 8787
+    },
+    {
+      "name": "sharpli-frontend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/sergiovelasco/streamvault && npm run dev -- --port 5180 --strictPort"],
+      "port": 5180
+    },
+    {
+      "name": "sharpli-api",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/sergiovelasco/streamvault/server && npm run dev"],
+      "port": 8787
     }
   ]
 }

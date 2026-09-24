@@ -8,8 +8,9 @@ import {
   FolderKanban, ChevronDown, ChevronRight, Search,
   Plus, X, TrendingUp, Building2, DollarSign, LayoutGrid,
   FileText, ShoppingCart, Truck, FileSpreadsheet,
-  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, FlaskConical, ListTodo, Sparkles,
+  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles,
 } from 'lucide-react';
+import { SharpliIcon } from './SharpliIcon';
 import { useProject } from '../context/ProjectContext';
 import { useAuth } from 'zite-auth-sdk';
 import { getProjects, getUnreadCounts, getChatConversations, permanentlyDelete, getPoNotifications, getAppSettings, uploadProfilePhoto, GetProjectsOutputType } from 'zite-endpoints-sdk';
@@ -115,6 +116,7 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ALL_ROLES,
     items: [
       { to: '/operacion/proyectos', icon: FolderKanban, label: 'Proyectos' },
+      { to: '/sharpli', icon: SharpliIcon, label: 'Sharpli' },
     ],
   },
   {
@@ -148,7 +150,6 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ALL_ROLES,
     items: [
       { to: '/tableros', icon: LayoutGrid, label: 'Tableros flexibles' },
-      { to: '/sharpli-test', icon: FlaskConical, label: 'Sharpli Test' },
     ],
   },
 ];
@@ -532,7 +533,7 @@ export default function Layout() {
 
     const isExempt =
       path === '/configuracion' ||
-      path === '/sharpli-test' ||
+      path === '/sharpli' ||
       path.startsWith('/admin/importar') ||
       path.startsWith('/shared/') ||
       path.startsWith('/portal/') ||

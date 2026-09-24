@@ -8,8 +8,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign, Wrench, Landmark } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
+import { SharpliIcon } from '../components/SharpliIcon';
 import { ProjectHubLanding } from '../components/project-hub/ProjectHubLanding';
 import { ProjectToolsTab } from '../components/project-hub/ProjectToolsTab';
+import SharpliEmbedTab from '../components/project-hub/SharpliEmbedTab';
 import RecruitmentPage from './RecruitmentPage';
 import PMPage from './PMPage';
 import ChatPage from './ChatPage';
@@ -23,7 +25,7 @@ import { uploadFile } from 'zite-file-upload-sdk';
 import { toast } from 'sonner';
 
 type Project = GetProjectsOutputType['projects'][0];
-type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos' | 'tools' | 'cobranza';
+type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos' | 'tools' | 'cobranza' | 'sharpli';
 type PmSection = 'timelines' | 'calendarios';
 
 const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -34,6 +36,7 @@ const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ classNam
   { id: 'chat',          label: 'Chat',           icon: MessageSquare },
   { id: 'documentos',    label: 'Documentos',     icon: FileText },
   { id: 'tools',         label: 'Tools',          icon: Wrench },
+  { id: 'sharpli',       label: 'Sharpli',        icon: SharpliIcon },
 ];
 
 // Acceso limitado mientras Tools solo tiene el módulo Swipe recién lanzado —
@@ -281,6 +284,12 @@ export default function ProjectHubPage() {
               </div>
             )}
             {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} />}
+            {activeTab === 'sharpli'       && (
+              <SharpliEmbedTab
+                projectName={project?.fullName ?? project?.projectCode ?? ''}
+                brandName={project?.client ?? ''}
+              />
+            )}
           </>
         )}
       </div>
