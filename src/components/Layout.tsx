@@ -11,6 +11,7 @@ import {
   CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles,
 } from 'lucide-react';
 import { SharpliIcon } from './SharpliIcon';
+import hubMark from '../assets/hub-mark.svg';
 import { useProject } from '../context/ProjectContext';
 import { useAuth } from 'zite-auth-sdk';
 import { getProjects, getUnreadCounts, getChatConversations, permanentlyDelete, getPoNotifications, getAppSettings, uploadProfilePhoto, GetProjectsOutputType } from 'zite-endpoints-sdk';
@@ -812,10 +813,17 @@ export default function Layout() {
           {/* Logo / Toggle row */}
           <div className={`border-b border-sidebar-border flex items-center flex-shrink-0 ${collapsed ? 'justify-center px-0 py-4' : 'px-4 py-4 justify-between'}`}>
             {!collapsed && (
-              <img
-                src="https://images.fillout.com/orgid-631922/flowpublicid-qcnywdt1sa/widgetid-default/mFJtyswrdg3jzGEgbmrpR9/pasted-image-1774464420367.png"
-                alt="Logo" className="h-7 w-auto"
-              />
+              <div className="flex items-start gap-2 min-w-0">
+                <div className="flex flex-col items-center flex-shrink-0">
+                  <img src={hubMark} alt="" className="h-6 w-6" />
+                  <span className="text-[8px] font-bold text-sidebar-foreground/40 uppercase tracking-widest mt-0.5">Hub</span>
+                </div>
+                <div className="w-px h-7 bg-sidebar-border flex-shrink-0" />
+                <img
+                  src="https://images.fillout.com/orgid-631922/flowpublicid-qcnywdt1sa/widgetid-default/mFJtyswrdg3jzGEgbmrpR9/pasted-image-1774464420367.png"
+                  alt="Logo" className="h-7 w-auto"
+                />
+              </div>
             )}
             <Tooltip>
               <TooltipTrigger asChild>
