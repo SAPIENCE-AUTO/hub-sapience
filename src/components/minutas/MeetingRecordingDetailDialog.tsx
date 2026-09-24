@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Video } from 'lucide-react';
 import MeetingSummaryPanel from './MeetingSummaryPanel';
 import MeetingSyncedTranscript, { type Utterance } from './MeetingSyncedTranscript';
+import MeetingSpeakerTimeline from './MeetingSpeakerTimeline';
 
 interface Acuerdo { texto: string; responsable?: string | null; hecho: boolean }
 interface SummaryJson { resumen: string; acuerdos: Acuerdo[] }
@@ -64,6 +65,7 @@ export default function MeetingRecordingDetailDialog({ recording, open, onClose 
   if (!recording) return null;
 
   const utterances = recording.transcriptData?.utterances ?? [];
+  const duration = utterances.length > 0 ? utterances[utterances.length - 1].end / 1000 : 0;
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -92,6 +94,15 @@ export default function MeetingRecordingDetailDialog({ recording, open, onClose 
                     <p className="text-sm">Video aún no disponible</p>
                   </div>
                 </div>
+              )}
+              {utterances.length > 0 && (
+                <MeetingSpeakerTimeline
+                  utterances={utterances}
+                  currentTime={currentTime}
+                  duration={duration}
+                  onSeek={handleSeek}
+                  videoRef={playerRef}
+                />
               )}
               <div className="flex items-end gap-0 border-b border-border">
                 <button
