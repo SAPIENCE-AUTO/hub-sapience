@@ -54,7 +54,13 @@ import { TaskList } from '../components/pm/TaskList';
 import { EventsTable } from '../components/pm/EventsTable';
 
 // ── Main PMPage ───────────────────────────────────────────────────────────────
-export default function PMPage({ initialSection = 'timelines' }: { initialSection?: 'timelines' | 'calendarios' } = {}) {
+export default function PMPage({ initialSection = 'timelines', onSectionChange }: {
+  initialSection?: 'timelines' | 'calendarios';
+  // Para que ProjectHubPage mantenga la URL (?tab=timeline|calendar) en sync
+  // cuando el usuario cambia de sub-pestaña aquí adentro — si no, un reload
+  // parado en "Calendarios" regresaba siempre a "Timelines".
+  onSectionChange?: (section: 'timelines' | 'calendarios') => void;
+} = {}) {
   const { user } = useAuth();
   const { selectedProject, projects } = useProject();
   const presence = useProjectPresence({ projectCode: selectedProject, pageName: 'pm', enabled: !!selectedProject && !!user, user: user ?? undefined });
@@ -1118,7 +1124,11 @@ export default function PMPage({ initialSection = 'timelines' }: { initialSectio
   return (
     <div className="flex flex-col h-full">
       {/* ── Top-level section tabs ───────────────────────────────────────────── */}
-      <Tabs defaultValue={initialSection} className="flex flex-col flex-1 overflow-hidden">
+      <Tabs
+        defaultValue={initialSection}
+        onValueChange={v => onSectionChange?.(v as 'timelines' | 'calendarios')}
+        className="flex flex-col flex-1 overflow-hidden"
+      >
         <div className="flex items-center px-4 pt-3 border-b border-border bg-card flex-shrink-0">
           <TabsList className="h-8">
             <TabsTrigger value="timelines" className="gap-1.5 text-xs h-7"><BarChart2 className="w-3.5 h-3.5" /> Timelines</TabsTrigger>

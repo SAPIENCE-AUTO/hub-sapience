@@ -63,12 +63,28 @@ function resolveInitialTab(tabParam: string | null): { tab: TabId; section: PmSe
 export default function ProjectHubPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, isLoading: authLoading } = useAuth();
   const { selectedProject, setSelectedProject, projects, setProjects, projectsLoading } = useProject();
   const { tab: initialTab, section: initialPmSection } = resolveInitialTab(searchParams.get('tab'));
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [pmSection, setPmSection] = useState<PmSection>(initialPmSection);
+
+  // Mantiene la URL en sync con la pestaña activa (?tab=...) — antes solo
+  // vivía en estado de React, así que un reload (o compartir el link)
+  // siempre regresaba al hub del proyecto sin importar en qué pestaña
+  // estuviera parado. resolveInitialTab ya sabe leer estos mismos valores.
+  useEffect(() => {
+    const next = activeTab === 'hub' ? null
+      : activeTab === 'actividades' ? (pmSection === 'calendarios' ? 'calendar' : 'timeline')
+      : activeTab;
+    if ((searchParams.get('tab') ?? null) === next) return;
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (next) p.set('tab', next); else p.delete('tab');
+      return p;
+    }, { replace: true });
+  }, [activeTab, pmSection]);
   const [muestraOpen, setMuestraOpen] = useState(false);
   const [muestraText, setMuestraText] = useState('');
   const [muestraImageUrl, setMuestraImageUrl] = useState('');
@@ -267,7 +283,7 @@ export default function ProjectHubPage() {
               />
             )}
             {activeTab === 'reclutamiento' && <RecruitmentPage hasMuestra={hasMuestra} onOpenMuestra={openMuestra} />}
-            {activeTab === 'actividades'   && <PMPage initialSection={pmSection} />}
+            {activeTab === 'actividades'   && <PMPage initialSection={pmSection} onSectionChange={setPmSection} />}
             {activeTab === 'presupuesto'   && (
               <div className="h-full overflow-y-auto">
                 <ProjectBudgetTab projectCode={projectId ?? ''} />
