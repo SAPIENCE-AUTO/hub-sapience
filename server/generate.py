@@ -251,6 +251,13 @@ EXTRA_TABLES = {
         cols=[
             dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
             dict(prop='recallBotId', col='recall_bot_id', pg='text', kind='text', extra=None),
+            # graphEventId identifica el evento real de Outlook (Microsoft
+            # Graph) del que salió esta minuta — permite correlacionar con
+            # certeza una fila de meeting_recordings con la junta exacta del
+            # calendario en getMinutasOverview.ts, en vez de adivinar por
+            # coincidencia de asunto/hora (que sí se usa como fallback para
+            # filas viejas que no tienen este campo, de antes de que existiera).
+            dict(prop='graphEventId', col='graph_event_id', pg='text', kind='text', extra=None),
             dict(prop='subject', col='subject', pg='text', kind='text', extra=None),
             dict(prop='ownerEmail', col='owner_email', pg='text', kind='text', extra=None),
             dict(prop='meetingStart', col='meeting_start', pg='timestamptz', kind='datetime', extra=None),

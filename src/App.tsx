@@ -29,6 +29,7 @@ import DataImportPage from './pages/DataImportPage';
 import ExpensesPage from './pages/ExpensesPage';
 import MigrationRunnerPage from './pages/MigrationRunnerPage';
 import SharpliPage from './pages/SharpliPage';
+import MinutasPage from './pages/MinutasPage';
 import ObservationRoomPage from './pages/ObservationRoomPage';
 import SwipePage from './pages/SwipePage';
 import EjesPage from './pages/EjesPage';
@@ -124,6 +125,7 @@ export default function App() {
                 <Route path="admin/migration" element={<MigrationRunnerPage />} />
                 <Route path="admin/importar" element={<DataImportPage />} />
                 <Route path="sharpli" element={<SharpliPage />} />
+                <Route path="minutas" element={<MinutasPage />} />
 
                 <Route path="commercial"   element={<Navigate to="/comercial/crm" replace />} />
                 <Route path="projects"     element={<Navigate to="/operacion/proyectos" replace />} />

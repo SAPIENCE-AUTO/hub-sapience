@@ -21,18 +21,21 @@ export default createEndpoint({
     subject: z.string().optional(),
     meetingStart: z.string().optional(),
     meetingEnd: z.string().optional(),
+    graphEventId: z.string().optional(),
   }),
   outputSchema: z.object({
     botId: z.string(),
+    recordingId: z.string(),
   }),
   execute: async ({ input, context }) => {
     // bot_name tiene un máximo de 100 caracteres en la API de Recall.
     const botName = input.subject ? `Sapience Notetaker — ${input.subject}`.slice(0, 100) : undefined;
     const bot = await createRecallBot(input.meetingUrl, botName);
 
-    await MeetingRecordings.create({
+    const recording = await MeetingRecordings.create({
       record: {
         recallBotId: bot.id,
+        graphEventId: input.graphEventId,
         subject: input.subject ?? 'Sin título',
         ownerEmail: context.user!.email,
         meetingStart: input.meetingStart,
@@ -41,6 +44,6 @@ export default createEndpoint({
       },
     });
 
-    return { botId: bot.id };
+    return { botId: bot.id, recordingId: recording.id };
   },
 });

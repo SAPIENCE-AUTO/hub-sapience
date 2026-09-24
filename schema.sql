@@ -909,6 +909,7 @@ create trigger cotizacion_line_items_set_updated before update on cotizacion_lin
 create table meeting_recordings (
   id                            uuid primary key default gen_random_uuid(),
   recall_bot_id                 text,
+  graph_event_id                text,
   subject                       text,
   owner_email                   text,
   meeting_start                 timestamptz,

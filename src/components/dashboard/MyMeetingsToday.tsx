@@ -88,6 +88,7 @@ function MeetingRow({ meeting, isOngoing }: { meeting: Meeting; isOngoing: boole
         subject: meeting.subject,
         meetingStart: meeting.start,
         meetingEnd: meeting.end,
+        graphEventId: meeting.id,
       });
       setBotId(res.botId);
       toast.success('Notetaker enviado a la junta');

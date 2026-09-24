@@ -8,7 +8,7 @@ import {
   FolderKanban, ChevronDown, ChevronRight, Search,
   Plus, X, TrendingUp, Building2, DollarSign, LayoutGrid,
   FileText, ShoppingCart, Truck, FileSpreadsheet,
-  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles,
+  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles, Video,
 } from 'lucide-react';
 import { SharpliIcon } from './SharpliIcon';
 import hubMark from '../assets/hub-mark.svg';
@@ -117,6 +117,7 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ALL_ROLES,
     items: [
       { to: '/operacion/proyectos', icon: FolderKanban, label: 'Proyectos' },
+      { to: '/minutas', icon: Video, label: 'Minutas', emails: ['sergio@sapience.com.mx'] },
       { to: '/sharpli', icon: SharpliIcon, label: 'Sharpli' },
     ],
   },
@@ -535,6 +536,7 @@ export default function Layout() {
     const isExempt =
       path === '/configuracion' ||
       path === '/sharpli' ||
+      path === '/minutas' ||
       path.startsWith('/admin/importar') ||
       path.startsWith('/shared/') ||
       path.startsWith('/portal/') ||

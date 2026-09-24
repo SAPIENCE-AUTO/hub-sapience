@@ -11,6 +11,7 @@ async function main() {
     create table if not exists meeting_recordings (
       id                    uuid primary key default gen_random_uuid(),
       recall_bot_id         text,
+      graph_event_id        text,
       subject               text,
       owner_email           text,
       meeting_start         timestamptz,
@@ -39,6 +40,8 @@ async function main() {
   // ya existía sin esta columna cuando esto se agregó; alter idempotente en
   // vez de tocar el create table de arriba a mano para una base ya viva.
   await pool.query(`alter table meeting_recordings add column if not exists mux_upload_id text;`);
+  // Minutas overview (sep 2026) — correlaciona con el evento real de Outlook.
+  await pool.query(`alter table meeting_recordings add column if not exists graph_event_id text;`);
   await pool.query(`create unique index if not exists meeting_recordings_recall_bot_id_uniq on meeting_recordings (recall_bot_id);`);
   await pool.query(`create index if not exists meeting_recordings_project_id_idx on meeting_recordings (project_id);`);
   await pool.query(`create index if not exists meeting_recordings_deal_id_idx on meeting_recordings (deal_id);`);

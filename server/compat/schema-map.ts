@@ -817,6 +817,7 @@ export const SCHEMA: Record<string, TableDef> = {
     fields: {
       id: { col: 'id', kind: 'text' },
       recallBotId: { col: 'recall_bot_id', kind: 'text' },
+      graphEventId: { col: 'graph_event_id', kind: 'text' },
       subject: { col: 'subject', kind: 'text' },
       ownerEmail: { col: 'owner_email', kind: 'text' },
       meetingStart: { col: 'meeting_start', kind: 'datetime' },

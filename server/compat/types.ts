@@ -723,6 +723,7 @@ export interface ClientsRecordType {
 export interface MeetingRecordingsRecordType {
   id: string;
   recallBotId?: string;
+  graphEventId?: string;
   subject?: string;
   ownerEmail?: string;
   meetingStart?: string;
