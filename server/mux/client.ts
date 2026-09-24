@@ -76,6 +76,38 @@ export async function deleteLiveStream(liveStreamId: string): Promise<void> {
   await muxFetch(`/video/v1/live-streams/${encodeURIComponent(liveStreamId)}`, { method: 'DELETE' });
 }
 
+export interface MuxAsset {
+  id: string;
+  status: string;
+  playback_ids?: Array<{ id: string; policy: string }>;
+}
+
+/**
+ * Minutas / notetaker (sep 2026): ingesta un MP4 ya grabado (la URL
+ * pre-firmada que entrega Recall.ai) para que vida permanentemente en Mux
+ * con reproductor real — a diferencia de createLiveStream, aquí no hay RTMP
+ * ni sesión en vivo, es "toma este archivo y procésalo". `public` porque
+ * hoy el player (mux-player) no maneja tokens firmados; si más adelante
+ * hace falta restringir el acceso a las minutas, esto pasa a `signed`.
+ */
+export async function createAssetFromUrl(sourceUrl: string): Promise<MuxAsset> {
+  const res = await muxFetch('/video/v1/assets', {
+    method: 'POST',
+    body: JSON.stringify({
+      input: [{ url: sourceUrl }],
+      playback_policy: ['public'],
+    }),
+  });
+  const { data } = (await res.json()) as { data: MuxAsset };
+  return data;
+}
+
+export async function getAsset(assetId: string): Promise<MuxAsset> {
+  const res = await muxFetch(`/video/v1/assets/${encodeURIComponent(assetId)}`);
+  const { data } = (await res.json()) as { data: MuxAsset };
+  return data;
+}
+
 /**
  * Verifica la firma `Mux-Signature: t=<ts>,v1=<hmac>` de un webhook.
  * HMAC-SHA256 sobre `${timestamp}.${rawBody}` con el signing secret — el

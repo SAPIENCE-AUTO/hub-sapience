@@ -905,6 +905,31 @@ create table cotizacion_line_items (
 );
 create trigger cotizacion_line_items_set_updated before update on cotizacion_line_items for each row execute function set_updated_at();
 
+-- ─── MeetingRecordings ─────────────────────────────────────────
+create table meeting_recordings (
+  id                            uuid primary key default gen_random_uuid(),
+  recall_bot_id                 text,
+  subject                       text,
+  owner_email                   text,
+  meeting_start                 timestamptz,
+  meeting_end                   timestamptz,
+  status                        text,
+  meeting_type                  text,
+  recall_download_url           text,
+  mux_asset_id                  text,
+  mux_playback_id               text,
+  assembly_transcript_id        text,
+  transcript                    text,
+  transcript_data               jsonb,
+  summary_json                  jsonb,
+  project_id                    uuid references projects(id) on delete set null,
+  deal_id                       uuid references deals(id) on delete set null,
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now(),
+  constraint meeting_recordings_meeting_type_chk check ("meeting_type" is null or "meeting_type" in ('Kick off con cliente', 'Kick off interno', 'Brief', 'Alineación interna de análisis', 'Follow up de proyecto'))
+);
+create trigger meeting_recordings_set_updated before update on meeting_recordings for each row execute function set_updated_at();
+
 
 -- ═══ Relaciones N-N ═══════════════════════════════════════════
 -- Los tres roles de equipo de un proyecto. En Zite eran los campos
@@ -993,6 +1018,12 @@ create unique index on users (lower(email));
 -- projects_project_code_uniq: el backfill de clients junta nombres que hoy
 -- solo difieren en mayúsculas/espacios ("Landor" vs "LANDOR").
 create unique index clients_name_uniq on clients (lower(trim(name)));
+-- meeting_recordings tampoco viene de Zite — único por bot de Recall para
+-- poder hacer upsert (crear la fila al mandar el bot, actualizarla según
+-- avanza vía server/webhooks/recall.ts) sin duplicar la junta.
+create unique index meeting_recordings_recall_bot_id_uniq on meeting_recordings (recall_bot_id);
+create index on meeting_recordings (project_id);
+create index on meeting_recordings (deal_id);
 
 -- El código filtra participantes con `contains`, que en Postgres es
 -- ILIKE '%…%' y no aprovecha un btree. Requiere trigram.

@@ -60,6 +60,21 @@
     },
     "ZITE_EMBED_SECRET": {
       "description": "Secreto HMAC-SHA256 para firmar los tokens de embed de Sharpli (nav 'Sharpli' y pestaña por proyecto) — debe coincidir con el secreto configurado del lado de Sharpli"
+    },
+    "RECALL_API_KEY": {
+      "description": "API key de Recall.ai para el módulo de Minutas/notetaker (crear/consultar bots)"
+    },
+    "RECALL_API_BASE_URL": {
+      "description": "Base URL de la API de Recall.ai, específica de la región de la cuenta (ej. https://us-west-2.recall.ai)"
+    },
+    "RECALL_WEBHOOK_SECRET": {
+      "description": "Signing secret (whsec_...) del webhook configurado en el dashboard de Recall.ai apuntando a /api/webhooks/recall"
+    },
+    "ZITE_ASSEMBLYAI_KEY": {
+      "description": "API key de AssemblyAI para transcribir minutas — misma cuenta que ya usa Sharpli"
+    },
+    "ZITE_ASSEMBLYAI_WEBHOOK_URL": {
+      "description": "URL pública a la que AssemblyAI avisa cuando termina de transcribir (/api/assemblyaiWebhook) — sin esto transcribe pero nunca avisa"
     }
   },
   "seoSettings": {

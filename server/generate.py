@@ -235,6 +235,59 @@ EXTRA_TABLES = {
         many={},
         name='Clients',
     ),
+    # Minutas / notetaker (sep 2026): una fila por junta grabada por el bot de
+    # Recall.ai (ver src/serverUtils/recallClient.ts). No hay ID de proyecto
+    # ni de deal al crearse — el link es por nombre si hay match obvio
+    # (mejor esfuerzo, nunca certero) o manual desde la UI; por eso project y
+    # deal son nullable y NO se excluyen entre sí (una junta puede ligarse a
+    # un deal antes de que exista el proyecto). recallBotId identifica la
+    # junta del lado de Recall; muxAssetId/muxPlaybackId una vez que Mux
+    # termina de procesar el video (server/webhooks/mux.ts); transcriptData
+    # es el JSON crudo de AssemblyAI (utterances con speaker/tiempo);
+    # summaryJson es la salida estructurada de OpenAI — acuerdos/action
+    # items con checkbox, no el resumen de prosa que ya genera Sharpli.
+    'MeetingRecordings': dict(
+        table='meeting_recordings',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='recallBotId', col='recall_bot_id', pg='text', kind='text', extra=None),
+            dict(prop='subject', col='subject', pg='text', kind='text', extra=None),
+            dict(prop='ownerEmail', col='owner_email', pg='text', kind='text', extra=None),
+            dict(prop='meetingStart', col='meeting_start', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='meetingEnd', col='meeting_end', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='status', col='status', pg='text', kind='text', extra=None),
+            # meetingType decide qué prompt de OpenAI se usa al generar el
+            # resumen (ver src/serverUtils/meetingSummaryPrompts.ts) — cada
+            # tipo de junta necesita extraer cosas distintas (un kick off con
+            # cliente no se resume igual que un follow up de proyecto). Se
+            # elige/edita desde la UI de Minutas, no al crear el bot — a esa
+            # hora casi nunca se sabe todavía con certeza.
+            dict(prop='meetingType', col='meeting_type', pg='text', kind='text', extra=None),
+            dict(prop='recallDownloadUrl', col='recall_download_url', pg='text', kind='text', extra=None),
+            dict(prop='muxAssetId', col='mux_asset_id', pg='text', kind='text', extra=None),
+            dict(prop='muxPlaybackId', col='mux_playback_id', pg='text', kind='text', extra=None),
+            # assemblyTranscriptId identifica la transcripción del lado de
+            # AssemblyAI — el webhook (src/api/assemblyaiWebhook.ts) solo
+            # manda {transcript_id, status}, así que hace falta este campo
+            # para encontrar la fila correcta, igual que ya hace Sharpli
+            # (Streamings.transcriptId).
+            dict(prop='assemblyTranscriptId', col='assembly_transcript_id', pg='text', kind='text', extra=None),
+            dict(prop='transcript', col='transcript', pg='text', kind='text', extra=None),
+            dict(prop='transcriptData', col='transcript_data', pg='jsonb', kind='json', extra=None),
+            dict(prop='summaryJson', col='summary_json', pg='jsonb', kind='json', extra=None),
+            dict(prop='project', col='project_id', pg='uuid', kind='link', extra=dict(target='projects')),
+            dict(prop='deal', col='deal_id', pg='uuid', kind='link', extra=dict(target='deals')),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+            dict(prop='updatedAt', col='updated_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[
+            "  constraint meeting_recordings_meeting_type_chk check (\"meeting_type\" is null or \"meeting_type\" in ("
+            "'Kick off con cliente', 'Kick off interno', 'Brief', 'Alineación interna de análisis', 'Follow up de proyecto'))",
+        ],
+        notes=[],
+        many={},
+        name='MeetingRecordings',
+    ),
 }
 canon.update(EXTRA_TABLES)
 
@@ -359,6 +412,12 @@ create unique index on users (lower(email));
 -- projects_project_code_uniq: el backfill de clients junta nombres que hoy
 -- solo difieren en mayúsculas/espacios ("Landor" vs "LANDOR").
 create unique index clients_name_uniq on clients (lower(trim(name)));
+-- meeting_recordings tampoco viene de Zite — único por bot de Recall para
+-- poder hacer upsert (crear la fila al mandar el bot, actualizarla según
+-- avanza vía server/webhooks/recall.ts) sin duplicar la junta.
+create unique index meeting_recordings_recall_bot_id_uniq on meeting_recordings (recall_bot_id);
+create index on meeting_recordings (project_id);
+create index on meeting_recordings (deal_id);
 
 -- El código filtra participantes con `contains`, que en Postgres es
 -- ILIKE '%…%' y no aprovecha un btree. Requiere trigram.

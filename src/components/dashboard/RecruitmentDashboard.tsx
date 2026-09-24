@@ -12,6 +12,7 @@ import MyTasks from './MyTasks';
 import UpcomingEvents from './UpcomingEvents';
 import InvoiceWidget from './InvoiceWidget';
 import DraggableWidgetGrid from './DraggableWidgetGrid';
+import MyMeetingsToday from './MyMeetingsToday';
 import { buildLayout, LayoutItem, WidgetSize } from './widgetConfig';
 
 type PoCounts = GetRecruitmentDashboardOutputType['poCounts'];
@@ -130,6 +131,7 @@ function MentionsList({ mentions, loading }: { mentions: Mention[]; loading: boo
 
 interface Props {
   user: {
+    email?: string;
     firstName?: string;
     role?: string;
     departamento?: string;
@@ -315,6 +317,9 @@ export default function RecruitmentDashboard({ user, data, loading, invoiceData,
           </span>
         </div>
       )}
+
+      {/* Piloto notetaker (sep 2026) — ver comentario gemelo en DashboardPage.tsx */}
+      {user.email === 'sergio@sapience.com.mx' && <MyMeetingsToday />}
 
       {/* Widget grid */}
       {layout.length > 0 && (

@@ -11,6 +11,7 @@ import { resolveAuth } from './auth';
 import { uploadApp } from './upload';
 import { muxWebhookApp } from './webhooks/mux';
 import { zoomWebhookApp } from './webhooks/zoom';
+import { recallWebhookApp } from './webhooks/recall';
 import { checkRateLimit, clientIp } from './rateLimit';
 import type { CompiledEndpoint } from './compat/endpoint';
 
@@ -117,6 +118,7 @@ app.route('/api', uploadApp);
 // verificar la firma HMAC, antes de que cualquier c.req.json() lo consuma.
 app.route('/api', muxWebhookApp);
 app.route('/api', zoomWebhookApp);
+app.route('/api', recallWebhookApp);
 
 // Límite burdo por IP para los 3 endpoints públicos (sin login) de la Sala de
 // observación — ver server/rateLimit.ts. Están aquí y no dentro de cada

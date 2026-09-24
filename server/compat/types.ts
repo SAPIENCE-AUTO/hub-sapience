@@ -719,3 +719,25 @@ export interface ClientsRecordType {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface MeetingRecordingsRecordType {
+  id: string;
+  recallBotId?: string;
+  subject?: string;
+  ownerEmail?: string;
+  meetingStart?: string;
+  meetingEnd?: string;
+  status?: string;
+  meetingType?: string;
+  recallDownloadUrl?: string;
+  muxAssetId?: string;
+  muxPlaybackId?: string;
+  assemblyTranscriptId?: string;
+  transcript?: string;
+  transcriptData?: any;
+  summaryJson?: any;
+  project?: string[];
+  deal?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}

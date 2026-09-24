@@ -16,6 +16,7 @@ import DocumentosTab from './DocumentosTab';
 import ResumenTab from './ResumenTab';
 import BriefEditor from './BriefEditor';
 import ApprovalReviewDialog from './ApprovalReviewDialog';
+import MeetingRecordingsSection from '../minutas/MeetingRecordingsSection';
 
 type Deal = GetDealsOutputType['deals'][0];
 
@@ -348,11 +349,12 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
             </div>
           ) : (
             <Tabs defaultValue="general" className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <TabsList className="mx-6 mt-3 mb-0 flex-shrink-0 grid grid-cols-5">
+              <TabsList className="mx-6 mt-3 mb-0 flex-shrink-0 grid grid-cols-6">
                 <TabsTrigger value="general" className="data-[state=active]:text-[#027495]">General</TabsTrigger>
                 <TabsTrigger value="cotizaciones" className="data-[state=active]:text-[#027495]">Cotizaciones</TabsTrigger>
                 <TabsTrigger value="documentos" className="data-[state=active]:text-[#027495]">Documentos</TabsTrigger>
                 <TabsTrigger value="brief" className="data-[state=active]:text-[#027495]">Brief</TabsTrigger>
+                <TabsTrigger value="minutas" className="data-[state=active]:text-[#027495]">Minutas</TabsTrigger>
                 <TabsTrigger value="resumen" className="data-[state=active]:text-[#027495]">Resumen</TabsTrigger>
               </TabsList>
               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
@@ -375,6 +377,9 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
                 </TabsContent>
                 <TabsContent value="brief" className="mt-0 data-[state=inactive]:hidden" forceMount>
                   <BriefEditor dealId={localDeal.id} />
+                </TabsContent>
+                <TabsContent value="minutas" className="mt-0 data-[state=inactive]:hidden" forceMount>
+                  <MeetingRecordingsSection dealId={localDeal.id} />
                 </TabsContent>
                 <TabsContent value="resumen" className="mt-0 data-[state=inactive]:hidden" forceMount>
                   <ResumenTab deal={localDeal} />

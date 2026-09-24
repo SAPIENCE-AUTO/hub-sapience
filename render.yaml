@@ -125,6 +125,27 @@ services:
       # Sharpli, o el handshake postMessage nunca entrega un token válido.
       - key: ZITE_EMBED_SECRET
         sync: false
+      # Minutas / notetaker (sep 2026) — API de Recall.ai para mandar el bot
+      # que se une a las juntas. RECALL_WEBHOOK_SECRET se obtiene al
+      # configurar el webhook en el dashboard de Recall apuntando a
+      # https://hub-sapience-api.onrender.com/api/webhooks/recall (no antes,
+      # necesita una URL pública real).
+      - key: RECALL_API_KEY
+        sync: false
+      - key: RECALL_API_BASE_URL
+        sync: false
+      - key: RECALL_WEBHOOK_SECRET
+        sync: false
+      # Misma cuenta de AssemblyAI que ya usa Sharpli (mismo API key) —
+      # transcribe la grabación de la junta que ya vive en Mux.
+      - key: ZITE_ASSEMBLYAI_KEY
+        sync: false
+      # A dónde avisa AssemblyAI cuando termina de transcribir — sin esto,
+      # transcribe igual pero /api/assemblyaiWebhook nunca se entera. Valor:
+      # https://hub-sapience-api.onrender.com/api/assemblyaiWebhook (no se
+      # puede configurar contra localhost).
+      - key: ZITE_ASSEMBLYAI_WEBHOOK_URL
+        sync: false
 
   # Frontend Vite — build estático servido por el CDN de Render.
   - type: web

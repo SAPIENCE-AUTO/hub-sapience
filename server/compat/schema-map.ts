@@ -812,6 +812,30 @@ export const SCHEMA: Record<string, TableDef> = {
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },
   },
+  MeetingRecordings: {
+    table: 'meeting_recordings',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      recallBotId: { col: 'recall_bot_id', kind: 'text' },
+      subject: { col: 'subject', kind: 'text' },
+      ownerEmail: { col: 'owner_email', kind: 'text' },
+      meetingStart: { col: 'meeting_start', kind: 'datetime' },
+      meetingEnd: { col: 'meeting_end', kind: 'datetime' },
+      status: { col: 'status', kind: 'text' },
+      meetingType: { col: 'meeting_type', kind: 'text' },
+      recallDownloadUrl: { col: 'recall_download_url', kind: 'text' },
+      muxAssetId: { col: 'mux_asset_id', kind: 'text' },
+      muxPlaybackId: { col: 'mux_playback_id', kind: 'text' },
+      assemblyTranscriptId: { col: 'assembly_transcript_id', kind: 'text' },
+      transcript: { col: 'transcript', kind: 'text' },
+      transcriptData: { col: 'transcript_data', kind: 'json' },
+      summaryJson: { col: 'summary_json', kind: 'json' },
+      project: { col: 'project_id', kind: 'link', target: 'projects' },
+      deal: { col: 'deal_id', kind: 'link', target: 'deals' },
+      createdAt: { col: 'created_at', kind: 'datetime' },
+      updatedAt: { col: 'updated_at', kind: 'datetime' }
+    },
+  },
 };
 
 export const MODEL_NAMES = Object.keys(SCHEMA) as (keyof typeof SCHEMA)[];

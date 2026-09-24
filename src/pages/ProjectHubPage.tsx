@@ -17,6 +17,7 @@ import PMPage from './PMPage';
 import ChatPage from './ChatPage';
 import ProjectDocuments from '../components/ProjectDocuments';
 import ProjectMinutas from '../components/ProjectMinutas';
+import MeetingRecordingsSection from '../components/minutas/MeetingRecordingsSection';
 import ProjectBudgetTab from '../components/pm/ProjectBudgetTab';
 import CollectionProcessTab from '../components/cobranza/CollectionProcessTab';
 import { saveProject, getProjects } from 'zite-endpoints-sdk';
@@ -295,6 +296,11 @@ export default function ProjectHubPage() {
             {activeTab === 'chat'          && <ChatPage projectOnly projectChannel={projectId} />}
             {activeTab === 'documentos'    && (
               <div className="h-full overflow-y-auto divide-y divide-border">
+                {project?.id && (
+                  <div className="p-4">
+                    <MeetingRecordingsSection projectId={project.id} hideWhenEmpty />
+                  </div>
+                )}
                 <ProjectMinutas projectCode={projectId ?? ''} />
                 <ProjectDocuments projectCode={projectId ?? ''} />
               </div>

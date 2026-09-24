@@ -75,6 +75,17 @@ muxWebhookApp.post('/webhooks/mux', async (c) => {
             [event.data.id, playbackId, event.data.live_stream_id],
           );
         }
+        // Minutas / notetaker: mismo evento, pero acá el asset se creó desde
+        // una URL (createAssetFromUrl en server/webhooks/recall.ts), no desde
+        // un live stream — se busca por el id del asset mismo, no por
+        // live_stream_id (que aquí no existe).
+        {
+          const playbackId = event.data.playback_ids?.[0]?.id ?? null;
+          await pool.query(
+            `update meeting_recordings set mux_playback_id = $1, status = 'ready', updated_at = now() where mux_asset_id = $2`,
+            [playbackId, event.data.id],
+          );
+        }
         break;
       }
       default:

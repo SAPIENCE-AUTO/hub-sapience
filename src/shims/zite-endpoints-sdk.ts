@@ -137,6 +137,7 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
 export const getMe = (input?: any): Promise<any> => call('getMe', input);
 
 export const addExpenseComment = (input?: any): Promise<any> => call('addExpenseComment', input);
+export const addNotetakerToMeeting = (input?: any): Promise<any> => call('addNotetakerToMeeting', input);
 export const analizarPreworkEstudio = (input?: any): Promise<any> => call('analizarPreworkEstudio', input);
 export const analizarPreworkRespuesta = (input?: any): Promise<any> => call('analizarPreworkRespuesta', input);
 export const analyzeRecruitmentStatus = (input?: any): Promise<any> => call('analyzeRecruitmentStatus', input);
@@ -212,6 +213,7 @@ export const filloutNativeWebhook = (input?: any): Promise<any> => call('fillout
 export const filloutWebhook = (input?: any): Promise<any> => call('filloutWebhook', input);
 export const fixCellData = (input?: any): Promise<any> => call('fixCellData', input);
 export const fixOrphanedCellValues = (input?: any): Promise<any> => call('fixOrphanedCellValues', input);
+export const generateMeetingSummary = (input?: any): Promise<any> => call('generateMeetingSummary', input);
 export const generatePoPdf = (input?: any): Promise<any> => call('generatePoPdf', input);
 export const generateSupplierToken = (input?: any): Promise<any> => call('generateSupplierToken', input);
 export const getAblyToken = (input?: any): Promise<any> => call('getAblyToken', input);
@@ -261,8 +263,11 @@ export const getInvoiceWidgetData = (input?: any): Promise<any> => call('getInvo
 export const getLastAnalysis = (input?: any): Promise<any> => call('getLastAnalysis', input);
 export const getLinkedEventsInfo = (input?: any): Promise<any> => call('getLinkedEventsInfo', input);
 export const getLinkedParticipants = (input?: any): Promise<any> => call('getLinkedParticipants', input);
+export const getMeetingRecordings = (input?: any): Promise<any> => call('getMeetingRecordings', input);
 export const getMessages = (input?: any): Promise<any> => call('getMessages', input);
 export const getMisPendientes = (input?: any): Promise<any> => call('getMisPendientes', input);
+export const getMyMeetingsToday = (input?: any): Promise<any> => call('getMyMeetingsToday', input);
+export const getNotetakerBotStatus = (input?: any): Promise<any> => call('getNotetakerBotStatus', input);
 export const searchMessages = (input?: any): Promise<any> => call('searchMessages', input);
 export const getMigrationLogs = (input?: any): Promise<any> => call('getMigrationLogs', input);
 export const getMultiProjectCostAnalysis = (input?: any): Promise<any> => call('getMultiProjectCostAnalysis', input);
@@ -338,6 +343,7 @@ export const joinEjesSesion = (input?: any): Promise<any> => call('joinEjesSesio
 export const joinSwipeSesion = (input?: any): Promise<any> => call('joinSwipeSesion', input);
 export const linkFilloutForm = (input?: any): Promise<any> => call('linkFilloutForm', input);
 export const linkGroupToEvent = (input?: any): Promise<any> => call('linkGroupToEvent', input);
+export const linkMeetingRecording = (input?: any): Promise<any> => call('linkMeetingRecording', input);
 export const linkProjectDeal = (input?: any): Promise<any> => call('linkProjectDeal', input);
 export const listTeamsChannels = (input?: any): Promise<any> => call('listTeamsChannels', input);
 export const markNDASent = (input?: any): Promise<any> => call('markNDASent', input);
@@ -440,6 +446,7 @@ export const unlinkExternalView = (input?: any): Promise<any> => call('unlinkExt
 export const unlinkTeamsChannel = (input?: any): Promise<any> => call('unlinkTeamsChannel', input);
 export const updateChatConversationMembers = (input?: any): Promise<any> => call('updateChatConversationMembers', input);
 export const updateDashboardTask = (input?: any): Promise<any> => call('updateDashboardTask', input);
+export const updateMeetingSummary = (input?: any): Promise<any> => call('updateMeetingSummary', input);
 export const updatePresence = (input?: any): Promise<any> => call('updatePresence', input);
 export const updatePreworkAsignacion = (input?: any): Promise<any> => call('updatePreworkAsignacion', input);
 export const updatePreworkEstudio = (input?: any): Promise<any> => call('updatePreworkEstudio', input);
@@ -547,6 +554,9 @@ export type GetLinkedEventsInfoOutputType = any;
 export type GetLinkedParticipantsOutputType = any;
 export type GetMessagesOutputType = any;
 export type GetMigrationLogsOutputType = any;
+export type GetMyMeetingsTodayOutputType = any;
+export type GetNotetakerBotStatusOutputType = any;
+export type AddNotetakerToMeetingOutputType = any;
 export type GetMultiProjectCostAnalysisOutputType = any;
 export type GetParticipantsOutputType = any;
 export type GetPaymentsOutputType = any;
