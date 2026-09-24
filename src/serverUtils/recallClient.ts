@@ -27,7 +27,21 @@ export interface RecallBot {
   id: string;
   meeting_url: { meeting_id?: string; platform?: string } | string;
   status_changes: { code: string; sub_code: string | null; created_at: string }[];
-  recordings?: { media_shortcuts?: { video_mixed?: { data?: { download_url?: string } } } }[];
+  recordings?: {
+    media_shortcuts?: {
+      video_mixed?: { data?: { download_url?: string } };
+      participant_events?: { data?: { speaker_timeline_download_url?: string } };
+    };
+  }[];
+}
+
+export interface RecallSpeakerTimelineSegment {
+  participant: { name: string | null };
+  // Pueden venir null en datos reales — el último segmento de un
+  // participante que seguía "hablando" cuando el bot salió de la junta,
+  // sin marca de fin formal (confirmado contra un bot real).
+  start_timestamp: { relative: number } | null;
+  end_timestamp: { relative: number } | null;
 }
 
 /** Crea un bot que se une a la junta de inmediato (sin join_at = ahora). */
@@ -68,6 +82,24 @@ export function botDownloadUrl(bot: RecallBot): string | undefined {
   // usa .optional() (permite undefined, no null), así que sin este ?? el
   // polling truena en cada tick hasta que termina la junta.
   return bot.recordings?.[0]?.media_shortcuts?.video_mixed?.data?.download_url ?? undefined;
+}
+
+/**
+ * Timeline de quién habló cuándo, según la detección nativa de la
+ * plataforma (Teams) que Recall expone gratis vía `participant_events`
+ * (activo por default, sin configuración) — confirmado contra datos reales
+ * de un bot ya terminado. `relative` está en SEGUNDOS desde que arrancó la
+ * grabación, mismo punto de partida que el archivo que se le manda a
+ * AssemblyAI (mismo download_url), así que es directamente comparable
+ * contra `start`/`end` de sus utterances (en MILISEGUNDOS) una vez
+ * convertidos — ver mergeSpeakerNames en assemblyaiWebhook.ts.
+ */
+export async function getRecallSpeakerTimeline(bot: RecallBot): Promise<RecallSpeakerTimelineSegment[] | undefined> {
+  const url = bot.recordings?.[0]?.media_shortcuts?.participant_events?.data?.speaker_timeline_download_url;
+  if (!url) return undefined;
+  const res = await fetch(url);
+  if (!res.ok) return undefined;
+  return res.json();
 }
 
 /**

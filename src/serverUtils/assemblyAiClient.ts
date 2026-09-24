@@ -53,10 +53,18 @@ export async function getAssemblyTranscript(transcriptId: string): Promise<Assem
   return res.json();
 }
 
-/** Mismo formato que ya usa Sharpli — "[Speaker A] texto" por turno. */
+/**
+ * Mismo formato que ya usa Sharpli — "[Speaker A] texto" por turno. Cuando
+ * mergeSpeakerNames.ts ya reemplazó la etiqueta genérica de AssemblyAI
+ * ("A", "B") por el nombre real de Recall, `u.speaker` deja de calzar con
+ * ese patrón de una sola letra — en ese caso se usa el nombre tal cual, sin
+ * el prefijo "Speaker " (que sonaría a "[Speaker Sergio Velasco]").
+ */
 export function formatTranscript(t: AssemblyTranscript): string {
   if (t.utterances?.length) {
-    return t.utterances.map(u => `[Speaker ${u.speaker}] ${u.text}`).join('\n\n');
+    return t.utterances
+      .map(u => (/^[A-Z]$/.test(u.speaker) ? `[Speaker ${u.speaker}] ${u.text}` : `[${u.speaker}] ${u.text}`))
+      .join('\n\n');
   }
   return t.text ?? '';
 }

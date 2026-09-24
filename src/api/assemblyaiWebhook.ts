@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { createEndpoint, MeetingRecordings } from '../../server/compat';
 import { getAssemblyTranscript, formatTranscript } from '../serverUtils/assemblyAiClient';
+import { getRecallBot, getRecallSpeakerTimeline } from '../serverUtils/recallClient';
+import { mergeSpeakerNames } from '../serverUtils/speakerNameMerge';
 
 // Minutas / notetaker (sep 2026): recibe el aviso de AssemblyAI cuando una
 // transcripción termina — mismo contrato que ya usa Sharpli
@@ -34,11 +36,28 @@ export default createEndpoint({
     const data = await getAssemblyTranscript(input.transcript_id);
     if (data.status !== 'completed') return { received: true };
 
+    let utterances = data.utterances ?? [];
+    // Solo minutas de notetaker tienen un bot de Recall del que sacar
+    // nombres reales — las subidas a mano no tienen esa metadata y se
+    // quedan con las etiquetas genéricas de AssemblyAI, que es lo único
+    // posible ahí. Mejor esfuerzo: si Recall falla por lo que sea, la
+    // transcripción se guarda igual con las etiquetas genéricas en vez de
+    // perder el resultado de AssemblyAI por un problema en un dato extra.
+    if (recording.recallBotId) {
+      try {
+        const bot = await getRecallBot(recording.recallBotId);
+        const timeline = await getRecallSpeakerTimeline(bot);
+        utterances = mergeSpeakerNames(utterances, timeline);
+      } catch (err) {
+        console.error('[assemblyaiWebhook] error trayendo nombres reales de Recall', (err as Error).message);
+      }
+    }
+
     await MeetingRecordings.update({
       id: recording.id,
       record: {
-        transcript: formatTranscript(data),
-        transcriptData: { utterances: data.utterances ?? [] },
+        transcript: formatTranscript({ ...data, utterances }),
+        transcriptData: { utterances },
       },
     });
 
