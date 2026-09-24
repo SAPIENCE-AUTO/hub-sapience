@@ -15,6 +15,7 @@ export interface MeetingRecording {
   meetingStart?: string;
   createdAt?: string;
   muxPlaybackId?: string;
+  assemblyTranscriptId?: string;
   transcript?: string;
   transcriptData?: { utterances: Utterance[] };
   summaryJson?: SummaryJson;

@@ -80,7 +80,6 @@ export interface MuxAsset {
   id: string;
   status: string;
   playback_ids?: Array<{ id: string; policy: string }>;
-  static_renditions?: { files: Array<{ name: string; ext: string; resolution: string; status: string }> };
 }
 
 /**
@@ -122,22 +121,20 @@ export interface MuxDirectUpload {
  * el bucket de Supabase Storage, así que ni el body limit de server/upload.ts
  * (50MB) ni el fileSizeLimit del bucket aplican aquí.
  *
- * `static_renditions: audio-only` es lo único que hace falta pedir además
- * del playback normal: mux-player reproduce por HLS vía playback_id sin
- * necesitar ningún rendition estático — el rendition solo existe para tener
- * un archivo descargable (audio.m4a) que AssemblyAI pueda transcribir, ya
- * que a diferencia del notetaker (que tiene la URL cruda de Recall.ai) acá
- * nunca hay otra URL que la que Mux mismo genera.
+ * Sin static_renditions a propósito — ver el mismo comentario real en
+ * Sharpli (streamvault/src/api/getMuxUploadUrl.ts): pedir un rendition
+ * estático retrasa el evento "ready" hasta que ESE render también termina,
+ * que es justo lo que hacía tardar las minutas. La transcripción ya no
+ * depende de Mux en absoluto — el navegador sube el mismo archivo en
+ * paralelo a AssemblyAI vía el relay del servidor (server/assemblyRelay.ts),
+ * igual que hace Sharpli.
  */
 export async function createDirectUpload(corsOrigin: string): Promise<MuxDirectUpload> {
   const res = await muxFetch('/video/v1/uploads', {
     method: 'POST',
     body: JSON.stringify({
       cors_origin: corsOrigin,
-      new_asset_settings: {
-        playback_policies: ['public'],
-        static_renditions: [{ resolution: 'audio-only' }],
-      },
+      new_asset_settings: { playback_policies: ['public'] },
     }),
   });
   const { data } = (await res.json()) as { data: MuxDirectUpload };

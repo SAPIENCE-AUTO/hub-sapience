@@ -1,22 +1,13 @@
 import { useEffect, useState } from 'react';
-import { getMeetingRecordings } from 'zite-endpoints-sdk';
-import { Video, CheckCircle2, Loader2, Upload } from 'lucide-react';
+import { getMeetingRecordings, deleteMeetingRecording } from 'zite-endpoints-sdk';
+import { Video, Loader2, Upload, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import MeetingRecordingDetailDialog, { type MeetingRecording } from './MeetingRecordingDetailDialog';
 import UploadMeetingRecordingDialog from './UploadMeetingRecordingDialog';
-
-const STATUS_LABEL: Record<string, string> = {
-  joining: 'Uniéndose…',
-  in_waiting_room: 'En la sala de espera…',
-  in_call_not_recording: 'En la junta (sin grabar)',
-  in_call_recording: 'Grabando',
-  call_ended: 'Junta terminada — procesando',
-  uploading: 'Subiendo…',
-  processing: 'Procesando grabación…',
-  ready: 'Lista',
-  transcription_error: 'Error al transcribir',
-  fatal: 'Error — no se pudo unir',
-};
+import MeetingPipelineSteps from './MeetingPipelineSteps';
 
 function formatDate(iso?: string) {
   if (!iso) return '';
@@ -36,6 +27,9 @@ export default function MeetingRecordingsSection({ projectId, dealId }: {
   const [recordings, setRecordings] = useState<MeetingRecording[] | null>(null);
   const [selected, setSelected] = useState<MeetingRecording | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<MeetingRecording | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   const fetchRecordings = () => {
     getMeetingRecordings(projectId ? { projectId } : dealId ? { dealId } : {})
@@ -47,6 +41,22 @@ export default function MeetingRecordingsSection({ projectId, dealId }: {
     setRecordings(null);
     fetchRecordings();
   }, [projectId, dealId]);
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await deleteMeetingRecording({ id: pendingDelete.id });
+      setRecordings(prev => prev?.filter(r => r.id !== pendingDelete.id) ?? null);
+      toast.success('Minuta borrada');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo borrar la minuta');
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
+      setDeleteConfirmText('');
+    }
+  };
 
   if (recordings === null) {
     return <div className="flex items-center gap-2 text-sm text-muted-foreground py-4"><Loader2 className="h-4 w-4 animate-spin" /> Cargando minutas…</div>;
@@ -69,28 +79,30 @@ export default function MeetingRecordingsSection({ projectId, dealId }: {
         </p>
       )}
       <div className="space-y-2">
-        {recordings.map(r => {
-          const ready = r.status === 'ready' && r.muxPlaybackId;
-          return (
-            <button
-              key={r.id}
-              onClick={() => setSelected(r)}
-              className="w-full text-left bg-card border border-border rounded-lg p-3 flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
-            >
-              <div className="min-w-0 flex items-center gap-2">
-                <Video className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{r.subject || 'Sin título'}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(r.meetingStart ?? r.createdAt)}</p>
-                </div>
+        {recordings.map(r => (
+          <div
+            key={r.id}
+            className="w-full bg-card border border-border rounded-lg p-3 flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
+          >
+            <button onClick={() => setSelected(r)} className="min-w-0 flex items-center gap-2 flex-1 text-left">
+              <Video className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{r.subject || 'Sin título'}</p>
+                <p className="text-xs text-muted-foreground">{formatDate(r.meetingStart ?? r.createdAt)}</p>
               </div>
-              <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                {ready ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {STATUS_LABEL[r.status ?? ''] ?? r.status}
-              </span>
             </button>
-          );
-        })}
+            <div className="flex items-center gap-2 shrink-0">
+              <MeetingPipelineSteps recording={r} />
+              <button
+                onClick={(e) => { e.stopPropagation(); setPendingDelete(r); }}
+                className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                title="Borrar minuta"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
       <MeetingRecordingDetailDialog recording={selected} open={!!selected} onClose={() => setSelected(null)} />
       <UploadMeetingRecordingDialog
@@ -100,6 +112,26 @@ export default function MeetingRecordingsSection({ projectId, dealId }: {
         onClose={() => setUploadOpen(false)}
         onUploaded={fetchRecordings}
       />
+      <Dialog open={!!pendingDelete} onOpenChange={v => { if (!v && !deleting) { setPendingDelete(null); setDeleteConfirmText(''); } }}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Borrar "{pendingDelete?.subject || 'Sin título'}"</DialogTitle>
+          </DialogHeader>
+          <Input
+            placeholder="Escribe BORRAR para confirmar"
+            value={deleteConfirmText}
+            onChange={e => setDeleteConfirmText(e.target.value)}
+            disabled={deleting}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPendingDelete(null); setDeleteConfirmText(''); }} disabled={deleting}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting || deleteConfirmText !== 'BORRAR'}>
+              {deleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Borrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
-import { createMuxUploadUrl } from 'zite-endpoints-sdk';
+import { createMuxUploadUrl, startMeetingTranscription, BASE } from 'zite-endpoints-sdk';
+import { supabase } from '@/lib/supabaseClient';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import { Upload, Loader2, FileAudio } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -14,13 +16,53 @@ function stripExtension(filename: string): string {
   return idx > 0 ? filename.slice(0, idx) : filename;
 }
 
+function formatSpeed(bps: number): string {
+  if (bps <= 0) return '';
+  const mbps = bps / (1024 * 1024);
+  return mbps >= 1 ? `${mbps.toFixed(1)} MB/s` : `${(bps / 1024).toFixed(0)} KB/s`;
+}
+
+/** XHR (no fetch) porque solo XHR da eventos de progreso reales — mismo patrón que uploadWithProgress en streamvault/src/contexts/UploadContext.tsx. */
+function uploadWithProgress(
+  url: string, method: 'PUT' | 'POST', file: File, headers: Record<string, string>,
+  onProgress?: (pct: number, speedBps: number) => void,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let lastLoaded = 0, lastTime = Date.now();
+    xhr.upload.addEventListener('progress', (e) => {
+      if (!e.lengthComputable || !onProgress) return;
+      const now = Date.now(), dt = (now - lastTime) / 1000;
+      const speed = dt > 0.1 ? (e.loaded - lastLoaded) / dt : 0;
+      lastLoaded = e.loaded; lastTime = now;
+      onProgress((e.loaded / e.total) * 100, speed);
+    });
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 400) { reject(new Error(`HTTP ${xhr.status}`)); return; }
+      resolve(xhr.responseText);
+    });
+    xhr.addEventListener('error', () => reject(new Error('Error de red')));
+    xhr.open(method, url);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.send(file);
+  });
+}
+
 // Minutas / notetaker (sep 2026): alta manual para juntas grabadas por otra
-// vía (no por el notetaker de Sapience) — "video o audio, indistinto"
-// (Sergio), y explícitamente "no quiero subir el audio o video a supabase...
-// debería subir a mux". El archivo va DIRECTO del navegador a la URL firmada
-// de Mux (createMuxUploadUrl.ts → PUT aquí mismo) — nunca toca uploadFile()/
-// Supabase Storage ni el body limit de server/upload.ts, así que no hay
-// techo de 50MB para esto.
+// vía — "video o audio, indistinto" (Sergio), "no quiero subir el audio o
+// video a supabase... debería subir a mux", y después: "en sharpli desde
+// que subo audio hasta que tengo la transcripción es mucho más rápido...
+// deberíamos [replicar ese proceso]". Se copia el patrón real de Sharpli
+// (streamvault/src/contexts/UploadContext.tsx): el navegador manda el mismo
+// archivo EN PARALELO a Mux (Direct Upload) y a AssemblyAI, en vez de subir
+// solo a Mux y esperar a que genere un rendition de audio antes de
+// transcribir (lo que hacía todo mucho más lento). Única diferencia real
+// con Sharpli: ahí el navegador sube directo a AssemblyAI con su API key
+// expuesta al cliente (su propio código lo marca "SECURITY TODO" — como acá
+// se comparte la MISMA cuenta/key, eso expondría una key compartida a
+// cualquiera con sesión en el Hub). Aquí la subida a AssemblyAI pasa por
+// server/assemblyRelay.ts, que retransmite el archivo en streaming sin
+// guardar la key en el cliente — mismo paralelismo, sin ese riesgo.
 export default function UploadMeetingRecordingDialog({ projectId, dealId, open, onClose, onUploaded }: {
   projectId?: string;
   dealId?: string;
@@ -32,6 +74,8 @@ export default function UploadMeetingRecordingDialog({ projectId, dealId, open, 
   const [subject, setSubject] = useState('');
   const [uploading, setUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [speedBps, setSpeedBps] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const acceptFile = (f: File) => {
@@ -52,17 +96,49 @@ export default function UploadMeetingRecordingDialog({ projectId, dealId, open, 
     if (f) acceptFile(f);
   };
 
-  const reset = () => { setFile(null); setSubject(''); if (fileInputRef.current) fileInputRef.current.value = ''; };
+  const reset = () => {
+    setFile(null); setSubject(''); setProgress(0); setSpeedBps(0);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleSubmit = async () => {
     if (!file) { toast.error('Elige un archivo de audio o video'); return; }
     if (!subject.trim()) { toast.error('Ponle un título a la minuta'); return; }
     setUploading(true);
+    setProgress(0);
+    setSpeedBps(0);
     try {
-      const { uploadUrl } = await createMuxUploadUrl({ subject: subject.trim(), projectId, dealId });
-      const putRes = await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } });
-      if (!putRes.ok) throw new Error(`Mux rechazó la subida (${putRes.status})`);
-      toast.success('Minuta subida — procesándose (video y transcripción tardan unos minutos)');
+      const { uploadUrl, recordingId } = await createMuxUploadUrl({ subject: subject.trim(), projectId, dealId });
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authHeader = sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {};
+
+      // Mux y AssemblyAI en paralelo — el mismo archivo va a los dos a la
+      // vez, no uno después del otro. La barra de progreso solo refleja Mux
+      // (el destino que de verdad importa mostrar, igual que en Sharpli).
+      const [muxResult, assemblyResult] = await Promise.allSettled([
+        uploadWithProgress(uploadUrl, 'PUT', file, { 'Content-Type': file.type || 'application/octet-stream' }, (pct, speed) => {
+          setProgress(pct);
+          setSpeedBps(speed);
+        }),
+        uploadWithProgress(`${BASE}/uploadToAssemblyAI`, 'POST', file, { 'Content-Type': file.type || 'application/octet-stream', ...authHeader }),
+      ]);
+
+      if (muxResult.status === 'rejected') throw muxResult.reason;
+
+      if (assemblyResult.status === 'fulfilled') {
+        try {
+          const { uploadUrl: assemblyUploadUrl } = JSON.parse(assemblyResult.value) as { uploadUrl: string };
+          await startMeetingTranscription({ recordingId, assemblyUploadUrl });
+        } catch (err) {
+          console.error('[UploadMeetingRecordingDialog] error iniciando transcripción', err);
+          toast.warning('Minuta subida — la transcripción no pudo iniciar, se puede reintentar después');
+        }
+      } else {
+        toast.warning('Minuta subida — no se pudo transcribir automáticamente');
+      }
+
+      toast.success('Minuta subida');
       reset();
       onUploaded();
       onClose();
@@ -81,7 +157,7 @@ export default function UploadMeetingRecordingDialog({ projectId, dealId, open, 
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Para juntas grabadas por otra vía (sin el notetaker). Acepta audio o video de cualquier tamaño — se transcribe y queda lista para resumir igual que las demás minutas.
+            Sube tu video o grabación para transcribirlo y obtener una minuta.
           </p>
           <div className="space-y-2">
             <Label>Archivo</Label>
@@ -118,6 +194,15 @@ export default function UploadMeetingRecordingDialog({ projectId, dealId, open, 
               disabled={uploading}
             />
           </div>
+          {uploading && (
+            <div className="space-y-1.5">
+              <Progress value={progress} className="h-2" />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{Math.round(progress)}%</span>
+                {speedBps > 0 && <span>{formatSpeed(speedBps)}</span>}
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => { if (!uploading) { reset(); onClose(); } }} disabled={uploading}>Cancelar</Button>

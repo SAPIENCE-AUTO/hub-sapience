@@ -185,6 +185,7 @@ export const deleteDocBlock = (input?: any): Promise<any> => call('deleteDocBloc
 export const deleteEjesSesion = (input?: any): Promise<any> => call('deleteEjesSesion', input);
 export const deleteExpense = (input?: any): Promise<any> => call('deleteExpense', input);
 export const deleteInternalView = (input?: any): Promise<any> => call('deleteInternalView', input);
+export const deleteMeetingRecording = (input?: any): Promise<any> => call('deleteMeetingRecording', input);
 export const deleteObservationChatMessage = (input?: any): Promise<any> => call('deleteObservationChatMessage', input);
 export const deleteMisPendiente = (input?: any): Promise<any> => call('deleteMisPendiente', input);
 export const deleteParticipant = (input?: any): Promise<any> => call('deleteParticipant', input);
@@ -430,6 +431,7 @@ export const setEjesIdeaEstado = (input?: any): Promise<any> => call('setEjesIde
 export const setEjesTableroEstado = (input?: any): Promise<any> => call('setEjesTableroEstado', input);
 export const setSwipeCapituloEstado = (input?: any): Promise<any> => call('setSwipeCapituloEstado', input);
 export const startCollectionProcess = (input?: any): Promise<any> => call('startCollectionProcess', input);
+export const startMeetingTranscription = (input?: any): Promise<any> => call('startMeetingTranscription', input);
 export const submitExpense = (input?: any): Promise<any> => call('submitExpense', input);
 export const submitPurchaseOrder = (input?: any): Promise<any> => call('submitPurchaseOrder', input);
 export const submitEjesEvaluacion = (input?: any): Promise<any> => call('submitEjesEvaluacion', input);

@@ -16,6 +16,7 @@ const recordingSchema = z.object({
   status: z.string().optional(),
   meetingType: z.string().optional(),
   muxPlaybackId: z.string().optional(),
+  assemblyTranscriptId: z.string().optional(),
   transcript: z.string().optional(),
   transcriptData: z.object({ utterances: z.array(z.object({ speaker: z.string(), text: z.string(), start: z.number(), end: z.number() })) }).optional(),
   summaryJson: z.object({ resumen: z.string(), acuerdos: z.array(acuerdoSchema) }).optional(),
@@ -42,7 +43,7 @@ export default createEndpoint({
       sorts: [{ field: 'createdAt', direction: 'desc' }],
       fields: [
         'subject', 'ownerEmail', 'meetingStart', 'meetingEnd', 'status', 'meetingType',
-        'muxPlaybackId', 'transcript', 'transcriptData', 'summaryJson', 'project', 'deal', 'createdAt',
+        'muxPlaybackId', 'assemblyTranscriptId', 'transcript', 'transcriptData', 'summaryJson', 'project', 'deal', 'createdAt',
       ],
     });
 

@@ -9,6 +9,7 @@ import { ZiteError } from './compat/errors';
 import { GraphAuthError } from './microsoft/graph';
 import { resolveAuth } from './auth';
 import { uploadApp } from './upload';
+import { assemblyRelayApp } from './assemblyRelay';
 import { muxWebhookApp } from './webhooks/mux';
 import { zoomWebhookApp } from './webhooks/zoom';
 import { recallWebhookApp } from './webhooks/recall';
@@ -113,6 +114,10 @@ app.get('/healthz', (c) => c.json({ ok: true }));
 // Ruta dedicada para multipart/form-data — antes del dispatcher genérico
 // (que solo entiende JSON) para que /api/upload no caiga ahí.
 app.route('/api', uploadApp);
+
+// Retransmisión en streaming a AssemblyAI (Minutas) — mismo criterio que
+// uploadApp: body crudo, nunca pasa por el dispatcher genérico.
+app.route('/api', assemblyRelayApp);
 
 // Igual razón que uploadApp: el webhook de Mux necesita el body crudo para
 // verificar la firma HMAC, antes de que cualquier c.req.json() lo consuma.
