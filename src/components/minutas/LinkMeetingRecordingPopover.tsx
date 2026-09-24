@@ -20,6 +20,13 @@ interface Option {
   dealId?: string;
 }
 
+// Un color por tipo — Sergio: "que 'proyecto' y 'deal' aparezca con color
+// distinto" para que la diferencia se note sin tener que leer la palabra.
+const TYPE_COLOR: Record<string, string> = {
+  Proyecto: 'text-sky-600 dark:text-sky-400',
+  Deal: 'text-violet-600 dark:text-violet-400',
+};
+
 // Minutas / notetaker (sep 2026): "que diga si ya está vinculada a un
 // proyecto/deal, a cuál está vinculada, o desde ahí mismo poder vincular"
 // (Sergio) — a diferencia de la primera versión, esto ya sabe mostrar el
@@ -79,7 +86,7 @@ export default function LinkMeetingRecordingPopover({ recordingId, projectId, de
     setLinking(true);
     try {
       await linkMeetingRecording({ meetingRecordingId: recordingId, projectId: opt.projectId ?? null, dealId: opt.dealId ?? null });
-      toast.success(`Vinculada a ${opt.label}`);
+      toast.success(`Vinculada a ${opt.label} (${opt.sublabel})`);
       setOpen(false);
       onLinked?.();
     } catch (err) {
@@ -96,18 +103,27 @@ export default function LinkMeetingRecordingPopover({ recordingId, projectId, de
   // no se le enseña ni el botón de "vincular" (cambiar algo que no puede
   // ver sería más confuso que útil) ni el nombre.
   if (dealId && !allowDeals) {
-    return <span className="text-xs text-muted-foreground">Vinculada</span>;
+    return <span className="text-xs text-muted-foreground">Vinculada a un deal</span>;
   }
 
   const filtered = (options ?? []).filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
   const isLinked = !!(projectId || dealId);
+  // No depende de que `options` ya haya cargado — projectId/dealId ya nos
+  // dicen el tipo directamente, y currentOption (que sí depende de options)
+  // solo hace falta para el nombre.
+  const linkedType = projectId ? 'Proyecto' : dealId ? 'Deal' : null;
 
   return (
     <Popover open={open} onOpenChange={o => { setOpen(o); if (o) loadOptions(); }}>
       <PopoverTrigger asChild>
         <Button size="sm" variant={isLinked ? 'ghost' : 'outline'} className="h-7 text-xs gap-1.5" disabled={linking}>
           {linking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isLinked ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Link2 className="h-3.5 w-3.5" />}
-          {isLinked ? (currentOption?.label ?? 'Vinculada') : 'Vincular a proyecto/deal'}
+          {isLinked ? (
+            <span className="flex items-center gap-1">
+              {currentOption?.label ?? 'Vinculada'}
+              <span className={`font-normal ${linkedType ? TYPE_COLOR[linkedType] : 'text-muted-foreground'}`}>· {linkedType}</span>
+            </span>
+          ) : 'Vincular a proyecto/deal'}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
@@ -121,7 +137,7 @@ export default function LinkMeetingRecordingPopover({ recordingId, projectId, de
                 <CommandItem key={opt.key} value={opt.key} onSelect={() => handleSelect(opt)}>
                   {currentOption?.key === opt.key && <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />}
                   <span className="truncate">{opt.label}</span>
-                  <span className="ml-auto text-[10px] text-muted-foreground shrink-0">{opt.sublabel}</span>
+                  <span className={`ml-auto text-[10px] font-medium shrink-0 ${TYPE_COLOR[opt.sublabel] ?? 'text-muted-foreground'}`}>{opt.sublabel}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
