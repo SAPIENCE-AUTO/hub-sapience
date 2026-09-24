@@ -1,9 +1,24 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+// "todo se ve super encimado... le falta interlineado" (Sergio) — el
+// <Markdown> que se ve en pantalla se separa bien porque hereda el margen
+// por default de <p>/<li> de la hoja de estilos del navegador (Tailwind
+// prose), pero copyRichText copia desde un <div> desconectado vía
+// execCommand('copy'), que solo preserva estilos INLINE, no la hoja de
+// estilos externa — de ahí que todo llegue pegado a Outlook. Estos
+// renderers fuerzan margin/line-height inline para que sobrevivan el copy.
+const EMAIL_SAFE_COMPONENTS: Components = {
+  h2: ({ children }) => <h2 style={{ margin: '20px 0 8px', fontSize: '16px', lineHeight: 1.4 }}>{children}</h2>,
+  p: ({ children }) => <p style={{ margin: '0 0 12px', lineHeight: 1.6 }}>{children}</p>,
+  ul: ({ children }) => <ul style={{ margin: '0 0 12px', paddingLeft: '20px' }}>{children}</ul>,
+  ol: ({ children }) => <ol style={{ margin: '0 0 12px', paddingLeft: '20px' }}>{children}</ol>,
+  li: ({ children }) => <li style={{ margin: '0 0 6px', lineHeight: 1.6 }}>{children}</li>,
+};
 
 // Convierte Markdown a HTML real (##, **, -, *itálica*) reusando react-markdown
 // — el mismo parser que ya renderiza el resumen en pantalla, en vez de
@@ -11,7 +26,7 @@ export function escapeHtml(text: string): string {
 // formato real de negritas/viñetas al pegar en Outlook/Word/Gmail, en vez de
 // asteriscos y guiones literales.
 export function markdownToHtml(markdown: string): string {
-  return renderToStaticMarkup(<ReactMarkdown>{markdown}</ReactMarkdown>);
+  return renderToStaticMarkup(<ReactMarkdown components={EMAIL_SAFE_COMPONENTS}>{markdown}</ReactMarkdown>);
 }
 
 // Copia HTML real al portapapeles con un fallback de texto plano — para que
