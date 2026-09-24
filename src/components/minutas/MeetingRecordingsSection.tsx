@@ -8,6 +8,14 @@ import { toast } from 'sonner';
 import MeetingRecordingDetailDialog, { type MeetingRecording } from './MeetingRecordingDetailDialog';
 import UploadMeetingRecordingDialog from './UploadMeetingRecordingDialog';
 import MeetingPipelineSteps from './MeetingPipelineSteps';
+import { getMeetingPipeline } from './meetingPipeline';
+
+// Mientras el video o la transcripción sigan en proceso, refresca sola cada
+// tanto — sin esto, la fila se queda mostrando el spinner para siempre
+// aunque el backend ya haya terminado, hasta que alguien recargue la
+// página a mano (mismo problema, mismo tipo de solución, que ya resuelve
+// BotStatusPill en MyMeetingsToday.tsx para el status del bot).
+const POLL_MS = 5000;
 
 function formatDate(iso?: string) {
   if (!iso) return '';
@@ -42,6 +50,16 @@ export default function MeetingRecordingsSection({ projectId, dealId }: {
     setRecordings(null);
     fetchRecordings();
   }, [projectId, dealId]);
+
+  const hasPending = (recordings ?? []).some(r =>
+    getMeetingPipeline(r).some(step => step.state === 'processing' || step.state === 'pending'),
+  );
+
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(fetchRecordings, POLL_MS);
+    return () => clearInterval(id);
+  }, [hasPending, projectId, dealId]);
 
   const handleDelete = async () => {
     if (!pendingDelete) return;
