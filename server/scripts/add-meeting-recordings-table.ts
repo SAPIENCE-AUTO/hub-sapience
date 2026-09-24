@@ -19,6 +19,7 @@ async function main() {
       meeting_type          text,
       recall_download_url   text,
       mux_asset_id          text,
+      mux_upload_id         text,
       mux_playback_id       text,
       assembly_transcript_id text,
       transcript            text,
@@ -34,6 +35,10 @@ async function main() {
     drop trigger if exists meeting_recordings_set_updated on meeting_recordings;
     create trigger meeting_recordings_set_updated before update on meeting_recordings for each row execute function set_updated_at();
   `);
+  // Subida manual directa a Mux (createMuxUploadUrl.ts, sep 2026) — la tabla
+  // ya existía sin esta columna cuando esto se agregó; alter idempotente en
+  // vez de tocar el create table de arriba a mano para una base ya viva.
+  await pool.query(`alter table meeting_recordings add column if not exists mux_upload_id text;`);
   await pool.query(`create unique index if not exists meeting_recordings_recall_bot_id_uniq on meeting_recordings (recall_bot_id);`);
   await pool.query(`create index if not exists meeting_recordings_project_id_idx on meeting_recordings (project_id);`);
   await pool.query(`create index if not exists meeting_recordings_deal_id_idx on meeting_recordings (deal_id);`);

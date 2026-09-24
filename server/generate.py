@@ -265,6 +265,14 @@ EXTRA_TABLES = {
             dict(prop='meetingType', col='meeting_type', pg='text', kind='text', extra=None),
             dict(prop='recallDownloadUrl', col='recall_download_url', pg='text', kind='text', extra=None),
             dict(prop='muxAssetId', col='mux_asset_id', pg='text', kind='text', extra=None),
+            # muxUploadId solo existe para el flujo de subida manual (Mux
+            # Direct Upload, ver createMuxUploadUrl.ts): se conoce ANTES de
+            # que el asset exista, así que es la única forma de correlacionar
+            # el webhook video.asset.ready con la fila correcta hasta que ese
+            # mismo evento rellena muxAssetId. El notetaker (recall.ts) nunca
+            # lo usa — ahí el asset se crea de una vez con createAssetFromUrl
+            # y ya se conoce su id de inmediato.
+            dict(prop='muxUploadId', col='mux_upload_id', pg='text', kind='text', extra=None),
             dict(prop='muxPlaybackId', col='mux_playback_id', pg='text', kind='text', extra=None),
             # assemblyTranscriptId identifica la transcripción del lado de
             # AssemblyAI — el webhook (src/api/assemblyaiWebhook.ts) solo

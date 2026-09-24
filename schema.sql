@@ -917,6 +917,7 @@ create table meeting_recordings (
   meeting_type                  text,
   recall_download_url           text,
   mux_asset_id                  text,
+  mux_upload_id                 text,
   mux_playback_id               text,
   assembly_transcript_id        text,
   transcript                    text,

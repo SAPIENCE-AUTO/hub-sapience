@@ -825,6 +825,7 @@ export const SCHEMA: Record<string, TableDef> = {
       meetingType: { col: 'meeting_type', kind: 'text' },
       recallDownloadUrl: { col: 'recall_download_url', kind: 'text' },
       muxAssetId: { col: 'mux_asset_id', kind: 'text' },
+      muxUploadId: { col: 'mux_upload_id', kind: 'text' },
       muxPlaybackId: { col: 'mux_playback_id', kind: 'text' },
       assemblyTranscriptId: { col: 'assembly_transcript_id', kind: 'text' },
       transcript: { col: 'transcript', kind: 'text' },

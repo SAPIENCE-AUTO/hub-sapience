@@ -731,6 +731,7 @@ export interface MeetingRecordingsRecordType {
   meetingType?: string;
   recallDownloadUrl?: string;
   muxAssetId?: string;
+  muxUploadId?: string;
   muxPlaybackId?: string;
   assemblyTranscriptId?: string;
   transcript?: string;

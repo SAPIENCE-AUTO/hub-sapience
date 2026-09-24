@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getMeetingRecordings } from 'zite-endpoints-sdk';
-import { Video, CheckCircle2, Loader2 } from 'lucide-react';
+import { Video, CheckCircle2, Loader2, Upload } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import MeetingRecordingDetailDialog, { type MeetingRecording } from './MeetingRecordingDetailDialog';
+import UploadMeetingRecordingDialog from './UploadMeetingRecordingDialog';
 
 const STATUS_LABEL: Record<string, string> = {
   joining: 'Uniéndose…',
@@ -9,6 +11,7 @@ const STATUS_LABEL: Record<string, string> = {
   in_call_not_recording: 'En la junta (sin grabar)',
   in_call_recording: 'Grabando',
   call_ended: 'Junta terminada — procesando',
+  uploading: 'Subiendo…',
   processing: 'Procesando grabación…',
   ready: 'Lista',
   transcription_error: 'Error al transcribir',
@@ -20,44 +23,49 @@ function formatDate(iso?: string) {
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// Minutas / notetaker (sep 2026): lista de grabaciones auto-generadas por el
-// notetaker, vinculadas a este proyecto o deal (getMeetingRecordings filtra
-// por uno u otro). Vive junto a ProjectMinutas (las minutas escritas a mano)
-// en Documentos, y como pestaña nueva en DealDetailSheet.
-export default function MeetingRecordingsSection({ projectId, dealId, hideWhenEmpty }: {
+// Minutas / notetaker (sep 2026): lista de grabaciones ligadas a este
+// proyecto o deal (getMeetingRecordings filtra por uno u otro) — tanto las
+// que llegan solas por el notetaker de Sapience como las que alguien sube a
+// mano (grabadas por otra vía: audio o video, indistinto). Vive junto a
+// ProjectMinutas (las minutas escritas a mano) en Documentos, y como pestaña
+// nueva en DealDetailSheet.
+export default function MeetingRecordingsSection({ projectId, dealId }: {
   projectId?: string;
   dealId?: string;
-  /** true en Documentos de Proyecto (sección embebida sobre otro contenido) — el
-   * piloto del notetaker es de un solo usuario hoy, así que casi ningún proyecto
-   * tiene minutas todavía, y un aviso vacío ahí sería puro ruido para el resto
-   * del equipo. La pestaña dedicada de Deal sí explica el estado vacío. */
-  hideWhenEmpty?: boolean;
 }) {
   const [recordings, setRecordings] = useState<MeetingRecording[] | null>(null);
   const [selected, setSelected] = useState<MeetingRecording | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
-  useEffect(() => {
-    setRecordings(null);
+  const fetchRecordings = () => {
     getMeetingRecordings(projectId ? { projectId } : dealId ? { dealId } : {})
       .then(res => setRecordings(res.recordings))
       .catch(() => setRecordings([]));
+  };
+
+  useEffect(() => {
+    setRecordings(null);
+    fetchRecordings();
   }, [projectId, dealId]);
 
   if (recordings === null) {
     return <div className="flex items-center gap-2 text-sm text-muted-foreground py-4"><Loader2 className="h-4 w-4 animate-spin" /> Cargando minutas…</div>;
   }
 
-  if (recordings.length === 0 && hideWhenEmpty) return null;
-
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <div className="w-1.5 h-4 rounded-full bg-primary" />
-        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Minutas (grabaciones de junta)</span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-4 rounded-full bg-primary" />
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Minutas (grabaciones de junta)</span>
+        </div>
+        <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => setUploadOpen(true)}>
+          <Upload className="h-3.5 w-3.5" /> Subir grabación
+        </Button>
       </div>
       {recordings.length === 0 && (
         <p className="text-sm text-muted-foreground py-2">
-          Todavía no hay minutas grabadas. Cuando el notetaker de Sapience grabe una junta relacionada, aparecerá aquí.
+          Todavía no hay minutas aquí. Llegan solas cuando el notetaker de Sapience graba una junta relacionada, o puedes subir un audio o video grabado por otra vía.
         </p>
       )}
       <div className="space-y-2">
@@ -85,6 +93,13 @@ export default function MeetingRecordingsSection({ projectId, dealId, hideWhenEm
         })}
       </div>
       <MeetingRecordingDetailDialog recording={selected} open={!!selected} onClose={() => setSelected(null)} />
+      <UploadMeetingRecordingDialog
+        projectId={projectId}
+        dealId={dealId}
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onUploaded={fetchRecordings}
+      />
     </div>
   );
 }

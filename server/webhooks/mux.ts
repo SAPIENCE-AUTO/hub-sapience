@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { pool } from '../compat';
-import { verifyMuxWebhookSignature } from '../mux/client';
+import { verifyMuxWebhookSignature, getAsset } from '../mux/client';
 import { publishEvent } from '../../src/lib/ably';
+import { startAssemblyTranscription } from '../../src/serverUtils/assemblyAiClient';
 
 /**
  * POST /api/webhooks/mux — sub-app dedicada, NO pasa por el dispatcher
@@ -16,7 +17,7 @@ export const muxWebhookApp = new Hono();
 
 interface MuxEvent {
   type: string;
-  data: { id: string; live_stream_id?: string; playback_ids?: Array<{ id: string; policy: string }> };
+  data: { id: string; asset_id?: string; upload_id?: string; live_stream_id?: string; playback_ids?: Array<{ id: string; policy: string }> };
 }
 
 muxWebhookApp.post('/webhooks/mux', async (c) => {
@@ -75,16 +76,61 @@ muxWebhookApp.post('/webhooks/mux', async (c) => {
             [event.data.id, playbackId, event.data.live_stream_id],
           );
         }
-        // Minutas / notetaker: mismo evento, pero acá el asset se creó desde
-        // una URL (createAssetFromUrl en server/webhooks/recall.ts), no desde
-        // un live stream — se busca por el id del asset mismo, no por
-        // live_stream_id (que aquí no existe).
+        // Minutas / notetaker: mismo evento, pero acá el asset puede venir de
+        // dos orígenes distintos — createAssetFromUrl (notetaker, recall.ts:
+        // ya conoce mux_asset_id desde que se creó) o Direct Upload (subida
+        // manual, createMuxUploadUrl.ts: solo conoce mux_upload_id hasta este
+        // momento). Por eso el match es por cualquiera de los dos, y
+        // mux_asset_id se rellena aquí si todavía no estaba.
+        //
+        // Si la fila tiene mux_upload_id (subida manual), el video queda
+        // reproducible pero la transcripción TODAVÍA no arrancó — depende
+        // del rendition de audio (video.asset.static_rendition.ready, abajo)
+        // porque a diferencia del notetaker (que trae la URL cruda de
+        // Recall.ai) acá no hay otra URL que la que Mux mismo genera. El
+        // notetaker sigue marcando "ready" de una vez, como siempre.
         {
           const playbackId = event.data.playback_ids?.[0]?.id ?? null;
           await pool.query(
-            `update meeting_recordings set mux_playback_id = $1, status = 'ready', updated_at = now() where mux_asset_id = $2`,
-            [playbackId, event.data.id],
+            `update meeting_recordings
+             set mux_asset_id = coalesce(mux_asset_id, $1),
+                 mux_playback_id = $2,
+                 status = case when mux_upload_id is not null then 'processing' else 'ready' end,
+                 updated_at = now()
+             where mux_asset_id = $1 or mux_upload_id = $3`,
+            [event.data.id, playbackId, event.data.upload_id ?? null],
           );
+        }
+        break;
+      }
+      case 'video.asset.static_rendition.ready': {
+        // Solo relevante para la subida manual (createMuxUploadUrl.ts) — el
+        // notetaker nunca pide static_renditions porque ya tiene la URL
+        // cruda de Recall.ai para transcribir. Se re-consulta el asset
+        // completo en vez de confiar en la forma exacta del payload del
+        // webhook (sin documentar a detalle) — mismo criterio que
+        // server/webhooks/recall.ts en bot.done.
+        const assetId = event.data.asset_id ?? event.data.id;
+        const { rows } = await pool.query<{ id: string; mux_playback_id: string | null }>(
+          `select id, mux_playback_id from meeting_recordings where mux_asset_id = $1`,
+          [assetId],
+        );
+        const recording = rows[0];
+        if (recording?.mux_playback_id) {
+          try {
+            const asset = await getAsset(assetId);
+            const audioFile = asset.static_renditions?.files.find(f => f.resolution === 'audio-only' && f.status === 'ready');
+            if (audioFile) {
+              const audioUrl = `https://stream.mux.com/${recording.mux_playback_id}/${audioFile.name}`;
+              const transcriptId = await startAssemblyTranscription(audioUrl);
+              await pool.query(
+                `update meeting_recordings set assembly_transcript_id = $1, status = 'ready', updated_at = now() where id = $2`,
+                [transcriptId, recording.id],
+              );
+            }
+          } catch (err) {
+            console.error('[webhooks/mux] error iniciando transcripción desde static rendition', (err as Error).message);
+          }
         }
         break;
       }

@@ -298,7 +298,7 @@ export default function ProjectHubPage() {
               <div className="h-full overflow-y-auto divide-y divide-border">
                 {project?.id && (
                   <div className="p-4">
-                    <MeetingRecordingsSection projectId={project.id} hideWhenEmpty />
+                    <MeetingRecordingsSection projectId={project.id} />
                   </div>
                 )}
                 <ProjectMinutas projectCode={projectId ?? ''} />
