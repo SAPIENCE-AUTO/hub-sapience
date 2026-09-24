@@ -147,7 +147,10 @@ export default function MeetingSpeakerTimeline({
 
   const speakers = Array.from(new Set(utterances.map(u => u.speaker)));
   const colorMap = buildSpeakerColorMap(utterances);
-  const speakerLabel = (s: string) => `Speaker ${s}`;
+  // Si mergeSpeakerNames.ts ya reemplazó la etiqueta genérica de AssemblyAI
+  // ("A", "B") por el nombre real de Recall, se usa tal cual — mismo
+  // criterio que MeetingSyncedTranscript.tsx / formatTranscript.ts.
+  const speakerLabel = (s: string) => (/^[A-Z]$/.test(s) ? `Speaker ${s}` : s);
 
   // Find current speaker
   let activeSpeaker = '';

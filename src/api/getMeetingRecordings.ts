@@ -18,7 +18,10 @@ const recordingSchema = z.object({
   muxPlaybackId: z.string().optional(),
   assemblyTranscriptId: z.string().optional(),
   transcript: z.string().optional(),
-  transcriptData: z.object({ utterances: z.array(z.object({ speaker: z.string(), text: z.string(), start: z.number(), end: z.number() })) }).optional(),
+  transcriptData: z.object({
+    utterances: z.array(z.object({ speaker: z.string(), text: z.string(), start: z.number(), end: z.number() })),
+    words: z.array(z.object({ text: z.string(), start: z.number(), end: z.number() })).optional(),
+  }).optional(),
   summaryJson: z.object({ resumen: z.string(), acuerdos: z.array(acuerdoSchema) }).optional(),
   project: z.array(z.string()).optional(),
   deal: z.array(z.string()).optional(),

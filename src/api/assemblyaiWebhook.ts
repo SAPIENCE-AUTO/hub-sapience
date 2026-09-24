@@ -53,11 +53,18 @@ export default createEndpoint({
       }
     }
 
+    // Timestamps por palabra, para resaltar la palabra activa durante el
+    // playback y hacer seek exacto al dar clic en una — mismo dato que ya
+    // trae la respuesta de AssemblyAI sin pedirlo aparte (ver
+    // assemblyAiClient.ts). Sin `speaker` — MeetingSyncedTranscript.tsx las
+    // ubica dentro de su utterance por rango de tiempo, no por speaker.
+    const words = (data.words ?? []).map(w => ({ text: w.text, start: w.start, end: w.end }));
+
     await MeetingRecordings.update({
       id: recording.id,
       record: {
         transcript: formatTranscript({ ...data, utterances }),
-        transcriptData: { utterances },
+        transcriptData: { utterances, words },
       },
     });
 

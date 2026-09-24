@@ -39,6 +39,11 @@ export interface AssemblyTranscript {
   status: string;
   text?: string;
   utterances?: { speaker: string; text: string; start: number; end: number }[];
+  // Timestamps por palabra (ms) — AssemblyAI los regresa por default junto
+  // con el resultado, sin pedirlos con un parámetro aparte. Mismo campo que
+  // ya usa Sharpli (wordsData en Streamings) para el resaltado de palabra
+  // activa durante el playback.
+  words?: { text: string; start: number; end: number }[];
 }
 
 export async function getAssemblyTranscript(transcriptId: string): Promise<AssemblyTranscript> {
