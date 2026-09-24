@@ -44,7 +44,7 @@ import {
   ChevronDownCircle, User, Mail, Phone, Paperclip, MousePointerClick,
   Square as LucideIcon, ArrowLeftFromLine, ArrowRightFromLine, GripVertical,
   Pipette, Calculator, MapPin, ExternalLink, GaugeCircle, Highlighter, Copy, Link2, Search,
-  CheckCircle2, AlertTriangle, Upload,
+  CheckCircle2, AlertTriangle, Upload, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { executeButtonAction, getStreetViewUrl, checkImageWeb } from 'zite-endpoints-sdk';
 import { ColumnFilterPopover } from './ColumnFilterPopover';
@@ -1342,8 +1342,14 @@ function parseMultiFileUrls(raw: string): string[] | null {
   return null;
 }
 
-function MultiFileCell({ urls, onEdit }: { urls: string[]; onEdit: () => void }) {
+function MultiFileCell({ urls, onEdit, onUpload, uploading }: {
+  urls: string[]; onEdit: () => void; onUpload: (files: File[]) => void; uploading: boolean;
+}) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  // Cierra el dialog solo cuando termina de subir — mientras uploading es
+  // true se queda abierto mostrando el spinner.
+  useEffect(() => { if (!uploading) setUploadDialogOpen(false); }, [uploading]);
   return (
     <div className="h-full min-w-0 flex items-center gap-1.5 px-1 overflow-hidden group/archivo">
       <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto">
@@ -1381,6 +1387,20 @@ function MultiFileCell({ urls, onEdit }: { urls: string[]; onEdit: () => void })
         })}
       </div>
       <button
+        onClick={e => { e.stopPropagation(); if (!uploading) setUploadDialogOpen(true); }}
+        disabled={uploading}
+        className="flex-shrink-0 opacity-0 group-hover/archivo:opacity-100 transition-opacity text-muted-foreground hover:text-foreground disabled:opacity-50 p-0.5 rounded"
+        title="Agregar archivos (se suman a los que ya hay)"
+      >
+        {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+      </button>
+      <FileUploadDialog
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+        uploading={uploading}
+        onFiles={onUpload}
+      />
+      <button
         onClick={e => { e.stopPropagation(); onEdit(); }}
         className="flex-shrink-0 opacity-0 group-hover/archivo:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded"
         title="Editar"
@@ -1393,6 +1413,9 @@ function MultiFileCell({ urls, onEdit }: { urls: string[]; onEdit: () => void })
           onOpenChange={o => { if (!o) setOpenIndex(null); }}
           url={urls[openIndex]}
           fileName={`Archivo ${openIndex + 1} de ${urls.length}`}
+          index={openIndex}
+          total={urls.length}
+          onNavigate={setOpenIndex}
         />
       )}
     </div>
@@ -1407,11 +1430,26 @@ type WebCheckResult = {
   error?: string;
 };
 
-function FilePreviewDialog({ open, onOpenChange, url, fileName }: {
+function FilePreviewDialog({ open, onOpenChange, url, fileName, index, total, onNavigate }: {
   open: boolean; onOpenChange: (o: boolean) => void; url: string; fileName?: string;
+  // Carrusel — solo se pasan cuando la celda tiene más de un archivo
+  // (MultiFileCell). Con un solo archivo, index/total/onNavigate quedan
+  // undefined y no se muestran flechas ni contador.
+  index?: number; total?: number; onNavigate?: (newIndex: number) => void;
 }) {
   const fileType = getFileType(url);
   const title = fileName || url.split('/').pop()?.split('?')[0] || 'Archivo';
+  const canNavigate = total !== undefined && total > 1 && onNavigate !== undefined && index !== undefined;
+
+  useEffect(() => {
+    if (!open || !canNavigate) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') onNavigate!((index! - 1 + total!) % total!);
+      if (e.key === 'ArrowRight') onNavigate!((index! + 1) % total!);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open, canNavigate, index, total, onNavigate]);
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<WebCheckResult | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
@@ -1539,7 +1577,30 @@ function FilePreviewDialog({ open, onOpenChange, url, fileName }: {
             </a>
           </div>
         </DialogHeader>
-        <div className="flex items-center justify-center bg-muted/20 overflow-auto p-4" style={{ minHeight: 300, maxHeight: '80vh' }}>
+        <div className="relative flex items-center justify-center bg-muted/20 overflow-auto p-4" style={{ minHeight: 300, maxHeight: '80vh' }}>
+          {canNavigate && (
+            <>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onNavigate!((index! - 1 + total!) % total!); }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-background/80 hover:bg-background text-foreground rounded-full p-1.5 shadow-sm"
+                title="Anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onNavigate!((index! + 1) % total!); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-background/80 hover:bg-background text-foreground rounded-full p-1.5 shadow-sm"
+                title="Siguiente"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 text-[11px] font-medium bg-background/80 text-foreground px-2 py-0.5 rounded-full">
+                {index! + 1} / {total}
+              </div>
+            </>
+          )}
           {fileType === 'image' && needsHeicConvert && converting && (
             <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -1588,6 +1649,63 @@ function FilePreviewDialog({ open, onOpenChange, url, fileName }: {
   );
 }
 
+// ── File upload dialog (drag & drop + explorar, uno o varios a la vez) ─────────
+function FileUploadDialog({ open, onOpenChange, onFiles, uploading }: {
+  open: boolean; onOpenChange: (o: boolean) => void; onFiles: (files: File[]) => void; uploading: boolean;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md" aria-describedby={undefined} onClick={e => e.stopPropagation()}>
+        <DialogHeader>
+          <DialogTitle className="text-sm font-medium">Subir archivos</DialogTitle>
+        </DialogHeader>
+        <div
+          onDragOver={e => { e.preventDefault(); if (!uploading) setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => {
+            e.preventDefault();
+            setDragOver(false);
+            if (uploading) return;
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) onFiles(files);
+          }}
+          onClick={() => { if (!uploading) inputRef.current?.click(); }}
+          className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-10 text-center transition-colors ${
+            uploading ? 'cursor-default opacity-70' : 'cursor-pointer'
+          } ${dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/50'}`}
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Subiendo…</p>
+            </>
+          ) : (
+            <>
+              <Upload className="w-6 h-6 text-muted-foreground" />
+              <p className="text-sm text-foreground font-medium">Arrastra tus archivos aquí</p>
+              <p className="text-xs text-muted-foreground">o haz clic para explorar — puedes elegir varios a la vez</p>
+            </>
+          )}
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*,.pdf,.heic,.heif"
+          className="hidden"
+          onChange={e => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = '';
+            if (files.length > 0) onFiles(files);
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Generic cell editor ───────────────────────────────────────────────────────
 function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTextColors, recentBgColors, suggestions }: {
   col: DynCol; value: CellVal | undefined; onSave: (v: CellVal) => void;
@@ -1598,19 +1716,37 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
   const [suggActiveIdx, setSuggActiveIdx] = useState(-1);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const type = col.columnType ?? 'Texto';
   const dateInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Cierra el dialog de subida (drag & drop) solo cuando termina de subir —
+  // mismo criterio que MultiFileCell.
+  useEffect(() => { if (!uploading) setUploadDialogOpen(false); }, [uploading]);
 
   // A pedido explícito: antes solo se podía pegar una URL a mano en columnas
   // "Archivo" — la única forma real de meter una foto era que llegara vía
   // Fillout. Ahora también se puede subir un archivo propio (mismo endpoint
   // /api/upload y Supabase Storage que ya usan Gastos/OCs/Documentos).
-  const handleFileUpload = async (file: File) => {
+  //
+  // Antes esto REEMPLAZABA el valor de la celda — si ya había fotos (de
+  // Fillout o de una subida previa), se perdían. Ahora se AGREGA: se parte lo
+  // que ya había (string plano o JSON de array, mismo criterio que
+  // parseMultiFileUrls) y se vuelve a guardar como JSON de array con el
+  // archivo nuevo al final.
+  const handleFilesUpload = async (files: File[]) => {
+    if (files.length === 0) return;
     setUploading(true);
     try {
-      const { fileUrl } = await uploadFile({ data: file, filename: file.name, folder: 'recruitment' });
-      onSave({ fileUrl });
+      const uploaded = await Promise.all(files.map(f => uploadFile({ data: f, filename: f.name, folder: 'recruitment' })));
+      const newUrls = uploaded.map(u => u.fileUrl);
+      const existingRaw = value?.fileUrl ?? value?.textValue ?? '';
+      const existing = existingRaw.trim().startsWith('[')
+        ? (() => { try { const p = JSON.parse(existingRaw); return Array.isArray(p) ? p.filter((v): v is string => typeof v === 'string' && v.length > 0) : []; } catch { return []; } })()
+        : (existingRaw ? [existingRaw] : []);
+      const all = [...existing, ...newUrls];
+      onSave({ fileUrl: all.length > 1 ? JSON.stringify(all) : all[0] });
       setEditing(false);
     } catch {
       toast.error('Error al subir el archivo');
@@ -1723,7 +1859,7 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
                 // abrir el selector de archivos.
                 onMouseDown={e => { e.preventDefault(); if (!uploading) fileInputRef.current?.click(); }}
                 disabled={uploading}
-                title="Subir un archivo propio"
+                title="Agregar un archivo (se suma a los que ya haya, no los reemplaza)"
                 style={{ position: 'fixed', top: pos.top - 24, left: pos.left + pos.width - 20, zIndex: 9999 }}
                 className="text-muted-foreground hover:text-foreground disabled:opacity-50 bg-background rounded p-0.5"
               >
@@ -1734,12 +1870,13 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               accept="image/*,video/*,.pdf,.heic,.heif"
               className="hidden"
               onChange={e => {
-                const file = e.target.files?.[0];
+                const files = Array.from(e.target.files ?? []);
                 e.target.value = '';
-                if (file) handleFileUpload(file);
+                if (files.length > 0) handleFilesUpload(files);
               }}
             />
           </>
@@ -1792,15 +1929,28 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
     const url = value?.fileUrl ?? value?.textValue ?? '';
     const multiUrls = url ? parseMultiFileUrls(url) : null;
     if (multiUrls) {
-      return <MultiFileCell urls={multiUrls} onEdit={() => { setTempVal(url); setEditing(true); }} />;
-    }
-    if (url) {
-      const fType = getFileType(url);
-      const canPreview = fType !== 'other';
-      const label = getFileLabel(url);
       return (
-        <div className="h-full min-w-0 flex items-center gap-1 px-1 overflow-hidden group/archivo">
-          {canPreview ? (
+        <MultiFileCell
+          urls={multiUrls}
+          onEdit={() => { setTempVal(url); setEditing(true); }}
+          onUpload={handleFilesUpload}
+          uploading={uploading}
+        />
+      );
+    }
+    // A pedido explícito (era muy poco visible el botón de subir escondido
+    // detrás de "entrar a editar", y el picker nativo de un solo archivo era
+    // incómodo para varias fotos): mismo ícono de Upload que MultiFileCell,
+    // junto al lápiz, visible con solo pasar el mouse — abre un dialog con
+    // drag & drop + explorar, y admite varios archivos de una vez. Cubre
+    // tanto la celda con un archivo como la celda vacía (agregar el primero).
+    const fType = url ? getFileType(url) : null;
+    const canPreview = !!url && fType !== 'other';
+    const label = url ? getFileLabel(url) : '';
+    return (
+      <div className="h-full min-w-0 flex items-center gap-1 px-1 overflow-hidden group/archivo">
+        {url ? (
+          canPreview ? (
             <button
               onClick={e => { e.stopPropagation(); setPreviewOpen(true); }}
               className="text-primary hover:underline truncate text-xs text-left"
@@ -1817,24 +1967,40 @@ function CellEditor({ col, value, onSave, rowId, dynCols, recentColors, recentTe
             >
               {label}
             </a>
-          )}
-          <button
-            onClick={() => { setTempVal(url); setEditing(true); }}
-            className="flex-shrink-0 opacity-0 group-hover/archivo:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded"
-            title="Editar URL"
-          >
-            <Pencil className="w-3 h-3" />
-          </button>
-          {canPreview && (
-            <FilePreviewDialog
-              open={previewOpen}
-              onOpenChange={setPreviewOpen}
-              url={url}
-            />
-          )}
-        </div>
-      );
-    }
+          )
+        ) : (
+          <span className="text-xs text-muted-foreground/50 flex-1">—</span>
+        )}
+        <button
+          onClick={e => { e.stopPropagation(); if (!uploading) setUploadDialogOpen(true); }}
+          disabled={uploading}
+          className="flex-shrink-0 opacity-0 group-hover/archivo:opacity-100 transition-opacity text-muted-foreground hover:text-foreground disabled:opacity-50 p-0.5 rounded"
+          title={url ? 'Agregar archivos (se suman a los que ya haya)' : 'Subir archivos'}
+        >
+          {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+        </button>
+        <FileUploadDialog
+          open={uploadDialogOpen}
+          onOpenChange={setUploadDialogOpen}
+          uploading={uploading}
+          onFiles={handleFilesUpload}
+        />
+        <button
+          onClick={() => { setTempVal(url); setEditing(true); }}
+          className="flex-shrink-0 opacity-0 group-hover/archivo:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded"
+          title="Editar URL"
+        >
+          <Pencil className="w-3 h-3" />
+        </button>
+        {canPreview && (
+          <FilePreviewDialog
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+            url={url}
+          />
+        )}
+      </div>
+    );
   }
 
   if (type === 'Link') {

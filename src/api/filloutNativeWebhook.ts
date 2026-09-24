@@ -60,6 +60,12 @@ const toText = (rawVal: unknown): string => {
       const urls = rawVal.map((f: any) => f.url ?? f.filename ?? '').filter(Boolean);
       return urls.length > 1 ? JSON.stringify(urls) : (urls[0] ?? '');
     }
+    if (rawVal.length > 0 && typeof rawVal[0] === 'string' && /^https?:\/\//.test(rawVal[0])) {
+      // Mismo caso de arriba, pero Fillout a veces manda el array de archivos
+      // como puros strings de URL en vez de objetos {url, filename}.
+      const urls = rawVal.filter(Boolean);
+      return urls.length > 1 ? JSON.stringify(urls) : (urls[0] ?? '');
+    }
     return rawVal.map(v => String(v)).filter(Boolean).join(', ');
   }
   if (typeof rawVal === 'object' && rawVal !== null) {
