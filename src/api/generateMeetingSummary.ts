@@ -36,13 +36,19 @@ export default createEndpoint({
 
     const client = new OpenAI({ apiKey: process.env.ZITE_OPENAI_ACCESS_TOKEN });
     const completion = await client.chat.completions.create({
-      model: 'gpt-4o',
+      // Mismo modelo que Sharpli usa para este tipo de resumen exhaustivo
+      // (generateSummary.ts) — gpt-4o generaba salidas más cortas de lo
+      // pedido. max_tokens explícito por la misma razón: Sharpli lo fija en
+      // 6000 a propósito, sin eso el resumen puede cortarse a media
+      // sección en una junta larga.
+      model: 'gpt-4.1',
       messages: [
         { role: 'system', content: getMeetingSummaryPrompt(input.meetingType) },
         { role: 'user', content: `Transcripción de la junta:\n\n${recording.transcript}` },
       ],
       response_format: { type: 'json_object' },
       temperature: 0.2,
+      max_tokens: 6000,
     });
 
     const parsed = SummarySchema.parse(JSON.parse(completion.choices[0].message.content ?? '{}'));

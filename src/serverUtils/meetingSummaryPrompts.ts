@@ -37,12 +37,12 @@ const OUTPUT_CONTRACT = `Responde ÚNICAMENTE con un objeto JSON (sin texto ante
 "acuerdos" son los ACTION ITEMS de la junta — la lista APARTE del resumen (no los repitas dentro del texto de "resumen" como una sección más) que la UI muestra como checklist con casillas. Si no hubo acuerdos o pendientes claros, regresa "acuerdos": [].`;
 
 const STYLE_RULES = `Reglas de estilo para "resumen":
-- Formato Markdown: usa ## para encabezados de sección, **negritas** con moderación (solo en el hallazgo, cifra o decisión más importante de cada sección, no en cada línea), y viñetas para enumerar puntos.
-- EXTENSIÓN: sé conciso y directo — prioriza capturar cada punto real sobre desarrollarlo de más. La mayoría de las secciones deben ser 3-6 viñetas, no párrafos largos.
+- Formato Markdown: usa ## para encabezados de sección, **negritas** para resaltar cifras, decisiones o hallazgos clave, y viñetas (con sub-viñetas cuando un punto tenga varias partes) para enumerar.
+- EXTENSIÓN: el resumen debe ser EXHAUSTIVO Y DETALLADO — captura TODO lo relevante que se discutió, no solo los titulares. Alguien que no estuvo en la junta debe poder entender la conversación completa leyendo el resumen, sin necesitar ver la grabación. NO hay un número máximo de viñetas por sección: si en una sección se discutieron diez puntos distintos, escribe diez viñetas, no cuatro. No sacrifiques detalle real por brevedad.
+- Para cada punto, sé específico: menciona cifras, fechas, nombres propios, marcas, lugares y cualquier detalle concreto mencionado — no lo generalices ni lo resumas de más. "Se discutió el presupuesto" es insuficiente si en la junta se dijo una cifra.
 - TONO: la FORMA debe sentirse profesional y estratégica (vocabulario preciso, bien organizado), pero el CONTENIDO debe ser 100% descriptivo y fiel — nunca agregues tu propia interpretación, conclusión o recomendación que no se haya dicho explícitamente en la junta.
 - Si dos personas dijeron cosas distintas o hubo desacuerdo sobre un punto, repórtalo tal cual (ambas posturas), no lo promedies ni elijas una.
-- Cuando alguien mencione una cifra, fecha, nombre propio o cita textual relevante, inclúyela literal — no la parafrasees ni la generalices.
-- Si una frase textual captura algo mejor que cualquier resumen (un requisito, una preocupación, una decisión dicha en las palabras exactas del cliente o del equipo), puedes citarla en *itálica* con el speaker entre paréntesis — úsalo con moderación, solo cuando la cita en sí aporte algo que una paráfrasis no.`;
+- Incluye 2-4 citas textuales relevantes por sección que tenga contenido sustancial, en *itálica* con el speaker entre paréntesis — prioriza las que capturan un requisito, preocupación o decisión en las palabras exactas de quien lo dijo, no las uses de relleno.`;
 
 const PROMPTS: Record<MeetingType, string> = {
   'Kick off con cliente': `Eres un analista de Sapience (agencia de investigación de mercados) encargado de redactar la minuta del kick off de un proyecto con un cliente. Esta minuta la va a leer gente del equipo que NO estuvo en la junta, así que debe bastar por sí sola para entender qué se acordó.
