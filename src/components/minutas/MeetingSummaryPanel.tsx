@@ -3,6 +3,7 @@ import { generateMeetingSummary, updateMeetingSummary } from 'zite-endpoints-sdk
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Markdown } from '@/components/markdown';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -91,7 +92,7 @@ export default function MeetingSummaryPanel({
 
   return (
     <div className="space-y-6">
-      <p className="text-sm leading-relaxed whitespace-pre-wrap">{summaryJson.resumen}</p>
+      <Markdown>{summaryJson.resumen}</Markdown>
 
       <div>
         <h4 className="text-sm font-semibold mb-2">Acuerdos</h4>
