@@ -381,6 +381,7 @@ export const recalculateDuplicateNotes = (input?: any): Promise<any> => call('re
 export const registerObserver = (input?: any): Promise<any> => call('registerObserver', input);
 export const rejectExpense = (input?: any): Promise<any> => call('rejectExpense', input);
 export const rejectPurchaseOrder = (input?: any): Promise<any> => call('rejectPurchaseOrder', input);
+export const retryMeetingTranscription = (input?: any): Promise<any> => call('retryMeetingTranscription', input);
 export const renameBoard = (input?: any): Promise<any> => call('renameBoard', input);
 export const renameChatConversation = (input?: any): Promise<any> => call('renameChatConversation', input);
 export const reorderInternalViews = (input?: any): Promise<any> => call('reorderInternalViews', input);

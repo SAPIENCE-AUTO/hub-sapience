@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { pool } from '../compat';
-import { verifyMuxWebhookSignature } from '../mux/client';
+import { verifyMuxWebhookSignature, getAsset } from '../mux/client';
 import { publishEvent } from '../../src/lib/ably';
+import { startAssemblyTranscription } from '../../src/serverUtils/assemblyAiClient';
 
 /**
  * POST /api/webhooks/mux — sub-app dedicada, NO pasa por el dispatcher
@@ -16,7 +17,7 @@ export const muxWebhookApp = new Hono();
 
 interface MuxEvent {
   type: string;
-  data: { id: string; upload_id?: string; live_stream_id?: string; playback_ids?: Array<{ id: string; policy: string }> };
+  data: { id: string; asset_id?: string; upload_id?: string; live_stream_id?: string; playback_ids?: Array<{ id: string; policy: string }> };
 }
 
 muxWebhookApp.post('/webhooks/mux', async (c) => {
@@ -99,6 +100,37 @@ muxWebhookApp.post('/webhooks/mux', async (c) => {
              where mux_asset_id = $1 or mux_upload_id = $3`,
             [event.data.id, playbackId, event.data.upload_id ?? null],
           );
+        }
+        break;
+      }
+      case 'video.asset.static_rendition.ready': {
+        // Solo relevante para retryMeetingTranscription.ts (el rendition se
+        // pide a mano ahí cuando el intento en paralelo con AssemblyAI
+        // falló) — la subida normal nunca pide renditions, así que este
+        // evento no le llega a nada más. Se re-consulta el asset completo en
+        // vez de confiar en la forma exacta del payload del webhook (sin
+        // documentar a detalle) — mismo criterio que server/webhooks/recall.ts.
+        const assetId = event.data.asset_id ?? event.data.id;
+        const { rows } = await pool.query<{ id: string; mux_playback_id: string | null }>(
+          `select id, mux_playback_id from meeting_recordings where mux_asset_id = $1 and assembly_transcript_id is null`,
+          [assetId],
+        );
+        const recording = rows[0];
+        if (recording?.mux_playback_id) {
+          try {
+            const asset = await getAsset(assetId);
+            const audioFile = asset.static_renditions?.files.find(f => f.resolution === 'audio-only' && f.status === 'ready');
+            if (audioFile) {
+              const audioUrl = `https://stream.mux.com/${recording.mux_playback_id}/${audioFile.name}`;
+              const transcriptId = await startAssemblyTranscription(audioUrl);
+              await pool.query(
+                `update meeting_recordings set assembly_transcript_id = $1, updated_at = now() where id = $2`,
+                [transcriptId, recording.id],
+              );
+            }
+          } catch (err) {
+            console.error('[webhooks/mux] error iniciando transcripción desde static rendition', (err as Error).message);
+          }
         }
         break;
       }

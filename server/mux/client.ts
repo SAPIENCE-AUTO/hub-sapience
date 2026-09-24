@@ -80,6 +80,7 @@ export interface MuxAsset {
   id: string;
   status: string;
   playback_ids?: Array<{ id: string; policy: string }>;
+  static_renditions?: { files: Array<{ name: string; ext: string; resolution: string; status: string }> };
 }
 
 /**
@@ -106,6 +107,21 @@ export async function getAsset(assetId: string): Promise<MuxAsset> {
   const res = await muxFetch(`/video/v1/assets/${encodeURIComponent(assetId)}`);
   const { data } = (await res.json()) as { data: MuxAsset };
   return data;
+}
+
+/**
+ * Minutas / notetaker (sep 2026): camino de reintento cuando la subida en
+ * paralelo a AssemblyAI falló (ver retryMeetingTranscription.ts) — a
+ * diferencia de la subida normal, aquí SÍ pedimos el rendition de audio,
+ * pero solo en este caso puntual, no en cada subida (eso es justo lo que se
+ * quitó por lento). Mismo endpoint que documenta Mux para agregar un
+ * rendition a un asset que ya existe, sin necesidad de volver a subir nada.
+ */
+export async function addStaticRendition(assetId: string, resolution: 'audio-only' | 'highest' = 'audio-only'): Promise<void> {
+  await muxFetch(`/video/v1/assets/${encodeURIComponent(assetId)}/static-renditions`, {
+    method: 'POST',
+    body: JSON.stringify({ resolution }),
+  });
 }
 
 export interface MuxDirectUpload {

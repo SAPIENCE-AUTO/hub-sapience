@@ -10,19 +10,29 @@ function StepDot({ state }: { state: PipelineStepState }) {
 }
 
 function Connector({ done }: { done: boolean }) {
-  return <div className={`h-0.5 w-3 rounded-full ${done ? 'bg-emerald-400' : 'bg-border'}`} />;
+  return <div className={`h-0.5 w-4 rounded-full shrink-0 ${done ? 'bg-emerald-400' : 'bg-border'}`} />;
 }
 
-// Adaptado de streamvault/src/components/PipelineSteps.tsx — versión
-// compacta (sin etiquetas visibles, solo title="" con el nombre del paso)
-// pensada para caber en una fila de lista, no en una card completa.
+// Adaptado de streamvault/src/components/PipelineSteps.tsx — con etiqueta
+// visible bajo cada punto (no solo title="" al pasar el mouse, que Sergio
+// probó y no se entendía a simple vista).
 export default function MeetingPipelineSteps({ recording }: { recording: MeetingPipelineInput }) {
   const steps = getMeetingPipeline(recording);
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-start gap-0">
       {steps.map((step, i) => (
-        <div key={step.key} className="flex items-center gap-1" title={step.label}>
-          <StepDot state={step.state} />
+        <div key={step.key} className="flex items-center">
+          <div className="flex flex-col items-center gap-0.5">
+            <StepDot state={step.state} />
+            <span className={`text-[9px] leading-tight whitespace-nowrap ${
+              step.state === 'done' ? 'text-emerald-600 font-medium' :
+              step.state === 'processing' ? 'text-primary font-medium' :
+              step.state === 'error' ? 'text-destructive font-medium' :
+              'text-muted-foreground/60'
+            }`}>
+              {step.label}
+            </span>
+          </div>
           {i < steps.length - 1 && <Connector done={step.state === 'done'} />}
         </div>
       ))}

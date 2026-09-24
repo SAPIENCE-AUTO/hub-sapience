@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getMeetingRecordings, deleteMeetingRecording } from 'zite-endpoints-sdk';
-import { Video, Loader2, Upload, Trash2 } from 'lucide-react';
+import { getMeetingRecordings, deleteMeetingRecording, retryMeetingTranscription } from 'zite-endpoints-sdk';
+import { Video, Loader2, Upload, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,7 @@ export default function MeetingRecordingsSection({ projectId, dealId }: {
   const [pendingDelete, setPendingDelete] = useState<MeetingRecording | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const fetchRecordings = () => {
     getMeetingRecordings(projectId ? { projectId } : dealId ? { dealId } : {})
@@ -58,6 +59,19 @@ export default function MeetingRecordingsSection({ projectId, dealId }: {
     }
   };
 
+  const handleRetry = async (r: MeetingRecording) => {
+    setRetryingId(r.id);
+    try {
+      const result = await retryMeetingTranscription({ id: r.id });
+      toast.success(result.status === 'started' ? 'Transcripción iniciada' : 'Preparando el audio — la transcripción arranca sola en unos minutos');
+      fetchRecordings();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo reintentar la transcripción');
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
   if (recordings === null) {
     return <div className="flex items-center gap-2 text-sm text-muted-foreground py-4"><Loader2 className="h-4 w-4 animate-spin" /> Cargando minutas…</div>;
   }
@@ -79,30 +93,43 @@ export default function MeetingRecordingsSection({ projectId, dealId }: {
         </p>
       )}
       <div className="space-y-2">
-        {recordings.map(r => (
-          <div
-            key={r.id}
-            className="w-full bg-card border border-border rounded-lg p-3 flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
-          >
-            <button onClick={() => setSelected(r)} className="min-w-0 flex items-center gap-2 flex-1 text-left">
-              <Video className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{r.subject || 'Sin título'}</p>
-                <p className="text-xs text-muted-foreground">{formatDate(r.meetingStart ?? r.createdAt)}</p>
-              </div>
-            </button>
-            <div className="flex items-center gap-2 shrink-0">
-              <MeetingPipelineSteps recording={r} />
-              <button
-                onClick={(e) => { e.stopPropagation(); setPendingDelete(r); }}
-                className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                title="Borrar minuta"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
+        {recordings.map(r => {
+          const canRetry = !!r.muxPlaybackId && !r.transcript && !r.assemblyTranscriptId;
+          return (
+            <div
+              key={r.id}
+              className="w-full bg-card border border-border rounded-lg p-3 flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
+            >
+              <button onClick={() => setSelected(r)} className="min-w-0 flex items-center gap-2 flex-1 text-left">
+                <Video className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{r.subject || 'Sin título'}</p>
+                  <p className="text-xs text-muted-foreground">{formatDate(r.meetingStart ?? r.createdAt)}</p>
+                </div>
               </button>
+              <div className="flex items-center gap-3 shrink-0">
+                <MeetingPipelineSteps recording={r} />
+                {canRetry && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRetry(r); }}
+                    disabled={retryingId === r.id}
+                    className="text-muted-foreground hover:text-primary transition-colors p-1 disabled:opacity-50"
+                    title="Reintentar transcripción"
+                  >
+                    {retryingId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  </button>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setPendingDelete(r); }}
+                  className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                  title="Borrar minuta"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <MeetingRecordingDetailDialog recording={selected} open={!!selected} onClose={() => setSelected(null)} />
       <UploadMeetingRecordingDialog
