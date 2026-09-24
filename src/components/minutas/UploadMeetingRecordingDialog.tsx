@@ -31,13 +31,25 @@ export default function UploadMeetingRecordingDialog({ projectId, dealId, open, 
   const [file, setFile] = useState<File | null>(null);
   const [subject, setSubject] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const acceptFile = (f: File) => {
+    setFile(f);
+    if (!subject.trim()) setSubject(stripExtension(f.name));
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (!f) return;
-    setFile(f);
-    if (!subject.trim()) setSubject(stripExtension(f.name));
+    if (f) acceptFile(f);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (uploading) return;
+    const f = e.dataTransfer.files?.[0];
+    if (f) acceptFile(f);
   };
 
   const reset = () => { setFile(null); setSubject(''); if (fileInputRef.current) fileInputRef.current.value = ''; };
@@ -84,11 +96,16 @@ export default function UploadMeetingRecordingDialog({ projectId, dealId, open, 
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); if (!uploading) setIsDragOver(true); }}
+              onDragLeave={() => setIsDragOver(false)}
+              onDrop={handleDrop}
               disabled={uploading}
-              className="w-full flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-3 text-sm hover:border-primary/40 transition-colors disabled:opacity-50"
+              className={`w-full flex items-center gap-2 border border-dashed rounded-lg px-3 py-3 text-sm transition-colors disabled:opacity-50 ${
+                isDragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+              }`}
             >
               <FileAudio className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="truncate text-left">{file ? file.name : 'Elegir audio o video…'}</span>
+              <span className="truncate text-left">{file ? file.name : 'Elegir audio o video, o arrástralo aquí…'}</span>
             </button>
           </div>
           <div className="space-y-2">
