@@ -150,6 +150,7 @@ export const bulkDeletePayments = (input?: any): Promise<any> => call('bulkDelet
 export const bulkUpdatePayments = (input?: any): Promise<any> => call('bulkUpdatePayments', input);
 export const cancelPurchaseOrder = (input?: any): Promise<any> => call('cancelPurchaseOrder', input);
 export const chatDealsAnalysis = (input?: any): Promise<any> => call('chatDealsAnalysis', input);
+export const chatWithMeetingTranscript = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('chatWithMeetingTranscript', input);
 export const checkImageWeb = (input?: any): Promise<any> => call('checkImageWeb', input);
 export const checkNewSubmissions = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('checkNewSubmissions', input);
 export const cleanupDuplicateCellValues = (input?: any): Promise<any> => call('cleanupDuplicateCellValues', input);
@@ -266,6 +267,7 @@ export const getInvoiceWidgetData = (input?: any): Promise<any> => call('getInvo
 export const getLastAnalysis = (input?: any): Promise<any> => call('getLastAnalysis', input);
 export const getLinkedEventsInfo = (input?: any): Promise<any> => call('getLinkedEventsInfo', input);
 export const getLinkedParticipants = (input?: any): Promise<any> => call('getLinkedParticipants', input);
+export const getMeetingChatHistory = (input?: any): Promise<any> => call('getMeetingChatHistory', input);
 export const getMeetingRecordings = (input?: any): Promise<any> => call('getMeetingRecordings', input);
 export const getMessages = (input?: any): Promise<any> => call('getMessages', input);
 export const getMisPendientes = (input?: any): Promise<any> => call('getMisPendientes', input);

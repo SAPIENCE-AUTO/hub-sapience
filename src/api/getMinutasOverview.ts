@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, MeetingRecordings } from '../../server/compat';
 import { fetchCalendarMeetings } from '../serverUtils/graphMeetings';
+import { attemptTranscriptionRecovery } from '../serverUtils/transcriptionRecovery';
 
 const recordingSummarySchema = z.object({
   id: z.string(),
@@ -25,6 +26,16 @@ const sessionSchema = z.object({
 
 const DAYS_PAST = 7;
 const DAYS_FUTURE = 14;
+
+// "necesito que sea infalible" (Sergio, tras "Ajustes LRP" quedarse con
+// video pero sin transcripción sin que nadie se enterara) — cada vez que
+// alguien abre/refresca Minutas (esta vista hace polling cada 60s mientras
+// la página está abierta), de paso revisa si alguna de sus grabaciones
+// quedó atorada y la reintenta sola, sin que haya que pedirlo a mano. El
+// cooldown evita reintentar la misma fila en cada poll mientras el intento
+// anterior sigue en curso (la recuperación puede tardar ~1 min esperando el
+// rendition de audio de Mux).
+const STUCK_RETRY_COOLDOWN_MS = 3 * 60 * 1000;
 
 // Minutas / notetaker (sep 2026): "apartado de minutas donde vengan todas
 // las sesiones (pasadas, ongoing y futuras)... si ya está vinculada... o
@@ -54,10 +65,26 @@ export default createEndpoint({
         sorts: [{ field: 'createdAt', direction: 'desc' }],
         fields: [
           'graphEventId', 'subject', 'meetingStart', 'meetingEnd', 'status',
-          'muxPlaybackId', 'assemblyTranscriptId', 'transcript', 'project', 'deal',
+          'muxPlaybackId', 'muxAssetId', 'assemblyTranscriptId', 'transcript', 'project', 'deal', 'updatedAt',
         ],
       }),
     ]);
+
+    // Self-heal: video listo, sin transcripción, y ya sea que quedó
+    // marcada explícitamente en error o simplemente lleva demasiado sin
+    // avanzar — se reintenta en segundo plano (fire-and-forget, nunca
+    // bloquea esta respuesta). Mismo mecanismo que el botón manual de
+    // retryMeetingTranscription.ts.
+    for (const r of rawRecordings) {
+      const staleEnough = r.updatedAt && Date.now() - new Date(r.updatedAt).getTime() > STUCK_RETRY_COOLDOWN_MS;
+      const stuck = r.muxPlaybackId && r.muxAssetId && !r.assemblyTranscriptId && !r.transcript &&
+        (r.status === 'transcription_error' || staleEnough);
+      if (stuck) {
+        attemptTranscriptionRecovery(r).catch(err =>
+          console.error('[getMinutasOverview] self-heal de transcripción falló', r.id, (err as Error).message),
+        );
+      }
+    }
 
     // Payload liviano a propósito: esta vista es una lista, no el detalle —
     // el transcript completo (puede ser texto larguísimo) nunca se necesita

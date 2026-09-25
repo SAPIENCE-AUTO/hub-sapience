@@ -4,6 +4,7 @@ import { verifyRecallWebhookSignature, getRecallBot, botDownloadUrl } from '../.
 import { createAssetFromUrl } from '../mux/client';
 import { startAssemblyTranscription } from '../../src/serverUtils/assemblyAiClient';
 import { suggestMeetingLink } from '../../src/serverUtils/matchMeetingToEntity';
+import { withRetries } from '../../src/serverUtils/retry';
 
 /**
  * POST /api/webhooks/recall — sub-app dedicada (igual que webhooks/mux.ts):
@@ -64,12 +65,19 @@ recallWebhookApp.post('/webhooks/recall', async (c) => {
         await pool.query(`update meeting_recordings set mux_asset_id = $1 where recall_bot_id = $2`, [asset.id, botId]);
 
         // Si AssemblyAI falla, el video en Mux ya quedó a salvo — no se
-        // revierte nada de lo anterior por esto.
+        // revierte nada de lo anterior por esto. "necesito que sea
+        // infalible" (Sergio, tras "Ajustes LRP" quedarse pegada sin que
+        // nadie se enterara): reintenta con backoff antes de rendirse, y si
+        // aun así falla, lo marca explícito (transcription_error) en vez de
+        // dejarlo en silencio — así el barrido de getMinutasOverview.ts lo
+        // puede recuperar solo, y si tampoco eso funciona, al menos se ve
+        // en la UI en vez de quedar indistinguible de "todavía procesando".
         try {
-          const transcriptId = await startAssemblyTranscription(downloadUrl);
+          const transcriptId = await withRetries(() => startAssemblyTranscription(downloadUrl));
           await pool.query(`update meeting_recordings set assembly_transcript_id = $1 where recall_bot_id = $2`, [transcriptId, botId]);
         } catch (err) {
-          console.error('[webhooks/recall] error iniciando transcripción', (err as Error).message);
+          console.error('[webhooks/recall] error iniciando transcripción tras reintentos', (err as Error).message);
+          await pool.query(`update meeting_recordings set status = 'transcription_error' where recall_bot_id = $1`, [botId]);
         }
 
         // Match por naming, mejor esfuerzo — si falla o no encuentra nada, la
