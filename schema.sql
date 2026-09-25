@@ -932,6 +932,17 @@ create table meeting_recordings (
 );
 create trigger meeting_recordings_set_updated before update on meeting_recordings for each row execute function set_updated_at();
 
+-- ─── MeetingChatMessages ───────────────────────────────────────
+create table meeting_chat_messages (
+  id                            uuid primary key default gen_random_uuid(),
+  meeting_recording_id          uuid references meeting_recordings(id) on delete set null,
+  "role"                        text,
+  content                       text,
+  created_at                    timestamptz not null default now(),
+  constraint meeting_chat_messages_role_chk check ("role" in ('user', 'assistant'))
+);
+create trigger meeting_chat_messages_set_updated before update on meeting_chat_messages for each row execute function set_updated_at();
+
 
 -- ═══ Relaciones N-N ═══════════════════════════════════════════
 -- Los tres roles de equipo de un proyecto. En Zite eran los campos

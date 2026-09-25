@@ -838,6 +838,16 @@ export const SCHEMA: Record<string, TableDef> = {
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },
   },
+  MeetingChatMessages: {
+    table: 'meeting_chat_messages',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      meetingRecording: { col: 'meeting_recording_id', kind: 'link', target: 'meeting_recordings' },
+      role: { col: 'role', kind: 'text' },
+      content: { col: 'content', kind: 'text' },
+      createdAt: { col: 'created_at', kind: 'datetime' }
+    },
+  },
 };
 
 export const MODEL_NAMES = Object.keys(SCHEMA) as (keyof typeof SCHEMA)[];

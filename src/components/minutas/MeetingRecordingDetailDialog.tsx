@@ -5,6 +5,7 @@ import { Video } from 'lucide-react';
 import MeetingSummaryPanel from './MeetingSummaryPanel';
 import MeetingSyncedTranscript, { type Utterance, type WordTimestamp } from './MeetingSyncedTranscript';
 import MeetingSpeakerTimeline from './MeetingSpeakerTimeline';
+import MeetingTranscriptChat from './MeetingTranscriptChat';
 
 interface Acuerdo { texto: string; responsable?: string | null; hecho: boolean }
 interface SummaryJson { resumen: string; acuerdos: Acuerdo[] }
@@ -166,6 +167,19 @@ export default function MeetingRecordingDetailDialog({ recording, open, onClose 
             </div>
           </div>
         </div>
+
+        {/* "el feature de chat en la transcripción... también está en sharpli
+            ya implementado" (Sergio) — puerto de FloatingTranscriptChat.tsx.
+            Flota sobre el diálogo (DialogContent ya es position:fixed, así
+            que ancla el absolute de abajo igual que un position:relative),
+            visible sin importar la pestaña activa, igual que en Sharpli. */}
+        {(utterances.length > 0 || recording.transcript?.trim()) && (
+          <MeetingTranscriptChat
+            meetingRecordingId={recording.id}
+            title={recording.subject}
+            onSeekTo={handleSeek}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

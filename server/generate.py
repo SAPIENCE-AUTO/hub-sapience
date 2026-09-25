@@ -303,6 +303,31 @@ EXTRA_TABLES = {
         many={},
         name='MeetingRecordings',
     ),
+    # Chat con IA sobre la transcripción de una minuta (sep 2026) — "también
+    # está en sharpli ya implementado" (Sergio): puerto directo de
+    # FloatingTranscriptChat.tsx/chatWithTranscription.ts de Sharpli. Una
+    # fila por mensaje (no una fila por conversación con un JSON de mensajes
+    # adentro) porque así lo modela el original (ChatMessages en
+    # streamvault/schema.sql) — permite historial por minuta con un simple
+    # `where meeting_recording_id = $1 order by created_at`, igual que
+    # Sharpli. role es texto con CHECK en vez de un modelo de roles
+    # separado, mismo criterio que Streamings/ChatMessages allá.
+    'MeetingChatMessages': dict(
+        table='meeting_chat_messages',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='meetingRecording', col='meeting_recording_id', pg='uuid', kind='link', extra=dict(target='meeting_recordings')),
+            dict(prop='role', col='role', pg='text', kind='text', extra=None),
+            dict(prop='content', col='content', pg='text', kind='text', extra=None),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[
+            "  constraint meeting_chat_messages_role_chk check (\"role\" in ('user', 'assistant'))",
+        ],
+        notes=[],
+        many={},
+        name='MeetingChatMessages',
+    ),
 }
 canon.update(EXTRA_TABLES)
 

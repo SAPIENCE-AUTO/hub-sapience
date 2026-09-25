@@ -743,3 +743,11 @@ export interface MeetingRecordingsRecordType {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface MeetingChatMessagesRecordType {
+  id: string;
+  meetingRecording?: string[];
+  role?: string;
+  content?: string;
+  createdAt?: string;
+}
