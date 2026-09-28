@@ -19,6 +19,29 @@ type Task = GetTasksForGanttOutputType['tasks'][0];
 let tasksCache: Task[] | null = null;
 let projectStatusesCache: Record<string, string> = {};
 
+// Días de asueto/no laborables de Sapience (Sergio, sep 2026) — a diferencia
+// de "holidays" (el Set de abajo), esto se ve gris para TODOS sin que nadie
+// tenga que agregarlo a mano desde el popover de Festivos: ese sigue siendo
+// para adiciones personales, sueltas, no para el calendario oficial de la
+// empresa. Confirmado con Sergio: 16 de noviembre 2026 (Día de la Revolución
+// Mexicana) y cierre de fin de año del 18 de diciembre 2026 al 6 de enero
+// 2027 (se retoman labores el 7 de enero). Es una lista fija de este año —
+// hay que revisarla/actualizarla cuando cambie el calendario del siguiente.
+function dateRange(startIso: string, endIso: string): string[] {
+  const dates: string[] = [];
+  let d = new Date(`${startIso}T00:00:00`);
+  const end = new Date(`${endIso}T00:00:00`);
+  while (d <= end) {
+    dates.push(format(d, 'yyyy-MM-dd'));
+    d = addDays(d, 1);
+  }
+  return dates;
+}
+const COMPANY_NON_WORKING_DAYS = new Set<string>([
+  '2026-11-16', // Día de la Revolución Mexicana
+  ...dateRange('2026-12-18', '2027-01-06'), // cierre de fin de año, se retoma el 7 de enero
+]);
+
 const STATUS_OPTIONS = [
   { label: 'Todos',      value: 'Todos' },
   { label: 'Activos',    value: 'Activos' },
@@ -567,7 +590,7 @@ export function GanttTimeline() {
       const date = addDays(minDate, i);
       const dow = getDay(date);
       const dateStr = format(date, 'yyyy-MM-dd');
-      result.push({ idx: i, dow, isWeekend: dow === 0 || dow === 6, isHoliday: holidays.has(dateStr), dayNum: date.getDate(), label: DAY_LABELS[dow], left: i * ppd, dateStr });
+      result.push({ idx: i, dow, isWeekend: dow === 0 || dow === 6, isHoliday: holidays.has(dateStr) || COMPANY_NON_WORKING_DAYS.has(dateStr), dayNum: date.getDate(), label: DAY_LABELS[dow], left: i * ppd, dateStr });
     }
     return result;
   }, [minDate, totalDays, ppd, holidays]);
