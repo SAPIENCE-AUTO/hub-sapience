@@ -421,7 +421,12 @@ export function GanttTimeline() {
       if (!t.startDate || !t.endDate || t.startDate > t.endDate) return false;
       if (statusFilter === 'Todos') return true;
       const projStatus = t.projectCode ? (projectStatuses[t.projectCode] ?? '') : '';
-      if (statusFilter === 'Activos')     return ACTIVE_STATUSES.has(projStatus);
+      // "en teoría deben verse los activos, pero no veo insanity" (Sergio) —
+      // 9 proyectos reales (incl. INSANITY, con 36 tareas vigentes) tienen
+      // status NULL en la base: nadie los marcó Finalizado/Cancelado, pero
+      // tampoco quedó explícito "En curso". Un status vacío nunca significa
+      // "cerrado" (eso siempre se marca a mano), así que cuenta como activo.
+      if (statusFilter === 'Activos')     return ACTIVE_STATUSES.has(projStatus) || projStatus === '';
       if (statusFilter === 'Finalizados') return projStatus === 'Finalizado';
       if (statusFilter === 'Cancelados')  return projStatus === 'Cancelado';
       return true;
