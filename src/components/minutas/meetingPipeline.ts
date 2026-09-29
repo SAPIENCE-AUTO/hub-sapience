@@ -9,6 +9,11 @@ export interface MeetingPipelineInput {
   status?: string;
   muxPlaybackId?: string;
   transcript?: string;
+  // getMinutasOverview.ts manda esto en vez de transcript (payload liviano a
+  // propósito, ver ese archivo) — sin este campo, esta vista se quedaba
+  // mostrando "procesando" para siempre aunque la transcripción ya
+  // estuviera lista, porque `transcript` nunca llegaba con nada.
+  hasTranscript?: boolean;
   assemblyTranscriptId?: string;
 }
 
@@ -21,7 +26,7 @@ export function getMeetingPipeline(r: MeetingPipelineInput): PipelineStep[] {
   const step2: PipelineStep = { key: 'video', label: 'Video listo', state: step2State };
 
   let step3State: PipelineStepState = 'pending';
-  if (r.transcript) step3State = 'done';
+  if (r.transcript || r.hasTranscript) step3State = 'done';
   else if (r.status === 'transcription_error') step3State = 'error';
   else if (r.assemblyTranscriptId) step3State = 'processing';
   const step3: PipelineStep = { key: 'transcribed', label: 'Transcrito', state: step3State };
