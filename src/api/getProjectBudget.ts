@@ -136,33 +136,46 @@ export default createEndpoint({
 
     // Override por proyecto (Vincular a Deal, exclusivo de Sergio — ver
     // linkProjectDeal.ts): además del rubro asignado al usuario, el proyecto
-    // puede acotar cuáles de esos rubros son visibles aquí. Sin configurar
-    // (null) = todos visibles, mismo comportamiento que antes de que
-    // existiera este campo — no hay regresión para proyectos ya vinculados.
-    let projectVisibleRubros: string[] | null = null;
+    // puede acotar cuáles de esos rubros (o, más fino, cuáles sub-rubros
+    // dentro de un rubro) son visibles aquí. Sin configurar (null) = todos
+    // visibles, mismo comportamiento que antes de que existiera este campo —
+    // no hay regresión para proyectos ya vinculados. Cada entrada es o el
+    // nombre del rubro completo ("Reclutamiento e incentivos", forma vieja,
+    // sigue soportada) o "Rubro::SubRubro" (forma nueva, granular — ver
+    // LinkProjectDealDialog.tsx, que es el único lugar que la escribe).
+    let projectVisibleEntries: string[] | null = null;
     if (project.visibleBudgetRubros) {
-      try { projectVisibleRubros = JSON.parse(project.visibleBudgetRubros); } catch { /* valor corrupto, tratar como sin configurar */ }
+      try { projectVisibleEntries = JSON.parse(project.visibleBudgetRubros); } catch { /* valor corrupto, tratar como sin configurar */ }
     }
 
-    const visibleRubros = canSeeAll
-      ? sortedRubroNames
-      : sortedRubroNames.filter(r => userRubros.includes(r) && (projectVisibleRubros === null || projectVisibleRubros.includes(r)));
+    function lineItemVisible(rubro: string, subRubro: string): boolean {
+      if (projectVisibleEntries === null) return true;
+      if (projectVisibleEntries.includes(rubro)) return true;
+      return projectVisibleEntries.includes(`${rubro}::${subRubro}`);
+    }
 
-    const rubros = visibleRubros.map(rubroName => {
-      const items = rubroItemsMap.get(rubroName) ?? [];
-      const lineItems = items.map(li => {
-        const cantidad = Number((li as any).cantidad ?? 1);
-        const componentes = Number((li as any).componentes ?? 1);
-        const unitCost = Number((li as any).unitCost ?? 0);
-        return { id: li.id, subRubro: (li as any).subRubro ?? '', cantidad, componentes, unitCost, total: cantidad * componentes * unitCost, cotizacionName: (li as any)._cotizacionName ?? '' };
-      });
-      return {
-        rubroName,
-        lineItems,
-        assignedUsers: rubroUsersMap.get(rubroName) ?? [],
-        subtotalCotizado: lineItems.reduce((s, li) => s + li.total, 0),
-      };
-    });
+    const rubros = sortedRubroNames
+      .filter(r => canSeeAll || userRubros.includes(r))
+      .map(rubroName => {
+        const items = (rubroItemsMap.get(rubroName) ?? [])
+          .filter(li => canSeeAll || lineItemVisible(rubroName, (li as any).subRubro ?? ''));
+        const lineItems = items.map(li => {
+          const cantidad = Number((li as any).cantidad ?? 1);
+          const componentes = Number((li as any).componentes ?? 1);
+          const unitCost = Number((li as any).unitCost ?? 0);
+          return { id: li.id, subRubro: (li as any).subRubro ?? '', cantidad, componentes, unitCost, total: cantidad * componentes * unitCost, cotizacionName: (li as any)._cotizacionName ?? '' };
+        });
+        return {
+          rubroName,
+          lineItems,
+          assignedUsers: rubroUsersMap.get(rubroName) ?? [],
+          subtotalCotizado: lineItems.reduce((s, li) => s + li.total, 0),
+        };
+      })
+      // Un rubro al que el usuario tiene acceso pero cuyas líneas quedaron
+      // todas ocultas por la config granular del proyecto no debe aparecer
+      // como bloque vacío.
+      .filter(r => canSeeAll || r.lineItems.length > 0);
 
     const totalCotizado = rubros.reduce((s, r) => s + r.subtotalCotizado, 0);
     const totalConMarkup = rubros.reduce((sum, r) => {
@@ -174,7 +187,7 @@ export default createEndpoint({
       canSeeAll, rubros,
       totals: { cotizado: totalCotizado, conMarkup: totalConMarkup },
       personas, currency, dealName, projectCode: project.projectCode ?? input.projectCode,
-      projectId: project.id, dealId, visibleBudgetRubros: projectVisibleRubros,
+      projectId: project.id, dealId, visibleBudgetRubros: projectVisibleEntries,
     };
   },
 });

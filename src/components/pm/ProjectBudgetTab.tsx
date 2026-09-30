@@ -146,6 +146,7 @@ export default function ProjectBudgetTab({ projectCode }: { projectCode: string 
           projectId={data.projectId}
           currentDealId={data.dealId}
           currentVisibleRubros={data.visibleBudgetRubros ?? null}
+          rubros={data.rubros}
           onLinked={load}
         />
       )}
@@ -162,6 +163,7 @@ export default function ProjectBudgetTab({ projectCode }: { projectCode: string 
             projectId={projectId}
             currentDealId={dealId}
             currentVisibleRubros={visibleBudgetRubros ?? null}
+            rubros={rubros}
             onLinked={load}
           />
         </div>
