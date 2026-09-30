@@ -23,20 +23,14 @@ function fmtAmt(v: number, currency: string) {
 }
 
 // Cada entrada guardada es o el nombre del rubro completo ("Reclutamiento e
-// incentivos" — todo visible) o "Rubro::SubRubro" (solo esa línea puntual) —
-// mismo formato que consume getProjectBudget.ts.
-function subKey(rubro: string, subRubro: string): string {
-  return `${rubro}::${subRubro}`;
-}
-
-function dedupSubRubros(items: { subRubro: string }[]): string[] {
-  const seen = new Set<string>();
-  const list: string[] = [];
-  for (const li of items) {
-    const sr = li.subRubro ?? '';
-    if (!seen.has(sr)) { seen.add(sr); list.push(sr); }
-  }
-  return list;
+// incentivos" — todo visible) o "Rubro::LineItemId" (solo esa línea puntual)
+// — mismo formato que consume getProjectBudget.ts. Se usa el ID real de la
+// línea, NO el texto de subRubro: dos cotizaciones distintas del mismo
+// proyecto pueden traer líneas con el mismo subRubro (ej. "Reclutamiento" en
+// Cuanti y en Cuali) — togglear por texto las apagaba a todas juntas sin
+// querer (bug real visto en RAPIDITO 3).
+function subKey(rubro: string, lineItemId: string): string {
+  return `${rubro}::${lineItemId}`;
 }
 
 function SummaryCard({ label, value, sub }: { label: string; value: string; sub?: boolean }) {
@@ -57,8 +51,7 @@ function RubroBlock({ rubro, currency, canEdit, visible, onToggleWhole, onToggle
   onToggleSub: (rubro: string, allSubKeys: string[], key: string) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const subRubros = dedupSubRubros(rubro.lineItems);
-  const allSubKeys = subRubros.map(sr => subKey(rubro.rubroName, sr));
+  const allSubKeys = rubro.lineItems.map(li => subKey(rubro.rubroName, li.id));
   const allOn = visible.has(rubro.rubroName) || (allSubKeys.length > 0 && allSubKeys.every(k => visible.has(k)));
 
   return (
@@ -126,7 +119,7 @@ function RubroBlock({ rubro, currency, canEdit, visible, onToggleWhole, onToggle
                       </tr>
                     )}
                     {items.map(li => {
-                      const key = subKey(rubro.rubroName, li.subRubro ?? '');
+                      const key = subKey(rubro.rubroName, li.id);
                       const on = visible.has(rubro.rubroName) || visible.has(key);
                       return (
                         <tr key={li.id} className="hover:bg-muted/20 transition-colors">

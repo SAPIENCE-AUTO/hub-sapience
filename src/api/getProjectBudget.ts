@@ -136,29 +136,33 @@ export default createEndpoint({
 
     // Override por proyecto (Vincular a Deal, exclusivo de Sergio — ver
     // linkProjectDeal.ts): además del rubro asignado al usuario, el proyecto
-    // puede acotar cuáles de esos rubros (o, más fino, cuáles sub-rubros
+    // puede acotar cuáles de esos rubros (o, más fino, cuáles líneas puntuales
     // dentro de un rubro) son visibles aquí. Sin configurar (null) = todos
     // visibles, mismo comportamiento que antes de que existiera este campo —
     // no hay regresión para proyectos ya vinculados. Cada entrada es o el
     // nombre del rubro completo ("Reclutamiento e incentivos", forma vieja,
-    // sigue soportada) o "Rubro::SubRubro" (forma nueva, granular — ver
-    // LinkProjectDealDialog.tsx, que es el único lugar que la escribe).
+    // sigue soportada) o "Rubro::LineItemId" (forma granular — ver
+    // ProjectBudgetTab.tsx, que es el único lugar que la escribe). Se usa el
+    // ID de la línea, NO el texto de subRubro: dos líneas de cotizaciones
+    // distintas pueden compartir el mismo subRubro (ej. "Reclutamiento" en
+    // Cuanti Y en Cuali) y un toggle por texto las apagaría a las dos juntas
+    // sin querer — bug real encontrado en RAPIDITO 3.
     let projectVisibleEntries: string[] | null = null;
     if (project.visibleBudgetRubros) {
       try { projectVisibleEntries = JSON.parse(project.visibleBudgetRubros); } catch { /* valor corrupto, tratar como sin configurar */ }
     }
 
-    function lineItemVisible(rubro: string, subRubro: string): boolean {
+    function lineItemVisible(rubro: string, lineItemId: string): boolean {
       if (projectVisibleEntries === null) return true;
       if (projectVisibleEntries.includes(rubro)) return true;
-      return projectVisibleEntries.includes(`${rubro}::${subRubro}`);
+      return projectVisibleEntries.includes(`${rubro}::${lineItemId}`);
     }
 
     const rubros = sortedRubroNames
       .filter(r => canSeeAll || userRubros.includes(r))
       .map(rubroName => {
         const items = (rubroItemsMap.get(rubroName) ?? [])
-          .filter(li => canSeeAll || lineItemVisible(rubroName, (li as any).subRubro ?? ''));
+          .filter(li => canSeeAll || lineItemVisible(rubroName, li.id));
         const lineItems = items.map(li => {
           const cantidad = Number((li as any).cantidad ?? 1);
           const componentes = Number((li as any).componentes ?? 1);
