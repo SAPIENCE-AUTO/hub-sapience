@@ -125,9 +125,10 @@ export default function App() {
                 <Route path="admin/migration" element={<MigrationRunnerPage />} />
                 <Route path="admin/importar" element={<DataImportPage />} />
                 <Route path="sharpli" element={<SharpliPage />} />
-                <Route path="minutas" element={<MinutasPage />} />
+                <Route path="notetaker" element={<MinutasPage />} />
 
                 <Route path="commercial"   element={<Navigate to="/comercial/crm" replace />} />
+                <Route path="minutas"      element={<Navigate to="/notetaker" replace />} />
                 <Route path="projects"     element={<Navigate to="/operacion/proyectos" replace />} />
                 <Route path="recruitment"  element={<Navigate to="/operacion/proyectos" replace />} />
                 <Route path="participants" element={<Navigate to="/operacion/proyectos" replace />} />

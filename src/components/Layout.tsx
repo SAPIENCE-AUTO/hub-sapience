@@ -117,7 +117,7 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ALL_ROLES,
     items: [
       { to: '/operacion/proyectos', icon: FolderKanban, label: 'Proyectos' },
-      { to: '/minutas', icon: Video, label: 'Minutas' },
+      { to: '/notetaker', icon: Video, label: 'Notetaker' },
       { to: '/sharpli', icon: SharpliIcon, label: 'Sharpli' },
     ],
   },
@@ -536,7 +536,7 @@ export default function Layout() {
     const isExempt =
       path === '/configuracion' ||
       path === '/sharpli' ||
-      path === '/minutas' ||
+      path === '/notetaker' ||
       path.startsWith('/admin/importar') ||
       path.startsWith('/shared/') ||
       path.startsWith('/portal/') ||

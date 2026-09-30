@@ -107,7 +107,7 @@ export default function MinutasPage() {
   const [selectedRecording, setSelectedRecording] = useState<MeetingRecording | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    try { return (localStorage.getItem('minutas-view') as ViewMode) ?? 'list'; } catch { return 'list'; }
+    try { return (localStorage.getItem('minutas-view') as ViewMode) ?? 'day'; } catch { return 'day'; }
   });
 
   const handleViewMode = (v: ViewMode) => {
@@ -143,10 +143,10 @@ export default function MinutasPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-4">
+    <div className={`mx-auto p-6 space-y-4 ${viewMode === 'day' ? 'max-w-6xl' : 'max-w-4xl'}`}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold">Minutas</h1>
+          <h1 className="text-xl font-bold">Notetaker</h1>
           <p className="text-sm text-muted-foreground">Tus juntas de los últimos 7 días y próximas 2 semanas — con o sin grabación.</p>
         </div>
         <div className="flex items-center rounded-md border border-border overflow-hidden shrink-0">

@@ -1,20 +1,35 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { getMeetingPipeline } from './meetingPipeline';
 import AddNotetakerButton from './AddNotetakerButton';
 import LinkMeetingRecordingPopover from './LinkMeetingRecordingPopover';
 import { GOLD, INFO, EXITO, ALERTA, PELIGRO, GRIS } from '../../lib/toolColors';
 import type { Session } from '../../pages/MinutasPage';
 
-const SLOT_H = 180;
-const TIME_W = 52;
-const DEFAULT_START_HOUR = 7;
-const DEFAULT_END_HOUR = 21;
+// "debe verse a golpe de vista todo el horario laboral" (Sergio) — 3 días
+// lado a lado, escala comprimida (44px/hora) para que 8am-7pm quepa sin
+// scroll. A esa escala una junta de 30 min mide ~22px: no alcanza para
+// header + botón + asunto (eso necesita ~80px, ver EventCard), así que la
+// mayoría de las juntas se muestran como una sola línea de color (igual que
+// Google/Outlook en su vista de día) y el detalle completo con las acciones
+// vive en un popover al hacer click — mismo patrón que ya usa
+// LinkMeetingRecordingPopover, no una UI nueva.
+const DAYS_TO_SHOW = 3;
+const SLOT_H = 44;
+const TIME_W = 44;
+const DEFAULT_START_HOUR = 8;
+const DEFAULT_END_HOUR = 19;
+const DAYS_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 function addDays(d: Date, n: number): Date {
   const r = new Date(d); r.setDate(r.getDate() + n); return r;
+}
+
+function startOfDay(d: Date): Date {
+  const r = new Date(d); r.setHours(0, 0, 0, 0); return r;
 }
 
 function sameLocalDay(a: Date, b: Date): boolean {
@@ -25,14 +40,16 @@ function hourFrac(d: Date): number {
   return d.getHours() + d.getMinutes() / 60;
 }
 
-function fmtDayLabel(d: Date): string {
-  const s = d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 function fmtHour(iso: string): string {
   if (!iso) return '';
   return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function fmtRangeLabel(first: Date, last: Date): string {
+  const sameMonth = first.getMonth() === last.getMonth();
+  const a = `${first.getDate()} ${MONTHS_ES[first.getMonth()]}`;
+  const b = sameMonth ? `${last.getDate()}` : `${last.getDate()} ${MONTHS_ES[last.getMonth()]}`;
+  return `${a} – ${b}`;
 }
 
 interface Positioned {
@@ -45,7 +62,7 @@ interface Positioned {
 
 // Mismo algoritmo de columnas lado-a-lado que WeeklyCalendar.tsx
 // (computeEventLayout), reimplementado en chico porque acá no hace falta
-// drag/resize ni el resto del estado de ese componente — Minutas es de
+// drag/resize ni el resto del estado de ese componente — Notetaker es de
 // solo lectura, las sesiones vienen del calendario de Outlook/Zoom, no se
 // crean ni mueven desde aquí.
 function layoutDay(items: { session: Session; startH: number; endH: number }[]): Positioned[] {
@@ -105,6 +122,60 @@ function statusLabel(session: Session, isOngoing: boolean, isPast: boolean): str
   return 'Procesando';
 }
 
+interface CardProps {
+  session: Session;
+  color: string;
+  ink: string;
+  label: string;
+  canAddNotetaker: boolean;
+  allowDeals: boolean;
+  onOpenDetail: (recordingId: string) => void;
+  onChanged: () => void;
+}
+
+// Header sólido + acciones — mismo patrón ColorHead de ProjectHubLanding.tsx:
+// la identidad de color vive en un fondo lleno, no en un tinte ni un borde
+// delgado. Se usa igual inline (juntas largas) que adentro del popover
+// (juntas cortas) para no mantener dos diseños de tarjeta distintos.
+function EventCard({ session, color, ink, label, canAddNotetaker, allowDeals, onOpenDetail, onChanged }: CardProps) {
+  const hasActions = canAddNotetaker || !!session.recording;
+  return (
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
+      <div className="flex items-center gap-1 px-1.5 py-1" style={{ backgroundColor: color, color: ink }}>
+        <span className="text-[11px] font-bold truncate">{fmtHour(session.start)}</span>
+        <span className="text-[9px] font-semibold uppercase tracking-wide truncate ml-auto opacity-90">{label}</span>
+      </div>
+      {hasActions && (
+        <div className="flex items-center gap-1 flex-wrap px-1.5 pt-1.5">
+          {canAddNotetaker && <AddNotetakerButton session={session} onChanged={onChanged} compact />}
+          {session.recording && (
+            <LinkMeetingRecordingPopover
+              recordingId={session.recording.id}
+              projectId={session.recording.project?.[0]}
+              dealId={session.recording.deal?.[0]}
+              allowDeals={allowDeals}
+              onLinked={onChanged}
+              compact
+            />
+          )}
+        </div>
+      )}
+      <div className="px-1.5 py-1.5 flex flex-col gap-0.5">
+        <p className="text-[12px] font-semibold leading-tight text-foreground">{session.subject}</p>
+        {session.provider && <span className="text-[9px] uppercase font-semibold text-muted-foreground">{session.provider}</span>}
+      </div>
+      {session.recording && (
+        <button
+          onClick={() => onOpenDetail(session.recording!.id)}
+          className="w-full text-left px-1.5 py-1.5 text-[10px] font-semibold text-primary hover:bg-muted border-t border-border"
+        >
+          Ver minuta completa →
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function MinutasDayView({ sessions, now, allowDeals, onOpenDetail, onChanged }: {
   sessions: Session[];
   now: number;
@@ -112,31 +183,33 @@ export default function MinutasDayView({ sessions, now, allowDeals, onOpenDetail
   onOpenDetail: (recordingId: string) => void;
   onChanged: () => void;
 }) {
-  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [windowStart, setWindowStart] = useState(() => startOfDay(new Date()));
+  const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(windowStart, i)), [windowStart]);
 
-  const dayItems = useMemo(() => {
-    return sessions
-      .filter(s => s.start && sameLocalDay(new Date(s.start), selectedDate))
-      .map(s => {
-        const start = new Date(s.start);
-        const end = s.end ? new Date(s.end) : new Date(start.getTime() + 60 * 60 * 1000);
-        return { session: s, startH: hourFrac(start), endH: Math.max(hourFrac(start) + 0.25, hourFrac(end)) };
-      });
-  }, [sessions, selectedDate]);
+  const perDay = useMemo(() => {
+    return days.map(day => ({
+      day,
+      items: sessions
+        .filter(s => s.start && sameLocalDay(new Date(s.start), day))
+        .map(s => {
+          const start = new Date(s.start);
+          const end = s.end ? new Date(s.end) : new Date(start.getTime() + 60 * 60 * 1000);
+          return { session: s, startH: hourFrac(start), endH: Math.max(hourFrac(start) + 0.25, hourFrac(end)) };
+        }),
+    }));
+  }, [sessions, days]);
 
   const { startHour, endHour } = useMemo(() => {
-    if (dayItems.length === 0) return { startHour: DEFAULT_START_HOUR, endHour: DEFAULT_END_HOUR };
-    const minH = Math.min(DEFAULT_START_HOUR, ...dayItems.map(i => Math.floor(i.startH)));
-    const maxH = Math.max(DEFAULT_END_HOUR, ...dayItems.map(i => Math.ceil(i.endH)));
+    const all = perDay.flatMap(p => p.items);
+    if (all.length === 0) return { startHour: DEFAULT_START_HOUR, endHour: DEFAULT_END_HOUR };
+    const minH = Math.min(DEFAULT_START_HOUR, ...all.map(i => Math.floor(i.startH)));
+    const maxH = Math.max(DEFAULT_END_HOUR, ...all.map(i => Math.ceil(i.endH)));
     return { startHour: Math.max(0, minH), endHour: Math.min(24, maxH) };
-  }, [dayItems]);
+  }, [perDay]);
 
-  const positioned = useMemo(() => layoutDay(dayItems), [dayItems]);
   const hrs = useMemo(() => Array.from({ length: endHour - startHour }, (_, i) => startHour + i), [startHour, endHour]);
   const totalH = SLOT_H * hrs.length;
-
   const nowDate = new Date(now);
-  const isToday = sameLocalDay(nowDate, selectedDate);
   const nowFrac = hourFrac(nowDate);
   const nowPct = ((nowFrac - startHour) / (endHour - startHour)) * 100;
 
@@ -144,95 +217,102 @@ export default function MinutasDayView({ sessions, now, allowDeals, onOpenDetail
     <div className="flex flex-col bg-card border rounded-xl relative">
       {/* Toolbar — mismo patrón que WeeklyCalendar.tsx */}
       <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-card">
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setSelectedDate(d => addDays(d, -1))}>
+        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setWindowStart(d => addDays(d, -DAYS_TO_SHOW))}>
           <ChevronLeft className="w-3.5 h-3.5" />
         </Button>
-        <span className="text-sm font-semibold w-56 text-center select-none">{fmtDayLabel(selectedDate)}</span>
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setSelectedDate(d => addDays(d, 1))}>
+        <span className="text-sm font-semibold w-40 text-center select-none">{fmtRangeLabel(days[0], days[DAYS_TO_SHOW - 1])}</span>
+        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setWindowStart(d => addDays(d, DAYS_TO_SHOW))}>
           <ChevronRight className="w-3.5 h-3.5" />
         </Button>
-        <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => setSelectedDate(new Date())}>Hoy</Button>
+        <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => setWindowStart(startOfDay(new Date()))}>Hoy</Button>
       </div>
 
-      {dayItems.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-12 text-center">No hay juntas este día.</p>
-      ) : (
-        <div className="flex overflow-auto rounded-b-xl" style={{ maxHeight: '70vh' }}>
-          <div style={{ width: TIME_W, flexShrink: 0 }} className="pt-1">
-            {hrs.map(h => (
-              <div key={h} style={{ height: SLOT_H }} className="flex items-start justify-end pr-2">
-                <span className="text-[10px] text-muted-foreground/50 tabular-nums leading-none">{String(h).padStart(2, '0')}:00</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex-1 relative border-l" style={{ height: totalH }}>
-            {hrs.map((h, i) => (
-              <div key={h} style={{ position: 'absolute', top: i * SLOT_H, left: 0, right: 0, height: SLOT_H }} className="border-t border-border/20" />
-            ))}
-            {isToday && nowPct >= 0 && nowPct <= 100 && (
-              <div style={{ position: 'absolute', top: `${nowPct}%`, left: 0, right: 0, zIndex: 15, display: 'flex', alignItems: 'center' }}>
-                <div className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" style={{ marginLeft: -4 }} />
-                <div className="flex-1 h-px bg-destructive" />
-              </div>
-            )}
-            {positioned.map(({ session, startH, endH, column, totalColumns }) => {
-              const startMs = session.start ? new Date(session.start).getTime() : NaN;
-              const endMs = session.end ? new Date(session.end).getTime() : NaN;
-              const isOngoing = !Number.isNaN(startMs) && !Number.isNaN(endMs) && now >= startMs && now <= endMs;
-              const isPast = !Number.isNaN(endMs) && now > endMs;
-              const canAddNotetaker = session.joinUrl && !session.recording && !isPast;
-              const top = ((startH - startHour) / (endHour - startHour)) * 100;
-              const height = Math.max(0.03, (endH - startH) / (endHour - startHour)) * 100;
-              const color = statusColor(session, isOngoing, isPast);
-              const ink = color === GOLD ? '#412402' : '#fff'; // mismo caso que ColorHead en ProjectHubLanding.tsx: gold es demasiado claro para texto blanco
-              const label = statusLabel(session, isOngoing, isPast);
-              const hasActions = canAddNotetaker || session.recording;
-
-              return (
-                <div
-                  key={session.key}
-                  onClick={() => session.recording && onOpenDetail(session.recording.id)}
-                  role={session.recording ? 'button' : undefined}
-                  className={`absolute bg-card border border-border rounded-lg overflow-hidden transition-colors ${session.recording ? 'cursor-pointer hover:border-foreground/30' : ''}`}
-                  style={{
-                    top: `${top}%`, height: `${height}%`, minHeight: hasActions ? 82 : 56,
-                    left: `calc(${(column / totalColumns) * 100}% + 2px)`,
-                    width: `calc(${(1 / totalColumns) * 100}% - 4px)`,
-                    zIndex: 10,
-                  }}
-                >
-                  {/* Header sólido — mismo patrón ColorHead de ProjectHubLanding.tsx: la identidad de color vive en un fondo lleno, no en un tinte ni un borde delgado */}
-                  <div className="flex items-center gap-1 px-1.5 py-0.5" style={{ backgroundColor: color, color: ink }}>
-                    <span className="text-[10px] font-bold truncate">{fmtHour(session.start)}</span>
-                    <span className="text-[9px] font-semibold uppercase tracking-wide truncate ml-auto opacity-90">{label}</span>
-                  </div>
-                  {/* Los botones van primero, justo bajo el header — es lo único que no se debe cortar
-                      en una junta corta; el asunto/proveedor sí pueden sacrificarse si no alcanza el alto. */}
-                  {hasActions && (
-                    <div className="flex items-center gap-1 flex-wrap px-1.5 pt-1" onClick={e => e.stopPropagation()}>
-                      {canAddNotetaker && <AddNotetakerButton session={session} onChanged={onChanged} compact />}
-                      {session.recording && (
-                        <LinkMeetingRecordingPopover
-                          recordingId={session.recording.id}
-                          projectId={session.recording.project?.[0]}
-                          dealId={session.recording.deal?.[0]}
-                          allowDeals={allowDeals}
-                          onLinked={onChanged}
-                          compact
-                        />
-                      )}
-                    </div>
-                  )}
-                  <div className="px-1.5 py-1 flex flex-col gap-0.5">
-                    <p className="text-[11px] font-semibold leading-tight text-foreground truncate">{session.subject}</p>
-                    {session.provider && <span className="text-[9px] uppercase font-semibold text-muted-foreground">{session.provider}</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      <div className="flex rounded-b-xl">
+        <div style={{ width: TIME_W, flexShrink: 0 }} className="pt-[34px]">
+          {hrs.map(h => (
+            <div key={h} style={{ height: SLOT_H }} className="flex items-start justify-end pr-1">
+              <span className="text-[9px] text-muted-foreground/50 tabular-nums leading-none">{String(h).padStart(2, '0')}:00</span>
+            </div>
+          ))}
         </div>
-      )}
+
+        {perDay.map(({ day, items }) => {
+          const isToday = sameLocalDay(day, nowDate);
+          const positioned = layoutDay(items);
+          return (
+            <div key={day.toISOString()} className="flex-1 min-w-0 border-l border-border flex flex-col">
+              <div className={`text-center py-1 border-b border-border ${isToday ? 'bg-primary/5' : ''}`}>
+                <div className="text-[9px] uppercase font-semibold text-muted-foreground">{DAYS_ES[(day.getDay() + 6) % 7]}</div>
+                <div className={`text-xs font-bold ${isToday ? 'text-primary' : 'text-foreground'}`}>{day.getDate()}</div>
+              </div>
+              <div className="relative" style={{ height: totalH }}>
+                {hrs.map((h, i) => (
+                  <div key={h} style={{ position: 'absolute', top: i * SLOT_H, left: 0, right: 0, height: SLOT_H }} className="border-t border-border/20" />
+                ))}
+                {isToday && nowPct >= 0 && nowPct <= 100 && (
+                  <div style={{ position: 'absolute', top: `${nowPct}%`, left: 0, right: 0, zIndex: 15, display: 'flex', alignItems: 'center' }}>
+                    <div className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0" style={{ marginLeft: -3 }} />
+                    <div className="flex-1 h-px bg-destructive" />
+                  </div>
+                )}
+                {positioned.map(({ session, startH, endH, column, totalColumns }) => {
+                  const startMs = session.start ? new Date(session.start).getTime() : NaN;
+                  const endMs = session.end ? new Date(session.end).getTime() : NaN;
+                  const isOngoing = !Number.isNaN(startMs) && !Number.isNaN(endMs) && now >= startMs && now <= endMs;
+                  const isPast = !Number.isNaN(endMs) && now > endMs;
+                  const canAddNotetaker = !!session.joinUrl && !session.recording && !isPast;
+                  const top = ((startH - startHour) / (endHour - startHour)) * 100;
+                  const heightPct = Math.max(0.03, (endH - startH) / (endHour - startHour)) * 100;
+                  const color = statusColor(session, isOngoing, isPast);
+                  const ink = color === GOLD ? '#412402' : '#fff';
+                  const label = statusLabel(session, isOngoing, isPast);
+                  const hasActions = canAddNotetaker || !!session.recording;
+
+                  // La barra siempre es una sola línea de texto truncable —
+                  // nunca se le mete la tarjeta rica adentro, porque a esta
+                  // escala (todo el horario laboral a la vista) la altura real
+                  // de una junta casi nunca alcanza para header+botones+asunto
+                  // sin encimarse con la siguiente. El detalle completo vive
+                  // en el popover, que no está atado al alto de la barra.
+                  const positionStyle = {
+                    top: `${top}%`, height: `${heightPct}%`, minHeight: 15,
+                    left: `calc(${(column / totalColumns) * 100}% + 1px)`,
+                    width: `calc(${(1 / totalColumns) * 100}% - 2px)`,
+                    zIndex: 10,
+                  };
+
+                  const bar = (
+                    <div
+                      className={`w-full h-full flex items-center gap-1 px-1 rounded overflow-hidden text-left ${hasActions ? 'cursor-pointer hover:brightness-95' : ''}`}
+                      style={{ backgroundColor: color, color: ink }}
+                    >
+                      <span className="text-[9px] font-bold truncate shrink-0">{fmtHour(session.start)}</span>
+                      <span className="text-[9px] truncate opacity-90">{session.subject}</span>
+                    </div>
+                  );
+
+                  if (!hasActions) {
+                    return <div key={session.key} className="absolute" style={positionStyle}>{bar}</div>;
+                  }
+
+                  return (
+                    <div key={session.key} className="absolute" style={positionStyle}>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="w-full h-full block">{bar}</button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-0" align="start" onClick={e => e.stopPropagation()}>
+                          <EventCard session={session} color={color} ink={ink} label={label} canAddNotetaker={canAddNotetaker} allowDeals={allowDeals} onOpenDetail={onOpenDetail} onChanged={onChanged} />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
