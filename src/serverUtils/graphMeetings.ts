@@ -33,6 +33,18 @@ export interface CalendarMeeting {
   provider: 'teams' | 'zoom';
 }
 
+// Graph regresa start.dateTime SIN offset ("2026-09-24T16:00:00.0000000") —
+// Date lo interpretaría como hora LOCAL del proceso que lo lee, no UTC (que
+// es lo que Graph realmente manda por default, sin pedir un Prefer:
+// outlook.timezone). Se normaliza AQUÍ, en la única fuente compartida, para
+// que ningún caller nuevo pueda repetir el bug por no acordarse de aplicarlo
+// — "me las mostraba como zona utc 0 y no como hora de cdmx" (Sergio) fue
+// justo eso: getMyMeetingsToday.ts nunca tuvo este fix, aunque
+// getMinutasOverview.ts sí (y de ahí lo tomó cuando se le olvidó a ese otro).
+function toUtcIso(iso: string): string {
+  return new Date(/[Zz]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`).toISOString();
+}
+
 export async function fetchCalendarMeetings(email: string, startDate: Date, endDate: Date): Promise<CalendarMeeting[]> {
   const url = `${graphMailboxBase(email)}/calendar/calendarView?startDateTime=${encodeURIComponent(startDate.toISOString())}&endDateTime=${encodeURIComponent(endDate.toISOString())}&$select=id,subject,start,end,isOnlineMeeting,onlineMeeting,onlineMeetingProvider,body,isCancelled&$top=200`;
   const res = await graphFetch(url);
@@ -46,11 +58,11 @@ export async function fetchCalendarMeetings(email: string, startDate: Date, endD
     .filter(e => !e.isCancelled)
     .map((e): CalendarMeeting | null => {
       if (e.isOnlineMeeting && e.onlineMeeting?.joinUrl) {
-        return { id: e.id, subject: e.subject ?? 'Sin título', start: e.start.dateTime, end: e.end.dateTime, joinUrl: e.onlineMeeting.joinUrl, provider: 'teams' };
+        return { id: e.id, subject: e.subject ?? 'Sin título', start: toUtcIso(e.start.dateTime), end: toUtcIso(e.end.dateTime), joinUrl: e.onlineMeeting.joinUrl, provider: 'teams' };
       }
       const zoomUrl = e.body?.content ? extractZoomUrl(e.body.content) : null;
       if (zoomUrl) {
-        return { id: e.id, subject: e.subject ?? 'Sin título', start: e.start.dateTime, end: e.end.dateTime, joinUrl: zoomUrl, provider: 'zoom' };
+        return { id: e.id, subject: e.subject ?? 'Sin título', start: toUtcIso(e.start.dateTime), end: toUtcIso(e.end.dateTime), joinUrl: zoomUrl, provider: 'zoom' };
       }
       return null;
     })

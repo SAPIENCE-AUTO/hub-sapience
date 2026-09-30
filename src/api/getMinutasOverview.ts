@@ -91,13 +91,11 @@ export default createEndpoint({
     // aquí, solo saber si ya existe.
     const recordings = rawRecordings.map(r => ({ ...r, hasTranscript: !!r.transcript, transcript: undefined }));
 
-    // Graph regresa start.dateTime SIN offset ("2026-09-24T16:00:00.0000000")
-    // — Date lo interpretaría como hora LOCAL del server, no UTC, mientras
-    // que meeting_start en Postgres sí sale con 'Z'. Se normaliza a ISO con
-    // 'Z' tanto para comparar acá como para lo que recibe el cliente — así
-    // el front nunca tiene que lidiar con esta ambigüedad de Graph.
-    const toUtcIso = (iso: string) => new Date(/[Zz]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`).toISOString();
-    const toUtcMs = (iso: string) => new Date(toUtcIso(iso)).getTime();
+    // fetchCalendarMeetings ya normaliza start/end a ISO con 'Z'
+    // (graphMeetings.ts) — Graph los manda sin offset y Date los
+    // interpretaría como hora LOCAL del server si no se corrigiera ahí. Acá
+    // solo hace falta convertir a milisegundos para comparar.
+    const toUtcMs = (iso: string) => new Date(iso).getTime();
 
     const usedRecordingIds = new Set<string>();
     const findRecordingFor = (graphEventId: string, subject: string, start: string) => {
@@ -120,8 +118,8 @@ export default createEndpoint({
       return {
         key: `cal-${m.id}`,
         subject: m.subject,
-        start: toUtcIso(m.start),
-        end: toUtcIso(m.end),
+        start: m.start,
+        end: m.end,
         joinUrl: m.joinUrl,
         provider: m.provider,
         graphEventId: m.id,
