@@ -1,9 +1,8 @@
 import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 
-// Extraído de getMyMeetingsToday.ts (sep 2026) para reusarlo también en
-// getMinutasOverview.ts con un rango de fechas más amplio — mismo query,
-// mismo criterio de extracción de link (Teams estructurado, Zoom por regex
-// en el body porque el add-in de Outlook no lo expone como campo propio).
+// Query compartido por getMinutasOverview.ts — criterio de extracción de
+// link: Teams estructurado, Zoom por regex en el body porque el add-in de
+// Outlook no lo expone como campo propio.
 const ZOOM_URL_RE = /https?:\/\/[\w.-]*zoom\.us\/(?:j|my)\/\S+?(?=["'<\s])/i;
 
 function extractZoomUrl(bodyHtml: string): string | null {
@@ -39,8 +38,7 @@ export interface CalendarMeeting {
 // outlook.timezone). Se normaliza AQUÍ, en la única fuente compartida, para
 // que ningún caller nuevo pueda repetir el bug por no acordarse de aplicarlo
 // — "me las mostraba como zona utc 0 y no como hora de cdmx" (Sergio) fue
-// justo eso: getMyMeetingsToday.ts nunca tuvo este fix, aunque
-// getMinutasOverview.ts sí (y de ahí lo tomó cuando se le olvidó a ese otro).
+// justo eso: un caller anterior de este mismo helper nunca tuvo el fix.
 function toUtcIso(iso: string): string {
   return new Date(/[Zz]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`).toISOString();
 }

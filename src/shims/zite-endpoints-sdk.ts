@@ -271,7 +271,6 @@ export const getMeetingChatHistory = (input?: any): Promise<any> => call('getMee
 export const getMeetingRecordings = (input?: any): Promise<any> => call('getMeetingRecordings', input);
 export const getMessages = (input?: any): Promise<any> => call('getMessages', input);
 export const getMisPendientes = (input?: any): Promise<any> => call('getMisPendientes', input);
-export const getMyMeetingsToday = (input?: any): Promise<any> => call('getMyMeetingsToday', input);
 export const getNotetakerBotStatus = (input?: any): Promise<any> => call('getNotetakerBotStatus', input);
 export const searchMessages = (input?: any): Promise<any> => call('searchMessages', input);
 export const getMigrationLogs = (input?: any): Promise<any> => call('getMigrationLogs', input);

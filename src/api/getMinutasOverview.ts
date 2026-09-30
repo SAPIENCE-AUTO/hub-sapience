@@ -1,7 +1,30 @@
 import { z } from 'zod';
-import { createEndpoint, MeetingRecordings } from '../../server/compat';
+import { createEndpoint, MeetingRecordings, Users, Projects } from '../../server/compat';
 import { fetchCalendarMeetings } from '../serverUtils/graphMeetings';
 import { attemptTranscriptionRecovery } from '../serverUtils/transcriptionRecovery';
+
+const RECORDING_FIELDS = [
+  'graphEventId', 'subject', 'meetingStart', 'meetingEnd', 'status',
+  'muxPlaybackId', 'muxAssetId', 'assemblyTranscriptId', 'transcript', 'project', 'deal', 'updatedAt',
+] as const;
+
+// "de inicio en esa sección puedan ver solo aquellas en las que ellos
+// estuvieron... y ya si está vinculada a un proyecto, pues acceso general"
+// (Sergio) — además de las minutas propias (ownerEmail), cualquiera que sea
+// líder o analista de un proyecto ve TAMBIÉN las minutas ya vinculadas a
+// ese proyecto, aunque no las haya grabado él. Los deals se quedan
+// exactamente como antes (sin ampliar) — es información comercial, mismo
+// criterio que DEAL_LINK_ALLOWED_EMAILS en LinkMeetingRecordingPopover.tsx.
+async function resolveMyProjectIds(email: string): Promise<string[]> {
+  const { records: userRows } = await Users.findAll({ filters: { email }, fields: ['id'], limit: 1 });
+  const userId = userRows[0]?.id;
+  if (!userId) return [];
+
+  const { records: projects } = await Projects.findAll({ fields: ['lider', 'analistas'], limit: 2000 });
+  return projects
+    .filter(p => p.lider === userId || (p.analistas ?? []).includes(userId))
+    .map(p => p.id);
+}
 
 const recordingSummarySchema = z.object({
   id: z.string(),
@@ -39,14 +62,13 @@ const STUCK_RETRY_COOLDOWN_MS = 3 * 60 * 1000;
 
 // Minutas / notetaker (sep 2026): "apartado de minutas donde vengan todas
 // las sesiones (pasadas, ongoing y futuras)... si ya está vinculada... o
-// vincular ahí mismo" (Sergio) — fusiona el calendario real (Graph, mismo
-// query que getMyMeetingsToday.ts pero en un rango más amplio) con las
-// filas de meeting_recordings del usuario, para que todo viva en un solo
-// lugar en vez de repartido entre "Mis juntas de hoy" y "Minutas sin
-// vincular". Correlaciona por graphEventId cuando existe (filas nuevas); las
-// filas viejas o subidas a mano, sin ese campo, se muestran como sesiones
-// propias sin intentar adivinar a qué evento de calendario pertenecen — es
-// mejor mostrarlas de más que perderlas.
+// vincular ahí mismo" (Sergio) — fusiona el calendario real (Graph) con las
+// filas de meeting_recordings propias y las de proyectos donde el usuario es
+// líder/analista, para que todo viva en un solo lugar. Correlaciona por
+// graphEventId cuando existe (filas nuevas); las filas viejas o subidas a
+// mano, sin ese campo, se muestran como sesiones propias sin intentar
+// adivinar a qué evento de calendario pertenecen — es mejor mostrarlas de
+// más que perderlas.
 export default createEndpoint({
   authenticated: true,
   description: 'Vista unificada de minutas: calendario (pasado/hoy/futuro) + grabaciones propias, con su estado de vínculo',
@@ -58,24 +80,23 @@ export default createEndpoint({
     const rangeStart = new Date(now.getTime() - DAYS_PAST * 24 * 60 * 60 * 1000);
     const rangeEnd = new Date(now.getTime() + DAYS_FUTURE * 24 * 60 * 60 * 1000);
 
-    const [calendarMeetings, { records: rawRecordings }] = await Promise.all([
+    const [calendarMeetings, { records: ownRecordings }, myProjectIds] = await Promise.all([
       fetchCalendarMeetings(email, rangeStart, rangeEnd).catch(() => []),
       MeetingRecordings.findAll({
         filters: { ownerEmail: email },
         sorts: [{ field: 'createdAt', direction: 'desc' }],
-        fields: [
-          'graphEventId', 'subject', 'meetingStart', 'meetingEnd', 'status',
-          'muxPlaybackId', 'muxAssetId', 'assemblyTranscriptId', 'transcript', 'project', 'deal', 'updatedAt',
-        ],
+        fields: [...RECORDING_FIELDS],
       }),
+      resolveMyProjectIds(email).catch(() => [] as string[]),
     ]);
 
-    // Self-heal: video listo, sin transcripción, y ya sea que quedó
-    // marcada explícitamente en error o simplemente lleva demasiado sin
-    // avanzar — se reintenta en segundo plano (fire-and-forget, nunca
-    // bloquea esta respuesta). Mismo mecanismo que el botón manual de
+    // Self-heal solo sobre las propias — si alguien más del equipo abre
+    // Minutas y ve una minuta ajena vinculada a su proyecto, no hace falta
+    // que TAMBIÉN dispare su propio intento de recuperación (el cooldown ya
+    // lo evita en parte, pero mejor ni arriesgar llamadas redundantes a
+    // AssemblyAI). Mismo mecanismo que el botón manual de
     // retryMeetingTranscription.ts.
-    for (const r of rawRecordings) {
+    for (const r of ownRecordings) {
       const staleEnough = r.updatedAt && Date.now() - new Date(r.updatedAt).getTime() > STUCK_RETRY_COOLDOWN_MS;
       const stuck = r.muxPlaybackId && r.muxAssetId && !r.assemblyTranscriptId && !r.transcript &&
         (r.status === 'transcription_error' || staleEnough);
@@ -85,6 +106,17 @@ export default createEndpoint({
         );
       }
     }
+
+    const { records: teamRecordings } = myProjectIds.length > 0
+      ? await MeetingRecordings.findAll({
+          filters: { project: { in: myProjectIds } as any },
+          sorts: [{ field: 'createdAt', direction: 'desc' }],
+          fields: [...RECORDING_FIELDS],
+        })
+      : { records: [] as typeof ownRecordings };
+
+    const ownIds = new Set(ownRecordings.map(r => r.id));
+    const rawRecordings = [...ownRecordings, ...teamRecordings.filter(r => !ownIds.has(r.id))];
 
     // Payload liviano a propósito: esta vista es una lista, no el detalle —
     // el transcript completo (puede ser texto larguísimo) nunca se necesita

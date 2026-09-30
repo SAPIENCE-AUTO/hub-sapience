@@ -117,7 +117,7 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ALL_ROLES,
     items: [
       { to: '/operacion/proyectos', icon: FolderKanban, label: 'Proyectos' },
-      { to: '/minutas', icon: Video, label: 'Minutas', emails: ['sergio@sapience.com.mx'] },
+      { to: '/minutas', icon: Video, label: 'Minutas' },
       { to: '/sharpli', icon: SharpliIcon, label: 'Sharpli' },
     ],
   },

@@ -17,7 +17,6 @@ import UpcomingEvents from '../components/dashboard/UpcomingEvents';
 import RecruitmentDashboard from '../components/dashboard/RecruitmentDashboard';
 import InvoiceWidget from '../components/dashboard/InvoiceWidget';
 import DraggableWidgetGrid from '../components/dashboard/DraggableWidgetGrid';
-import MyMeetingsToday from '../components/dashboard/MyMeetingsToday';
 import { buildLayout, LayoutItem, WidgetSize } from '../components/dashboard/widgetConfig';
 
 type DashData = GetDashboardDataOutputType;
@@ -292,10 +291,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Piloto notetaker (sep 2026) — acotado a Sergio mientras se prueba la
-          mecánica básica; fuera del sistema de widgets configurable a
-          propósito, ver comentario en MyMeetingsToday.tsx. */}
-      {user?.email === 'sergio@sapience.com.mx' && <MyMeetingsToday />}
 
       {/* Widget grid */}
       {widgetLayout.length > 0 && (

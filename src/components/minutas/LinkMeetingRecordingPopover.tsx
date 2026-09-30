@@ -35,12 +35,13 @@ const TYPE_COLOR: Record<string, string> = {
 // no sea Sergio o Luis, tanto la opción como el resultado si ya estaba
 // vinculada a uno (mejor no mostrar el nombre del deal a quien no debería
 // verlo, aunque ya esté vinculado).
-export default function LinkMeetingRecordingPopover({ recordingId, projectId, dealId, allowDeals, onLinked }: {
+export default function LinkMeetingRecordingPopover({ recordingId, projectId, dealId, allowDeals, onLinked, compact }: {
   recordingId: string;
   projectId?: string;
   dealId?: string;
   allowDeals: boolean;
   onLinked?: () => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -103,7 +104,9 @@ export default function LinkMeetingRecordingPopover({ recordingId, projectId, de
   // no se le enseña ni el botón de "vincular" (cambiar algo que no puede
   // ver sería más confuso que útil) ni el nombre.
   if (dealId && !allowDeals) {
-    return <span className="text-xs text-muted-foreground">Vinculada a un deal</span>;
+    return compact
+      ? <Check className="h-3.5 w-3.5 text-emerald-600" aria-label="Vinculada a un deal" />
+      : <span className="text-xs text-muted-foreground">Vinculada a un deal</span>;
   }
 
   const filtered = (options ?? []).filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
@@ -116,15 +119,31 @@ export default function LinkMeetingRecordingPopover({ recordingId, projectId, de
   return (
     <Popover open={open} onOpenChange={o => { setOpen(o); if (o) loadOptions(); }}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant={isLinked ? 'ghost' : 'outline'} className="h-7 text-xs gap-1.5" disabled={linking}>
-          {linking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isLinked ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Link2 className="h-3.5 w-3.5" />}
-          {isLinked ? (
-            <span className="flex items-center gap-1">
-              {currentOption?.label ?? 'Vinculada'}
-              <span className={`font-normal ${linkedType ? TYPE_COLOR[linkedType] : 'text-muted-foreground'}`}>· {linkedType}</span>
-            </span>
-          ) : 'Vincular a proyecto/deal'}
-        </Button>
+        {compact ? (
+          <button
+            onClick={e => e.stopPropagation()}
+            disabled={linking}
+            title={isLinked ? `Vinculada a ${currentOption?.label ?? linkedType}` : 'Vincular a proyecto o deal'}
+            className={`flex items-center gap-1 h-5 px-1.5 rounded border text-[9px] font-semibold shrink-0 max-w-[110px] disabled:opacity-50 ${
+              isLinked
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/15'
+                : 'bg-background border-border text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            {linking ? <Loader2 className="h-2.5 w-2.5 animate-spin shrink-0" /> : isLinked ? <Check className="h-2.5 w-2.5 shrink-0" /> : <Link2 className="h-2.5 w-2.5 shrink-0" />}
+            <span className="truncate">{isLinked ? (currentOption?.label ?? linkedType) : 'Vincular'}</span>
+          </button>
+        ) : (
+          <Button size="sm" variant={isLinked ? 'ghost' : 'outline'} className="h-7 text-xs gap-1.5" disabled={linking}>
+            {linking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isLinked ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Link2 className="h-3.5 w-3.5" />}
+            {isLinked ? (
+              <span className="flex items-center gap-1">
+                {currentOption?.label ?? 'Vinculada'}
+                <span className={`font-normal ${linkedType ? TYPE_COLOR[linkedType] : 'text-muted-foreground'}`}>· {linkedType}</span>
+              </span>
+            ) : 'Vincular a proyecto/deal'}
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
         <Command shouldFilter={false}>

@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from 'zite-auth-sdk';
-import { getMinutasOverview, getMeetingRecordings, addNotetakerToMeeting } from 'zite-endpoints-sdk';
-import { Video, Loader2, Clock } from 'lucide-react';
+import { getMinutasOverview, getMeetingRecordings } from 'zite-endpoints-sdk';
+import { Video, Loader2, Clock, List, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import MeetingPipelineSteps from '../components/minutas/MeetingPipelineSteps';
 import LinkMeetingRecordingPopover, { DEAL_LINK_ALLOWED_EMAILS } from '../components/minutas/LinkMeetingRecordingPopover';
 import MeetingRecordingDetailDialog, { type MeetingRecording } from '../components/minutas/MeetingRecordingDetailDialog';
+import AddNotetakerButton from '../components/minutas/AddNotetakerButton';
+import MinutasDayView from '../components/minutas/MinutasDayView';
 
-interface RecordingSummary {
+export interface RecordingSummary {
   id: string;
   status?: string;
   muxPlaybackId?: string;
@@ -17,7 +19,7 @@ interface RecordingSummary {
   deal?: string[];
 }
 
-interface Session {
+export interface Session {
   key: string;
   subject: string;
   start: string;
@@ -27,6 +29,8 @@ interface Session {
   graphEventId?: string;
   recording?: RecordingSummary;
 }
+
+type ViewMode = 'list' | 'day';
 
 function formatDateTime(iso: string) {
   if (!iso) return '';
@@ -40,31 +44,11 @@ function SessionRow({ session, now, allowDeals, onOpenDetail, onChanged }: {
   onOpenDetail: (recordingId: string) => void;
   onChanged: () => void;
 }) {
-  const [sending, setSending] = useState(false);
   const startMs = session.start ? new Date(session.start).getTime() : NaN;
   const endMs = session.end ? new Date(session.end).getTime() : NaN;
   const isOngoing = !Number.isNaN(startMs) && !Number.isNaN(endMs) && now >= startMs && now <= endMs;
   const isPast = !Number.isNaN(endMs) && now > endMs;
   const canAddNotetaker = session.joinUrl && !session.recording && !isPast;
-
-  const handleAdd = async () => {
-    setSending(true);
-    try {
-      await addNotetakerToMeeting({
-        meetingUrl: session.joinUrl,
-        subject: session.subject,
-        meetingStart: session.start,
-        meetingEnd: session.end,
-        graphEventId: session.graphEventId,
-      });
-      toast.success('Notetaker enviado a la junta');
-      onChanged();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'No se pudo agregar el notetaker');
-    } finally {
-      setSending(false);
-    }
-  };
 
   return (
     <div className={`bg-card border rounded-lg p-3 flex items-center justify-between gap-3 ${isOngoing ? 'border-primary/50 bg-primary/5' : 'border-border'}`}>
@@ -101,16 +85,7 @@ function SessionRow({ session, now, allowDeals, onOpenDetail, onChanged }: {
             onLinked={onChanged}
           />
         )}
-        {canAddNotetaker && (
-          <button
-            onClick={handleAdd}
-            disabled={sending}
-            className="flex items-center gap-1.5 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 px-2.5 py-1.5 rounded-md"
-          >
-            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Video className="w-3.5 h-3.5" />}
-            Agregar notetaker
-          </button>
-        )}
+        {canAddNotetaker && <AddNotetakerButton session={session} onChanged={onChanged} />}
       </div>
     </div>
   );
@@ -120,9 +95,10 @@ function SessionRow({ session, now, allowDeals, onOpenDetail, onChanged }: {
 // todas las sesiones (pasadas, ongoing y futuras)... diga si ya está
 // vinculada... o vincular ahí mismo" (Sergio) — reemplaza los widgets
 // sueltos del Dashboard (Mis juntas de hoy + Minutas sin vincular) con una
-// sola vista. Acotado a sergio@sapience.com.mx en el nav (Layout.tsx),
-// mismo alcance que el resto del piloto — los datos ya vienen filtrados por
-// usuario desde el propio endpoint (context.user.email).
+// sola vista, ya visible para todo el equipo en el nav (Layout.tsx). El
+// alcance de qué ve cada quien (propias + las de sus proyectos como
+// líder/analista) lo resuelve getMinutasOverview.ts del lado del servidor,
+// no esta página.
 export default function MinutasPage() {
   const { user } = useAuth();
   const allowDeals = !!user?.email && DEAL_LINK_ALLOWED_EMAILS.includes(user.email);
@@ -130,6 +106,14 @@ export default function MinutasPage() {
   const [now, setNow] = useState(() => Date.now());
   const [selectedRecording, setSelectedRecording] = useState<MeetingRecording | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try { return (localStorage.getItem('minutas-view') as ViewMode) ?? 'list'; } catch { return 'list'; }
+  });
+
+  const handleViewMode = (v: ViewMode) => {
+    setViewMode(v);
+    try { localStorage.setItem('minutas-view', v); } catch {}
+  };
 
   const fetchSessions = useCallback(() => {
     getMinutasOverview({}).then(res => setSessions(res.sessions)).catch(() => setSessions(prev => prev ?? []));
@@ -160,15 +144,33 @@ export default function MinutasPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-4">
-      <div>
-        <h1 className="text-xl font-bold">Minutas</h1>
-        <p className="text-sm text-muted-foreground">Tus juntas de los últimos 7 días y próximas 2 semanas — con o sin grabación.</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold">Minutas</h1>
+          <p className="text-sm text-muted-foreground">Tus juntas de los últimos 7 días y próximas 2 semanas — con o sin grabación.</p>
+        </div>
+        <div className="flex items-center rounded-md border border-border overflow-hidden shrink-0">
+          <button
+            onClick={() => handleViewMode('list')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
+          >
+            <List className="w-3.5 h-3.5" /> Lista
+          </button>
+          <button
+            onClick={() => handleViewMode('day')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border-l border-border transition-colors ${viewMode === 'day' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted'}`}
+          >
+            <CalendarDays className="w-3.5 h-3.5" /> Calendario
+          </button>
+        </div>
       </div>
 
       {sessions === null ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
           <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
         </div>
+      ) : viewMode === 'day' ? (
+        <MinutasDayView sessions={sessions} now={now} allowDeals={allowDeals} onOpenDetail={openDetail} onChanged={fetchSessions} />
       ) : sessions.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">No hay juntas en este rango de fechas.</p>
       ) : (
