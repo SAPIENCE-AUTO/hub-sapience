@@ -1,14 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useAuth } from 'zite-auth-sdk';
-import { getProjectBudget, GetProjectBudgetOutputType } from 'zite-endpoints-sdk';
+import { getProjectBudget, linkProjectDeal, GetProjectBudgetOutputType } from 'zite-endpoints-sdk';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { ChevronDown, ChevronUp, User, Wallet } from 'lucide-react';
+import { toast } from 'sonner';
 import LinkProjectDealDialog from './LinkProjectDealDialog';
 
-// Vincular un proyecto a un deal (y elegir qué rubros de presupuesto son
-// visibles) es exclusivo de Sergio — ver linkProjectDeal.ts, que también
-// valida esto del lado del servidor. Este gate de UI es solo cosmético.
+// Vincular un proyecto a un deal, y controlar qué rubros/sub-rubros de
+// presupuesto son visibles, es exclusivo de Sergio — ver linkProjectDeal.ts,
+// que también valida esto del lado del servidor. Este gate de UI es solo
+// cosmético.
 const LINK_DEAL_ALLOWED_EMAILS = ['sergio@sapience.com.mx'];
 
 type BudgetData = GetProjectBudgetOutputType;
@@ -17,6 +20,23 @@ type RubroData = BudgetData['rubros'][0];
 function fmtAmt(v: number, currency: string) {
   const sym = currency === 'USD' ? 'USD ' : currency === 'EUR' ? 'EUR ' : '$';
   return `${sym}${v.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Cada entrada guardada es o el nombre del rubro completo ("Reclutamiento e
+// incentivos" — todo visible) o "Rubro::SubRubro" (solo esa línea puntual) —
+// mismo formato que consume getProjectBudget.ts.
+function subKey(rubro: string, subRubro: string): string {
+  return `${rubro}::${subRubro}`;
+}
+
+function dedupSubRubros(items: { subRubro: string }[]): string[] {
+  const seen = new Set<string>();
+  const list: string[] = [];
+  for (const li of items) {
+    const sr = li.subRubro ?? '';
+    if (!seen.has(sr)) { seen.add(sr); list.push(sr); }
+  }
+  return list;
 }
 
 function SummaryCard({ label, value, sub }: { label: string; value: string; sub?: boolean }) {
@@ -28,13 +48,27 @@ function SummaryCard({ label, value, sub }: { label: string; value: string; sub?
   );
 }
 
-function RubroBlock({ rubro, currency }: { rubro: RubroData; currency: string }) {
+function RubroBlock({ rubro, currency, canEdit, visible, onToggleWhole, onToggleSub }: {
+  rubro: RubroData;
+  currency: string;
+  canEdit: boolean;
+  visible: Set<string>;
+  onToggleWhole: (rubro: string, allSubKeys: string[], isCurrentlyOn: boolean) => void;
+  onToggleSub: (rubro: string, allSubKeys: string[], key: string) => void;
+}) {
   const [open, setOpen] = useState(true);
+  const subRubros = dedupSubRubros(rubro.lineItems);
+  const allSubKeys = subRubros.map(sr => subKey(rubro.rubroName, sr));
+  const allOn = visible.has(rubro.rubroName) || (allSubKeys.length > 0 && allSubKeys.every(k => visible.has(k)));
+
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-4 py-3.5 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setOpen(o => !o); }}
+        className="w-full flex items-center gap-3 px-4 py-3.5 bg-muted/20 hover:bg-muted/40 transition-colors text-left cursor-pointer"
       >
         <div className="flex-1 min-w-0">
           <span className="font-semibold text-sm">{rubro.rubroName}</span>
@@ -48,6 +82,11 @@ function RubroBlock({ rubro, currency }: { rubro: RubroData; currency: string })
             </div>
           )}
         </div>
+        {canEdit && (
+          <span onClick={e => e.stopPropagation()} title="Visible para quien tenga este rubro asignado" className="flex-shrink-0">
+            <Switch checked={allOn} onCheckedChange={() => onToggleWhole(rubro.rubroName, allSubKeys, allOn)} />
+          </span>
+        )}
         <span className="text-sm font-bold text-primary tabular-nums flex-shrink-0">
           {fmtAmt(rubro.subtotalCotizado, currency)}
         </span>
@@ -55,15 +94,15 @@ function RubroBlock({ rubro, currency }: { rubro: RubroData; currency: string })
           ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
         }
-      </button>
+      </div>
 
       {open && (
         <div className="overflow-x-auto border-t border-border">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/30 border-b border-border">
-                {['Sub-rubro', 'Cant.', 'Comp.', 'P. Unitario', 'Total'].map((h, i) => (
-                  <th key={h} className={`px-4 py-2 text-xs font-semibold text-muted-foreground ${i > 0 ? 'text-right' : 'text-left'}`}>{h}</th>
+                {[...(canEdit ? ['Visible'] : []), 'Sub-rubro', 'Cant.', 'Comp.', 'P. Unitario', 'Total'].map((h, i) => (
+                  <th key={h} className={`px-4 py-2 text-xs font-semibold text-muted-foreground ${i > (canEdit ? 1 : 0) ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -76,31 +115,41 @@ function RubroBlock({ rubro, currency }: { rubro: RubroData; currency: string })
                   groups.get(key)!.push(li);
                 }
                 const showSubheaders = groups.size > 1;
+                const colSpan = canEdit ? 6 : 5;
                 return [...groups.entries()].map(([cotName, items]) => (
-                  <>
+                  <Fragment key={cotName}>
                     {showSubheaders && (
-                      <tr key={`hdr-${cotName}`}>
-                        <td colSpan={5} className="px-4 py-1 text-[10px] font-semibold text-muted-foreground bg-muted/30">
+                      <tr>
+                        <td colSpan={colSpan} className="px-4 py-1 text-[10px] font-semibold text-muted-foreground bg-muted/30">
                           {cotName}
                         </td>
                       </tr>
                     )}
-                    {items.map(li => (
-                      <tr key={li.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-4 py-2.5 font-medium">{li.subRubro || '—'}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{li.cantidad}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{li.componentes}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{fmtAmt(li.unitCost, currency)}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fmtAmt(li.total, currency)}</td>
-                      </tr>
-                    ))}
-                  </>
+                    {items.map(li => {
+                      const key = subKey(rubro.rubroName, li.subRubro ?? '');
+                      const on = visible.has(rubro.rubroName) || visible.has(key);
+                      return (
+                        <tr key={li.id} className="hover:bg-muted/20 transition-colors">
+                          {canEdit && (
+                            <td className="px-4 py-2.5">
+                              <Switch className="scale-90" checked={on} onCheckedChange={() => onToggleSub(rubro.rubroName, allSubKeys, key)} />
+                            </td>
+                          )}
+                          <td className="px-4 py-2.5 font-medium">{li.subRubro || '—'}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{li.cantidad}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{li.componentes}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{fmtAmt(li.unitCost, currency)}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fmtAmt(li.total, currency)}</td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
                 ));
               })()}
             </tbody>
             <tfoot>
               <tr className="border-t border-border bg-muted/20">
-                <td colSpan={4} className="px-4 py-2.5 text-xs font-semibold text-right text-muted-foreground">Subtotal</td>
+                <td colSpan={canEdit ? 5 : 4} className="px-4 py-2.5 text-xs font-semibold text-right text-muted-foreground">Subtotal</td>
                 <td className="px-4 py-2.5 text-right font-bold text-primary tabular-nums">{fmtAmt(rubro.subtotalCotizado, currency)}</td>
               </tr>
             </tfoot>
@@ -115,15 +164,64 @@ export default function ProjectBudgetTab({ projectCode }: { projectCode: string 
   const { user } = useAuth();
   const [data, setData] = useState<BudgetData | null>(null);
   const [loading, setLoading] = useState(true);
+  // Qué queda visible por rubro/sub-rubro para este proyecto — ver
+  // linkProjectDeal.ts. Se guarda solo (sin botón "Guardar") en cuanto Sergio
+  // prende/apaga un switch aquí mismo, en la pestaña, en vez de tener que
+  // abrir el diálogo de "Vincular a Deal" cada vez.
+  const [visible, setVisible] = useState<Set<string>>(new Set());
   const canLinkDeal = !!(user as { email?: string } | null)?.email && LINK_DEAL_ALLOWED_EMAILS.includes((user as { email?: string }).email!);
 
   const load = useCallback(() => {
     if (!projectCode) return;
     setLoading(true);
-    getProjectBudget({ projectCode }).then(setData).catch(() => {}).finally(() => setLoading(false));
+    getProjectBudget({ projectCode }).then(d => {
+      setData(d);
+      // Sin configurar todavía (null) el estado real hoy es "todo visible"
+      // para quien tenga el rubro asignado — se siembra el set con cada
+      // rubro completo para que los switches arranquen reflejando eso, en
+      // vez de arrancar apagados y verse como si ya estuviera todo oculto.
+      setVisible(d.visibleBudgetRubros != null ? new Set(d.visibleBudgetRubros) : new Set(d.rubros.map((r: RubroData) => r.rubroName)));
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [projectCode]);
 
   useEffect(() => { load(); }, [load]);
+
+  const persist = async (next: Set<string>) => {
+    const prev = visible;
+    setVisible(next); // optimista
+    try {
+      await linkProjectDeal({ projectId: data!.projectId, dealId: data!.dealId, visibleRubros: [...next] });
+    } catch (e) {
+      setVisible(prev);
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar la visibilidad');
+    }
+  };
+
+  const toggleWhole = (rubro: string, allSubKeys: string[], isCurrentlyOn: boolean) => {
+    const next = new Set(visible);
+    next.delete(rubro);
+    allSubKeys.forEach(k => next.delete(k));
+    if (!isCurrentlyOn) {
+      if (allSubKeys.length === 0) next.add(rubro);
+      else allSubKeys.forEach(k => next.add(k));
+    }
+    persist(next);
+  };
+
+  const toggleSub = (rubro: string, allSubKeys: string[], key: string) => {
+    const next = new Set(visible);
+    if (next.has(rubro)) {
+      // estaba en modo "todo el rubro" — expandir a granular, todas
+      // encendidas menos la que se acaba de tocar.
+      next.delete(rubro);
+      allSubKeys.forEach(k => { if (k !== key) next.add(k); });
+    } else if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+    persist(next);
+  };
 
   if (loading) return (
     <div className="p-6 space-y-4 max-w-4xl">
@@ -142,30 +240,18 @@ export default function ProjectBudgetTab({ projectCode }: { projectCode: string 
         Este proyecto no tiene cotizaciones incluidas con líneas de presupuesto, o no tienes acceso a ningún rubro.
       </p>
       {canLinkDeal && data?.projectId && (
-        <LinkProjectDealDialog
-          projectId={data.projectId}
-          currentDealId={data.dealId}
-          currentVisibleRubros={data.visibleBudgetRubros ?? null}
-          rubros={data.rubros}
-          onLinked={load}
-        />
+        <LinkProjectDealDialog projectId={data.projectId} currentDealId={data.dealId} onLinked={load} />
       )}
     </div>
   );
 
-  const { currency, rubros, totals, canSeeAll, projectId, dealId, visibleBudgetRubros } = data;
+  const { currency, rubros, totals, canSeeAll, projectId, dealId } = data;
 
   return (
     <div className="p-6 space-y-5 max-w-4xl">
       {canLinkDeal && projectId && (
         <div className="flex justify-end">
-          <LinkProjectDealDialog
-            projectId={projectId}
-            currentDealId={dealId}
-            currentVisibleRubros={visibleBudgetRubros ?? null}
-            rubros={rubros}
-            onLinked={load}
-          />
+          <LinkProjectDealDialog projectId={projectId} currentDealId={dealId} onLinked={load} />
         </div>
       )}
 
@@ -177,7 +263,17 @@ export default function ProjectBudgetTab({ projectCode }: { projectCode: string 
       )}
 
       <div className="space-y-3">
-        {rubros.map(rubro => <RubroBlock key={rubro.rubroName} rubro={rubro} currency={currency} />)}
+        {rubros.map(rubro => (
+          <RubroBlock
+            key={rubro.rubroName}
+            rubro={rubro}
+            currency={currency}
+            canEdit={canLinkDeal}
+            visible={visible}
+            onToggleWhole={toggleWhole}
+            onToggleSub={toggleSub}
+          />
+        ))}
       </div>
     </div>
   );
