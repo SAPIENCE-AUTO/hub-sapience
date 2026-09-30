@@ -22,6 +22,14 @@ export default createEndpoint({
     visiblePages: z.array(z.string()).optional(),
     dashboardWidgets: z.array(z.string()).optional(),
     homePage: z.string().optional(),
+    // Sin esto, zod descarta el campo en silencio (no truena, solo lo quita
+    // del output) porque un z.object() por default tira cualquier llave no
+    // declarada — canSeeBudget en ProjectHubPage.tsx siempre veía
+    // user.cotizacionRubros como undefined para cualquiera que no fuera
+    // Owner/Socio/Finanzas, aunque el campo sí existiera en la base (bug
+    // real: Itzel ya tenía "Reclutamiento e incentivos" marcado y aun así no
+    // le aparecía la pestaña Presupuesto).
+    cotizacionRubros: z.array(z.string()).optional(),
   }),
   execute: async ({ context }) => ({ ...context.user! }) as any,
 });

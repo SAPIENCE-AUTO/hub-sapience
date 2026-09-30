@@ -43,6 +43,7 @@ export interface AuthUser {
   accessAdmin?: string;
   accessFinanzas?: string;
   accessOtros?: string;
+  cotizacionRubros?: string[];
   maxApprovalAmount?: number;
   costCenters?: string[];
   /** Ruta a la que redirige "/" para este usuario en vez del default global. */
