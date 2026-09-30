@@ -8,16 +8,15 @@ import LinkMeetingRecordingPopover from './LinkMeetingRecordingPopover';
 import { GOLD, INFO, EXITO, ALERTA, PELIGRO, GRIS } from '../../lib/toolColors';
 import type { Session } from '../../pages/MinutasPage';
 
-// "debe verse a golpe de vista todo el horario laboral" (Sergio) — 3 días
-// lado a lado, escala comprimida (44px/hora) para que 8am-7pm quepa sin
-// scroll. A esa escala una junta de 30 min mide ~22px: no alcanza para
-// header + botón + asunto (eso necesita ~80px, ver EventCard), así que la
-// mayoría de las juntas se muestran como una sola línea de color (igual que
-// Google/Outlook en su vista de día) y el detalle completo con las acciones
-// vive en un popover al hacer click — mismo patrón que ya usa
-// LinkMeetingRecordingPopover, no una UI nueva.
-const DAYS_TO_SHOW = 3;
-const SLOT_H = 44;
+// "verlo de golpe toda la semana emulando un calendario de Outlook" (Sergio,
+// tras aprobar que el detalle viva en un popover) — semana completa
+// (Lun-Dom, mismo criterio de inicio de semana que WeeklyCalendar.tsx),
+// escala un poco más alta que la primera versión de 3 días (56px/hora en
+// vez de 44) ya que el popover se hizo cargo del contenido rico: la barra
+// solo necesita mostrar una línea de texto, así que ganar altura no vuelve
+// a arriesgar encimados.
+const DAYS_TO_SHOW = 7;
+const SLOT_H = 56;
 const TIME_W = 44;
 const DEFAULT_START_HOUR = 8;
 const DEFAULT_END_HOUR = 19;
@@ -30,6 +29,14 @@ function addDays(d: Date, n: number): Date {
 
 function startOfDay(d: Date): Date {
   const r = new Date(d); r.setHours(0, 0, 0, 0); return r;
+}
+
+// Mismo criterio que getMonday() en WeeklyCalendar.tsx — semana Lun-Dom.
+function startOfWeek(d: Date): Date {
+  const r = startOfDay(d);
+  const day = r.getDay();
+  r.setDate(r.getDate() - (day === 0 ? 6 : day - 1));
+  return r;
 }
 
 function sameLocalDay(a: Date, b: Date): boolean {
@@ -183,7 +190,7 @@ export default function MinutasDayView({ sessions, now, allowDeals, onOpenDetail
   onOpenDetail: (recordingId: string) => void;
   onChanged: () => void;
 }) {
-  const [windowStart, setWindowStart] = useState(() => startOfDay(new Date()));
+  const [windowStart, setWindowStart] = useState(() => startOfWeek(new Date()));
   const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(windowStart, i)), [windowStart]);
 
   const perDay = useMemo(() => {
@@ -224,7 +231,7 @@ export default function MinutasDayView({ sessions, now, allowDeals, onOpenDetail
         <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setWindowStart(d => addDays(d, DAYS_TO_SHOW))}>
           <ChevronRight className="w-3.5 h-3.5" />
         </Button>
-        <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => setWindowStart(startOfDay(new Date()))}>Hoy</Button>
+        <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => setWindowStart(startOfWeek(new Date()))}>Hoy</Button>
       </div>
 
       <div className="flex rounded-b-xl">

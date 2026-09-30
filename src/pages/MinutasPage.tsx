@@ -143,7 +143,7 @@ export default function MinutasPage() {
   };
 
   return (
-    <div className={`mx-auto p-6 space-y-4 ${viewMode === 'day' ? 'max-w-6xl' : 'max-w-4xl'}`}>
+    <div className={`mx-auto p-6 space-y-4 ${viewMode === 'day' ? 'max-w-[1400px]' : 'max-w-4xl'}`}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold">Notetaker</h1>
