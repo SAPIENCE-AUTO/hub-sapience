@@ -58,6 +58,15 @@ services:
         sync: false
       - key: ZITE_FILLOUT_API_KEY
         sync: false
+      # URL pública de este mismo servicio + /api/filloutNativeWebhook — sin
+      # esto, linkFilloutForm.ts no registra el webhook con Fillout y la app
+      # sigue funcionando igual que antes (solo con el polling de
+      # checkNewSubmissions cada ~45s mientras alguien tenga el tablero
+      # abierto). Valor:
+      # https://hub-sapience-api.onrender.com/api/filloutNativeWebhook (no se
+      # puede configurar contra localhost — Fillout no alcanza tu máquina).
+      - key: ZITE_FILLOUT_WEBHOOK_URL
+        sync: false
       - key: ZITE_GOOGLE_MAPS_API_KEY
         sync: false
       - key: ZITE_GOOGLE_VISION_API_KEY

@@ -161,6 +161,19 @@ export default createEndpoint({
 
     for (const oldLink of oldLinks) {
       try {
+        const oldMeta = JSON.parse(oldLink.optionsJson ?? '{}');
+        // Sin esto, cada re-link (mismo botón de siempre, sin importar si ya
+        // estaba vinculado) deja un webhook huérfano registrado en Fillout
+        // apuntando a un sentinel ya borrado — se acumulan en silencio.
+        if (oldMeta.webhookId && apiKey) {
+          await fetch('https://api.fillout.com/v1/api/webhook/delete', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ webhookId: oldMeta.webhookId }),
+          }).catch(() => { /* best-effort, no bloquea el re-link */ });
+        }
+      } catch { /* ignore */ }
+      try {
         await BoardColumns.update({
           id: oldLink.id,
           record: { deletedAt: new Date().toISOString(), deletedBy },
@@ -270,7 +283,40 @@ export default createEndpoint({
       if (colId) questionMapping.push({ filloutId: q.id, columnId: colId, questionName: name });
     }
 
-    // ── 6. Store linkage as a hidden sentinel column ───────────────────────
+    // ── 6. Registrar el webhook real en Fillout ─────────────────────────────
+    // "el vínculo... debería refrescarse/actualizarse solito no?" (Sergio) —
+    // antes esto era un stub (webhookRegistered siempre false, comentario
+    // "not supported in this architecture") heredado del export original de
+    // Zite, donde no había una URL pública estable a la que Fillout pudiera
+    // mandarle el POST. En Render sí la hay — ZITE_FILLOUT_WEBHOOK_URL apunta
+    // a filloutNativeWebhook.ts, que ya sabía recibir submissions reales
+    // (incidente ELÁSTICO/CHILE) pero nunca tuvo quién se las mandara. Sin
+    // esta variable configurada (dev local, donde Fillout no puede alcanzar
+    // localhost) se omite sin tronar — el polling de checkNewSubmissions
+    // sigue funcionando igual como respaldo.
+    const webhookTargetUrl = process.env.ZITE_FILLOUT_WEBHOOK_URL ?? '';
+    let webhookId: number | undefined;
+    let webhookRegistered = false;
+    if (webhookTargetUrl) {
+      try {
+        const whRes = await fetch('https://api.fillout.com/v1/api/webhook/create', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ formId: input.formId, url: webhookTargetUrl }),
+        });
+        if (whRes.ok) {
+          const whData = await whRes.json();
+          webhookId = whData.id;
+          webhookRegistered = true;
+        } else {
+          console.warn('[linkFilloutForm] No se pudo registrar el webhook en Fillout', whRes.status);
+        }
+      } catch (err) {
+        console.warn('[linkFilloutForm] Error registrando webhook en Fillout', (err as Error).message);
+      }
+    }
+
+    // ── 7. Store linkage as a hidden sentinel column ───────────────────────
     //    boardId = UUID (primary destination for new submissions)
     //    legacyBoardId = legacy composite (reference only, not used for writes)
     await BoardColumns.create({
@@ -288,19 +334,18 @@ export default createEndpoint({
           boardName: input.boardName,
           linkedAt: new Date().toISOString(),
           questionMapping,
+          webhookId,
         }),
       },
     });
 
-    // ── 7. (Webhook registration removed — not supported in this architecture) ─
-    const webhookUrl = '';
-    const webhookRegistered = false;
-
     // NOTE: Initial import of existing submissions is handled automatically
     // by checkNewSubmissions (lightweight polling) which fires 10s after linking.
     // Since lastSyncedAt is not set in the metadata above, the first poll will
-    // fetch all submissions from the beginning.
+    // fetch all submissions from the beginning. El polling se queda activo
+    // aunque el webhook ya esté registrado — es la red de seguridad si
+    // Fillout no logra entregar un POST puntual.
 
-    return { success: true, columnsCreated: toCreate.length, webhookUrl, webhookRegistered, initialImported: 0 };
+    return { success: true, columnsCreated: toCreate.length, webhookUrl: webhookTargetUrl, webhookRegistered, initialImported: 0 };
   },
 });
