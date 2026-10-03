@@ -337,6 +337,8 @@ export const getTimelineBoardStatus = (input?: any): Promise<any> => call('getTi
 export const getTrashItems = (input?: any): Promise<any> => call('getTrashItems', input);
 export const getUnreadCounts = (input?: any): Promise<any> => call('getUnreadCounts', input);
 export const getUsers = (input?: any): Promise<any> => call('getUsers', input);
+export const getUserActivity = (input?: any): Promise<any> => call('getUserActivity', input);
+export const trackActivity = (input?: any): Promise<any> => call('trackActivity', input);
 export const importCotizacionesFromCsv = (input?: any): Promise<any> => call('importCotizacionesFromCsv', input);
 export const importDeals = (input?: any): Promise<any> => call('importDeals', input);
 export const importExcelData = (input?: any): Promise<any> => call('importExcelData', input);

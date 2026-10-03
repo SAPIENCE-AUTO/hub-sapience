@@ -328,6 +328,29 @@ EXTRA_TABLES = {
         many={},
         name='MeetingChatMessages',
     ),
+
+    # Tiempo de uso del Hub por persona (oct 2026) — "ver qué hace cada
+    # usuario, cuánto tiempo" (Sergio). Una fila por (usuario, día, sección)
+    # con los segundos acumulados, no una por latido: así la tabla crece con
+    # usuarios x días x secciones y no con cada minuto conectado. Solo la
+    # lee el panel de Actividad de Configuración (exclusivo de Sergio).
+    'UserActivity': dict(
+        table='user_activity',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='user', col='user_id', pg='uuid', kind='link', extra=dict(target='users')),
+            dict(prop='day', col='day', pg='date', kind='date', extra=None),
+            dict(prop='section', col='section', pg='text', kind='text', extra=None),
+            dict(prop='seconds', col='seconds', pg='numeric', kind='number', extra=None),
+            dict(prop='updatedAt', col='updated_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[
+            "  constraint user_activity_uniq unique (user_id, day, section)",
+        ],
+        notes=[],
+        many={},
+        name='UserActivity',
+    ),
 }
 canon.update(EXTRA_TABLES)
 

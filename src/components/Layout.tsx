@@ -24,6 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isPageVisible, ROUTE_TO_PAGE_KEY } from '../lib/pageVisibility';
+import { useActivityTracker } from '../hooks/useActivityTracker';
 import PendingSavesBar from './PendingSavesBar';
 import AvatarCropEditor from './AvatarCropEditor';
 import { useRealtimeUserNotifications, ConversationCreatedPayload, ConversationDeletedPayload, ConversationRenamedPayload, ConversationMembersUpdatedPayload } from '../hooks/useRealtimeUserNotifications';
@@ -387,6 +388,7 @@ export default function Layout() {
     try { return localStorage.getItem('sidebar-collapsed') === 'true'; } catch { return false; }
   });
   const location = useLocation();
+  useActivityTracker(!!user);
   const navigate = useNavigate();
 
   const toggleCollapsed = () => {

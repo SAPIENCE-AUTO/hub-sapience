@@ -719,6 +719,18 @@ create table migration_logs (
 );
 create trigger migration_logs_set_updated before update on migration_logs for each row execute function set_updated_at();
 
+-- ─── UserActivity ──────────────────────────────────────────────
+create table user_activity (
+  id                            uuid primary key default gen_random_uuid(),
+  user_id                       uuid references users(id) on delete set null,
+  day                           date,
+  section                       text,
+  seconds                       numeric,
+  updated_at                    timestamptz not null default now(),
+  constraint user_activity_uniq unique (user_id, day, section)
+);
+create trigger user_activity_set_updated before update on user_activity for each row execute function set_updated_at();
+
 -- ─── Projects ──────────────────────────────────────────────────
 create table projects (
   id                            uuid primary key default gen_random_uuid(),

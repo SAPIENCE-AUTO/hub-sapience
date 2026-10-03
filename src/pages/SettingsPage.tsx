@@ -20,13 +20,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Progress } from '@/components/ui/progress';
 import {
   Settings, Users, Shield, Plus, Check, Loader2, AlertTriangle,
-  Eye, Globe, ShieldCheck, ChevronRight, Trash2, Database, Download, FileJson, ArrowRight,
+  Eye, Globe, ShieldCheck, ChevronRight, Trash2, Database, Download, FileJson, ArrowRight, Activity,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PAGE_SECTIONS_DEF } from '../lib/pageVisibility';
 import { COST_CENTERS } from '../lib/constants';
 import { fmtCurrency } from '../lib/format';
 import NavPreviewDialog from '../components/NavPreviewDialog';
+import ActivityTab from '../components/settings/ActivityTab';
 
 type UserRecord = GetUsersOutputType['users'][0];
 type LimitRecord = GetApprovalLimitsOutputType['limits'][0];
@@ -1819,6 +1820,10 @@ function BackupsTab() {
 export default function SettingsPage() {
   const { user } = useAuth();
 
+  // Actividad de uso por persona: monitoreo, exclusivo de Sergio (el gate real
+  // está en getUserActivity.ts, este solo oculta la pestaña).
+  const canSeeActivity = user?.email === 'sergio@sapience.com.mx';
+
   const canAccess = user?.role === 'Owner' || user?.role === 'Socio' ||
     user?.purchaseLevel === 'Socios' ||
     user?.purchaseLevel === 'Finanzas';
@@ -1868,6 +1873,11 @@ export default function SettingsPage() {
           <TabsTrigger value="backups" className="gap-2 text-sm">
             <Database className="w-3.5 h-3.5" /> Backups
           </TabsTrigger>
+          {canSeeActivity && (
+            <TabsTrigger value="actividad" className="gap-2 text-sm">
+              <Activity className="w-3.5 h-3.5" /> Actividad
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="usuarios">
@@ -1899,6 +1909,14 @@ export default function SettingsPage() {
             <BackupsTab />
           </div>
         </TabsContent>
+
+        {canSeeActivity && (
+          <TabsContent value="actividad">
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
+              <ActivityTab />
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

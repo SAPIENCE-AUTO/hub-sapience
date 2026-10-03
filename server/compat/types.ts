@@ -751,3 +751,12 @@ export interface MeetingChatMessagesRecordType {
   content?: string;
   createdAt?: string;
 }
+
+export interface UserActivityRecordType {
+  id: string;
+  user?: string[];
+  day?: string;
+  section?: string;
+  seconds?: number;
+  updatedAt?: string;
+}
