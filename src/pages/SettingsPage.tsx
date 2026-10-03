@@ -20,10 +20,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Progress } from '@/components/ui/progress';
 import {
   Settings, Users, Shield, Plus, Check, Loader2, AlertTriangle,
-  Eye, Globe, ShieldCheck, ChevronRight, Trash2, Database, Download, FileJson, ArrowRight, Activity,
+  Eye, Globe, ShieldCheck, ChevronRight, Trash2, Database, Download, FileJson, ArrowRight, Activity, Search,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PAGE_SECTIONS_DEF } from '../lib/pageVisibility';
+import { matchesQuery } from '../lib/search';
 import { COST_CENTERS } from '../lib/constants';
 import { fmtCurrency } from '../lib/format';
 import NavPreviewDialog from '../components/NavPreviewDialog';
@@ -914,6 +915,7 @@ function UsersTab() {
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [previewUser, setPreviewUser] = useState<UserRecord | null>(null);
+  const [query, setQuery] = useState('');
 
   const loadUsers = () => {
     setLoading(true);
@@ -933,29 +935,37 @@ function UsersTab() {
     setUsers(prev => prev.filter(u => u.id !== id));
   };
 
+  const visibleUsers = users.filter(u => matchesQuery(query, u.firstName, u.lastName, u.email, u.role));
+
   return (
     <>
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+      <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-border flex-wrap">
         <div>
           <p className="text-sm font-semibold">Usuarios del sistema</p>
           <p className="text-xs text-muted-foreground">
-            {loading ? 'Cargando...' : `${users.length} usuario${users.length !== 1 ? 's' : ''} registrados — haz clic en uno para editarlo`}
+            {loading ? 'Cargando...' : query ? `${visibleUsers.length} de ${users.length} usuarios` : `${users.length} usuario${users.length !== 1 ? 's' : ''} registrados — haz clic en uno para editarlo`}
           </p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setInviteOpen(true)}>
-          <Plus className="w-3.5 h-3.5" /> Agregar usuarios
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar usuario..." className="h-8 w-56 pl-8 text-sm" />
+          </div>
+          <Button size="sm" className="gap-1.5" onClick={() => setInviteOpen(true)}>
+            <Plus className="w-3.5 h-3.5" /> Agregar usuarios
+          </Button>
+        </div>
       </div>
 
       {loading ? (
         <div className="p-6 space-y-3">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
         </div>
-      ) : users.length === 0 ? (
-        <div className="px-6 py-16 text-center text-sm text-muted-foreground">No hay usuarios registrados.</div>
+      ) : visibleUsers.length === 0 ? (
+        <div className="px-6 py-16 text-center text-sm text-muted-foreground">{query ? 'Ningún usuario coincide con la búsqueda.' : 'No hay usuarios registrados.'}</div>
       ) : (
         <div className="divide-y divide-border">
-          {users.map(user => {
+          {visibleUsers.map(user => {
             const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || '—';
             const hasCustomPages = (user.visiblePages ?? []).length > 0;
             return (

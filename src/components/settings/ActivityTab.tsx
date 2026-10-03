@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback, Fragment } from 'react';
 import { getUserActivity } from 'zite-endpoints-sdk';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { matchesQuery } from '../../lib/search';
 import { EXITO, GRIS, TEAL } from '../../lib/toolColors';
 
 interface UserActivity {
@@ -62,6 +64,7 @@ export default function ActivityTab() {
   const [data, setData] = useState<ActivityData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   const load = useCallback(() => {
     getUserActivity({ days: range }).then(d => { setData(d); setError(null); }).catch(e => setError(e instanceof Error ? e.message : 'No se pudo cargar'));
@@ -78,6 +81,7 @@ export default function ActivityTab() {
   if (!data) return <div className="p-6 space-y-2">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>;
 
   const onlineCount = data.users.filter(u => u.online).length;
+  const visibleUsers = data.users.filter(u => matchesQuery(query, u.name, u.email, u.role));
 
   return (
     <div>
@@ -87,6 +91,11 @@ export default function ActivityTab() {
           <p className="text-xs text-muted-foreground">
             {onlineCount} en línea ahora · solo cuenta tiempo con la pestaña visible y actividad en los últimos 2 min
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar persona..." className="h-8 w-48 pl-8 text-sm" />
         </div>
         <div className="flex items-center rounded-md border border-border overflow-hidden">
           {RANGES.map((r, i) => (
@@ -98,6 +107,7 @@ export default function ActivityTab() {
               {r.label}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -113,7 +123,7 @@ export default function ActivityTab() {
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {data.users.map(u => {
+          {visibleUsers.map(u => {
             const open = expanded === u.id;
             return (
               <Fragment key={u.id}>
@@ -168,6 +178,7 @@ export default function ActivityTab() {
           })}
         </tbody>
       </table>
+      {visibleUsers.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted-foreground">Ninguna persona coincide con la búsqueda.</p>}
     </div>
   );
 }
