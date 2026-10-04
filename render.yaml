@@ -155,6 +155,16 @@ services:
       # puede configurar contra localhost).
       - key: ZITE_ASSEMBLYAI_WEBHOOK_URL
         sync: false
+      # Generador de propuestas (oct 2026, solo Sergio, dentro de cada Deal) —
+      # API de Anthropic. ANTHROPIC_MODEL es opcional: por defecto el modelo
+      # más nuevo (claude-fable-5-1); PROPUESTAS_BUCKET también (por defecto
+      # "propuestas", bucket privado de Supabase Storage).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: PROPUESTAS_BUCKET
+        sync: false
 
   # Frontend Vite — build estático servido por el CDN de Render.
   - type: web
