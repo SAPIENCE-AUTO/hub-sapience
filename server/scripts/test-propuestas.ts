@@ -77,7 +77,7 @@ const ejemploPath = path.join(TMP, 'ejemplo.json');
 fs.writeFileSync(ejemploPath, JSON.stringify(EJEMPLO), 'utf8');
 const origOut = path.join(TMP, 'orig.pptx');
 execFileSync('node', [path.join(SKILL, 'scripts/construir.js'), ejemploPath, origOut], { cwd: SKILL, stdio: 'pipe' });
-const { buffer, ajustes } = await construirPropuesta(EJEMPLO);
+const { buffer, ajustes } = await construirPropuesta(EJEMPLO, {}, { paridad: true });
 const a = await entradas(fs.readFileSync(origOut));
 const b = await entradas(buffer);
 const sinMeta = (m: Map<string, string>) => new Map([...m].filter(([n]) => !n.startsWith('docProps/')));
@@ -92,7 +92,7 @@ const conPaleta = clone(); conPaleta.paleta = { acento: 'FFEE99', secundario: 'A
 const pPath = path.join(TMP, 'paleta.json'); fs.writeFileSync(pPath, JSON.stringify(conPaleta), 'utf8');
 const salida = execFileSync('node', [path.join(SKILL, 'scripts/construir.js'), pPath, path.join(TMP, 'paleta_orig.pptx')], { cwd: SKILL, encoding: 'utf8' });
 const impresos = salida.split('\n').filter(l => /^\s{2}\S/.test(l)).map(l => l.trim());
-const r2 = await construirPropuesta(conPaleta);
+const r2 = await construirPropuesta(conPaleta, {}, { paridad: true });
 if (JSON.stringify(impresos) === JSON.stringify(r2.ajustes)) ok(`ajustes con paleta propia iguales a los del original (${impresos.length})`);
 else { bad('ajustes de paleta distintos'); console.log('    original:', impresos, '\n    ts      :', r2.ajustes); }
 

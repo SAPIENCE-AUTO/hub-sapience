@@ -17,6 +17,8 @@ import ResumenTab from './ResumenTab';
 import BriefEditor from './BriefEditor';
 import ApprovalReviewDialog from './ApprovalReviewDialog';
 import MeetingRecordingsSection from '../minutas/MeetingRecordingsSection';
+import PropuestaTab from '../propuestas/PropuestaTab';
+import { useAuth } from 'zite-auth-sdk';
 
 type Deal = GetDealsOutputType['deals'][0];
 
@@ -43,6 +45,11 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
   const [createProjectPopoverOpen, setCreateProjectPopoverOpen] = useState(false);
   const [creatingProjectDirect, setCreatingProjectDirect] = useState(false);
   const { setProjects } = useProject();
+  // Generador de propuestas: solo Sergio (el gate real está en los endpoints,
+  // serverUtils/propuestas/acceso.ts). Con la pestaña activa el popup se ensancha.
+  const { user } = useAuth();
+  const canPropuestas = user?.email === 'sergio@sapience.com.mx';
+  const [tab, setTab] = useState('general');
   // Al pasar a "Ganado" por aquí (dropdown del header, ej. arrastrando en el
   // kanban o eligiéndolo directo) — a diferencia del botón "Aprobar Deal" de
   // arriba, que ya crea el proyecto — se ofrece aprobar de una vez las
@@ -191,7 +198,7 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={o => !o && onClose()}>
-        <DialogContent className="max-w-4xl max-h-[85vh] min-h-[420px] flex flex-col gap-0 p-0 overflow-hidden [&>button]:text-white/80 [&>button]:opacity-100 [&>button]:hover:text-white [&>button]:hover:bg-white/10">
+        <DialogContent className={`${tab === 'propuesta' ? 'max-w-6xl' : 'max-w-4xl'} max-h-[85vh] min-h-[420px] flex flex-col gap-0 p-0 overflow-hidden [&>button]:text-white/80 [&>button]:opacity-100 [&>button]:hover:text-white [&>button]:hover:bg-white/10`}>
           {/* Header — navy/teal de marca (mismo look que LoginPage.tsx y el
               portal de proveedores), en vez del header genérico blanco/gris.
               El selector [&>button] de arriba es la única forma de recolorear
@@ -348,14 +355,15 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
               <DealGeneralTab deal={localDeal} onSaved={handleDealSaved} onDeleted={onDeleted} existingClients={existingClients} linkedProject={matchType === 'linked' ? linkedProject : null} checkingProject={checkingProject} />
             </div>
           ) : (
-            <Tabs defaultValue="general" className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <TabsList className="mx-6 mt-3 mb-0 flex-shrink-0 grid grid-cols-6">
+            <Tabs value={tab} onValueChange={setTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <TabsList className={`mx-6 mt-3 mb-0 flex-shrink-0 grid ${canPropuestas ? 'grid-cols-7' : 'grid-cols-6'}`}>
                 <TabsTrigger value="general" className="data-[state=active]:text-[#027495]">General</TabsTrigger>
                 <TabsTrigger value="cotizaciones" className="data-[state=active]:text-[#027495]">Cotizaciones</TabsTrigger>
                 <TabsTrigger value="documentos" className="data-[state=active]:text-[#027495]">Documentos</TabsTrigger>
                 <TabsTrigger value="brief" className="data-[state=active]:text-[#027495]">Brief</TabsTrigger>
                 <TabsTrigger value="minutas" className="data-[state=active]:text-[#027495]">Minutas</TabsTrigger>
                 <TabsTrigger value="resumen" className="data-[state=active]:text-[#027495]">Resumen</TabsTrigger>
+                {canPropuestas && <TabsTrigger value="propuesta" className="data-[state=active]:text-[#027495]">Propuesta</TabsTrigger>}
               </TabsList>
               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
                 <TabsContent value="general" className="mt-0 data-[state=inactive]:hidden" forceMount>
@@ -384,6 +392,11 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
                 <TabsContent value="resumen" className="mt-0 data-[state=inactive]:hidden" forceMount>
                   <ResumenTab deal={localDeal} />
                 </TabsContent>
+                {canPropuestas && (
+                  <TabsContent value="propuesta" className="mt-0">
+                    <PropuestaTab dealId={localDeal.id} />
+                  </TabsContent>
+                )}
               </div>
             </Tabs>
           )}

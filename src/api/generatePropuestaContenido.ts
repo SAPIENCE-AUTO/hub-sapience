@@ -23,13 +23,9 @@ export default createEndpoint({
     if (p.estado === 'esqueleto') throw new Error('Aprueba el esqueleto (guárdalo) antes de escribir la propuesta');
     const brief = await cargarBrief(p);
     const archivos = await cargarArchivos(input.id);
-    const archivosPorSlot = Object.fromEntries(archivos.map(a => [`${a.tipo}:${a.slot}`, a.path!]));
-    // fotos de portada en el orden de los huecos: slots FOTO_1, FOTO_2, …
-    const fotos = archivos.filter(a => a.tipo === 'foto_portada')
-      .sort((a, b) => Number(a.slot?.match(/\d+/)?.[0] ?? 0) - Number(b.slot?.match(/\d+/)?.[0] ?? 0))
-      .map(a => a.path!);
+    const lista = archivos.map(a => ({ tipo: a.tipo!, slot: a.slot, path: a.path! }));
     const r = await conLatido(stream, 'Claude sigue escribiendo…', () =>
-      escribirYRevisar({ brief, notas: p.notas, esqueleto: parsed.data, archivosPorSlot, rutasFotosPortada: fotos, progreso: paso => stream?.write({ paso }) }));
+      escribirYRevisar({ brief, notas: p.notas, esqueleto: parsed.data, archivos: lista, progreso: paso => stream?.write({ paso }) }));
     const estado = r.problemas.length ? 'contenido' : 'revisado';
     await Propuestas.update({ id: input.id, record: { contenido: r.contenido, problemas: r.problemas, estado } as any });
     return { estado, vueltas: r.vueltas, avisos: r.avisos, problemas: r.problemas };

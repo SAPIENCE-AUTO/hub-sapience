@@ -3,7 +3,7 @@ import { createEndpoint, Propuestas } from '../../server/compat';
 import { exigirAccesoPropuestas } from '../serverUtils/propuestas/acceso';
 import { cargarPropuesta } from '../serverUtils/propuestas/datos';
 import { Contenido } from '../serverUtils/propuestas/esquemas';
-import { revisarContenido } from '../serverUtils/propuestas/revisar';
+import { revisarTodo } from '../serverUtils/propuestas/revision';
 
 // Edición manual del contenido (pantalla 4, "editor JSON simple") — se vuelve a
 // pasar por el revisor para que el estado y los problemas reflejen lo guardado.
@@ -15,7 +15,7 @@ export default createEndpoint({
   execute: async ({ input, context }) => {
     exigirAccesoPropuestas(context);
     await cargarPropuesta(input.id);
-    const problemas = revisarContenido(input.contenido);
+    const problemas = revisarTodo(input.contenido);
     const estado = problemas.length ? 'contenido' : 'revisado';
     await Propuestas.update({ id: input.id, record: { contenido: input.contenido, problemas, estado } as any });
     return { estado, problemas };

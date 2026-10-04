@@ -3,7 +3,8 @@
 import { z } from 'zod';
 import { llamarJSON, type Contenido as ContenidoMsg } from './claude';
 import { Esqueleto, PaletasPropuestas, Contenido, type EsqueletoT } from './esquemas';
-import { revisarContenido, type Problema } from './revisar';
+import type { Problema } from './revisar';
+import { revisarTodo } from './revision';
 import { tiemposALamina } from './tiempos';
 
 export interface BriefInput { texto?: string | null; pdfBase64?: string | null }
@@ -28,9 +29,11 @@ Lee el brief y propone el esqueleto de la propuesta. Responde solo con JSON con 
   "fases": [{"nombre": "", "etapa": null, "icono": "nombre de Feather Icon, ej. FiUsers", "goal": "", "tecnica": "", "muestra": ""}],
   "indice": [{"tipo": "contexto | punto_partida | objetivos | enfoque | detalle_fase | muestra | entregables | tiempos | inversion | seccion | cierre", "titulo": "", "resumen": "una línea de lo que dirá", "incluir": true, "razon": "por qué se incluye o se deja fuera"}],
   "precio": {"modo": "unico | por_fase", "partidas": [{"fase": 0, "descripcion": "", "precio": "MXN $000,000.00"}], "total": "MXN $000,000.00 + IVA", "letra": ""},
-  "tiempos": {"fecha_inicio": "AAAA-MM-DD o null si está por confirmar", "actividades": [{"nombre": "Reclutamiento", "fase": null, "inicio_semana": 0, "duracion_semanas": 1}]},
+  "tiempos": {"fecha_inicio": "AAAA-MM-DD SOLO si el brief o la persona dan un día exacto; si dicen un mes o «mediados de…», null (la lámina mostrará Semana 1, Semana 2…)", "actividades": [{"nombre": "Reclutamiento", "fase": null, "inicio_semana": 0, "duracion_semanas": 1}]},
   "diseno": {"estilo": "A-G", "portada": "id de portadas.json", "razon": "una frase", "ilustraciones": false}
-}` },
+}
+
+Cronograma: máximo 9 semanas en total y máximo 8 actividades, cada nombre de actividad en máximo 24 caracteres («Diario online», «Sesiones grupales»). No inventes fechas: ver «fecha_inicio».` },
   ];
   return llamarJSON({ usuario, esquema: Esqueleto, maxTokens: 16000 });
 }
@@ -74,7 +77,21 @@ CONTENIDO: ${JSON.stringify(contenido)}`;
 // paleta, ilustraciones, fotos de portada y la lámina de tiempos se fijan aquí
 // de forma determinista (el spec dice que se toman de "diseno" y que los
 // tiempos se convierten con una función, no se reescriben).
-export function fijarDesdeEsqueleto(contenido: any, esq: EsqueletoT, rutasFotosPortada: string[]): { contenido: any; avisos: string[] } {
+const txtParte = (p: any): string => (typeof p === 'string' ? p : p?.texto ?? '');
+export function separarPartes(partes: any[]): any[] {
+  return partes.map((p, i) => {
+    if (i === 0) return p;
+    const antes = txtParte(partes[i - 1]), t = txtParte(p);
+    if (!antes || !t || /\s$/.test(antes) || /^\s/.test(t)) return p;
+    // palabra pegada con la siguiente: termina en letra, cifra o puntuación y la otra empieza con letra, cifra o ¿¡
+    if (!/[\p{L}\p{N}.!?:;,)»”]$/u.test(antes) || !/^[\p{L}\p{N}¿¡«“(]/u.test(t)) return p;
+    return typeof p === 'string' ? ' ' + p : { ...p, texto: ' ' + p.texto };
+  });
+}
+
+export interface ArchivoSlot { tipo: string; slot?: string | null; path: string }
+
+export function fijarDesdeEsqueleto(contenido: any, esq: EsqueletoT, rutasFotosPortada: string[], archivos: ArchivoSlot[] = []): { contenido: any; avisos: string[] } {
   const c = JSON.parse(JSON.stringify(contenido));
   const avisos: string[] = [];
   c.estilo = esq.diseno.estilo;
@@ -95,8 +112,30 @@ export function fijarDesdeEsqueleto(contenido: any, esq: EsqueletoT, rutasFotosP
       c.laminas.splice(k >= 0 ? k : c.laminas.length, 0, nueva);
     }
   }
+  // Archivos por slot (spec §6/§4): se colocan aquí de forma determinista en vez
+  // de depender de que Claude copie bien las rutas.
+  const lamina = (tipo: string) => c.laminas.find((l: any) => l.tipo === tipo);
+  const idx = (slot?: string | null) => Number(slot?.match(/\.(\d+)$/)?.[1] ?? -1);
+  for (const a of archivos) {
+    const i = idx(a.slot);
+    if (a.tipo === 'ilustracion' && a.slot) {
+      if (a.slot.startsWith('contexto.') && lamina('contexto')?.columnas?.[i]) lamina('contexto').columnas[i].ilustracion = a.path;
+      else if (a.slot.startsWith('objetivos.') && lamina('objetivos')?.especificos?.[i]) lamina('objetivos').especificos[i].ilustracion = a.path;
+      else if (a.slot.startsWith('enfoque.') && lamina('enfoque') && i >= 0) {
+        const l = lamina('enfoque'); l.ilustraciones = Array.from({ length: Math.max(esq.fases.length, i + 1) }, (_, k) => l.ilustraciones?.[k] ?? null); l.ilustraciones[i] = a.path;
+      } else if (a.slot === 'punto_partida' && lamina('punto_partida')) lamina('punto_partida').ilustracion = a.path;
+    } else if (a.tipo === 'entregable' && lamina('entregables')?.imagenes?.[i]) {
+      lamina('entregables').imagenes[i].archivo = a.path;
+    } else if (a.tipo === 'foto_fase') {
+      const l = c.laminas.find((x: any) => x.tipo === 'detalle_fase' && x.fase === i);
+      if (l) l.foto = a.path;
+    }
+  }
   // Skill (paso 3): «entregables fuera si no hay capturas». Claude a veces deja
   // la lámina con archivo vacío; el constructor no puede dibujar eso.
+  // Texto corrido con partes en negritas («entrada», «cierre», «insight»): si Claude
+  // pega dos partes sin espacio («recompra.Con esa mirada») se agrega el espacio.
+  for (const l of c.laminas) for (const k of ['entrada', 'cierre', 'insight']) if (Array.isArray(l[k])) l[k] = separarPartes(l[k]);
   const antes = c.laminas.length;
   c.laminas = c.laminas.filter((l: any) => {
     if (l.tipo !== 'entregables') return true;
@@ -111,20 +150,24 @@ export interface ResultadoContenido { contenido: any; problemas: Problema[]; vue
 
 // Spec §5/§8: revisor → si marca problemas, Claude corrige; máximo 2 vueltas.
 export async function escribirYRevisar(args: {
-  brief: BriefInput; notas?: string | null; esqueleto: EsqueletoT; archivosPorSlot: Record<string, string>;
-  rutasFotosPortada: string[]; progreso?: (paso: string) => void;
+  brief: BriefInput; notas?: string | null; esqueleto: EsqueletoT; archivos: ArchivoSlot[];
+  progreso?: (paso: string) => void;
 }): Promise<ResultadoContenido> {
   args.progreso?.('Escribiendo la propuesta…');
-  let fijado = fijarDesdeEsqueleto(await escribirContenido(args), args.esqueleto, args.rutasFotosPortada);
+  // fotos de portada en el orden de los huecos: slots FOTO_1, FOTO_2, …
+  const rutasFotosPortada = args.archivos.filter(a => a.tipo === 'foto_portada')
+    .sort((a, b) => Number(a.slot?.match(/\d+/)?.[0] ?? 0) - Number(b.slot?.match(/\d+/)?.[0] ?? 0)).map(a => a.path);
+  const archivosPorSlot = Object.fromEntries(args.archivos.map(a => [`${a.tipo}:${a.slot}`, a.path]));
+  let fijado = fijarDesdeEsqueleto(await escribirContenido({ ...args, archivosPorSlot }), args.esqueleto, rutasFotosPortada, args.archivos);
   let contenido = fijado.contenido;
-  let problemas = revisarContenido(contenido);
+  let problemas = revisarTodo(contenido);
   let vueltas = 0;
   while (problemas.length && vueltas < 2) {
     vueltas++;
     args.progreso?.(`Corrigiendo ${problemas.length} problema(s) del revisor (vuelta ${vueltas} de 2)…`);
-    fijado = fijarDesdeEsqueleto(await corregirContenido(contenido, problemas), args.esqueleto, args.rutasFotosPortada);
+    fijado = fijarDesdeEsqueleto(await corregirContenido(contenido, problemas), args.esqueleto, rutasFotosPortada, args.archivos);
     contenido = fijado.contenido;
-    problemas = revisarContenido(contenido);
+    problemas = revisarTodo(contenido);
   }
   return { contenido, problemas, vueltas, avisos: fijado.avisos };
 }
