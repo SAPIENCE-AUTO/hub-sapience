@@ -1,0 +1,50 @@
+{
+ "F": "Poppins",
+ "TF": "Montserrat",
+ "TS": 50,
+ "CF": "Montserrat",
+ "BG": "FFFFFF",
+ "SURF": "EDF1F5",
+ "TXT": "1F2A36",
+ "MUT": "5F6B78",
+ "LINE": "D3DAE2",
+ "DIM": "98A3B0",
+ "ACC": "F58A42",
+ "SEC": "FFC101",
+ "SECT": "00324F",
+ "CELL": "EDF1F5",
+ "CELLT": "1F2A36",
+ "WEND": "E4E9EF",
+ "WDAY": "F0F3F7",
+ "header": "band",
+ "BAND": "00324F",
+ "footer": "none",
+ "shape": "outline",
+ "OUTTXT": "00324F",
+ "iconShape": "rsquare",
+ "objetivos": "funnel",
+ "id": "G",
+ "nombre": "Diagonal X, contorno",
+ "portada": "SANTIAGO",
+ "colores_fase": [
+  {
+   "c": "F58A42",
+   "t": "FFFFFF",
+   "tx": "D46B22"
+  },
+  {
+   "c": "00324F",
+   "t": "FFFFFF"
+  },
+  {
+   "c": "FFC101",
+   "t": "00324F",
+   "tx": "B88A00"
+  },
+  {
+   "c": "5FC2DE",
+   "t": "00324F",
+   "tx": "2E8FAE"
+  }
+ ]
+}

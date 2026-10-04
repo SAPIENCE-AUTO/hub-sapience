@@ -1,0 +1,280 @@
+{
+ "proyecto": "Rituales del café en casa",
+ "cliente": "Café Altura",
+ "fecha": "Octubre 2026",
+ "tipo": "Propuesta de trabajo",
+ "estilo": "C",
+ "fotos_portada": [],
+ "fases": [
+  {
+   "nombre": "Brewing Context",
+   "icono": "FiBookOpen"
+  },
+  {
+   "nombre": "Home Rituals",
+   "icono": "FiCoffee"
+  },
+  {
+   "nombre": "Measuring",
+   "icono": "FiBarChart2"
+  },
+  {
+   "nombre": "Landing",
+   "icono": "FiTarget"
+  }
+ ],
+ "laminas": [
+  {
+   "tipo": "contexto",
+   "bisagra": "Café Altura creció con el café de olla y el soluble, pero el ritual en casa está cambiando",
+   "columnas": [
+    {
+     "titulo": "Un ritual que se sofisticó",
+     "puntos": [
+      {
+       "texto": "Desde la pandemia, cafeteras de cápsula y métodos de filtrado entraron a la cocina",
+       "fuente": "brief"
+      },
+      {
+       "texto": "El café en casa dejó de ser solo un despertador funcional",
+       "fuente": "brief"
+      }
+     ]
+    },
+    {
+     "titulo": "Una marca que se quedó en el soluble",
+     "puntos": [
+      {
+       "texto": "El 70% del volumen de Café Altura sigue en la presentación soluble de 200 g",
+       "fuente": "brief"
+      },
+      {
+       "texto": "Las líneas de grano y molido no han logrado tracción fuera de autoservicio",
+       "fuente": "brief"
+      }
+     ]
+    },
+    {
+     "titulo": "Poco conocimiento del momento",
+     "puntos": [
+      {
+       "texto": "No hay estudios recientes sobre cómo se vive hoy el café en casa",
+       "fuente": "brief"
+      },
+      {
+       "texto": "Ni sobre qué lo detona, qué lo acompaña y qué significa",
+       "fuente": "brief"
+      }
+     ]
+    }
+   ],
+   "cierre": [
+    "Necesitamos volver a la mesa de la cocina y entender ",
+    {
+     "texto": "qué significa hoy tomar café en casa",
+     "resalta": true
+    },
+    ", para encontrar el lugar que Café Altura puede ocupar en ese ritual."
+   ]
+  },
+  {
+   "tipo": "objetivos",
+   "general": "Entender cómo se vive hoy el café en casa, para identificar dónde puede crecer Café Altura más allá del soluble",
+   "especificos": [
+    {
+     "titulo": "Entender el ritual del café en casa",
+     "puntos": [
+      "Momentos y detonantes del café en casa",
+      "Preparación, utensilios y acompañantes"
+     ]
+    },
+    {
+     "titulo": "Explorar el repertorio de formatos y métodos",
+     "preguntas": [
+      "¿Qué formatos y métodos forman su repertorio?",
+      "¿Qué los hace cambiar de formato?"
+     ]
+    },
+    {
+     "titulo": "Identificar dónde es creíble Café Altura",
+     "texto": "Percepción actual de Café Altura y credenciales para jugar en otros formatos"
+    }
+   ]
+  },
+  {
+   "tipo": "enfoque",
+   "bisagra": "Proponemos cuatro fases, y cada una alimenta a la siguiente",
+   "verbos": [
+    [
+     "Revisar lo que ya existe",
+     "Escuchar la conversación",
+     "Afinar hipótesis"
+    ],
+    [
+     "Entrar a la cocina",
+     "Vivir el ritual",
+     "Decodificar tensiones"
+    ],
+    [
+     "Dimensionar momentos",
+     "Priorizar formatos",
+     "Medir el fit de marca"
+    ],
+    [
+     "Aterrizar territorios",
+     "Definir dónde jugar",
+     "Acordar siguientes pasos"
+    ]
+   ]
+  },
+  {
+   "tipo": "detalle_fase",
+   "fase": 1,
+   "goal": "Entrar a las cocinas para entender cómo se arma el ritual del café, qué lo detona y qué significa para cada persona",
+   "como": [
+    {
+     "titulo": "Ethnoweek de 5 días",
+     "texto": "Cada participante nos comparte en video y foto sus momentos de café <qué prepara, con qué, con quién>"
+    },
+    {
+     "titulo": "Visita etnográfica en casa de 90 min",
+     "texto": "Preparamos café juntos y profundizamos en lo que vimos en el diario"
+    }
+   ],
+   "output": [
+    "Mapa del ritual por momento del día",
+    "Tensiones del café en casa",
+    "Lenguaje y códigos del consumidor",
+    "Insumos para la fase de Measuring"
+   ]
+  },
+  {
+   "tipo": "muestra",
+   "bisagra": "Proponemos 12 casas, por etapa de vida y relación con Café Altura",
+   "columnas": [
+    "25 a 34 años",
+    "35 a 49 años",
+    "50 a 65 años"
+   ],
+   "filas": [
+    {
+     "nombre": "Usuarios de Café Altura",
+     "celdas": [
+      "2 casas",
+      "2 casas",
+      "2 casas"
+     ]
+    },
+    {
+     "nombre": "Usuarios de otras marcas",
+     "celdas": [
+      "2 casas",
+      "2 casas",
+      "2 casas"
+     ]
+    }
+   ],
+   "notas": [
+    "Todos toman café en casa al menos 5 días a la semana y deciden la marca que se compra",
+    "NSE C+ y C, mix de hombres y mujeres, CDMX y Guadalajara"
+   ]
+  },
+  {
+   "tipo": "tiempos",
+   "semanas": [
+    "5 – 11 oct",
+    "12 – 18 oct",
+    "19 – 25 oct",
+    "26 oct – 1 nov",
+    "2 – 8 nov",
+    "9 – 15 nov",
+    "16 – 22 nov",
+    "23 – 29 nov"
+   ],
+   "barras": [
+    {
+     "fase": 0,
+     "inicio": 0,
+     "fin": 1.6
+    },
+    {
+     "fase": 1,
+     "inicio": 1.4,
+     "fin": 4.3
+    },
+    {
+     "fase": 2,
+     "inicio": 4.0,
+     "fin": 7.1
+    },
+    {
+     "fase": 3,
+     "inicio": 7.3,
+     "fin": 7.7,
+     "etiqueta": "Workshop de landing"
+    }
+   ],
+   "nota": "Aprobación → 5 de octubre. Entrega de resultados → 27 de noviembre."
+  },
+  {
+   "tipo": "inversion",
+   "bisagra": "Cada fase se puede aprobar por separado, o las cuatro con precio especial",
+   "partidas": [
+    {
+     "fase": 0,
+     "descripcion": "Desk research y social listening",
+     "precio": "MXN $65,000.00"
+    },
+    {
+     "fase": 1,
+     "descripcion": "12 casas con ethnoweek y visita",
+     "precio": "MXN $340,000.00"
+    },
+    {
+     "fase": 2,
+     "descripcion": "400 encuestas online",
+     "precio": "MXN $280,000.00"
+    },
+    {
+     "fase": 3,
+     "descripcion": "Workshop presencial",
+     "precio": "Incluido como valor agregado"
+    }
+   ],
+   "paquete": {
+    "etiqueta": "Precio especial por las cuatro fases",
+    "precio": "MXN $620,000.00 + IVA",
+    "letra": "Seiscientos veinte mil pesos mexicanos + IVA"
+   }
+  },
+  {
+   "tipo": "seccion",
+   "titulo": "Para arrancar",
+   "bisagra": "Esto necesitamos de Café Altura antes del kick off",
+   "columnas": [
+    {
+     "titulo": "Información",
+     "puntos": [
+      "Estudios previos de la categoría",
+      "Ventas por formato del último año"
+     ]
+    },
+    {
+     "titulo": "Producto",
+     "puntos": [
+      "Muestras de las tres presentaciones para las visitas"
+     ]
+    },
+    {
+     "titulo": "Equipo",
+     "puntos": [
+      "Quién asistirá a las visitas y al workshop"
+     ]
+    }
+   ]
+  },
+  {
+   "tipo": "cierre"
+  }
+ ]
+}

@@ -1,0 +1,47 @@
+{
+ "F": "Montserrat",
+ "TF": "Source Sans 3",
+ "TS": 58,
+ "CF": "Montserrat",
+ "BG": "FFFFFF",
+ "SURF": "EEF1F3",
+ "TXT": "262626",
+ "MUT": "5F6B78",
+ "LINE": "D5DAE0",
+ "DIM": "9AA4AF",
+ "ACC": "00936F",
+ "SEC": "E9AA42",
+ "SECT": "2F3B4A",
+ "CELL": "EEF1F3",
+ "CELLT": "262626",
+ "WEND": "E6E9ED",
+ "WDAY": "F1F3F5",
+ "header": "band",
+ "BAND": "323F4F",
+ "footer": "none",
+ "shape": "soft",
+ "iconShape": "diamond",
+ "enfoque": "band",
+ "id": "D",
+ "nombre": "Rombos, verde",
+ "portada": "PAIN",
+ "colores_fase": [
+  {
+   "c": "00936F",
+   "t": "FFFFFF"
+  },
+  {
+   "c": "E9AA42",
+   "t": "262626",
+   "tx": "B07A1C"
+  },
+  {
+   "c": "FF675C",
+   "t": "FFFFFF"
+  },
+  {
+   "c": "323F4F",
+   "t": "FFFFFF"
+  }
+ ]
+}

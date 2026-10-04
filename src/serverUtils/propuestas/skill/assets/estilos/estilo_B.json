@@ -1,0 +1,47 @@
+{
+ "F": "Montserrat",
+ "TF": "Oswald",
+ "TS": 54,
+ "CF": "Oswald",
+ "BG": "F2F2F0",
+ "SURF": "E2E6EB",
+ "TXT": "262626",
+ "MUT": "5F6B78",
+ "LINE": "C9CED6",
+ "ACC": "C65A1E",
+ "SEC": "E8B04B",
+ "SECT": "A86F12",
+ "DIM": "8C96A3",
+ "CELL": "FFFFFF",
+ "CELLT": "262626",
+ "WEND": "E1E5EA",
+ "WDAY": "EAEDF1",
+ "header": "band",
+ "BAND": "323F4F",
+ "footer": "none",
+ "id": "B",
+ "nombre": "Banda navy, base clara",
+ "portada": "FRESH",
+ "colores_fase": [
+  {
+   "c": "E8B04B",
+   "t": "262626",
+   "tx": "A86F12"
+  },
+  {
+   "c": "B33A3A",
+   "t": "FFFFFF",
+   "tx": "B33A3A"
+  },
+  {
+   "c": "A9C9C0",
+   "t": "262626",
+   "tx": "4E8A7B"
+  },
+  {
+   "c": "4F5F7A",
+   "t": "FFFFFF",
+   "tx": "4F5F7A"
+  }
+ ]
+}

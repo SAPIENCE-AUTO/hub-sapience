@@ -1,0 +1,47 @@
+{
+ "TXT": "FFFFFF",
+ "MUT": "A7B0BC",
+ "LINE": "4A5563",
+ "header": "line",
+ "footer": "none",
+ "F": "Montserrat",
+ "TF": "Montserrat",
+ "TS": 50,
+ "BG": "222A35",
+ "SURF": "343E4C",
+ "ACC": "FF675C",
+ "SEC": "FFC000",
+ "SECT": "FFC000",
+ "DIM": "6B7685",
+ "CELL": "343E4C",
+ "CELLT": "FFFFFF",
+ "WEND": "262E3A",
+ "WDAY": "2C3542",
+ "HDR": "FF675C",
+ "HDRT": "FFFFFF",
+ "shape": "pill",
+ "iconShape": "circle",
+ "objetivos": "funnel",
+ "muestra": "table",
+ "id": "E",
+ "nombre": "Mancha, embudo y tabla",
+ "portada": "DOS",
+ "colores_fase": [
+  {
+   "c": "FFC000",
+   "t": "222A35"
+  },
+  {
+   "c": "FF675C",
+   "t": "FFFFFF"
+  },
+  {
+   "c": "A9D18E",
+   "t": "222A35"
+  },
+  {
+   "c": "8FA3B8",
+   "t": "222A35"
+  }
+ ]
+}

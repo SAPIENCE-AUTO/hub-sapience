@@ -1,0 +1,48 @@
+{
+ "TXT": "FFFFFF",
+ "MUT": "C3CBD5",
+ "LINE": "5A687C",
+ "header": "line",
+ "footer": "none",
+ "F": "Montserrat",
+ "TF": "Oswald",
+ "TS": 56,
+ "CF": "Montserrat",
+ "BG": "354251",
+ "SURF": "445266",
+ "DIM": "8794A6",
+ "ACC": "FF675C",
+ "SEC": "F2C14E",
+ "SECT": "F2C14E",
+ "CELL": "445266",
+ "CELLT": "FFFFFF",
+ "WEND": "3B4859",
+ "WDAY": "415064",
+ "HDR": "F2C14E",
+ "HDRT": "354251",
+ "shape": "square",
+ "iconShape": "square",
+ "enfoque": "band",
+ "muestra": "table",
+ "id": "F",
+ "nombre": "Pizarra, cuadrado",
+ "portada": "ESPARTA",
+ "colores_fase": [
+  {
+   "c": "FF675C",
+   "t": "FFFFFF"
+  },
+  {
+   "c": "F2C14E",
+   "t": "354251"
+  },
+  {
+   "c": "7FC8C2",
+   "t": "354251"
+  },
+  {
+   "c": "D9DEE5",
+   "t": "354251"
+  }
+ ]
+}

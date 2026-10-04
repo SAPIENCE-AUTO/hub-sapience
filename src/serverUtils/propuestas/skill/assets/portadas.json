@@ -1,0 +1,608 @@
+{
+ "CITIZEN": {
+  "nombre": "Mancha, título en cascada",
+  "textos": [
+   [
+    "{TITULO}",
+    24,
+    90,
+    420,
+    130,
+    36,
+    1,
+    "FF4155",
+    "left"
+   ],
+   [
+    "PARA",
+    24,
+    217,
+    70,
+    30,
+    24,
+    0,
+    "FF4155",
+    "left"
+   ],
+   [
+    "{CLIENTE}",
+    96,
+    190,
+    360,
+    64,
+    44,
+    1,
+    "FF4155",
+    "left"
+   ],
+   [
+    "{TIPO}",
+    20,
+    489,
+    330,
+    22,
+    18,
+    1,
+    "FFFFFF",
+    "left"
+   ],
+   [
+    "{FECHA}",
+    20,
+    510,
+    200,
+    16,
+    12,
+    0,
+    "FFFFFF",
+    "left"
+   ]
+  ],
+  "marco": "marco_CITIZEN.png",
+  "huecos": [
+   [
+    5.938,
+    0.542,
+    6.972,
+    6.675
+   ]
+  ]
+ },
+ "DOS": {
+  "nombre": "Mancha, cliente protagonista",
+  "textos": [
+   [
+    "{TIPO}",
+    21,
+    82,
+    380,
+    50,
+    20.3,
+    1,
+    "FFB843",
+    "left"
+   ],
+   [
+    "{TITULO}",
+    18,
+    200,
+    440,
+    110,
+    36,
+    1,
+    "A9D18E",
+    "left"
+   ],
+   [
+    "PARA",
+    18,
+    311,
+    200,
+    58,
+    40,
+    1,
+    "A9D18E",
+    "left"
+   ],
+   [
+    "{CLIENTE}",
+    18,
+    368,
+    440,
+    80,
+    54,
+    1,
+    "A9D18E",
+    "left"
+   ],
+   [
+    "{FECHA}",
+    15,
+    512,
+    200,
+    16,
+    10.5,
+    0,
+    "FFFFFF",
+    "left"
+   ]
+  ],
+  "marco": "marco_DOS.png",
+  "huecos": [
+   [
+    6.406,
+    0.812,
+    6.514,
+    6.223
+   ]
+  ]
+ },
+ "SANTIAGO": {
+  "nombre": "Diagonal en X",
+  "textos": [
+   [
+    "{TIPO}",
+    14,
+    96,
+    480,
+    175,
+    50,
+    1,
+    "FFC101",
+    "left"
+   ],
+   [
+    "{TITULO}\nPARA {CLIENTE}",
+    14,
+    410,
+    420,
+    64,
+    20,
+    1,
+    "FFFFFF",
+    "left"
+   ],
+   [
+    "{FECHA}",
+    14,
+    476,
+    200,
+    16,
+    12,
+    1,
+    "FFFFFF",
+    "left"
+   ]
+  ],
+  "marco": "marco_SANTIAGO.png",
+  "huecos": [
+   [
+    5.646,
+    -0.002,
+    11.416,
+    7.598
+   ]
+  ]
+ },
+ "AURELIO": {
+  "nombre": "Brochazo",
+  "textos": [
+   [
+    "{titulo}",
+    46,
+    37,
+    400,
+    18,
+    12,
+    1,
+    "3C3C3C",
+    "left"
+   ],
+   [
+    "PROPUESTA",
+    380,
+    88,
+    538,
+    100,
+    80,
+    1,
+    "354251",
+    "right"
+   ],
+   [
+    "{TIPO_RESTO}",
+    480,
+    178,
+    434,
+    24,
+    18,
+    1,
+    "7F7F7F",
+    "right"
+   ],
+   [
+    "Preparada para {cliente}",
+    500,
+    457,
+    409,
+    22,
+    16,
+    1,
+    "FF675C",
+    "right"
+   ],
+   [
+    "{fecha}",
+    700,
+    478,
+    209,
+    20,
+    14,
+    0,
+    "FF675C",
+    "right"
+   ]
+  ],
+  "marco": "marco_AURELIO.png",
+  "huecos": [
+   [
+    0.0,
+    1.378,
+    7.047,
+    6.122
+   ]
+  ]
+ },
+ "ESPARTA": {
+  "nombre": "Chevrón",
+  "textos": [
+   [
+    "{TIPO}",
+    30,
+    87,
+    480,
+    170,
+    50,
+    1,
+    "FF675C",
+    "left"
+   ],
+   [
+    "{titulo}\npara {cliente}",
+    25,
+    410,
+    420,
+    64,
+    20,
+    1,
+    "FFFFFF",
+    "left"
+   ],
+   [
+    "{FECHA}",
+    25,
+    490,
+    200,
+    16,
+    12,
+    1,
+    "FFFFFF",
+    "left"
+   ]
+  ],
+  "marco": "marco_ESPARTA.png",
+  "huecos": [
+   [
+    2.121,
+    0.0,
+    11.243,
+    7.5
+   ]
+  ]
+ },
+ "1200": {
+  "nombre": "Diagonal amarilla",
+  "textos": [
+   [
+    "{TITULO}",
+    25,
+    64,
+    360,
+    84,
+    32,
+    1,
+    "E9AA42",
+    "left"
+   ],
+   [
+    "{tipo} · {fecha}",
+    25,
+    150,
+    360,
+    24,
+    16,
+    0,
+    "FFFFFF",
+    "left"
+   ]
+  ],
+  "marco": "marco_1200.png",
+  "huecos": [
+   [
+    5.469,
+    -0.0,
+    7.874999999999999,
+    7.5
+   ]
+  ]
+ },
+ "PIVOT": {
+  "nombre": "Pixeles",
+  "textos": [
+   [
+    "{TITULO} PARA",
+    559,
+    60,
+    390,
+    60,
+    24,
+    1,
+    "FFB843",
+    "left"
+   ],
+   [
+    "{CLIENTE}",
+    559,
+    122,
+    390,
+    46,
+    36,
+    1,
+    "FFB843",
+    "left"
+   ],
+   [
+    "{TIPO}",
+    735,
+    480,
+    210,
+    34,
+    15,
+    1,
+    "FFFFFF",
+    "left"
+   ],
+   [
+    "{FECHA}",
+    735,
+    514,
+    200,
+    16,
+    12,
+    0,
+    "FFFFFF",
+    "left"
+   ]
+  ],
+  "marco": "marco_PIVOT.png",
+  "huecos": [
+   [
+    0.0,
+    -0.0,
+    10.031,
+    7.5
+   ]
+  ]
+ },
+ "Yellow": {
+  "nombre": "Triángulos",
+  "textos": [
+   [
+    "{TITULO}\n{CLIENTE}",
+    418,
+    189,
+    520,
+    150,
+    36,
+    1,
+    "FFC000",
+    "left"
+   ],
+   [
+    "{TIPO}",
+    640,
+    470,
+    300,
+    34,
+    15,
+    1,
+    "FFFFFF",
+    "right"
+   ],
+   [
+    "{FECHA}",
+    700,
+    504,
+    240,
+    16,
+    12,
+    0,
+    "FFFFFF",
+    "right"
+   ]
+  ],
+  "marco": "marco_Yellow.png",
+  "huecos": [
+   [
+    0.0,
+    0.0,
+    7.056,
+    7.5
+   ]
+  ]
+ },
+ "VALOR": {
+  "nombre": "Rombos en retícula",
+  "textos": [
+   [
+    "Propuesta",
+    41,
+    150,
+    320,
+    66,
+    53.3,
+    1,
+    "FFFFFF",
+    "left"
+   ],
+   [
+    "de investigación y estrategia",
+    41,
+    207,
+    320,
+    26,
+    20.3,
+    0,
+    "FFFFFF",
+    "left"
+   ],
+   [
+    "{titulo} · {cliente} · {fecha}",
+    41,
+    244,
+    420,
+    20,
+    14,
+    0,
+    "FFFFFF",
+    "left"
+   ]
+  ],
+  "marco": "marco_VALOR.png",
+  "huecos": [
+   [
+    2.262,
+    -0.0,
+    11.071,
+    7.5
+   ]
+  ]
+ },
+ "PAIN": {
+  "nombre": "Rombos redondeados",
+  "textos": [
+   [
+    "{TITULO}",
+    41,
+    110,
+    430,
+    60,
+    34,
+    1,
+    "E9AA42",
+    "left"
+   ],
+   [
+    "{CLIENTE}",
+    41,
+    172,
+    380,
+    40,
+    30,
+    0,
+    "FFFFFF",
+    "left"
+   ],
+   [
+    "{tipo}\n{fecha}",
+    52,
+    232,
+    300,
+    36,
+    14.3,
+    0,
+    "FFFFFF",
+    "left"
+   ]
+  ],
+  "marco": "marco_PAIN.png",
+  "huecos": [
+   [
+    6.521,
+    1.813,
+    3.896,
+    3.8850000000000007
+   ],
+   [
+    9.375,
+    0.521,
+    3.042,
+    3.052
+   ],
+   [
+    9.375,
+    3.927,
+    3.042,
+    3.052
+   ]
+  ]
+ },
+ "FRESH": {
+  "nombre": "Onda",
+  "textos": [
+   [
+    "{titulo}",
+    41,
+    50,
+    700,
+    70,
+    50,
+    1,
+    "FFFFFF",
+    "left"
+   ],
+   [
+    "Para {cliente}",
+    41,
+    118,
+    500,
+    48,
+    32,
+    0,
+    "FFFFFF",
+    "left"
+   ],
+   [
+    "{TIPO}",
+    640,
+    461,
+    287,
+    20,
+    14,
+    1,
+    "262626",
+    "right"
+   ],
+   [
+    "{FECHA}",
+    700,
+    480,
+    227,
+    20,
+    14,
+    0,
+    "262626",
+    "right"
+   ]
+  ],
+  "marco": "marco_FRESH.png",
+  "huecos": [
+   [
+    0.0,
+    -0.0,
+    13.33,
+    7.502
+   ]
+  ]
+ }
+}

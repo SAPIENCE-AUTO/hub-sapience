@@ -1,0 +1,41 @@
+{
+ "TXT": "FFFFFF",
+ "MUT": "A7B0BC",
+ "LINE": "4A5563",
+ "header": "line",
+ "footer": "none",
+ "F": "Montserrat",
+ "TF": "Montserrat",
+ "TS": 50,
+ "BG": "212833",
+ "SURF": "2C3542",
+ "ACC": "FF4155",
+ "SEC": "FFB843",
+ "SECT": "FFB843",
+ "DIM": "5B6676",
+ "CELL": "FFFFFF",
+ "CELLT": "212833",
+ "WEND": "262E3A",
+ "WDAY": "2A3340",
+ "id": "A",
+ "nombre": "Oscuro coral",
+ "portada": "CITIZEN",
+ "colores_fase": [
+  {
+   "c": "FFB843",
+   "t": "212833"
+  },
+  {
+   "c": "FF4155",
+   "t": "FFFFFF"
+  },
+  {
+   "c": "5FC2DE",
+   "t": "212833"
+  },
+  {
+   "c": "B7C3D0",
+   "t": "212833"
+  }
+ ]
+}

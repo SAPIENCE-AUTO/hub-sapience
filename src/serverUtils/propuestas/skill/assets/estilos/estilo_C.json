@@ -1,0 +1,46 @@
+{
+ "F": "Montserrat",
+ "TF": "Montserrat",
+ "TS": 50,
+ "BG": "FFFFFF",
+ "SURF": "F0F0F0",
+ "TXT": "262626",
+ "MUT": "6B7280",
+ "LINE": "D1D5DB",
+ "ACC": "FF675C",
+ "SEC": "FFC000",
+ "SECT": "354251",
+ "DIM": "9CA3AF",
+ "CELL": "F0F0F0",
+ "CELLT": "262626",
+ "WEND": "E5E7EB",
+ "WDAY": "F3F4F6",
+ "header": "line",
+ "footer": "band",
+ "FBAND": "FFC000",
+ "id": "C",
+ "nombre": "Blanco, pie amarillo",
+ "portada": "PIVOT",
+ "colores_fase": [
+  {
+   "c": "FF675C",
+   "t": "FFFFFF",
+   "tx": "E2574C"
+  },
+  {
+   "c": "FFC000",
+   "t": "262626",
+   "tx": "C08F00"
+  },
+  {
+   "c": "354251",
+   "t": "FFFFFF",
+   "tx": "354251"
+  },
+  {
+   "c": "8AA1B1",
+   "t": "FFFFFF",
+   "tx": "5F7A8C"
+  }
+ ]
+}
