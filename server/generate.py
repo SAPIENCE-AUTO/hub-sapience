@@ -351,6 +351,61 @@ EXTRA_TABLES = {
         many={},
         name='UserActivity',
     ),
+
+    # Generador de propuestas (oct 2026, SPEC_feature_propuestas_hub.md). Vive
+    # dentro de cada Deal ("adentro de cada deal podría estar este feature",
+    # Sergio); client se guarda además de deal para no depender de que el
+    # deal siga ligado al mismo cliente. esqueleto/contenido son jsonb porque
+    # son la salida de Claude y el formato del constructor, se leen y escriben
+    # enteros — nunca se consultan por dentro. estado lleva CHECK para poder
+    # retomar la propuesta desde cualquier paso.
+    'Propuestas': dict(
+        table='propuestas',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='deal', col='deal_id', pg='uuid', kind='link', extra=dict(target='deals')),
+            dict(prop='client', col='client_id', pg='uuid', kind='link', extra=dict(target='clients')),
+            dict(prop='titulo', col='titulo', pg='text', kind='text', extra=None),
+            dict(prop='estado', col='estado', pg='text', kind='text', extra=None),
+            dict(prop='metodo', col='metodo', pg='text', kind='text', extra=None),
+            dict(prop='briefTexto', col='brief_texto', pg='text', kind='text', extra=None),
+            dict(prop='briefPath', col='brief_path', pg='text', kind='text', extra=None),
+            dict(prop='notas', col='notas', pg='text', kind='text', extra=None),
+            dict(prop='esqueleto', col='esqueleto', pg='jsonb', kind='json', extra=None),
+            dict(prop='contenido', col='contenido', pg='jsonb', kind='json', extra=None),
+            dict(prop='problemas', col='problemas', pg='jsonb', kind='json', extra=None),
+            dict(prop='ajustesPaleta', col='ajustes_paleta', pg='jsonb', kind='json', extra=None),
+            dict(prop='pptxPath', col='pptx_path', pg='text', kind='text', extra=None),
+            dict(prop='version', col='version', pg='integer', kind='number', extra=None),
+            dict(prop='createdBy', col='created_by', pg='uuid', kind='link', extra=dict(target='users')),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+            dict(prop='updatedAt', col='updated_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[
+            "  constraint propuestas_estado_chk check (\"estado\" in ('borrador','esqueleto','esqueleto_aprobado','contenido','revisado','construida','error'))",
+            "  constraint propuestas_metodo_chk check (\"metodo\" is null or \"metodo\" in ('cualitativo','cuantitativo','mixto'))",
+        ],
+        notes=[],
+        many={},
+        name='Propuestas',
+    ),
+    'PropuestaArchivos': dict(
+        table='propuesta_archivos',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='propuesta', col='propuesta_id', pg='uuid', kind='link', extra=dict(target='propuestas')),
+            dict(prop='tipo', col='tipo', pg='text', kind='text', extra=None),
+            dict(prop='slot', col='slot', pg='text', kind='text', extra=None),
+            dict(prop='path', col='path', pg='text', kind='text', extra=None),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[
+            "  constraint propuesta_archivos_tipo_chk check (\"tipo\" in ('foto_portada','ilustracion','entregable','foto_fase'))",
+        ],
+        notes=[],
+        many={},
+        name='PropuestaArchivos',
+    ),
 }
 canon.update(EXTRA_TABLES)
 

@@ -859,6 +859,40 @@ export const SCHEMA: Record<string, TableDef> = {
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },
   },
+  Propuestas: {
+    table: 'propuestas',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      deal: { col: 'deal_id', kind: 'link', target: 'deals' },
+      client: { col: 'client_id', kind: 'link', target: 'clients' },
+      titulo: { col: 'titulo', kind: 'text' },
+      estado: { col: 'estado', kind: 'text' },
+      metodo: { col: 'metodo', kind: 'text' },
+      briefTexto: { col: 'brief_texto', kind: 'text' },
+      briefPath: { col: 'brief_path', kind: 'text' },
+      notas: { col: 'notas', kind: 'text' },
+      esqueleto: { col: 'esqueleto', kind: 'json' },
+      contenido: { col: 'contenido', kind: 'json' },
+      problemas: { col: 'problemas', kind: 'json' },
+      ajustesPaleta: { col: 'ajustes_paleta', kind: 'json' },
+      pptxPath: { col: 'pptx_path', kind: 'text' },
+      version: { col: 'version', kind: 'number' },
+      createdBy: { col: 'created_by', kind: 'link', target: 'users' },
+      createdAt: { col: 'created_at', kind: 'datetime' },
+      updatedAt: { col: 'updated_at', kind: 'datetime' }
+    },
+  },
+  PropuestaArchivos: {
+    table: 'propuesta_archivos',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      propuesta: { col: 'propuesta_id', kind: 'link', target: 'propuestas' },
+      tipo: { col: 'tipo', kind: 'text' },
+      slot: { col: 'slot', kind: 'text' },
+      path: { col: 'path', kind: 'text' },
+      createdAt: { col: 'created_at', kind: 'datetime' }
+    },
+  },
 };
 
 export const MODEL_NAMES = Object.keys(SCHEMA) as (keyof typeof SCHEMA)[];

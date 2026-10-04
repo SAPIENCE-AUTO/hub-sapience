@@ -898,6 +898,31 @@ create table collection_processes (
 );
 create trigger collection_processes_set_updated before update on collection_processes for each row execute function set_updated_at();
 
+-- ─── Propuestas ────────────────────────────────────────────────
+create table propuestas (
+  id                            uuid primary key default gen_random_uuid(),
+  deal_id                       uuid references deals(id) on delete set null,
+  client_id                     uuid references clients(id) on delete set null,
+  titulo                        text,
+  estado                        text,
+  metodo                        text,
+  brief_texto                   text,
+  brief_path                    text,
+  notas                         text,
+  esqueleto                     jsonb,
+  contenido                     jsonb,
+  problemas                     jsonb,
+  ajustes_paleta                jsonb,
+  pptx_path                     text,
+  version                       integer,
+  created_by                    uuid references users(id) on delete set null,
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now(),
+  constraint propuestas_estado_chk check ("estado" in ('borrador','esqueleto','esqueleto_aprobado','contenido','revisado','construida','error')),
+  constraint propuestas_metodo_chk check ("metodo" is null or "metodo" in ('cualitativo','cuantitativo','mixto'))
+);
+create trigger propuestas_set_updated before update on propuestas for each row execute function set_updated_at();
+
 -- ─── Cotizacion Line Items ─────────────────────────────────────
 create table cotizacion_line_items (
   id                            uuid primary key default gen_random_uuid(),
@@ -943,6 +968,18 @@ create table meeting_recordings (
   constraint meeting_recordings_meeting_type_chk check ("meeting_type" is null or "meeting_type" in ('Kick off con cliente', 'Kick off interno', 'Brief', 'Alineación interna de análisis', 'Follow up de proyecto'))
 );
 create trigger meeting_recordings_set_updated before update on meeting_recordings for each row execute function set_updated_at();
+
+-- ─── PropuestaArchivos ─────────────────────────────────────────
+create table propuesta_archivos (
+  id                            uuid primary key default gen_random_uuid(),
+  propuesta_id                  uuid references propuestas(id) on delete set null,
+  tipo                          text,
+  slot                          text,
+  path                          text,
+  created_at                    timestamptz not null default now(),
+  constraint propuesta_archivos_tipo_chk check ("tipo" in ('foto_portada','ilustracion','entregable','foto_fase'))
+);
+create trigger propuesta_archivos_set_updated before update on propuesta_archivos for each row execute function set_updated_at();
 
 -- ─── MeetingChatMessages ───────────────────────────────────────
 create table meeting_chat_messages (

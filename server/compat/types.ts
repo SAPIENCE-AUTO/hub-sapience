@@ -760,3 +760,33 @@ export interface UserActivityRecordType {
   seconds?: number;
   updatedAt?: string;
 }
+
+export interface PropuestasRecordType {
+  id: string;
+  deal?: string[];
+  client?: string[];
+  titulo?: string;
+  estado?: string;
+  metodo?: string;
+  briefTexto?: string;
+  briefPath?: string;
+  notas?: string;
+  esqueleto?: any;
+  contenido?: any;
+  problemas?: any;
+  ajustesPaleta?: any;
+  pptxPath?: string;
+  version?: number;
+  createdBy?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PropuestaArchivosRecordType {
+  id: string;
+  propuesta?: string[];
+  tipo?: string;
+  slot?: string;
+  path?: string;
+  createdAt?: string;
+}
