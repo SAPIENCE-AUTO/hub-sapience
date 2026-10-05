@@ -355,7 +355,7 @@ const M = {
       if (G) filasHdr.push([vacio].concat(G.map(g => { const p = grupo(g);
         const txt = g.detalle ? [{ text: p.n.toUpperCase(), options: { bold: true, breakLine: true } }, { text: g.detalle, options: { fontSize: 11, bold: false } }] : p.n.toUpperCase();
         return { text: txt, options: { colspan: g.columnas, bold: !g.detalle, color: p.t, fill: { color: p.c }, align: 'center' } }; })));
-      filasHdr.push([vacio].concat(d.columnas.map(c => ({ text: c, options: { bold: true, color: TH.HDRT || 'FFFFFF', fill: { color: TH.HDR || SURF }, align: 'center', fontSize: G ? 13 : 16 } }))));
+      filasHdr.push([vacio].concat(d.columnas.map(c => ({ text: c, options: { bold: true, color: TH.HDR ? (TH.HDRT || 'FFFFFF') : (TH.ACCT || 'FFFFFF'), fill: { color: TH.HDR || ACC }, align: 'center', fontSize: G ? 13 : 16 } }))));
       const rows = d.filas.map(f => [{ text: f.nombre, options: { bold: true, color: ACC } }].concat(f.celdas.map(c => ({ text: c, options: { align: 'center', color: TXT } }))));
       const hs = (G ? [G.some(g => g.detalle) ? 0.62 : 0.45, 0.45] : [0.55]).concat(Array(d.filas.length).fill(filasH));
       s.addTable(filasHdr.concat(rows), { x: X0, y: yCont, w: CW, colW: [wl + 0.2].concat(Array(nc).fill((CW - wl - 0.2) / nc)), rowH: hs, fontFace: F, fontSize: 15, valign: 'middle', border: { type: 'solid', pt: 1, color: LINE }, color: TXT });

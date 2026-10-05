@@ -33,7 +33,7 @@ Inglés de industria que se queda tal cual: approach, stretch, white spaces, fin
 - Corchetes angulares para la aclaración operativa: «<50% shoppers de Walmart y 50% otras cadenas>».
 - Comillas simples para conceptos propios o palabras del consumidor: «dolores de la vida ‘moderna’».
 - Dos puntos como bisagra, nunca, en ningún texto de la propuesta (entrada, puntos, descripciones, notas). «La prueba no está asegurando la recompra: hay quienes…» se reescribe con conector: «La prueba no se está convirtiendo en recompra, porque hay quienes…». Tampoco «Exploring: diario online…».
-- Negrita en la frase que carga el sentido. NO en mayúsculas para criterios excluyentes de reclutamiento.
+- Negrita en la frase que carga el sentido. Los criterios excluyentes de reclutamiento van en minúsculas, nunca en mayúsculas para enfatizar («no han tomado Ensure en los últimos 6 meses», no «NO han tomado»).
 
 ## Vocabulario del cliente
 

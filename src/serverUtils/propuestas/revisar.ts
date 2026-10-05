@@ -24,6 +24,8 @@ const W = '[\\p{L}\\p{N}_]';
 const NUM_CERO = /(?<![\d$,.])0[1-9](?![\d,.:])/;
 const LETRAS_ESPACIADAS = new RegExp(`(?:(?<!${W})${W} ){5,}`, 'u');
 const PREGUNTA_BINARIA = new RegExp(`(?<!${W})(en cuáles|cuándo|dónde) no(?!${W})`, 'u');
+const ENFASIS_MAYUS = new RegExp(`(?<!${W})(NO|NUNCA|SOLO|SÓLO|SIN|SIEMPRE)(?!${W})`, 'u');
+const PORQUE = new RegExp(`(?<!${W})porque(?!${W})`, 'u');
 const EL_BRIEF = new RegExp(`(?<!${W})el brief(?!${W})`, 'u');
 const CORCHETE_SUELTO = /<\s*\d+\s*>/;
 const DOS_PUNTOS = new RegExp(`${W}:\\s`, 'u');
@@ -88,6 +90,9 @@ export function revisarContenido(C: any): Problema[] {
     if (PREGUNTA_BINARIA.test(low) && !ruta.endsWith('nota') && !ruta.endsWith('notas')) {
       add(ruta, `Pregunta binaria o absoluta: «${t}». Se pregunta para entender desde el consumidor (cuándo la eligen y qué los lleva a dejarla fuera), no para clasificar.`);
     }
+    if (ENFASIS_MAYUS.test(t) && !(t === t.toUpperCase() && t !== t.toLowerCase())) {
+      add(ruta, `Palabra en mayúsculas para enfatizar: «${t}». Los criterios van en minúsculas.`);
+    }
     if (EL_BRIEF.test(low)) add(ruta, 'Menciona «el brief». La propuesta le habla al cliente; se dice lo que el cliente nos compartió o se plantea directo.');
     if (CORCHETE_SUELTO.test(t)) add(ruta, `Número suelto entre corchetes angulares: «${t}». La aclaración operativa lleva texto: «<6 participantes cada una>».`);
     if (DOS_PUNTOS.test(t)) add(ruta, `Dos puntos como bisagra: «${t}». Se reescribe con conector (porque, para, en el que) o se parte en dos oraciones.`);
@@ -96,6 +101,9 @@ export function revisarContenido(C: any): Problema[] {
 
   const fases: any[] = C.fases ?? [];
   const nf = fases.length;
+  if (C.cliente && C.proyecto && String(C.proyecto).toLowerCase().includes(String(C.cliente).toLowerCase())) {
+    add('proyecto', `El nombre del proyecto «${C.proyecto}» lleva el cliente; la portada ya pone «para ${C.cliente}» y sale repetido.`);
+  }
   const TS = tamanoTitulo(C.estilo ?? 'A');
   const ILU = !!C.ilustraciones;
   const laminas: any[] = C.laminas ?? [];
@@ -171,6 +179,12 @@ export function revisarContenido(C: any): Problema[] {
       if (grupos && grupos.reduce((a: number, g: any) => a + (g.columnas ?? 0), 0) !== (l.columnas ?? []).length) {
         add(`laminas[${i}].grupos`, 'Los grupos de la muestra no suman el número de columnas.');
       }
+      if (fases.some(f => f.participantes) && PORQUE.test(String(l.bisagra || '').toLowerCase())) {
+        add(`laminas[${i}].bisagra`, 'La bisagra de la muestra explica la decisión de participantes. El porqué va en el enfoque; aquí solo se dice con quién vamos a hablar.');
+      }
+      (l.notas ?? []).forEach((n: any, k: number) => {
+        if ((String(n).match(/</g) ?? []).length > 1) add(`laminas[${i}].notas[${k}]`, 'La nota trae más de una definición. Va una definición por renglón.');
+      });
       for (const f of l.filas ?? []) for (const c of f.celdas ?? []) {
         if (c.includes('·')) add(`laminas[${i}]`, `Celda de muestra con punto medio: «${c}». Escríbela en español: «6 en 1 sesión».`);
       }

@@ -59,6 +59,10 @@ const casos: [string, (c: any) => void][] = [
   ['grupo sin detalle', c => { c.laminas[4].grupos = [{ fase: 1, columnas: 3 }]; }],
   ['detalle de fase sin quienes (las fases declaran participantes)', c => { c.fases.forEach((f: any, k: number) => { f.participantes = k === 0 ? 'nuevos' : 'mismos'; }); }],
   ['fase como nombre en detalle de fase', c => { c.laminas[3].fase = 'Home Rituals'; }],
+  ['el nombre del proyecto lleva el cliente', c => { c.proyecto = 'Café Altura y sus rituales'; }],
+  ['palabra en mayúsculas para enfatizar', c => { c.laminas[4].notas[2] = 'Todos NO han comprado otra marca en los últimos 6 meses'; }],
+  ['bisagra de la muestra con «porque» (fases con participantes)', c => { c.fases[0].participantes = 'nuevos'; c.laminas[4].bisagra = 'Hablaremos con 12 casas, porque son las mismas que en la fase anterior'; }],
+  ['nota de muestra con más de una definición', c => { c.laminas[4].notas[0] = 'Usuarios de Café Altura <la compran> y de otras marcas <no la han comprado>'; }],
   ['cantidad en letra fuera de formato', c => { c.laminas[6].paquete.letra = 'Seiscientos veinte mil pesos 00/100 M.N.'; }],
 ];
 // Contenido de prueba con errores (assets/): exactamente 24 problemas, iguales en Python y en TS.

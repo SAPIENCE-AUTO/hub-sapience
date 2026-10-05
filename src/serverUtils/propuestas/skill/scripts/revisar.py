@@ -68,6 +68,8 @@ for ruta, t in textos(C):
         problemas.append((ruta, 'Texto con letras espaciadas (versalitas espaciadas).'))
     if re.search(r'\b(en cuáles|cuándo|dónde) no\b', low) and not ruta.endswith(('nota', 'notas')):
         problemas.append((ruta, f'Pregunta binaria o absoluta: «{t}». Se pregunta para entender desde el consumidor (cuándo la eligen y qué los lleva a dejarla fuera), no para clasificar.'))
+    if re.search(r'\b(NO|NUNCA|SOLO|SÓLO|SIN|SIEMPRE)\b', t) and not t.isupper():
+        problemas.append((ruta, f'Palabra en mayúsculas para enfatizar: «{t}». Los criterios van en minúsculas.'))
     if re.search(r'\bel brief\b', low):
         problemas.append((ruta, 'Menciona «el brief». La propuesta le habla al cliente; se dice lo que el cliente nos compartió o se plantea directo.'))
     if re.search(r'<\s*\d+\s*>', t):
@@ -78,6 +80,8 @@ for ruta, t in textos(C):
         problemas.append((ruta, 'Número separado de su unidad por un salto de línea.'))
 
 nf = len(C.get('fases', []))
+if C.get('cliente') and C.get('proyecto') and C['cliente'].lower() in C['proyecto'].lower():
+    problemas.append(('proyecto', f'El nombre del proyecto «{C["proyecto"]}» lleva el cliente; la portada ya pone «para {C["cliente"]}» y sale repetido.'))
 try:
     TS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'estilos', f'estilo_{C.get("estilo", "A")}.json'), encoding='utf-8'))['TS']
 except Exception:
@@ -156,6 +160,11 @@ for i, l in enumerate(C.get('laminas', [])):
                 problemas.append((f'laminas[{i}].grupos[{k}]', 'El grupo no dice cuántos participantes son ni qué hacen («16 participantes con diario y entrevista»).'))
         if l.get('grupos') and sum(g.get('columnas', 0) for g in l['grupos']) != len(l.get('columnas', [])):
             problemas.append((f'laminas[{i}].grupos', 'Los grupos de la muestra no suman el número de columnas.'))
+        if any(f.get('participantes') for f in C.get('fases', [])) and re.search(r'\bporque\b', (l.get('bisagra') or '').lower()):
+            problemas.append((f'laminas[{i}].bisagra', 'La bisagra de la muestra explica la decisión de participantes. El porqué va en el enfoque; aquí solo se dice con quién vamos a hablar.'))
+        for k, n in enumerate(l.get('notas', [])):
+            if str(n).count('<') > 1:
+                problemas.append((f'laminas[{i}].notas[{k}]', 'La nota trae más de una definición. Va una definición por renglón.'))
         for f in l.get('filas', []):
             for c in f.get('celdas', []):
                 if '·' in c:

@@ -31,6 +31,7 @@ CÓMO SE ESCRIBE PARA LA LÁMINA (la propuesta la lee el cliente y se imprime en
 - Muestra: las notas son obligatorias (criterios comunes y definición de cada perfil). Para que quepan debajo, la tabla lleva máximo 4 filas (3 si usa «grupos») y el acomodo en celdas máximo 2. Si alguna fase después de la primera tiene participantes nuevos, la muestra se agrupa por fase con «grupos» y las columnas son solo cortes (ciudad, edad).
 - Nunca digas «el brief», «del brief» ni «según el brief»: el cliente lee esto. Afirma directo (nombra las ciudades, el público, la categoría) o di «lo que nos compartieron». Lo que sí se respeta es el vocabulario del cliente.
 - Los corchetes angulares son solo para una aclaración operativa con sentido completo («<6 participantes por sesión>»), nunca para un número suelto como «<12>».
+- Las notas de la persona son instrucciones e información para ti; nunca las copies tal cual en ninguna lámina.
 - Redacta como persona, en español de México, sin frases armadas de trozos. Si una oración necesita releerse para entenderse, reescríbela.`;
 
 let systemCache: string | null = null;
