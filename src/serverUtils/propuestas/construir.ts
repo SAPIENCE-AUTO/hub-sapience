@@ -80,7 +80,7 @@ const FASES = (C.fases || []).map((f, i) => Object.assign({ n: f.nombre, etapa: 
 // una fase se puede indicar por índice (0, 1…) o por nombre
 const idxFase = f => typeof f === 'number' ? f : FASES.findIndex(x => x.n.toLowerCase() === String(f).toLowerCase());
 // lo que dice el conector entre una fase y la siguiente
-const textoPart = p => p === 'mismos' ? 'con los mismos participantes' : p === 'nuevos' ? 'con participantes nuevos' : '';
+const textoPart = p => p === 'mismos' ? 'con los mismos participantes' : p === 'nuevos' ? 'con participantes nuevos' : p === 'ninguno' ? 'trabajo interno de Sapience' : '';
 const W = 13.333, X0 = 0.6, CW = 12.13;
 let page = 1;
 
@@ -150,6 +150,11 @@ function ilustracion(s, x, y, w, h, archivo) {
   T(s, 'ILUSTRACIÓN', { x, y, w, h, fontSize: 10, bold: true, color: DIM, align: 'center', valign: 'middle' });
 }
 const ILU = !!C.ilustraciones;
+const esPendiente = p => !p || /^(pendiente|tbc|por confirmar)$/i.test(String(p).trim());
+function pendiente(s, x, y, w, h, sz) {   // hueco para un precio que la persona todavía no da
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y, w, h, fill: { color: SURF }, rectRadius: 0.1, line: { color: DIM, width: 1, dashType: 'dash' }, objectName: 'PRECIO_PENDIENTE' });
+  T(s, 'PRECIO POR CONFIRMAR', { x, y, w, h, fontSize: sz, bold: true, color: DIM, align: 'center', valign: 'middle' });
+}
 function iconBox(s, cx, cy, d, fill) {
   const k = TH.iconShape || 'circle';
   if (k === 'square') s.addShape(pres.shapes.RECTANGLE, { x: cx - d / 2, y: cy - d / 2, w: d, h: d, fill: { color: fill }, line: { color: fill } });
@@ -204,7 +209,7 @@ function plantilla(t) {
   const m = { titulo: C.proyecto, cliente: C.cliente, fecha: C.fecha, tipo };
   return t.replace(/\{(TIPO_RESTO|titulo|TITULO|cliente|CLIENTE|fecha|FECHA|tipo|TIPO)\}/g, (_, k) => {
     if (k === 'TIPO_RESTO') return tipo.replace(/^propuesta\s*/i, '').toUpperCase();
-    const v = m[k.toLowerCase()]; return k === k.toUpperCase() ? v.toUpperCase() : v;
+    const v = m[k.toLowerCase()] || ''; return k === k.toUpperCase() ? v.toUpperCase() : v;
   });
 }
 function ajusta(t, w, h, sz, bold) {
@@ -437,13 +442,15 @@ const M = {
     if (d.nota) T(s, d.nota, { x: X0, y: 6.35, w: CW, h: 0.3, fontSize: 12, color: MUT });
   },
   async inversion(d) {
+    // Claude nunca pone precio: si la persona no lo dio, el precio va como «pendiente» y aquí queda un hueco marcado
     const s = base(d.titulo || 'Inversión', d.bisagra);
     if (d.partidas) {
       cols(d.partidas.length, 0.18).forEach(({ x, w }, i) => { const pa = d.partidas[i], p = FASES[pa.fase];
         pill(s, x, 2.7, w, 0.5, p.n.toUpperCase(), p.c, p.t, 13);
         T(s, pa.descripcion, { x, y: 3.35, w, h: 0.6, fontSize: 13, align: 'center', color: MUT });
-        const largo = pa.precio.length > 16;
-        T(s, pa.precio, { x, y: 4.0, w, h: 0.8, fontSize: largo ? 16 : 21, bold: true, align: 'center' }); });
+        if (esPendiente(pa.precio)) pendiente(s, x + 0.2, 4.05, w - 0.4, 0.7, 13);
+        else { const largo = pa.precio.length > 16;
+          T(s, pa.precio, { x, y: 4.0, w, h: 0.8, fontSize: largo ? 16 : 21, bold: true, align: 'center' }); } });
     } else if (d.incluye) {
       box(s, X0, 2.6, CW, 2.5, SURF);
       T(s, 'LA INVERSIÓN INCLUYE', { x: X0 + 0.3, y: 2.75, w: 6, h: 0.3, fontSize: 12, bold: true, color: SECT });
@@ -451,8 +458,9 @@ const M = {
     }
     if (d.paquete) {
       if (d.paquete.etiqueta) T(s, d.paquete.etiqueta.toUpperCase(), { x: X0, y: 5.25, w: 8, h: 0.4, fontSize: 15, bold: true, color: SECT });
-      T(s, d.paquete.precio, { x: X0, y: 5.65, w: 10, h: 0.75, fontSize: 40, bold: true, color: ACC });
-      T(s, `(${d.paquete.letra})`, { x: X0, y: 6.38, w: 10, h: 0.35, fontSize: 13, color: MUT });
+      if (esPendiente(d.paquete.precio)) pendiente(s, X0, 5.7, 5.5, 0.85, 16);
+      else { T(s, d.paquete.precio, { x: X0, y: 5.65, w: 10, h: 0.75, fontSize: 40, bold: true, color: ACC });
+        T(s, `(${d.paquete.letra})`, { x: X0, y: 6.38, w: 10, h: 0.35, fontSize: 13, color: MUT }); }
     }
     if (d.nota) T(s, d.nota, { x: X0, y: 6.72, w: CW, h: 0.25, fontSize: 10, color: MUT });
   },
@@ -461,7 +469,21 @@ const M = {
     if (d.columnas) cols(d.columnas.length, 0.3).forEach(({ x, w }, i) => { const c = d.columnas[i];
       pill(s, x, yCont, w, 0.5, c.titulo.toUpperCase(), SURF, SECT, 15);
       T(s, flechas(c.puntos), { x: x + 0.1, y: yCont + 0.7, w: w - 0.15, h: 3.2 }); });
-    else if (d.puntos) T(s, flechas(d.puntos, 15), { x: X0, y: yCont, w: CW, h: 3.8 });
+    else if (d.puntos) {   // cada punto en su caja, para que la lámina no quede solo con texto; icono opcional por punto
+      const P = d.puntos.map(p => typeof p === 'string' ? { texto: p } : p), n = P.length;
+      const porFila = n <= 4 ? n : Math.ceil(n / 2), filas = Math.ceil(n / porFila), cs = cols(porFila, 0.25);
+      const conIc = P.some(p => p.icono), hIc = conIc ? 1.2 : 0, sz = porFila > 3 ? 13 : 14.5;
+      const hTx = Math.max(...P.map((p, i) => altoLista(p.texto, cs[i % porFila].w - 0.6, sz)));
+      const disp = (6.6 - yCont - 0.25 * (filas - 1)) / filas;
+      const hB = Math.min(disp, Math.max(0.7 + hIc + hTx, filas > 1 ? 1.6 : 2.6));   // cajas con cuerpo, sin dejar media lámina vacía
+      for (const [i, p] of P.entries()) {
+        const { x, w } = cs[i % porFila], y = yCont + Math.floor(i / porFila) * (hB + 0.25), y0 = y + (hB - hIc - hTx) / 2;
+        box(s, x, y, w, hB, SURF);
+        if (p.icono) { iconBox(s, x + w / 2, y0 + 0.45, 0.9, ACC);
+          s.addImage({ data: await icon(p.icono, '#' + (TH.ACCT || 'FFFFFF')), x: x + w / 2 - 0.24, y: y0 + 0.21, w: 0.48, h: 0.48 }); }
+        T(s, partesAng(p.texto, sz), { x: x + 0.3, y: y0 + hIc, w: w - 0.6, h: hTx + 0.1, align: 'center', valign: 'top' });
+      }
+    }
     if (d.nota) T(s, d.nota, { x: X0, y: 6.3, w: CW, h: 0.5, fontSize: 13, color: MUT });
   },
   async cierre() { const s = pres.addSlide(); s.addImage({ path: A('img', 'cierre.png'), x: 0, y: 0, w: W, h: 7.5 }); },

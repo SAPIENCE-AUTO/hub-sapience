@@ -33,7 +33,7 @@ Antes de escribir una sola lámina, lee los tres archivos de referencia:
 
 - **No se inventa información.** El contexto y cualquier afirmación sobre el mercado, la marca, la competencia o el consumidor salen solo del brief o de lo que diga quien pide la propuesta. En el archivo de contenido, cada punto del contexto lleva su `fuente` (`brief`, `persona` o `hipotesis`). Lo que es hipótesis se redacta como hipótesis («podría», «la pregunta es si»). Las indicaciones sobre la muestra (por ejemplo, incluir compradores de cierta competencia) son decisiones de diseño, no datos de mercado, y no se convierten en afirmaciones del contexto. Si falta información para un buen contexto, se pregunta en el paso 2.
 
-- Toda propuesta lleva precio. Nunca «por cotizar». Si no hay dato, pregunta en el paso 2.
+- El precio nunca lo inventa Claude: sale solo de lo que diga la persona. Si no lo da (o dice TBC), el precio va como `"pendiente"` en el contenido y el constructor deja un hueco marcado PRECIO POR CONFIRMAR, que la persona llena antes de mandar la propuesta. Nunca se escribe «por cotizar» como texto de la propuesta.
 - Las fases se bautizan para cada proyecto (ver `estructura.md`). No uses un catálogo fijo de nombres.
 - Nada de numeración con cero a la izquierda (01, 02); si algo se numera, va 1, 2, 3.
 - Nada de barras delgadas de color para separar o dividir; se separa con aire o con bloques sólidos. Las únicas líneas delgadas permitidas son la gris bajo el encabezado y la rayita vertical junto al logo en las bandas.

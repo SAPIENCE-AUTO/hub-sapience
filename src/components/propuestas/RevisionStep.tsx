@@ -58,6 +58,10 @@ export default function RevisionStep({ p, iniciar, onIniciado, onChanged, onVolv
 
   const ocupado = llamada.corriendo || construyendo;
   const hayContenido = !!p.contenido;
+  // Precio pendiente: alguna partida o el precio final de la inversión viene como "pendiente"
+  const precioPendiente = !!p.contenido?.laminas?.some((l: any) => l.tipo === 'inversion' &&
+    ((l.partidas ?? []).some((x: any) => /^(pendiente|tbc|por confirmar)$/i.test(String(x.precio ?? '').trim()) || !x.precio) ||
+      (l.paquete && (/^(pendiente|tbc|por confirmar)$/i.test(String(l.paquete.precio ?? '').trim()) || !l.paquete.precio))));
 
   return (
     <div className="space-y-6">
@@ -101,6 +105,12 @@ export default function RevisionStep({ p, iniciar, onIniciado, onChanged, onVolv
         <Seccion titulo="Ajustes que hizo el constructor a la paleta" ayuda="Contraste, saturación y que las fases se distingan.">
           <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-0.5">{p.ajustesPaleta.map((a: string, i: number) => <li key={i}>{a}</li>)}</ul>
         </Seccion>
+      )}
+
+      {hayContenido && precioPendiente && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" /> Esta propuesta no tiene precio. Llénalo antes de mandarla.
+        </div>
       )}
 
       {hayContenido && (

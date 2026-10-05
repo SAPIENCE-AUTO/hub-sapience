@@ -51,7 +51,15 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
     } catch (e) { toast.error(e instanceof Error ? e.message : 'No se pudo volver a proponer'); }
   };
 
+  // Participantes por fase: ninguna viene marcada; la primera fase CON participantes va en «nuevos» (no puede ser «mismos»).
+  const sinGente = (f: any) => f.participantes === 'ninguno';
+  const esPrimeraConGente = (i: number) => d.fases.slice(0, i).every(sinGente);
+  const faseSinElegir = d.fases.map((f: any, i: number) => (!f.participantes ? i : -1)).filter((i: number) => i >= 0);
+  const primeraMismos = d.fases.findIndex((f: any, i: number) => esPrimeraConGente(i) && !sinGente(f) && f.participantes === 'mismos');
+  const participantesOk = faseSinElegir.length === 0 && primeraMismos < 0;
+
   const aprobar = async () => {
+    if (!participantesOk) { toast.error('Falta decidir los participantes de alguna fase'); return; }
     setGuardando(true);
     try { await savePropuestaEsqueleto({ id: p.id, esqueleto: d }); await onChanged(); onAprobado(); }
     catch (e) { toast.error(e instanceof Error ? e.message : 'No se pudo guardar el esqueleto'); }
@@ -103,14 +111,15 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => quitarFase(i)} disabled={ocupado || d.fases.length <= 1}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
               <div className="flex flex-col md:flex-row md:items-center gap-2">
-                <Select value={i === 0 ? 'nuevos' : (f.participantes ?? 'nuevos')} onValueChange={v => set(c => { c.fases[i].participantes = v; })} disabled={ocupado || i === 0}>
-                  <SelectTrigger className="h-8 md:w-56"><SelectValue /></SelectTrigger>
+                <Select value={f.participantes ?? ''} onValueChange={v => set(c => { c.fases[i].participantes = v; })} disabled={ocupado}>
+                  <SelectTrigger className={`h-8 md:w-72 ${!f.participantes || (i === primeraMismos) ? 'border-amber-400' : ''}`}><SelectValue placeholder="Elige quiénes participan…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mismos">Mismos participantes</SelectItem>
                     <SelectItem value="nuevos">Participantes nuevos</SelectItem>
+                    <SelectItem value="mismos" disabled={esPrimeraConGente(i)}>Mismos participantes</SelectItem>
+                    <SelectItem value="ninguno">Sin participantes – trabajo de Sapience</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input className="h-8 flex-1" placeholder={i === 0 ? 'La primera fase siempre va con participantes nuevos' : 'Por qué (una frase)'} value={f.razon_participantes ?? ''} onChange={e => set(c => { c.fases[i].razon_participantes = e.target.value; })} disabled={ocupado} />
+                <Input className="h-8 flex-1" placeholder="Por qué (una frase)" value={f.razon_participantes ?? ''} onChange={e => set(c => { c.fases[i].razon_participantes = e.target.value; })} disabled={ocupado} />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 {([['goal', 'Goal'], ['tecnica', 'Técnica'], ['muestra', 'Muestra']] as const).map(([k, l]) => (
@@ -123,7 +132,7 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
             </div>
           ))}
           <Button variant="outline" size="sm" className="gap-1.5" disabled={ocupado}
-            onClick={() => set(c => { c.fases.push({ nombre: 'Nueva fase', etapa: null, icono: 'FiCircle', goal: '', tecnica: '', muestra: '', participantes: 'nuevos', razon_participantes: '' }); })}>
+            onClick={() => set(c => { c.fases.push({ nombre: 'Nueva fase', etapa: null, icono: 'FiCircle', goal: '', tecnica: '', muestra: '', razon_participantes: '' }); })}>
             <Plus className="w-3.5 h-3.5" /> Agregar fase
           </Button>
         </div>
@@ -154,13 +163,13 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
         </div>
       </Seccion>
 
-      <Seccion titulo="Precio" ayuda="Formato de Sapience: MXN $000,000.00 (+ IVA). El revisor lo valida.">
+      <Seccion titulo="Precio" ayuda="Los precios los pones tú: Claude no propone ninguno. Escribe la cantidad (MXN $000,000.00 + IVA) o déjalo vacío o en TBC; la propuesta saldrá con un hueco marcado «PRECIO POR CONFIRMAR».">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           <Select value={d.precio.modo} onValueChange={v => set(c => { c.precio.modo = v; })} disabled={ocupado}>
             <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="unico">Precio único</SelectItem><SelectItem value="por_fase">Por fase</SelectItem></SelectContent>
           </Select>
-          <Input className="h-8" placeholder="Total" value={d.precio.total} onChange={e => set(c => { c.precio.total = e.target.value; })} disabled={ocupado} />
+          <Input className="h-8" placeholder="Total: MXN $000,000.00 + IVA o TBC" value={d.precio.total} onChange={e => set(c => { c.precio.total = e.target.value; })} disabled={ocupado} />
           <Input className="h-8 md:col-span-2" placeholder="Total en letra" value={d.precio.letra} onChange={e => set(c => { c.precio.letra = e.target.value; })} disabled={ocupado} />
         </div>
         {d.precio.partidas.map((pa: any, i: number) => (
@@ -171,7 +180,7 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
               </Select>
             </div>
             <Input className="h-8 col-span-5" placeholder="Descripción" value={pa.descripcion} onChange={e => set(c => { c.precio.partidas[i].descripcion = e.target.value; })} disabled={ocupado} />
-            <Input className="h-8 col-span-3" placeholder="MXN $000,000.00" value={pa.precio} onChange={e => set(c => { c.precio.partidas[i].precio = e.target.value; })} disabled={ocupado} />
+            <Input className="h-8 col-span-3" placeholder="MXN $000,000.00 o TBC" value={pa.precio} onChange={e => set(c => { c.precio.partidas[i].precio = e.target.value; })} disabled={ocupado} />
             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => set(c => { c.precio.partidas.splice(i, 1); })} disabled={ocupado}><Trash2 className="w-3.5 h-3.5" /></Button>
           </div>
         ))}
@@ -216,8 +225,14 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
         <Switch checked={!!d.diseno.ilustraciones} onCheckedChange={v => set(c => { c.diseno.ilustraciones = v; })} disabled={ocupado} />
       </div>
 
+      {!participantesOk && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+          {faseSinElegir.length > 0 && <p>Falta decidir quiénes participan en: {faseSinElegir.map((i: number) => `«${d.fases[i].nombre}»`).join(', ')}. Elige una opción en cada fase para continuar.</p>}
+          {primeraMismos >= 0 && <p>«{d.fases[primeraMismos].nombre}» es la primera fase con participantes, así que va con participantes nuevos.</p>}
+        </div>
+      )}
       <div className="flex justify-end">
-        <Button onClick={aprobar} disabled={ocupado} className="gap-1.5"><Check className="w-4 h-4" /> Aprobar esqueleto y continuar</Button>
+        <Button onClick={aprobar} disabled={ocupado || !participantesOk} className="gap-1.5"><Check className="w-4 h-4" /> Aprobar esqueleto y continuar</Button>
       </div>
     </div>
   );

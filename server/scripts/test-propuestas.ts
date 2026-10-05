@@ -14,6 +14,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { revisarContenido } from '../../src/serverUtils/propuestas/revisar';
 import { construirPropuesta } from '../../src/serverUtils/propuestas/construir';
+import { esqueletoParaClaude, validarPrecios } from '../../src/serverUtils/propuestas/flujo';
 
 const SKILL = path.resolve(import.meta.dirname, '../../src/serverUtils/propuestas/skill');
 const EJEMPLO = JSON.parse(fs.readFileSync(path.join(SKILL, 'assets/ejemplo_contenido.json'), 'utf8'));
@@ -63,6 +64,15 @@ const casos: [string, (c: any) => void][] = [
   ['palabra en mayúsculas para enfatizar', c => { c.laminas[4].notas[2] = 'Todos NO han comprado otra marca en los últimos 6 meses'; }],
   ['bisagra de la muestra con «porque» (fases con participantes)', c => { c.fases[0].participantes = 'nuevos'; c.laminas[4].bisagra = 'Hablaremos con 12 casas, porque son las mismas que en la fase anterior'; }],
   ['nota de muestra con más de una definición', c => { c.laminas[4].notas[0] = 'Usuarios de Café Altura <la compran> y de otras marcas <no la han comprado>'; }],
+  ['participantes [nuevos, mismos] sin grupos: 0 problemas', c => { c.fases.forEach((f: any, k: number) => { f.participantes = k === 0 ? 'nuevos' : 'mismos'; }); c.laminas[3].quienes = '12 participantes'; }],
+  ['participantes [nuevos, nuevos] sin grupos: marca el problema', c => { c.fases.forEach((f: any, k: number) => { f.participantes = k <= 1 ? 'nuevos' : 'mismos'; }); c.laminas[3].quienes = '12 participantes'; }],
+  ['participantes [nuevos, ninguno, mismos] sin grupos: 0 problemas de grupos', c => { c.fases.forEach((f: any, k: number) => { f.participantes = ['nuevos', 'ninguno', 'mismos', 'mismos'][k]; }); }],
+  ['participantes [ninguno, nuevos, mismos] sin grupos: 0 problemas de grupos', c => { c.fases.forEach((f: any, k: number) => { f.participantes = ['ninguno', 'nuevos', 'mismos', 'mismos'][k]; }); c.laminas[3].quienes = '12 participantes'; }],
+  ['participantes [nuevos, ninguno, nuevos] sin grupos: marca el problema de grupos', c => { c.fases.forEach((f: any, k: number) => { f.participantes = ['nuevos', 'ninguno', 'nuevos', 'mismos'][k]; }); }],
+  ['inversión con precio «pendiente»: 0 problemas', c => { c.laminas[6].partidas[1].precio = 'pendiente'; c.laminas[6].paquete = { etiqueta: 'Precio', precio: 'pendiente' }; }],
+  ['hipótesis escrita como hecho', c => { c.laminas[0].columnas[2].puntos[1].texto = 'El ritual nuevo no deja lugar para una marca de soluble'; }],
+  ['definición de perfil sin tiempo ni frecuencia', c => { c.laminas[4].notas[0] = 'Usuarios de Café Altura <es la marca que más compran en casa>'; }],
+  ['lámina de puntos sin icono', c => { c.laminas.splice(7, 0, { tipo: 'seccion', titulo: 'Para arrancar', bisagra: 'Esto necesitamos de Café Altura', puntos: ['Estudios previos', { texto: 'Muestras', icono: 'FiPackage' }] }); }],
   ['cantidad en letra fuera de formato', c => { c.laminas[6].paquete.letra = 'Seiscientos veinte mil pesos 00/100 M.N.'; }],
 ];
 // Contenido de prueba con errores (assets/): exactamente 24 problemas, iguales en Python y en TS.
@@ -80,6 +90,13 @@ for (const [nombre, mut] of casos) {
   const obtenido = ts.length ? ts.map(p => `[${p.ruta}] ${p.problema}`) : ['Sin problemas.'];
   const iguales = JSON.stringify(esperado) === JSON.stringify(obtenido) && (py.status === 1) === (ts.length > 0);
   if (nombre.startsWith('prueba_victoria')) console.log(`    (Victoria con errores: Python ${esperado.length} problemas, TS ${ts.length})`);
+  if (nombre.startsWith('participantes [nuevos, ninguno, mismos]') || nombre.startsWith('participantes [ninguno, nuevos, mismos]')) {
+    if (ts.some(x => x.problema.startsWith('Hay fases con participantes nuevos'))) { bad(`${nombre}: no debía salir el problema de grupos`); continue; }
+  }
+  if (nombre.startsWith('participantes [nuevos, ninguno, nuevos]') && !ts.some(x => x.problema.startsWith('Hay fases con participantes nuevos'))) { bad(`${nombre}: debía salir el problema de grupos`); continue; }
+  if (nombre.startsWith('inversión con precio «pendiente»') && ts.length !== 0) { bad(`${nombre}: debían ser 0 y salieron ${ts.length}`); continue; }
+  if (nombre.startsWith('participantes [nuevos, mismos]') && ts.length !== 0) { bad(`${nombre}: debían ser 0 y salieron ${ts.length}`); continue; }
+  if (nombre.startsWith('participantes [nuevos, nuevos]') && !(ts.length === 1 && ts[0].problema.startsWith('Hay fases con participantes nuevos'))) { bad(`${nombre}: debía salir solo el problema de grupos y salió ${JSON.stringify(ts.map(x => x.problema))}`); continue; }
   if (nombre === 'ejemplo sin cambios' && ts.length !== 0) { bad(`${nombre}: debe salir «Sin problemas» y salieron ${ts.length}`); continue; }
   if (iguales) ok(`${nombre} (${ts.length} problemas)`);
   else { bad(nombre); console.log('    python:', esperado, '\n    ts    :', obtenido); }
@@ -145,6 +162,22 @@ for (const acomodoEnfoque of ['circulos', 'banda']) for (const acomodoMuestra of
   if (salida === '') ok('ningún slide trae </a:r><a:pPr (limpiarParrafos aplicado, con <…> en notas y en «cómo»)'); else bad('XML con <a:pPr> a media línea en: ' + salida);
 }
 
+// fase interna («ninguno»), precios pendientes y lámina de puntos con iconos: idénticos al original
+for (const acomodoEnfoque of ['circulos', 'banda']) {
+  const cn = clone();
+  cn.fases.forEach((f: any, k: number) => { f.participantes = ['nuevos', 'ninguno', 'mismos', 'mismos'][k]; });
+  cn.laminas[2].acomodo = acomodoEnfoque;
+  cn.laminas[6].partidas[1].precio = 'pendiente'; cn.laminas[6].paquete = { etiqueta: 'Precio especial', precio: 'pendiente' };
+  cn.laminas.splice(7, 0, { tipo: 'seccion', titulo: 'Para arrancar', bisagra: 'Esto necesitamos de Café Altura', puntos: [{ texto: 'Estudios previos de la categoría', icono: 'FiBookOpen' }, { texto: 'Muestras de las tres presentaciones', icono: 'FiPackage' }, { texto: 'Quién asistirá a las visitas', icono: 'FiUsers' }] });
+  const nPath = path.join(TMP, `interna_${acomodoEnfoque}.json`); fs.writeFileSync(nPath, JSON.stringify(cn), 'utf8');
+  const nOut = nPath.replace('.json', '.pptx');
+  execFileSync('node', [path.join(SKILL, 'scripts/construir.js'), nPath, nOut], { cwd: SKILL, stdio: 'pipe' });
+  const nts = await construirPropuesta(cn);
+  const na = sinMeta(await entradas(fs.readFileSync(nOut))), nb = sinMeta(await entradas(nts.buffer));
+  const nd = [...new Set([...na.keys(), ...nb.keys()])].filter(n => na.get(n) !== nb.get(n));
+  if (nd.length === 0) ok(`fase interna + precios pendientes + puntos con icono (enfoque ${acomodoEnfoque}) idénticos al original`); else bad(`fase interna/pendiente/puntos (${acomodoEnfoque}) distintos: ` + nd.join(', '));
+}
+
 // muestra con `grupos` en los dos acomodos: el TS debe salir idéntico al original
 for (const acomodo of ['tabla', 'celdas']) {
   const cg = clone(); cg.laminas[4].acomodo = acomodo; cg.laminas[4].grupos = [{ fase: 0, columnas: 2 }, { fase: 1, columnas: 1 }];
@@ -155,6 +188,33 @@ for (const acomodo of ['tabla', 'celdas']) {
   const ga = sinMeta(await entradas(fs.readFileSync(gOut))), gb = sinMeta(await entradas(gts.buffer));
   const gd = [...new Set([...ga.keys(), ...gb.keys()])].filter(n => ga.get(n) !== gb.get(n));
   if (gd.length === 0) ok(`muestra con grupos (${acomodo}) idéntica al original`); else bad(`muestra con grupos (${acomodo}) distinta: ` + gd.join(', '));
+}
+
+// ── precios: nunca salen de Claude ──────────────────────────────────────
+console.log('Precios: esqueleto → Claude → guardia');
+{
+  const esqTBC: any = { precio: { modo: 'por_fase', partidas: [{ fase: 0, descripcion: 'a', precio: 'TBC' }, { fase: 1, descripcion: 'b', precio: '' }, { fase: 2, descripcion: 'c', precio: 'MXN $100,000.00' }, { fase: 3, descripcion: 'd', precio: 'Incluido como valor agregado' }], total: 'por confirmar', letra: 'Cien mil pesos mexicanos' } };
+  const aClaude = esqueletoParaClaude(esqTBC).precio;
+  const okAClaude = aClaude.partidas.map((x: any) => x.precio).join('|') === 'pendiente|pendiente|MXN $100,000.00|Incluido como valor agregado' && aClaude.total === 'pendiente' && aClaude.letra === '';
+  if (okAClaude) ok('a Claude le llega «pendiente» en todo precio vacío o TBC (y sin letra); el esqueleto original no se toca'); else bad('esqueletoParaClaude: ' + JSON.stringify(aClaude));
+  if (esqTBC.precio.partidas[0].precio === 'TBC') ok('esqueletoParaClaude no modifica el esqueleto guardado'); else bad('esqueletoParaClaude modificó el esqueleto original');
+  // Claude inventa cifras: se reemplazan por el valor del esqueleto («pendiente») y se registran
+  const c1 = clone(); c1.laminas[6].partidas = [{ fase: 0, descripcion: 'a', precio: 'MXN $850,000.00' }, { fase: 1, descripcion: 'b', precio: 'MXN $90,000.00' }, { fase: 2, descripcion: 'c', precio: 'MXN $100,000.00' }, { fase: 3, descripcion: 'd', precio: 'Incluido como valor agregado' }];
+  c1.laminas[6].paquete = { etiqueta: 'Paquete', precio: 'MXN $780,000.00 + IVA', letra: 'Setecientos ochenta mil pesos mexicanos + IVA' };
+  const av1 = validarPrecios(c1, esqTBC);
+  const l1 = c1.laminas[6];
+  const okInv = l1.partidas.map((x: any) => x.precio).join('|') === 'pendiente|pendiente|MXN $100,000.00|Incluido como valor agregado' && l1.paquete.precio === 'pendiente' && l1.paquete.letra === undefined && av1.length === 3;
+  if (okInv) ok(`cifras inventadas reemplazadas por «pendiente», sin cantidad en letra, y registradas (${av1.length} avisos)`); else bad('validarPrecios: ' + JSON.stringify({ p: l1.partidas.map((x: any) => x.precio), paq: l1.paquete, av1 }));
+  // el contenido de Claude ya correcto no se toca ni genera avisos
+  const c2 = clone(); c2.laminas[6].partidas = [{ fase: 0, descripcion: 'a', precio: 'pendiente' }, { fase: 1, descripcion: 'b', precio: 'pendiente' }, { fase: 2, descripcion: 'c', precio: 'MXN $100,000.00' }, { fase: 3, descripcion: 'd', precio: 'Incluido como valor agregado' }];
+  c2.laminas[6].paquete = { etiqueta: 'Paquete', precio: 'pendiente' };
+  const av2 = validarPrecios(c2, esqTBC);
+  if (av2.length === 0 && c2.laminas[6].paquete.precio === 'pendiente') ok('contenido que respeta el esqueleto: sin cambios ni avisos'); else bad('validarPrecios tocó un contenido correcto: ' + JSON.stringify(av2));
+  // el precio que la persona sí llenó se conserva exacto
+  const esqOK: any = { precio: { modo: 'unico', partidas: [], total: 'MXN $620,000.00 + IVA', letra: 'Seiscientos veinte mil pesos mexicanos + IVA' } };
+  const c3 = clone(); c3.laminas[6].partidas = undefined; c3.laminas[6].paquete = { etiqueta: 'P', precio: 'MXN $999,000.00 + IVA', letra: 'x' };
+  validarPrecios(c3, esqOK);
+  if (c3.laminas[6].paquete.precio === 'MXN $620,000.00 + IVA') ok('el precio final de la persona se restituye si Claude lo cambia'); else bad('precio final no restituido: ' + c3.laminas[6].paquete.precio);
 }
 
 fs.rmSync(TMP, { recursive: true, force: true });

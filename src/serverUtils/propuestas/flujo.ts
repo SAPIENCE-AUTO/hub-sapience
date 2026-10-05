@@ -23,16 +23,16 @@ export async function proponerEsqueleto(args: { brief: BriefInput; notas?: strin
 
 Lee el brief y propone el esqueleto de la propuesta.
 
-Si el brief no trae datos de contexto (situación del negocio, la marca, la categoría o el consumidor) suficientes para al menos dos bloques con sustancia, pregúntalos en "preguntas". El target y lo que falta investigar no cuentan como contexto. Para cada fase después de la primera, decide si trabaja con los mismos participantes de la fase anterior o con nuevos, y explica por qué en una frase. La primera fase va siempre en nuevos. Ordena el índice así: contexto, postura si aplica, objetivos, enfoque, detalle de fase, entregables, muestra, tiempos, inversión y, después de la inversión, lo que necesitamos del cliente, valor agregado, escenarios o siguiente paso; cierre al final.
+Si el brief no trae datos de contexto (situación del negocio, la marca, la categoría o el consumidor) suficientes para al menos dos bloques con sustancia, pregúntalos en "preguntas". El target y lo que falta investigar no cuentan como contexto. No propongas precios; deja precio y total vacíos. Para cada fase después de la primera, decide si trabaja con los mismos participantes de la fase anterior o con nuevos, y explica por qué en una frase. Llena participantes en todas las fases. Usa "ninguno" para las fases que son trabajo interno de Sapience, sin consumidores. "mismos" se refiere a los de la última fase que tuvo participantes. La primera fase con participantes va en "nuevos". Ordena el índice así: contexto, postura si aplica, objetivos, enfoque, detalle de fase, entregables, muestra, tiempos, inversión y, después de la inversión, lo que necesitamos del cliente, valor agregado, escenarios o siguiente paso; cierre al final.
 
 Responde solo con JSON con este esquema:
 {
   "resumen_brief": "2 a 4 oraciones con lo que pide el cliente, solo con lo que dice el brief",
   "preguntas": ["lo que falta y cambia la propuesta; vacío si no falta nada"],
   "metodo": "cualitativo | cuantitativo | mixto",
-  "fases": [{"nombre": "", "etapa": null, "icono": "nombre de Feather Icon, ej. FiUsers", "goal": "", "tecnica": "", "muestra": "", "participantes": "nuevos | mismos", "razon_participantes": "una frase"}],
+  "fases": [{"nombre": "", "etapa": null, "icono": "nombre de Feather Icon, ej. FiUsers", "goal": "", "tecnica": "", "muestra": "", "participantes": "nuevos | mismos | ninguno", "razon_participantes": "una frase"}],
   "indice": [{"tipo": "contexto | punto_partida | objetivos | enfoque | detalle_fase | muestra | entregables | tiempos | inversion | seccion | cierre", "titulo": "", "resumen": "una línea de lo que dirá", "incluir": true, "razon": "por qué se incluye o se deja fuera"}],
-  "precio": {"modo": "unico | por_fase", "partidas": [{"fase": 0, "descripcion": "", "precio": "MXN $000,000.00"}], "total": "MXN $000,000.00 + IVA", "letra": ""},
+  "precio": {"modo": "unico | por_fase", "partidas": [{"fase": 0, "descripcion": "", "precio": ""}], "total": "", "letra": ""},
   "tiempos": {"fecha_inicio": "AAAA-MM-DD SOLO si el brief o la persona dan un día exacto; si dicen un mes o «mediados de…», null (la lámina mostrará Semana 1, Semana 2…)", "actividades": [{"nombre": "Reclutamiento", "fase": null, "inicio_semana": 0, "duracion_semanas": 1}]},
   "diseno": {"estilo": "A-G", "portada": "id de portadas.json", "razon": "una frase", "ilustraciones": false}
 }
@@ -41,8 +41,8 @@ Cronograma: el análisis de cada fase dura mínimo 1 semana. Máximo 9 semanas e
   ];
   const esq = await llamarJSON({ usuario, esquema: Esqueleto, maxTokens: 16000 });
   // El análisis de una fase no baja de 1 semana (precarga 1.5, la persona lo ajusta en pantalla).
-  // La primera fase siempre es de participantes nuevos.
-  const fases = esq.fases.map((f, i) => (i === 0 ? { ...f, participantes: 'nuevos' as const } : f));
+  // La primera fase con participantes (no «ninguno») siempre es de participantes nuevos.
+  const fases = primeraConGenteNuevos(esq.fases);
   return { ...esq, fases, tiempos: precargarAnalisis(esq.tiempos) };
 }
 
@@ -63,11 +63,11 @@ export async function escribirContenido(args: { brief: BriefInput; notas?: strin
     { type: 'text', text: `FECHA DE HOY (para el campo "fecha" del contenido): ${new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric', timeZone: 'America/Mexico_City' })}
 NOTAS DE LA PERSONA: ${args.notas?.trim() || '(ninguna)'}
 ESQUELETO APROBADO:
-${JSON.stringify(args.esqueleto)}
+${JSON.stringify(esqueletoParaClaude(args.esqueleto))}
 ARCHIVOS SUBIDOS POR SLOT (usa estas rutas tal cual donde corresponda):
 ${JSON.stringify(args.archivosPorSlot)}
 
-Escribe el contenido completo de la propuesta con base en el esqueleto aprobado. La decisión de participantes de cada fase se ve en la propuesta: llena «quienes» en cada detalle de fase y «detalle» en cada grupo de la muestra. Di el porqué una sola vez, en la bisagra del enfoque. La bisagra de la muestra solo dice con quién vamos a hablar, y las notas de la muestra quedan para los criterios de reclutamiento y la definición de cada perfil, una por renglón. Respeta las fases, el índice (solo las láminas con incluir: true, en ese orden), la muestra, el precio y los tiempos tal como vienen. Responde solo con JSON en el formato del archivo de contenido descrito en references/estructura.md (el mismo de assets/ejemplo_contenido.json), con estilo, portada, paleta, ilustraciones y rutas de archivos tomados de "diseno".` },
+Escribe el contenido completo de la propuesta con base en el esqueleto aprobado. Los precios se copian tal como vienen en el esqueleto. Si un precio viene como pendiente, escribe "pendiente" y no pongas cantidad en letra. Nunca inventes un precio. La decisión de participantes de cada fase se ve en la propuesta: llena «quienes» en cada detalle de fase y «detalle» en cada grupo de la muestra. Di el porqué una sola vez, en la bisagra del enfoque. La bisagra de la muestra solo dice con quién vamos a hablar, y las notas de la muestra quedan para los criterios de reclutamiento y la definición de cada perfil, una por renglón. Respeta las fases, el índice (solo las láminas con incluir: true, en ese orden), la muestra, el precio y los tiempos tal como vienen. Responde solo con JSON en el formato del archivo de contenido descrito en references/estructura.md (el mismo de assets/ejemplo_contenido.json), con estilo, portada, paleta, ilustraciones y rutas de archivos tomados de "diseno".` },
   ];
   return llamarJSON({ usuario, esquema: Contenido, maxTokens: 32000 });
 }
@@ -77,14 +77,67 @@ export async function corregirContenido(contenido: any, problemas: Problema[]): 
   const lista = problemas.map(p => `[${p.ruta}] ${p.problema}`).join('\n');
   const usuario = `El revisor de Sapience marcó estos problemas en el contenido. Corrígelos sin inventar información y sin cambiar lo que no está marcado. Responde solo con el contenido completo corregido en JSON.
 PROBLEMAS: ${lista}
+No cambies ningún precio: si viene como "pendiente", se queda como "pendiente" y sin cantidad en letra. Nunca inventes un precio.
 CONTENIDO: ${JSON.stringify(contenido)}`;
   return llamarJSON({ usuario, esquema: Contenido, maxTokens: 32000 });
+}
+
+// ── Precios ───────────────────────────────────────────────────────────────
+// Claude nunca propone ni pone precio: salen solo de la persona (pantalla 2). Un precio vacío, TBC,
+// «por confirmar» o «pendiente» viaja como "pendiente" y el constructor deja un hueco marcado.
+export const precioPendiente = (p: unknown): boolean => !p || /^(pendiente|tbc|por confirmar)$/i.test(String(p).trim());
+const normPrecio = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+// Lo que se le manda a Claude en la llamada 2: todo precio vacío o TBC va como "pendiente" y sin cantidad en letra.
+export function esqueletoParaClaude(esq: EsqueletoT): EsqueletoT {
+  const c: EsqueletoT = JSON.parse(JSON.stringify(esq));
+  c.precio.partidas = c.precio.partidas.map(pa => ({ ...pa, precio: precioPendiente(pa.precio) ? 'pendiente' : pa.precio }));
+  c.precio.total = precioPendiente(c.precio.total) ? 'pendiente' : c.precio.total;
+  if (c.precio.total === 'pendiente') c.precio.letra = '';
+  return c;
+}
+
+// Después de la llamada 2 y de cada corrección: cada precio del contenido debe ser el del esqueleto o "pendiente".
+// Si Claude escribió una cifra que no está en el esqueleto, se reemplaza y se registra en los avisos.
+export function validarPrecios(contenido: any, esq: EsqueletoT): string[] {
+  const avisos: string[] = [];
+  const porFase: Record<number, string[]> = {};   // precios de las partidas del esqueleto, por fase y en orden
+  for (const pa of esq.precio.partidas) (porFase[pa.fase] ??= []).push(precioPendiente(pa.precio) ? 'pendiente' : pa.precio.trim());
+  const usados: Record<number, number> = {};
+  for (const l of contenido.laminas ?? []) {
+    if (l.tipo !== 'inversion') continue;
+    for (const pa of l.partidas ?? []) {
+      const k = usados[pa.fase] = (usados[pa.fase] ?? -1) + 1;
+      const esperado = porFase[pa.fase]?.[k] ?? 'pendiente';
+      const tiene = precioPendiente(pa.precio) ? 'pendiente' : pa.precio;
+      if (normPrecio(tiene) !== normPrecio(esperado)) {
+        avisos.push(`Claude escribió el precio «${pa.precio}» en una partida de la inversión y no coincide con el esqueleto; quedó «${esperado}».`);
+        pa.precio = esperado;
+      } else pa.precio = esperado;
+    }
+    if (l.paquete) {
+      const esperado = precioPendiente(esq.precio.total) ? 'pendiente' : esq.precio.total.trim();
+      const tiene = precioPendiente(l.paquete.precio) ? 'pendiente' : l.paquete.precio;
+      if (normPrecio(tiene) !== normPrecio(esperado)) {
+        avisos.push(`Claude escribió el precio final «${l.paquete.precio}» y no coincide con el esqueleto; quedó «${esperado}».`);
+      }
+      l.paquete.precio = esperado;
+      if (esperado === 'pendiente') delete l.paquete.letra;   // sin precio no hay cantidad en letra
+    }
+  }
+  return avisos;
 }
 
 // Lo que el esqueleto ya decidió NO se le deja a Claude: estilo, portada,
 // paleta, ilustraciones, fotos de portada y la lámina de tiempos se fijan aquí
 // de forma determinista (el spec dice que se toman de "diseno" y que los
 // tiempos se convierten con una función, no se reescriben).
+// La primera fase que tiene participantes (no «ninguno») va siempre en «nuevos».
+export function primeraConGenteNuevos<T extends { participantes: string }>(fases: T[]): T[] {
+  const k = fases.findIndex(f => f.participantes !== 'ninguno');
+  return fases.map((f, i) => (i === k ? { ...f, participantes: 'nuevos' } : f));
+}
+
 const txtParte = (p: any): string => (typeof p === 'string' ? p : p?.texto ?? '');
 export function separarPartes(partes: any[]): any[] {
   return partes.map((p, i) => {
@@ -116,7 +169,7 @@ export function fijarDesdeEsqueleto(contenido: any, esq: EsqueletoT, rutasFotosP
     }
   }
   // Participantes por fase: lo decide el esqueleto; el revisor y la muestra lo usan.
-  if (Array.isArray(c.fases)) c.fases = c.fases.map((f: any, i: number) => (esq.fases[i] ? { ...f, participantes: i === 0 ? 'nuevos' : esq.fases[i].participantes } : f));
+  if (Array.isArray(c.fases)) { const ps = primeraConGenteNuevos(esq.fases); c.fases = c.fases.map((f: any, i: number) => (ps[i] ? { ...f, participantes: ps[i].participantes } : f)); }
   c.portada = esq.diseno.portada;
   if (esq.diseno.paleta) c.paleta = esq.diseno.paleta; else delete c.paleta;
   c.ilustraciones = !!esq.diseno.ilustraciones;
@@ -165,6 +218,7 @@ export function fijarDesdeEsqueleto(contenido: any, esq: EsqueletoT, rutasFotosP
     return l.imagenes.length > 0;
   });
   if (c.laminas.length < antes) avisos.push('Se omitió la lámina de ejemplos de entregables porque no se subieron capturas.');
+  avisos.push(...validarPrecios(c, esq));   // ningún precio sale de Claude: el del esqueleto o «pendiente»
   return { contenido: c, avisos };
 }
 
@@ -182,6 +236,7 @@ export async function escribirYRevisar(args: {
   const archivosPorSlot = Object.fromEntries(args.archivos.map(a => [`${a.tipo}:${a.slot}`, a.path]));
   let fijado = fijarDesdeEsqueleto(await escribirContenido({ ...args, archivosPorSlot }), args.esqueleto, rutasFotosPortada, args.archivos);
   let contenido = fijado.contenido;
+  const avisosTodos = new Set<string>(fijado.avisos);   // los avisos de cada pasada se conservan (p. ej. un precio inventado que ya se reemplazó)
   let problemas = revisarTodo(contenido);
   let vueltas = 0;
   while (problemas.length && vueltas < 2) {
@@ -189,9 +244,10 @@ export async function escribirYRevisar(args: {
     args.progreso?.(`Corrigiendo ${problemas.length} problema(s) del revisor (vuelta ${vueltas} de 2)…`);
     fijado = fijarDesdeEsqueleto(await corregirContenido(contenido, problemas), args.esqueleto, rutasFotosPortada, args.archivos);
     contenido = fijado.contenido;
+    fijado.avisos.forEach(a => avisosTodos.add(a));
     problemas = revisarTodo(contenido);
   }
-  return { contenido, problemas, vueltas, avisos: fijado.avisos };
+  return { contenido, problemas, vueltas, avisos: [...avisosTodos] };
 }
 
 export { z };

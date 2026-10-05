@@ -34,6 +34,9 @@ const INFINITIVO = /(ar|er|ir)\n?$/;
 const MENOR = new RegExp(`(?<!${W})1[0-7](?!${W})`, 'u');
 const CIFRA_VERBO_CUANTI = /^(medir|cuantificar|dimensionar)/;
 const PROPONEMOS = new RegExp(`(?<!${W})propon(emos|er)(?!${W})`, 'u');
+const HIPOTESIS_CONDICIONAL = new RegExp(`(${W}+r[íi]an?(?!${W})|(?<!${W})pueden?(?!${W})|(?<!${W})quiz[áa]|(?<!${W})tal vez|(?<!${W})la pregunta es si|(?<!${W})la hip[óo]tesis)`, 'u');
+const DEFINICION_CON_TIEMPO = new RegExp(`\\d|(?<!${W})(dos|tres|cuatro|seis|doce)(?!${W})`, 'u');
+const PRECIO_PENDIENTE = (p: any) => !p || ['pendiente', 'tbc', 'por confirmar'].includes(String(p).trim().toLowerCase());
 const CONTEXTO_OBJETIVO = /^(falta|necesitamos|hay que|queremos) (entender|saber|conocer|explorar|identificar)/;
 
 const largo = (s: string) => [...s].length;
@@ -130,7 +133,7 @@ export function revisarContenido(C: any): Problema[] {
     }
     if (tipo === 'inversion') {
       for (const pa of l.partidas ?? []) {
-        if (!(PRECIO.test(pa.precio) || pa.precio.toLowerCase().startsWith('sin costo') || pa.precio.toLowerCase().startsWith('incluido'))) {
+        if (!(PRECIO_PENDIENTE(pa.precio) || PRECIO.test(pa.precio) || pa.precio.toLowerCase().startsWith('sin costo') || pa.precio.toLowerCase().startsWith('incluido'))) {
           add(`laminas[${i}]`, `Precio con formato distinto al de Sapience: «${pa.precio}».`);
         }
         if (pa.fase >= nf) add(`laminas[${i}]`, 'Partida apunta a una fase que no existe.');
@@ -138,9 +141,10 @@ export function revisarContenido(C: any): Problema[] {
       const pq = l.paquete;
       if (!pq) add(`laminas[${i}]`, 'La inversión no tiene precio final.');
       else {
-        if (!PRECIO.test(pq.precio)) add(`laminas[${i}]`, `Precio final con formato distinto: «${pq.precio}».`);
-        if (!pq.letra) add(`laminas[${i}]`, 'Falta la cantidad en letra.');
-        else if (!LETRA.test(pq.letra)) add(`laminas[${i}].paquete.letra`, `Cantidad en letra con formato distinto: «${pq.letra}». Va así y sin agregados: «Seiscientos diez mil pesos mexicanos + IVA».`);
+        if (PRECIO_PENDIENTE(pq.precio)) { /* precio pendiente: lo llena la persona; Hub avisa antes de descargar */ }
+        else if (!PRECIO.test(pq.precio)) add(`laminas[${i}]`, `Precio final con formato distinto: «${pq.precio}».`);
+        if (!PRECIO_PENDIENTE(pq.precio) && !pq.letra) add(`laminas[${i}]`, 'Falta la cantidad en letra.');
+        else if (pq.letra && !LETRA.test(pq.letra)) add(`laminas[${i}].paquete.letra`, `Cantidad en letra con formato distinto: «${pq.letra}». Va así y sin agregados: «Seiscientos diez mil pesos mexicanos + IVA».`);
       }
       const partidas: any[] = l.partidas ?? [];
       if (partidas.length) {
@@ -169,7 +173,9 @@ export function revisarContenido(C: any): Problema[] {
       if (!grupos && (l.columnas ?? []).some((c: string) => nombres.some(n => c.toLowerCase().includes(n)))) {
         add(`laminas[${i}].columnas`, 'Las columnas de la muestra mezclan fase y corte. Agrupa por fase con «grupos» y deja en columnas solo los cortes (ciudad, edad).');
       }
-      if (fases.slice(1).some(f => f.participantes === 'nuevos') && !grupos && nf > 1) {
+      // solo cuentan las fases con participantes (las internas van en «ninguno»), sin la primera de ellas
+      const conGente = fases.filter(f => f.participantes !== 'ninguno');
+      if (conGente.slice(1).some(f => f.participantes === 'nuevos') && !grupos) {
         add(`laminas[${i}]`, 'Hay fases con participantes nuevos y la muestra no se agrupa por fase con «grupos».');
       }
       (l.grupos ?? []).forEach((g: any, k: number) => {
@@ -183,6 +189,9 @@ export function revisarContenido(C: any): Problema[] {
         add(`laminas[${i}].bisagra`, 'La bisagra de la muestra explica la decisión de participantes. El porqué va en el enfoque; aquí solo se dice con quién vamos a hablar.');
       }
       (l.notas ?? []).forEach((n: any, k: number) => {
+        for (const m of String(n).matchAll(/<([^>]+)>/g)) {
+          if (!DEFINICION_CON_TIEMPO.test(m[1].toLowerCase())) add(`laminas[${i}].notas[${k}]`, `Definición sin tiempo ni frecuencia: «<${m[1]}>». Ej.: «toman Ensure desde hace al menos 3 meses».`);
+        }
         if ((String(n).match(/</g) ?? []).length > 1) add(`laminas[${i}].notas[${k}]`, 'La nota trae más de una definición. Va una definición por renglón.');
       });
       for (const f of l.filas ?? []) for (const c of f.celdas ?? []) {
@@ -198,8 +207,13 @@ export function revisarContenido(C: any): Problema[] {
         for (const v of vs) if (v.split(/\s+/).filter(Boolean).length < 2) add(`laminas[${i}].verbos[${k}]`, `«${v}» es un verbo suelto. Cada fase lleva frases cortas de verbo con objeto («Entrar a la cocina»).`);
       });
     }
+    if (tipo === 'seccion' && l.puntos && l.puntos.length && !(l.columnas && l.columnas.length)) {
+      if (l.puntos.some((p: any) => !(p && typeof p === 'object' && !Array.isArray(p) && p.icono))) add(`laminas[${i}].puntos`, 'Cada punto de la lámina lleva su icono ({texto, icono}); sin icono las cajas quedan vacías.');
+    }
     if (tipo === 'detalle_fase') {
-      if (nf > 1 && fases.some(f => f.participantes) && !l.quienes) add(`laminas[${i}]`, 'El detalle de fase no dice quiénes participan («quienes»: «24 participantes nuevos»).');
+      const fi = Number.isInteger(l.fase) && l.fase < nf ? l.fase : null;
+      const interna = fi !== null && fases[fi]?.participantes === 'ninguno';
+      if (nf > 1 && !interna && fases.some(f => f.participantes) && !l.quienes) add(`laminas[${i}]`, 'El detalle de fase no dice quiénes participan («quienes»: «24 participantes nuevos»).');
       (l.como ?? []).forEach((c: any, k: number) => {
         if (renglones(c.texto ?? '', 6.6, 11.5) > 2) add(`laminas[${i}].como[${k}]`, `La descripción de «${pyStr(c.titulo)}» pasa de 2 renglones. Acórtala.`);
       });
@@ -231,6 +245,8 @@ export function revisarContenido(C: any): Problema[] {
       (l.columnas ?? []).forEach((col: any, ci: number) => {
         (col.puntos ?? []).forEach((p: any, pi: number) => {
           const tx = (p && typeof p === 'object' && !Array.isArray(p) ? p.texto : p) || '';
+          const esHip = (p && typeof p === 'object' && !Array.isArray(p) && p.fuente === 'hipotesis') || String(col.titulo || '').toLowerCase().startsWith('hipótesis');
+          if (esHip && !HIPOTESIS_CONDICIONAL.test(String(tx).toLowerCase())) add(`laminas[${i}].columnas[${ci}].puntos[${pi}]`, `«${tx}» es una hipótesis y está escrita como hecho. Va en condicional («podrían», «la pregunta es si»).`);
           if (CONTEXTO_OBJETIVO.test(String(tx).toLowerCase())) add(`laminas[${i}].columnas[${ci}].puntos[${pi}]`, `«${tx}» es un objetivo, no contexto. El contexto lleva datos del brief; si no los hay, se pregunta.`);
         });
       });

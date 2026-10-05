@@ -111,8 +111,9 @@ for i, l in enumerate(C.get('laminas', [])):
         elif len(set(rs)) > 1:
             problemas.append((f'laminas[{i}].especificos', f'Los títulos de los objetivos ocupan distinto número de renglones ({rs}). Todos van en 1 o todos en 2.'))
     if tipo == 'inversion':
+        pend = lambda p: not p or str(p).strip().lower() in ('pendiente', 'tbc', 'por confirmar')
         for pa in l.get('partidas', []):
-            if not (PRECIO.match(pa['precio']) or pa['precio'].lower().startswith(('sin costo', 'incluido'))):
+            if not (pend(pa['precio']) or PRECIO.match(pa['precio']) or pa['precio'].lower().startswith(('sin costo', 'incluido'))):
                 problemas.append((f'laminas[{i}]', f'Precio con formato distinto al de Sapience: «{pa["precio"]}».'))
             if pa['fase'] >= nf:
                 problemas.append((f'laminas[{i}]', 'Partida apunta a una fase que no existe.'))
@@ -120,11 +121,13 @@ for i, l in enumerate(C.get('laminas', [])):
         if not pq:
             problemas.append((f'laminas[{i}]', 'La inversión no tiene precio final.'))
         else:
-            if not PRECIO.match(pq['precio']):
+            if pend(pq['precio']):
+                pass   # precio pendiente: lo llena la persona; Hub avisa antes de descargar
+            elif not PRECIO.match(pq['precio']):
                 problemas.append((f'laminas[{i}]', f'Precio final con formato distinto: «{pq["precio"]}».'))
-            if not pq.get('letra'):
+            if not pend(pq['precio']) and not pq.get('letra'):
                 problemas.append((f'laminas[{i}]', 'Falta la cantidad en letra.'))
-            elif not LETRA.match(pq['letra']):
+            elif pq.get('letra') and not LETRA.match(pq['letra']):
                 problemas.append((f'laminas[{i}].paquete.letra', f'Cantidad en letra con formato distinto: «{pq["letra"]}». Va así y sin agregados: «Seiscientos diez mil pesos mexicanos + IVA».'))
         partidas = l.get('partidas', [])
         if partidas:
@@ -151,7 +154,9 @@ for i, l in enumerate(C.get('laminas', [])):
         nombres = [f.get('nombre', '').lower() for f in C.get('fases', []) if f.get('nombre')]
         if not l.get('grupos') and any(n in c.lower() for c in l.get('columnas', []) for n in nombres):
             problemas.append((f'laminas[{i}].columnas', 'Las columnas de la muestra mezclan fase y corte. Agrupa por fase con «grupos» y deja en columnas solo los cortes (ciudad, edad).'))
-        if any(f.get('participantes') == 'nuevos' for f in C.get('fases', [])[1:]) and not l.get('grupos') and nf > 1:
+        # solo cuentan las fases con participantes (las internas van en «ninguno»), sin la primera de ellas
+        con_gente = [f for f in C.get('fases', []) if f.get('participantes') != 'ninguno']
+        if any(f.get('participantes') == 'nuevos' for f in con_gente[1:]) and not l.get('grupos'):
             problemas.append((f'laminas[{i}]', 'Hay fases con participantes nuevos y la muestra no se agrupa por fase con «grupos».'))
         for k, g in enumerate(l.get('grupos', [])):
             if not isinstance(g.get('fase'), int):
@@ -163,6 +168,9 @@ for i, l in enumerate(C.get('laminas', [])):
         if any(f.get('participantes') for f in C.get('fases', [])) and re.search(r'\bporque\b', (l.get('bisagra') or '').lower()):
             problemas.append((f'laminas[{i}].bisagra', 'La bisagra de la muestra explica la decisión de participantes. El porqué va en el enfoque; aquí solo se dice con quién vamos a hablar.'))
         for k, n in enumerate(l.get('notas', [])):
+            for d_ in re.findall(r'<([^>]+)>', str(n)):
+                if not re.search(r'\d|\b(dos|tres|cuatro|seis|doce)\b', d_.lower()):
+                    problemas.append((f'laminas[{i}].notas[{k}]', f'Definición sin tiempo ni frecuencia: «<{d_}>». Ej.: «toman Ensure desde hace al menos 3 meses».'))
             if str(n).count('<') > 1:
                 problemas.append((f'laminas[{i}].notas[{k}]', 'La nota trae más de una definición. Va una definición por renglón.'))
         for f in l.get('filas', []):
@@ -177,8 +185,13 @@ for i, l in enumerate(C.get('laminas', [])):
             for v in vs:
                 if len(v.split()) < 2:
                     problemas.append((f'laminas[{i}].verbos[{k}]', f'«{v}» es un verbo suelto. Cada fase lleva frases cortas de verbo con objeto («Entrar a la cocina»).'))
+    if tipo == 'seccion' and l.get('puntos') and not l.get('columnas'):
+        if any(not (isinstance(p, dict) and p.get('icono')) for p in l['puntos']):
+            problemas.append((f'laminas[{i}].puntos', 'Cada punto de la lámina lleva su icono ({texto, icono}); sin icono las cajas quedan vacías.'))
     if tipo == 'detalle_fase':
-        if nf > 1 and any(f.get('participantes') for f in C.get('fases', [])) and not l.get('quienes'):
+        fi = l.get('fase') if isinstance(l.get('fase'), int) and l.get('fase') < nf else None
+        interna = fi is not None and C['fases'][fi].get('participantes') == 'ninguno'
+        if nf > 1 and not interna and any(f.get('participantes') for f in C.get('fases', [])) and not l.get('quienes'):
             problemas.append((f'laminas[{i}]', 'El detalle de fase no dice quiénes participan («quienes»: «24 participantes nuevos»).'))
         for k, c in enumerate(l.get('como', [])):
             if renglones(c.get('texto', ''), 6.6, 11.5) > 2:
@@ -212,6 +225,9 @@ for i, l in enumerate(C.get('laminas', [])):
         for ci, col in enumerate(l.get('columnas', [])):
             for pi, p in enumerate(col.get('puntos', [])):
                 tx = (p.get('texto') if isinstance(p, dict) else p) or ''
+                es_hip = (isinstance(p, dict) and p.get('fuente') == 'hipotesis') or (col.get('titulo') or '').lower().startswith('hipótesis')
+                if es_hip and not re.search(r'(\w+r[íi]an?\b|\bpueden?\b|\bquiz[áa]|\btal vez|\bla pregunta es si|\bla hip[óo]tesis)', tx.lower()):
+                    problemas.append((f'laminas[{i}].columnas[{ci}].puntos[{pi}]', f'«{tx}» es una hipótesis y está escrita como hecho. Va en condicional («podrían», «la pregunta es si»).'))
                 if re.match(r'(falta|necesitamos|hay que|queremos) (entender|saber|conocer|explorar|identificar)', tx.lower()):
                     problemas.append((f'laminas[{i}].columnas[{ci}].puntos[{pi}]', f'«{tx}» es un objetivo, no contexto. El contexto lleva datos del brief; si no los hay, se pregunta.'))
         for ci, col in enumerate(l.get('columnas', [])):

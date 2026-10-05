@@ -21,7 +21,8 @@ export const Esqueleto = z.object({
   fases: z.array(z.object({
     nombre: z.string(), etapa: z.string().nullable().optional(), icono: z.string().default('FiCircle'),
     goal: z.string().default(''), tecnica: z.string().default(''), muestra: z.string().default(''),
-    participantes: z.enum(['nuevos', 'mismos']).default('nuevos'), razon_participantes: z.string().default(''),
+    // sin default a propósito: si Claude (o la persona) no lo llena, se pide, no se asume «nuevos»
+    participantes: z.enum(['nuevos', 'mismos', 'ninguno']), razon_participantes: z.string().default(''),
   })).min(1),
   indice: z.array(z.object({
     tipo: z.enum(TIPOS_LAMINA), titulo: z.string().default(''), resumen: z.string().default(''),
