@@ -73,6 +73,9 @@ const casos: [string, (c: any) => void][] = [
   ['hipótesis escrita como hecho', c => { c.laminas[0].columnas[2].puntos[1].texto = 'El ritual nuevo no deja lugar para una marca de soluble'; }],
   ['definición de perfil sin tiempo ni frecuencia', c => { c.laminas[4].notas[0] = 'Usuarios de Café Altura <es la marca que más compran en casa>'; }],
   ['lámina de puntos sin icono', c => { c.laminas.splice(7, 0, { tipo: 'seccion', titulo: 'Para arrancar', bisagra: 'Esto necesitamos de Café Altura', puntos: ['Estudios previos', { texto: 'Muestras', icono: 'FiPackage' }] }); }],
+  ['metodología con sesiones y muestra que no dice «sesión»', c => { c.laminas[3].como[0].texto = 'Haremos 4 sesiones grupales de 6 personas para ver el ritual real'; }],
+  ['muestra sin fila de total', c => { c.laminas[4].filas = c.laminas[4].filas.filter((f: any) => !f.total); }],
+  ['muestra con sesiones y composición entre corchetes: 0 problemas', c => { c.laminas[3].como[0].texto = 'Haremos 4 sesiones grupales de 6 personas para ver el ritual real'; c.laminas[4].filas[0].celdas[0] = '1 sesión de 6 <3 usuarios y 3 de otras marcas>'; }],
   ['cantidad en letra fuera de formato', c => { c.laminas[6].paquete.letra = 'Seiscientos veinte mil pesos 00/100 M.N.'; }],
 ];
 // Contenido de prueba con errores (assets/): exactamente 24 problemas, iguales en Python y en TS.
@@ -94,6 +97,9 @@ for (const [nombre, mut] of casos) {
     if (ts.some(x => x.problema.startsWith('Hay fases con participantes nuevos'))) { bad(`${nombre}: no debía salir el problema de grupos`); continue; }
   }
   if (nombre.startsWith('participantes [nuevos, ninguno, nuevos]') && !ts.some(x => x.problema.startsWith('Hay fases con participantes nuevos'))) { bad(`${nombre}: debía salir el problema de grupos`); continue; }
+  if (nombre.startsWith('muestra con sesiones y composición') && ts.length !== 0) { bad(`${nombre}: debían ser 0 y salieron ${ts.length}`); continue; }
+  if (nombre.startsWith('metodología con sesiones') && !ts.some(x => x.problema.startsWith('La metodología tiene sesiones'))) { bad(`${nombre}: debía marcar la muestra sin sesiones`); continue; }
+  if (nombre.startsWith('muestra sin fila de total') && !ts.some(x => x.problema.startsWith('La muestra no cierra con una fila de total'))) { bad(`${nombre}: debía marcar la falta de total`); continue; }
   if (nombre.startsWith('inversión con precio «pendiente»') && ts.length !== 0) { bad(`${nombre}: debían ser 0 y salieron ${ts.length}`); continue; }
   if (nombre.startsWith('participantes [nuevos, mismos]') && ts.length !== 0) { bad(`${nombre}: debían ser 0 y salieron ${ts.length}`); continue; }
   if (nombre.startsWith('participantes [nuevos, nuevos]') && !(ts.length === 1 && ts[0].problema.startsWith('Hay fases con participantes nuevos'))) { bad(`${nombre}: debía salir solo el problema de grupos y salió ${JSON.stringify(ts.map(x => x.problema))}`); continue; }
@@ -160,6 +166,24 @@ for (const acomodoEnfoque of ['circulos', 'banda']) for (const acomodoMuestra of
   const fcc = path.join(TMP, 'pPr.pptx'); fs.writeFileSync(fcc, rr.buffer);
   const salida = execFileSync('python3', ['-c', "import sys,zipfile,re\nz=zipfile.ZipFile(sys.argv[1])\nmalos=[n for n in z.namelist() if re.match(r'ppt/slides/slide\\d+\\.xml$',n) and '</a:r><a:pPr' in z.read(n).decode('utf8')]\nprint(','.join(malos))", fcc], { encoding: 'utf8' }).trim();
   if (salida === '') ok('ningún slide trae </a:r><a:pPr (limpiarParrafos aplicado, con <…> en notas y en «cómo»)'); else bad('XML con <a:pPr> a media línea en: ' + salida);
+}
+
+// muestra con sesiones: celdas con composición entre corchetes y fila de total, en tabla y en celdas
+for (const acomodoM of ['tabla', 'celdas']) {
+  const cs2 = clone(); cs2.laminas[4].acomodo = acomodoM;
+  cs2.laminas[3].como[0].texto = 'Haremos 4 sesiones grupales de 6 personas';
+  cs2.laminas[4].columnas = ['Guadalajara', 'Ciudad de México', 'Total'];
+  cs2.laminas[4].filas = [
+    { nombre: '25 a 34 años', celdas: ['1 sesión de 6 <3 Ensure y 3 otros suplementos>', '1 sesión de 6 <3 Ensure y 3 otros suplementos>', '2 sesiones'] },
+    { nombre: '35 a 49 años', celdas: ['1 sesión de 6 <3 Ensure y 3 otros suplementos>', '1 sesión de 6 <3 Ensure y 3 otros suplementos>', '2 sesiones'] },
+    { nombre: 'Total', total: true, celdas: ['12 participantes', '12 participantes', '24 participantes'] }];
+  const sPath = path.join(TMP, `sesiones_${acomodoM}.json`); fs.writeFileSync(sPath, JSON.stringify(cs2), 'utf8');
+  const sOut = sPath.replace('.json', '.pptx');
+  execFileSync('node', [path.join(SKILL, 'scripts/construir.js'), sPath, sOut], { cwd: SKILL, stdio: 'pipe' });
+  const sts = await construirPropuesta(cs2);
+  const sa = sinMeta(await entradas(fs.readFileSync(sOut))), sb = sinMeta(await entradas(sts.buffer));
+  const sd = [...new Set([...sa.keys(), ...sb.keys()])].filter(n => sa.get(n) !== sb.get(n));
+  if (sd.length === 0) ok(`muestra con sesiones, composición y fila de total (${acomodoM}) idéntica al original`); else bad(`muestra con sesiones (${acomodoM}) distinta: ` + sd.join(', '));
 }
 
 // fase interna («ninguno»), precios pendientes y lámina de puntos con iconos: idénticos al original

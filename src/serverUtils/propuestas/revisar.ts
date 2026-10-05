@@ -164,6 +164,16 @@ export function revisarContenido(C: any): Problema[] {
       }
       if (l.nota && renglones(l.nota, ANCHO, 12) > 1) add(`laminas[${i}].nota`, 'La nota de tiempos no cabe en una línea. Deja solo aprobación y entrega.');
     }
+    if (tipo === 'muestra') {
+      const textosMet = laminas.filter(x => x.tipo === 'detalle_fase').flatMap(x => x.como ?? []).map((c: any) => `${c.titulo ?? ''} ${c.texto ?? ''}`).join(' ').toLowerCase();
+      const celdasTxt = (l.filas ?? []).flatMap((f: any) => f.celdas ?? []).join(' ').toLowerCase();
+      if (textosMet.includes('sesi') && !celdasTxt.includes('sesi')) {
+        add(`laminas[${i}]`, 'La metodología tiene sesiones y la muestra no dice cómo se reparten. Arma la tabla desde las sesiones: «1 sesión de 6 <3 Ensure y 3 otros>».');
+      }
+      if ((l.filas ?? []).length && !l.filas.some((f: any) => f.total)) {
+        add(`laminas[${i}]`, 'La muestra no cierra con una fila de total («total»: true) con los participantes por mercado y el total general.');
+      }
+    }
     if (tipo === 'muestra' && !(l.notas && l.notas.length)) {
       add(`laminas[${i}]`, 'La muestra no lleva notas. Debajo van siempre los criterios comunes y la definición de cada perfil.');
     }

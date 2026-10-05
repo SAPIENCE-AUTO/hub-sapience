@@ -185,6 +185,15 @@
       "2 casas",
       "2 casas"
      ]
+    },
+    {
+     "nombre": "Total",
+     "total": true,
+     "celdas": [
+      "4 casas",
+      "4 casas",
+      "4 casas"
+     ]
     }
    ],
    "notas": [

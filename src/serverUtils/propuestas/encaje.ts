@@ -19,10 +19,10 @@ const lineas = (t: string, w: number, pt: number, bold = false) =>
   renglonesTexto(t, w, pt, bold ? (esMayus(t) ? K_MAYUS : K_NEGRITAS) : (esMayus(t) ? 0.66 : K_REGULAR));
 const textoDe = (it: any): string => (typeof it === 'string' ? it : it?.texto ?? '');
 // altoLista de construir.js (pulgadas): texto suelto o lista de flechas.
-const altoLista = (items: any, w: number, sz: number): number => {
+const altoLista = (items: any, w: number, sz: number, esp = 6): number => {
   if (!items) return 0;
   if (typeof items === 'string') return lineas(items, w, sz) * sz * 1.25 / 72;
-  return items.reduce((h: number, it: any) => h + lineas(textoDe(it), w - 0.25, sz) * sz * 1.22 / 72 + 6 / 72, 0);
+  return items.reduce((h: number, it: any) => h + lineas(textoDe(it), w - 0.25, sz) * sz * 1.22 / 72 + esp / 72, 0);
 };
 // Alto en puntos de una lista de flechas.
 const altoFlechasPt = (items: any[], wIn: number, pt: number, esp = 6) =>
@@ -91,30 +91,35 @@ export function revisarEncaje(C: any): Problema[] {
     }
 
     if (l.tipo === 'muestra') {
-      // Geometría de muestra() en construir.js, con `grupos` (nombre de fase sobre sus columnas).
+      // Geometría de muestra() en construir.js: grupos (nombre de fase sobre sus columnas), celdas con composición
+      // entre corchetes («1 sesión de 6 <3 Ensure y 3 otros>», dos renglones) y notas siempre debajo de la tabla.
       const nc = (l.columnas ?? []).length, nf = (l.filas ?? []).length, gap = 0.15, wl = 3.3, G = !!(l.grupos && l.grupos.length);
       const conDetalle = G && l.grupos.some((g: any) => g?.detalle);
+      const conComp = (l.filas ?? []).some((f: any) => (f.celdas ?? []).some((c: string) => /</.test(c)));
       const tabla = (l.acomodo ?? (TH.muestra === 'table' ? 'tabla' : 'celdas')) === 'tabla';
-      const filasH = nf > 3 ? 0.55 : (G ? 0.62 : 0.75), gapF = G ? 0.16 : 0.2;
+      const filasH = conComp ? (nf > 3 ? 0.62 : 0.7) : (nf > 3 ? 0.55 : (G ? 0.62 : 0.75)), gapF = G || conComp ? 0.14 : 0.2;
       const wc = (CW - wl - 0.2 - gap * (nc - 1)) / Math.max(1, nc);
       let yEnd: number;
       if (tabla) yEnd = yCont + (G ? (conDetalle ? 0.62 : 0.45) + 0.45 : 0.55) + nf * filasH;
       else { const yC = G ? yCont + (conDetalle ? 0.86 : 0.55) : yCont, hC = G ? 0.42 : 0.5, y0 = yC + hC + gapF; yEnd = y0 + nf * (filasH + gapF) - gapF; }
-      const ptCelda = tabla ? 15 : (G ? 15 : 17), ptNombre = tabla ? 15 : 14;
-      const maxLin = Math.floor((filasH * 72) / (ptCelda * 1.2));
+      const ptCelda = tabla ? 15 : (G || conComp ? 15 : 17), ptNombre = tabla ? 15 : 14;
       (l.filas ?? []).forEach((f: any, j: number) => {
         (f.celdas ?? []).forEach((c: string, k: number) => {
-          const n = lineas(c, wc - (tabla ? 0.2 : 0), ptCelda, !tabla);
-          if (n > maxLin) add(`${r}.filas[${j}].celdas[${k}]`, `La celda «${c}» no cabe en su casilla (${n} líneas, caben ${maxLin}). Hazla telegráfica: cifra y unidad (~${aprox(wc, ptCelda, maxLin, tabla ? K_REGULAR : K_NEGRITAS)} caracteres).`);
+          const m = String(c).match(/^([^<]*)<([^>]+)>\s*$/);
+          const w = wc - (tabla ? 0.2 : 0);
+          // con composición: el texto de la sesión a ptCelda y la composición más chica (70 %), en dos bloques
+          const hPt = m ? lineas(m[1].trim(), w, ptCelda, !tabla) * ptCelda * 1.2 + lineas(m[2], w, Math.round(ptCelda * 0.7)) * Math.round(ptCelda * 0.7) * 1.2
+                        : lineas(c, w, ptCelda, !tabla) * ptCelda * 1.2;
+          if (hPt > filasH * 72) add(`${r}.filas[${j}].celdas[${k}]`, `La celda «${c}» no cabe en su casilla (${hPt.toFixed(0)} pt y la casilla mide ${(filasH * 72).toFixed(0)}). Acórtala: cantidad y, si hay sesiones, «1 sesión de 6 <composición corta>».`);
         });
-        if (lineas(f.nombre ?? '', wl, ptNombre, true) > Math.floor((filasH * 72) / (ptNombre * 1.2))) add(`${r}.filas[${j}].nombre`, `La etiqueta de fila «${f.nombre}» no cabe en su casilla. Acórtala (~${aprox(wl, ptNombre, 2, K_NEGRITAS)} caracteres).`);
+        const nombreLin = lineas(f.nombre ?? '', wl, ptNombre, true);
+        if (nombreLin * ptNombre * 1.2 > filasH * 72) add(`${r}.filas[${j}].nombre`, `La etiqueta de fila «${f.nombre}» no cabe en su casilla. Acórtala (~${aprox(wl, ptNombre, Math.floor((filasH * 72) / (ptNombre * 1.2)), K_NEGRITAS)} caracteres).`);
       });
       if (l.notas?.length) {
-        const yNotas = Math.min(yEnd + 0.3, 5.8), hNotas = altoFlechasPt(l.notas.map((x: any) => textoDe(x).replace(/^\s*(→|->|➜|•|-)\s*/, '')), CW, 11.5, 4) / 72;
-        if (yNotas < yEnd - 0.02) {
-          add(`${r}.notas`, `Con ${nf} filas la tabla de muestra llega hasta ${yEnd.toFixed(1)} in y las notas empiezan antes (${yNotas.toFixed(1)} in): se encima el texto. Reduce las filas o pasa la tabla a menos cortes.`);
-        } else if (yNotas + hNotas > 6.9) {
-          add(`${r}.notas`, `Las notas de la muestra no caben bajo la tabla (se salen por abajo). Deja máximo ${Math.max(1, Math.floor(((6.9 - yNotas) * 72) / (11.5 * 1.2 * 2 + 4)))} nota(s) de una o dos líneas.`);
+        // las notas empiezan siempre debajo de la tabla y bajan de tamaño hasta 9.5 pt si no caben
+        const yN = yEnd + 0.22, notas = l.notas.map((x: any) => textoDe(x).replace(/^\s*(→|->|➜|•|-)\s*/, ''));
+        if (altoLista(notas, CW, 9.5, 4) > 6.88 - yN) {
+          add(`${r}.notas`, `Las notas no caben bajo la tabla ni a 9.5 pt (la tabla llega a ${yEnd.toFixed(1)} in). Reduce las filas o acorta las notas.`);
         }
       }
     }

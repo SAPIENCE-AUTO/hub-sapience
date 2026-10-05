@@ -380,7 +380,12 @@ const M = {
     const s = base(d.titulo || 'Target y muestra', d.bisagra);
     const lay = d.acomodo || (TH.muestra === 'table' ? 'tabla' : 'celdas'), G = d.grupos;
     const nc = d.columnas.length, wl = 3.3, gap = 0.15, wc = (CW - wl - 0.2 - gap * (nc - 1)) / nc, xc = X0 + wl + 0.2;
-    const filasH = d.filas.length > 3 ? 0.55 : (G ? 0.62 : 0.75), gapF = G ? 0.16 : 0.2;
+    const conComp = d.filas.some(f => f.celdas.some(c => /</.test(c)));
+    const filasH = conComp ? (d.filas.length > 3 ? 0.62 : 0.7) : (d.filas.length > 3 ? 0.55 : (G ? 0.62 : 0.75)), gapF = G || conComp ? 0.14 : 0.2;
+    // Una celda puede traer su composición entre corchetes: «1 sesión de 6 <3 Ensure y 3 otros>» sale en dos renglones,
+    // la composición más chica y sin corchetes. La fila con total: true cierra la tabla con los totales.
+    const celda = (c, sz) => { const m = String(c).match(/^([^<]*)<([^>]+)>\s*$/);
+      return m ? [{ text: m[1].trim(), options: { breakLine: true, fontSize: sz } }, { text: m[2], options: { fontSize: Math.round(sz * 0.7), bold: false } }] : String(c); };
     const grupo = g => { const p = FASES[idxFase(g.fase)]; return p ? { n: g.titulo || p.n, c: p.c, t: p.t } : { n: g.titulo, c: ACC, t: TH.ACCT || 'FFFFFF' }; };
     let yEnd;
     if (lay === 'tabla') {
@@ -389,7 +394,7 @@ const M = {
         const txt = g.detalle ? [{ text: p.n.toUpperCase(), options: { bold: true, breakLine: true } }, { text: g.detalle, options: { fontSize: 11, bold: false } }] : p.n.toUpperCase();
         return { text: txt, options: { colspan: g.columnas, bold: !g.detalle, color: p.t, fill: { color: p.c }, align: 'center' } }; })));
       filasHdr.push([vacio].concat(d.columnas.map(c => ({ text: c, options: { bold: true, color: TH.HDR ? (TH.HDRT || 'FFFFFF') : (TH.ACCT || 'FFFFFF'), fill: { color: TH.HDR || ACC }, align: 'center', fontSize: G ? 13 : 16 } }))));
-      const rows = d.filas.map(f => [{ text: f.nombre, options: { bold: true, color: ACC } }].concat(f.celdas.map(c => ({ text: c, options: { align: 'center', color: TXT } }))));
+      const rows = d.filas.map(f => [{ text: f.nombre, options: { bold: true, color: f.total ? TXT : ACC, fill: { color: f.total ? SURF : BG } } }].concat(f.celdas.map(c => ({ text: celda(c, 15), options: { align: 'center', color: TXT, bold: !!f.total, fill: { color: f.total ? SURF : BG } } }))));
       const hs = (G ? [G.some(g => g.detalle) ? 0.62 : 0.45, 0.45] : [0.55]).concat(Array(d.filas.length).fill(filasH));
       s.addTable(filasHdr.concat(rows), { x: X0, y: yCont, w: CW, colW: [wl + 0.2].concat(Array(nc).fill((CW - wl - 0.2) / nc)), rowH: hs, fontFace: F, fontSize: 15, valign: 'middle', border: { type: 'solid', pt: 1, color: LINE }, color: TXT });
       yEnd = yCont + hs.reduce((a, b) => a + b, 0);
@@ -405,11 +410,13 @@ const M = {
       d.columnas.forEach((c, i) => pill(s, xc + i * (wc + gap), yC, wc, hC, c, SURF, SECT, G ? 13 : 15));
       const y0 = yC + hC + gapF;
       d.filas.forEach((f, j) => { const y = y0 + j * (filasH + gapF);
-        pill(s, X0, y, wl, filasH, f.nombre, ACC, 'FFFFFF', 14);
-        f.celdas.forEach((t, i) => pill(s, xc + i * (wc + gap), y, wc, filasH, t, TH.CELL, TH.CELLT, G ? 15 : 17, true)); });
+        pill(s, X0, y, wl, filasH, f.nombre, f.total ? SURF : ACC, f.total ? TXT : 'FFFFFF', 14, !!f.total);
+        f.celdas.forEach((t, i) => pill(s, xc + i * (wc + gap), y, wc, filasH, celda(t, G || conComp ? 15 : 17), f.total ? SURF : TH.CELL, TH.CELLT, G || conComp ? 15 : 17, true)); });
       yEnd = y0 + d.filas.length * (filasH + gapF) - gapF;
     }
-    if (d.notas) T(s, flechas(d.notas, 11.5, 4), { x: X0, y: Math.min(yEnd + 0.3, 5.8), w: CW, h: 6.85 - Math.min(yEnd + 0.3, 5.8) });
+    if (d.notas) { const yN = yEnd + 0.22;   // las notas siempre debajo de la tabla; si no caben, bajan de tamaño
+      let zN = 11.5; while (zN > 9.5 && altoLista(d.notas, CW, zN, 4) > 6.88 - yN) zN -= 0.5;
+      T(s, flechas(d.notas, zN, 4), { x: X0, y: yN, w: CW, h: 6.88 - yN }); }
   },
   async entregables(d) {
     const s = base(d.titulo || 'Ejemplos de entregables', d.bisagra);

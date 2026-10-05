@@ -148,6 +148,13 @@ for i, l in enumerate(C.get('laminas', [])):
                 problemas.append((f'laminas[{i}]', 'Barra del cronograma se sale de las semanas.'))
         if l.get('nota') and renglones(l['nota'], ANCHO, 12) > 1:
             problemas.append((f'laminas[{i}].nota', 'La nota de tiempos no cabe en una línea. Deja solo aprobación y entrega.'))
+    if tipo == 'muestra':
+        textos_met = ' '.join(c.get('titulo', '') + ' ' + c.get('texto', '') for x in C.get('laminas', []) if x.get('tipo') == 'detalle_fase' for c in x.get('como', [])).lower()
+        celdas = ' '.join(c for f in l.get('filas', []) for c in f.get('celdas', [])).lower()
+        if 'sesi' in textos_met and 'sesi' not in celdas:
+            problemas.append((f'laminas[{i}]', 'La metodología tiene sesiones y la muestra no dice cómo se reparten. Arma la tabla desde las sesiones: «1 sesión de 6 <3 Ensure y 3 otros>».'))
+        if l.get('filas') and not any(f.get('total') for f in l['filas']):
+            problemas.append((f'laminas[{i}]', 'La muestra no cierra con una fila de total («total»: true) con los participantes por mercado y el total general.'))
     if tipo == 'muestra' and not l.get('notas'):
         problemas.append((f'laminas[{i}]', 'La muestra no lleva notas. Debajo van siempre los criterios comunes y la definición de cada perfil.'))
     if tipo == 'muestra':
