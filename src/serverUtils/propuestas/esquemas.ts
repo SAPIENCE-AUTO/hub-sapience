@@ -15,10 +15,13 @@ export const PaletasPropuestas = z.array(Paleta.extend({ nombre: z.string(), ton
 export const Esqueleto = z.object({
   resumen_brief: z.string(),
   preguntas: z.array(z.string()).default([]),
+  // Diagnóstico (lo llena el endpoint, no Claude): cada pregunta que Claude ha devuelto y si se respondió.
+  preguntas_estado: z.array(z.object({ pregunta: z.string(), respondida: z.boolean(), respuesta: z.string().optional() })).default([]),
   metodo: z.enum(['cualitativo', 'cuantitativo', 'mixto']),
   fases: z.array(z.object({
     nombre: z.string(), etapa: z.string().nullable().optional(), icono: z.string().default('FiCircle'),
     goal: z.string().default(''), tecnica: z.string().default(''), muestra: z.string().default(''),
+    participantes: z.enum(['nuevos', 'mismos']).default('nuevos'), razon_participantes: z.string().default(''),
   })).min(1),
   indice: z.array(z.object({
     tipo: z.enum(TIPOS_LAMINA), titulo: z.string().default(''), resumen: z.string().default(''),

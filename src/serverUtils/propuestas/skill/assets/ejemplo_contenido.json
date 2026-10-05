@@ -26,50 +26,60 @@
  "laminas": [
   {
    "tipo": "contexto",
-   "bisagra": "Café Altura creció con el café de olla y el soluble, pero el ritual en casa está cambiando",
+   "entrada": [
+    "Café Altura creció acompañando el café de olla y el soluble en la cocina mexicana. Sin embargo, desde la pandemia el café en casa ",
+    {
+     "texto": "cambió de forma y de significado",
+     "negrita": true
+    },
+    ", y la marca no se ha movido al mismo ritmo."
+   ],
    "columnas": [
     {
-     "titulo": "Un ritual que se sofisticó",
+     "titulo": "Ritual en cambio",
+     "icono": "FiCoffee",
      "puntos": [
       {
-       "texto": "Desde la pandemia, cafeteras de cápsula y métodos de filtrado entraron a la cocina",
+       "texto": "Desde la pandemia, cápsulas y métodos de filtrado entraron a la cocina",
        "fuente": "brief"
       },
       {
-       "texto": "El café en casa dejó de ser solo un despertador funcional",
+       "texto": "Pero el café en casa dejó de ser solo un despertador funcional",
        "fuente": "brief"
       }
      ]
     },
     {
-     "titulo": "Una marca que se quedó en el soluble",
+     "titulo": "Peso del soluble",
+     "icono": "FiPackage",
      "puntos": [
       {
-       "texto": "El 70% del volumen de Café Altura sigue en la presentación soluble de 200 g",
+       "texto": "El 70% del volumen de Café Altura sigue en el soluble de 200 g",
        "fuente": "brief"
       },
       {
-       "texto": "Las líneas de grano y molido no han logrado tracción fuera de autoservicio",
+       "texto": "Sin embargo, grano y molido no han logrado tracción fuera de autoservicio",
        "fuente": "brief"
       }
      ]
     },
     {
-     "titulo": "Poco conocimiento del momento",
+     "titulo": "Sin estudios recientes",
+     "icono": "FiSearch",
      "puntos": [
       {
-       "texto": "No hay estudios recientes sobre cómo se vive hoy el café en casa",
+       "texto": "La marca no tiene estudios recientes sobre el café en casa",
        "fuente": "brief"
       },
       {
-       "texto": "Ni sobre qué lo detona, qué lo acompaña y qué significa",
-       "fuente": "brief"
+       "texto": "La pregunta es si el ritual nuevo deja lugar para una marca de soluble",
+       "fuente": "hipotesis"
       }
      ]
     }
    ],
    "cierre": [
-    "Necesitamos volver a la mesa de la cocina y entender ",
+    "Por eso necesitamos volver a la mesa de la cocina y entender ",
     {
      "texto": "qué significa hoy tomar café en casa",
      "resalta": true
@@ -79,7 +89,7 @@
   },
   {
    "tipo": "objetivos",
-   "general": "Entender cómo se vive hoy el café en casa, para identificar dónde puede crecer Café Altura más allá del soluble",
+   "general": "Entender cómo se vive hoy el café en casa, para decidir en qué formatos y momentos puede crecer Café Altura más allá del soluble",
    "especificos": [
     {
      "titulo": "Entender el ritual del café en casa",
@@ -91,19 +101,22 @@
     {
      "titulo": "Explorar el repertorio de formatos y métodos",
      "preguntas": [
-      "¿Qué formatos y métodos forman su repertorio?",
+      "¿Qué formatos y métodos usan hoy?",
       "¿Qué los hace cambiar de formato?"
      ]
     },
     {
      "titulo": "Identificar dónde es creíble Café Altura",
-     "texto": "Percepción actual de Café Altura y credenciales para jugar en otros formatos"
+     "puntos": [
+      "Percepción actual de Café Altura",
+      "Credenciales para jugar en otros formatos"
+     ]
     }
    ]
   },
   {
    "tipo": "enfoque",
-   "bisagra": "Proponemos cuatro fases, y cada una alimenta a la siguiente",
+   "bisagra": "Proponemos cuatro fases, en las que el output de cada una será el insumo de la siguiente",
    "verbos": [
     [
      "Revisar lo que ya existe",
@@ -134,11 +147,11 @@
    "como": [
     {
      "titulo": "Ethnoweek de 5 días",
-     "texto": "Cada participante nos comparte en video y foto sus momentos de café <qué prepara, con qué, con quién>"
+     "texto": "Cada participante nos compartirá en video y foto sus momentos de café <qué prepara, con qué, con quién>, para ver el ritual real y no el declarado"
     },
     {
      "titulo": "Visita etnográfica en casa de 90 min",
-     "texto": "Preparamos café juntos y profundizamos en lo que vimos en el diario"
+     "texto": "Prepararemos café con cada participante y profundizaremos en lo que vimos en el diario"
     }
    ],
    "output": [
@@ -175,6 +188,7 @@
     }
    ],
    "notas": [
+    "Usuarios de Café Altura <es la marca que más compran en casa> y usuarios de otras marcas <no han comprado Café Altura en los últimos 6 meses>",
     "Todos toman café en casa al menos 5 días a la semana y deciden la marca que se compra",
     "NSE C+ y C, mix de hombres y mujeres, CDMX y Guadalajara"
    ]
@@ -218,7 +232,7 @@
   },
   {
    "tipo": "inversion",
-   "bisagra": "Cada fase se puede aprobar por separado, o las cuatro con precio especial",
+   "bisagra": "Cada fase se puede aprobar por separado, o las cuatro con un precio especial",
    "partidas": [
     {
      "fase": 0,
@@ -262,13 +276,15 @@
     {
      "titulo": "Producto",
      "puntos": [
-      "Muestras de las tres presentaciones para las visitas"
+      "Muestras de las tres presentaciones",
+      "Material de marca para las visitas"
      ]
     },
     {
      "titulo": "Equipo",
      "puntos": [
-      "Quién asistirá a las visitas y al workshop"
+      "Quién asistirá a las visitas",
+      "Quién asistirá al workshop"
      ]
     }
    ]

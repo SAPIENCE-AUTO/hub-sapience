@@ -59,6 +59,11 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
   };
 
   const ocupado = llamada.corriendo || guardando;
+  // Aviso (no bloquea): entre muestra e inversión solo va tiempos; lo demás va después de la inversión.
+  const incluidas: any[] = d.indice.filter((l: any) => l.incluir);
+  const iMuestra = incluidas.findIndex(l => l.tipo === 'muestra'), iInversion = incluidas.findIndex(l => l.tipo === 'inversion');
+  const fueraDeLugar = iMuestra >= 0 && iInversion > iMuestra
+    ? incluidas.slice(iMuestra + 1, iInversion).filter(l => l.tipo !== 'tiempos') : [];
   const faseOpts = d.fases.map((f: any, i: number) => <SelectItem key={i} value={String(i)}>{i + 1}. {f.nombre}</SelectItem>);
 
   return (
@@ -73,7 +78,7 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
           <div className="space-y-3">
             {d.preguntas.map((q: string, i: number) => (
               <div key={i} className="space-y-1">
-                <p className="text-sm">{q}</p>
+                <p className="text-sm">{q}{d.preguntas_estado?.find((e: any) => e.pregunta === q)?.respondida && <span className="ml-2 text-[11px] text-emerald-600">respondida</span>}</p>
                 <Textarea rows={2} value={respuestas[q] ?? ''} onChange={e => setRespuestas(r => ({ ...r, [q]: e.target.value }))} disabled={ocupado} />
               </div>
             ))}
@@ -97,6 +102,16 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => moverFase(i, 1)} disabled={ocupado || i === d.fases.length - 1}><ArrowDown className="w-3.5 h-3.5" /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => quitarFase(i)} disabled={ocupado || d.fases.length <= 1}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
+              <div className="flex flex-col md:flex-row md:items-center gap-2">
+                <Select value={i === 0 ? 'nuevos' : (f.participantes ?? 'nuevos')} onValueChange={v => set(c => { c.fases[i].participantes = v; })} disabled={ocupado || i === 0}>
+                  <SelectTrigger className="h-8 md:w-56"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mismos">Mismos participantes</SelectItem>
+                    <SelectItem value="nuevos">Participantes nuevos</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input className="h-8 flex-1" placeholder={i === 0 ? 'La primera fase siempre va con participantes nuevos' : 'Por qué (una frase)'} value={f.razon_participantes ?? ''} onChange={e => set(c => { c.fases[i].razon_participantes = e.target.value; })} disabled={ocupado} />
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 {([['goal', 'Goal'], ['tecnica', 'Técnica'], ['muestra', 'Muestra']] as const).map(([k, l]) => (
                   <div key={k} className="space-y-1">
@@ -108,13 +123,18 @@ export default function EsqueletoStep({ p, onChanged, onAprobado }: { p: any; on
             </div>
           ))}
           <Button variant="outline" size="sm" className="gap-1.5" disabled={ocupado}
-            onClick={() => set(c => { c.fases.push({ nombre: 'Nueva fase', etapa: null, icono: 'FiCircle', goal: '', tecnica: '', muestra: '' }); })}>
+            onClick={() => set(c => { c.fases.push({ nombre: 'Nueva fase', etapa: null, icono: 'FiCircle', goal: '', tecnica: '', muestra: '', participantes: 'nuevos', razon_participantes: '' }); })}>
             <Plus className="w-3.5 h-3.5" /> Agregar fase
           </Button>
         </div>
       </Seccion>
 
       <Seccion titulo="Índice de láminas" ayuda="Palomea las que van, reordénalas con las flechas. Las que Claude dejó fuera aparecen sin palomear con su razón.">
+        {fueraDeLugar.length > 0 && (
+          <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+            Entre la muestra y la inversión solo va Tiempos. {fueraDeLugar.map(l => `«${l.titulo || TIPOS_LAMINA[l.tipo] || l.tipo}»`).join(', ')} {fueraDeLugar.length > 1 ? 'van' : 'va'} después de la inversión. Puedes dejarlo así, pero el revisor lo marcará.
+          </div>
+        )}
         <div className="rounded-xl border border-border divide-y divide-border">
           {d.indice.map((l: any, i: number) => (
             <div key={i} className={`flex items-start gap-3 px-3 py-2.5 ${l.incluir ? '' : 'bg-muted/30'}`}>

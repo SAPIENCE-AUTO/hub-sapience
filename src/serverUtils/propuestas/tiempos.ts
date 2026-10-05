@@ -6,6 +6,15 @@
 export interface Actividad { nombre: string; fase: number | null; inicio_semana: number; duracion_semanas: number }
 export interface TiemposEsqueleto { fecha_inicio: string | null; actividades: Actividad[] }
 
+// Análisis de una fase: no baja de 1 semana sin que la persona lo cambie a mano.
+// PENDIENTE DE CONFIRMAR CON SERGIO: la precarga de 1.5 semanas.
+export const ANALISIS_MINIMO_SEMANAS = 1;
+export const ANALISIS_PRECARGA_SEMANAS = 1.5;
+export function precargarAnalisis(t: TiemposEsqueleto): TiemposEsqueleto {
+  return { ...t, actividades: (t.actividades ?? []).map(a =>
+    /^an[aá]lisis/i.test(a.nombre.trim()) && a.duracion_semanas < ANALISIS_MINIMO_SEMANAS ? { ...a, duracion_semanas: ANALISIS_PRECARGA_SEMANAS } : a) };
+}
+
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 function rangoSemana(inicio: Date, n: number): string {

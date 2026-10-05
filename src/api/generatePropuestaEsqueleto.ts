@@ -22,6 +22,13 @@ export default createEndpoint({
     const cliente = clientId ? (await Clients.findOne({ id: clientId }))?.name : undefined;
     const esqueleto = await conLatido(stream, 'Claude sigue armando el esqueleto…', () =>
       proponerEsqueleto({ brief, notas: p.notas, metodo: p.metodo, respuestas: input.respuestas, cliente: cliente ?? undefined }));
+    // Diagnóstico: todas las preguntas que Claude ha devuelto en esta propuesta y si la persona las respondió.
+    const prev: any = p.esqueleto ?? {};
+    const estado: { pregunta: string; respondida: boolean; respuesta?: string }[] = [...(prev.preguntas_estado ?? [])];
+    for (const q of prev.preguntas ?? []) if (!estado.some(e => e.pregunta === q)) estado.push({ pregunta: q, respondida: false });
+    for (const e of estado) { const r = input.respuestas?.[e.pregunta]?.trim(); if (r) { e.respondida = true; e.respuesta = r; } }
+    for (const q of esqueleto.preguntas) if (!estado.some(e => e.pregunta === q)) estado.push({ pregunta: q, respondida: false });
+    esqueleto.preguntas_estado = estado;
     // Se conserva el diseño que la persona ya hubiera elegido si se vuelve a proponer.
     const previo = (p.esqueleto as any)?.diseno;
     if (previo?.paleta && !esqueleto.diseno.paleta) esqueleto.diseno.paleta = previo.paleta;

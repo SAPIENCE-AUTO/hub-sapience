@@ -27,6 +27,8 @@ Una paleta propia se arma desde un tono breve o desde los colores de marca del c
 
 Las cajas de una misma fila llevan el mismo número de puntos con largo parecido y la misma altura, ajustada al contenido para que no queden huecos.
 
+Los títulos de las cajas de una fila (encabezados de color del contexto, títulos de objetivos específicos) ocupan todos el mismo número de renglones, 1 o 2, nunca más. El texto de abajo va en letra más chica que el título. El título de cada lámina cabe en un renglón.
+
 ## Ilustraciones
 
 Propuestas como Grinch van construidas alrededor de ilustraciones (una por bloque de contexto, por objetivo y por técnica). Con `ilustraciones: true` el constructor deja los huecos en su lugar exacto. Las ilustraciones no se generan con AI; las pone el diseñador.

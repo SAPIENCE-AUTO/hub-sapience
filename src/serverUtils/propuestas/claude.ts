@@ -28,7 +28,7 @@ CÓMO SE ESCRIBE PARA LA LÁMINA (la propuesta la lee el cliente y se imprime en
 - Cajas de color de una misma fila (títulos de columnas de contexto, de secciones): todas ocupan el mismo número de renglones; lo más limpio es una sola línea (máximo ~22 caracteres cada una).
 - Objetivos específicos: el título de cada tarjeta ocupa máximo 2 líneas (~55 caracteres); el detalle va en las viñetas, que son más chicas.
 - Fechas: no inventes ningún día exacto. Si el brief da solo un mes o «mediados de», escríbelo así («mediados de noviembre»); no lo conviertas a «16 de noviembre» ni comentes la temporada (fiestas, vacaciones) a menos que el brief lo mencione.
-- Muestra: si la tabla tiene 3 o más filas, no pongas notas bajo la tabla; el detalle va en las etiquetas de fila o en la lámina de método.
+- Muestra: las notas son obligatorias (criterios comunes y definición de cada perfil). Para que quepan debajo, la tabla lleva máximo 4 filas (3 si usa «grupos») y el acomodo en celdas máximo 2. Si alguna fase después de la primera tiene participantes nuevos, la muestra se agrupa por fase con «grupos» y las columnas son solo cortes (ciudad, edad).
 - Nunca digas «el brief», «del brief» ni «según el brief»: el cliente lee esto. Afirma directo (nombra las ciudades, el público, la categoría) o di «lo que nos compartieron». Lo que sí se respeta es el vocabulario del cliente.
 - Los corchetes angulares son solo para una aclaración operativa con sentido completo («<6 participantes por sesión>»), nunca para un número suelto como «<12>».
 - Redacta como persona, en español de México, sin frases armadas de trozos. Si una oración necesita releerse para entenderse, reescríbela.`;

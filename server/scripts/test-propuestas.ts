@@ -44,7 +44,22 @@ const casos: [string, (c: any) => void][] = [
   ['verbo cuantitativo en estudio cualitativo', c => { c.metodo = 'cualitativo'; c.laminas[1].especificos[0].titulo = 'Medir el consumo'; }],
   ['falta lámina de inversión', c => { c.laminas = c.laminas.filter((l: any) => l.tipo !== 'inversion'); }],
   ['acentos (unicode) en palabras sueltas', c => { c.laminas[7].bisagra = 'á é í ó ú ñ ü'; }],
+  ['«el brief» y número suelto entre corchetes', c => { c.laminas[7].bisagra = 'Lo que dice el brief <12>'; }],
+  ['título de lámina de más de un renglón', c => { c.laminas[7].titulo = 'Lo que necesitamos de Café Altura para arrancar'; }],
+  ['lámina fuera de lugar entre muestra e inversión', c => { const k = c.laminas.findIndex((l: any) => l.tipo === 'seccion'); const [x] = c.laminas.splice(k, 1); c.laminas.splice(5, 0, x); }],
+  ['muestra sin notas, con punto medio', c => { c.laminas[4].notas = []; c.laminas[4].filas[0].celdas[0] = '1 sesión · 6'; }],
+  ['verbo suelto en el enfoque', c => { c.laminas[2].verbos[0][0] = 'Observar'; }],
+  ['descripción de técnica de más de 2 renglones (11.5 pt)', c => { c.laminas[3].como[1].texto = 'Prepararemos café con cada participante y profundizaremos en lo que vimos en el diario, para entender cada gesto del ritual, sus tiempos, sus utensilios y lo que significa para quienes lo viven en casa todos los días, sin prisa y sin guion.'; }],
+  ['pregunta binaria o absoluta', c => { c.laminas[1].especificos[0].puntos[0] = 'En qué momentos entra y en cuáles no'; }],
+  ['columnas de muestra que mezclan fase y corte', c => { c.laminas[4].columnas[0] = 'Home Rituals en CDMX'; }],
+  ['fase con participantes nuevos y muestra sin grupos', c => { c.fases[1].participantes = 'nuevos'; }],
+  ['grupos que no suman las columnas', c => { c.laminas[4].grupos = [{ fase: 1, columnas: 2 }]; }],
+  ['grupos bien formados (sin problemas de grupos)', c => { c.fases[1].participantes = 'nuevos'; c.laminas[4].grupos = [{ fase: 1, columnas: 3 }]; }],
+  ['cantidad en letra fuera de formato', c => { c.laminas[6].paquete.letra = 'Seiscientos veinte mil pesos 00/100 M.N.'; }],
 ];
+// Contenido de prueba con errores (assets/): exactamente 24 problemas, iguales en Python y en TS.
+const PRUEBA_VICTORIA = JSON.parse(fs.readFileSync(path.join(SKILL, 'assets/prueba_victoria_con_errores.json'), 'utf8'));
+casos.push(['prueba_victoria_con_errores.json (mismos problemas en Python y TS)', c => { Object.keys(c).forEach(k => delete c[k]); Object.assign(c, JSON.parse(JSON.stringify(PRUEBA_VICTORIA))); }]);
 
 console.log('Revisor: TS vs revisar.py');
 for (const [nombre, mut] of casos) {
@@ -56,14 +71,11 @@ for (const [nombre, mut] of casos) {
   const ts = revisarContenido(c);
   const obtenido = ts.length ? ts.map(p => `[${p.ruta}] ${p.problema}`) : ['Sin problemas.'];
   const iguales = JSON.stringify(esperado) === JSON.stringify(obtenido) && (py.status === 1) === (ts.length > 0);
+  if (nombre.startsWith('prueba_victoria')) console.log(`    (Victoria con errores: Python ${esperado.length} problemas, TS ${ts.length})`);
+  if (nombre === 'ejemplo sin cambios' && ts.length !== 0) { bad(`${nombre}: debe salir «Sin problemas» y salieron ${ts.length}`); continue; }
   if (iguales) ok(`${nombre} (${ts.length} problemas)`);
   else { bad(nombre); console.log('    python:', esperado, '\n    ts    :', obtenido); }
 }
-// Hallazgo: el ejemplo que viene en el zip NO sale limpio con el revisor
-// original (el spec dice que sí). La paridad TS = Python se cumple igual; esto
-// solo avisa, no falla.
-if (revisarContenido(clone()).length !== 0) console.log('  ⚠ aviso: assets/ejemplo_contenido.json no sale «Sin problemas» ni con revisar.py original (ver los 2 problemas arriba)');
-
 // ── constructor ─────────────────────────────────────────────────────────
 console.log('Constructor: TS vs construir.js');
 async function entradas(buf: Buffer): Promise<Map<string, string>> {
@@ -77,7 +89,7 @@ const ejemploPath = path.join(TMP, 'ejemplo.json');
 fs.writeFileSync(ejemploPath, JSON.stringify(EJEMPLO), 'utf8');
 const origOut = path.join(TMP, 'orig.pptx');
 execFileSync('node', [path.join(SKILL, 'scripts/construir.js'), ejemploPath, origOut], { cwd: SKILL, stdio: 'pipe' });
-const { buffer, ajustes } = await construirPropuesta(EJEMPLO, {}, { paridad: true });
+const { buffer, ajustes } = await construirPropuesta(EJEMPLO);
 const a = await entradas(fs.readFileSync(origOut));
 const b = await entradas(buffer);
 const sinMeta = (m: Map<string, string>) => new Map([...m].filter(([n]) => !n.startsWith('docProps/')));
@@ -92,9 +104,21 @@ const conPaleta = clone(); conPaleta.paleta = { acento: 'FFEE99', secundario: 'A
 const pPath = path.join(TMP, 'paleta.json'); fs.writeFileSync(pPath, JSON.stringify(conPaleta), 'utf8');
 const salida = execFileSync('node', [path.join(SKILL, 'scripts/construir.js'), pPath, path.join(TMP, 'paleta_orig.pptx')], { cwd: SKILL, encoding: 'utf8' });
 const impresos = salida.split('\n').filter(l => /^\s{2}\S/.test(l)).map(l => l.trim());
-const r2 = await construirPropuesta(conPaleta, {}, { paridad: true });
+const r2 = await construirPropuesta(conPaleta);
 if (JSON.stringify(impresos) === JSON.stringify(r2.ajustes)) ok(`ajustes con paleta propia iguales a los del original (${impresos.length})`);
 else { bad('ajustes de paleta distintos'); console.log('    original:', impresos, '\n    ts      :', r2.ajustes); }
+
+// muestra con `grupos` en los dos acomodos: el TS debe salir idéntico al original
+for (const acomodo of ['tabla', 'celdas']) {
+  const cg = clone(); cg.laminas[4].acomodo = acomodo; cg.laminas[4].grupos = [{ fase: 0, columnas: 2 }, { fase: 1, columnas: 1 }];
+  const gPath = path.join(TMP, `grupos_${acomodo}.json`); fs.writeFileSync(gPath, JSON.stringify(cg), 'utf8');
+  const gOut = path.join(TMP, `grupos_${acomodo}.pptx`);
+  execFileSync('node', [path.join(SKILL, 'scripts/construir.js'), gPath, gOut], { cwd: SKILL, stdio: 'pipe' });
+  const gts = await construirPropuesta(cg);
+  const ga = sinMeta(await entradas(fs.readFileSync(gOut))), gb = sinMeta(await entradas(gts.buffer));
+  const gd = [...new Set([...ga.keys(), ...gb.keys()])].filter(n => ga.get(n) !== gb.get(n));
+  if (gd.length === 0) ok(`muestra con grupos (${acomodo}) idéntica al original`); else bad(`muestra con grupos (${acomodo}) distinta: ` + gd.join(', '));
+}
 
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(fallos === 0 ? '\n✅ todo igual al original' : `\n❌ ${fallos} fallo(s)`);

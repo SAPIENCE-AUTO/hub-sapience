@@ -31,11 +31,7 @@ function resolverRutas(obj: any, archivos: Record<string, string>, clave = ''): 
 export async function construirPropuesta(
   contenido: any,
   archivos: Record<string, string> = {},
-  // `paridad: true` apaga los ajustes de encaje del Hub (marcados con HUB) y deja
-  // el constructor idéntico al original de la skill; lo usa el test de paridad.
-  opciones: { paridad?: boolean } = {},
 ): Promise<{ buffer: Buffer; ajustes: string[] }> {
-  const HUB = !opciones.paridad;
   const C = resolverRutas(JSON.parse(JSON.stringify(contenido)), archivos);
   const TH = JSON.parse(fs.readFileSync(A('estilos', `estilo_${C.estilo}.json`), 'utf8'));
 // ---------- paleta propia con candados (contraste, saturación, distinción entre fases) ----------
@@ -79,8 +75,15 @@ const W = 13.333, X0 = 0.6, CW = 12.13;
 let page = 1;
 
 const T = (s, t, o) => s.addText(t, Object.assign({ fontFace: F, color: TXT, margin: 0, isTextBox: true, valign: 'top' }, o));
-const flechas = (arr, sz = 13.5) => arr.map((t, i) => ({ text: (t && t.texto) ? t.texto : t, options: { bullet: { code: '2192', indent: 18 }, breakLine: i < arr.length - 1, paraSpaceAfter: 6, fontSize: sz } }));
-const runs = (arr) => arr.map(r => typeof r === 'string' ? { text: r } : { text: r.texto, options: Object.assign({}, r.resalta ? { color: ACC, bold: true } : {}, r.negrita ? { bold: true } : {}) });
+const sinFlecha = x => String(x).replace(/^\s*(→|->|➜|•|-)\s*/, '');   // si el texto ya trae flecha, no se duplica
+const flechas = (arr, sz = 13.5, esp = 6) => arr.map((t, i) => ({ text: sinFlecha((t && t.texto) ? t.texto : t), options: { bullet: { code: '2192', indent: 18 }, breakLine: i < arr.length - 1, paraSpaceAfter: esp, fontSize: sz } }));
+// Si Claude parte una oración en pedazos con distinto formato y olvida el espacio («recompra.Con»), se agrega.
+const espaciado = arr => arr.map((r, i) => {
+  if (i === 0) return r; const txt = x => typeof x === 'string' ? x : (x.texto || '');
+  const prev = txt(arr[i - 1]), cur = txt(r);
+  if (/[^\s(«¿¡]$/.test(prev) && /^[A-Za-zÁÉÍÓÚÑáéíóúñ0-9¿¡«(]/.test(cur)) return typeof r === 'string' ? ' ' + r : Object.assign({}, r, { texto: ' ' + cur });
+  return r; });
+const runs = (arr) => espaciado(arr).map(r => typeof r === 'string' ? { text: r } : { text: r.texto, options: Object.assign({}, r.resalta ? { color: ACC, bold: true } : {}, r.negrita ? { bold: true } : {}) });
 
 function pill(s, x, y, w, h, txt, fill, col, sz = 15, lowkey = false) {
   const sh = TH.shape || 'pill';
@@ -102,8 +105,23 @@ function box(s, x, y, w, h, fill, borde) {
   if (sh === 'square') s.addShape(pres.shapes.RECTANGLE, o);
   else s.addShape(pres.shapes.ROUNDED_RECTANGLE, Object.assign(o, { rectRadius: 0.12 }));
 }
-const runsC = (arr, hl) => arr.map(r => typeof r === 'string' ? { text: r } : { text: r.texto, options: Object.assign({}, r.resalta ? { color: hl, bold: true } : {}, r.negrita ? { bold: true } : {}) });
-function lineas(t, w, sz) { return String(t).split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length * 0.48 * sz / (w * 72))), 0); }
+const runsC = (arr, hl) => espaciado(arr).map(r => typeof r === 'string' ? { text: r } : { text: r.texto, options: Object.assign({}, r.resalta ? { color: hl, bold: true } : {}, r.negrita ? { bold: true } : {}) });
+// Renglones estimados palabra por palabra, como corta PowerPoint. Anchos promedio por carácter medidos con
+// Montserrat: regular 0.54, negritas 0.55, mayúsculas en negritas 0.70 (del tamaño de letra).
+function renglonesTexto(t, w, sz, k) {
+  const max = (w - 0.05) * 72;
+  return String(t).split('\n').reduce((n, l) => {
+    let r = 1, ancho = 0;
+    for (const p of l.split(/\s+/).filter(Boolean)) {
+      const pw = p.length * k * sz, esp = ancho ? 0.28 * sz : 0;
+      if (ancho && ancho + esp + pw > max) { r++; ancho = pw; } else ancho += esp + pw;
+      while (ancho > max) { r++; ancho -= max; }   // palabra más larga que la caja
+    }
+    return n + r; }, 0);
+}
+const esMayus = t => String(t) === String(t).toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(t);
+function lineasB(t, w, sz) { return renglonesTexto(t, w, sz, esMayus(t) ? 0.70 : 0.55); }
+function lineas(t, w, sz) { return renglonesTexto(t, w, sz, esMayus(t) ? 0.66 : 0.54); }
 function altoLista(items, w, sz) { // alto en pulgadas de una lista de flechas o de un texto
   if (!items) return 0;
   if (typeof items === 'string') return lineas(items, w, sz) * sz * 1.25 / 72;
@@ -173,14 +191,18 @@ function plantilla(t) {
   });
 }
 function ajusta(t, w, h, sz, bold) {
-  // reduce el tamaño hasta que el texto quepa en la caja (estimación por ancho promedio de carácter)
-  const mayus = HUB && t === t.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(t);   // HUB: las mayúsculas de Montserrat son más anchas que el promedio
-  const k = bold ? (mayus ? 0.78 : 0.64) : (mayus ? 0.66 : 0.56);
+  // reduce el tamaño hasta que el texto quepa en la caja (w y h en puntos)
   for (let z = sz; z >= sz * 0.55; z -= 1) {
-    const lineas = t.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length * k * z / w)), 0);
-    if (lineas * z * 1.08 <= h + 2) return z;
+    const n = bold ? lineasB(t, w / 72, z) : lineas(t, w / 72, z);
+    if (n * z * 1.15 <= h + 2) return z;
   }
   return sz * 0.55;
+}
+// Alto disponible de un texto de portada: hasta donde empieza otro texto de la plantilla que esté debajo y se
+// cruce en horizontal (algunas plantillas tienen las cajas traslapadas, como CITIZEN).
+function altoLibre(textos, i) {
+  const [, x, y, w, h] = textos[i];
+  return textos.reduce((m, [, x2, y2, w2], j) => (j !== i && y2 > y && x2 < x + w && x2 + w2 > x) ? Math.min(m, y2 - y - 4) : m, h);
 }
 function portada() {
   const P = PORTADAS[C.portada || TH.portada];
@@ -192,7 +214,7 @@ function portada() {
       T(s, 'FOTO ' + (i + 1), { x, y, w, h, fontSize: 20, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' }); }
   });
   s.addImage({ path: A('marcos', P.marco), x: 0, y: 0, w: W, h: 7.5, objectName: 'MARCO' });
-  P.textos.forEach(([t, x, y, w, h, sz, b, c, al], i) => T(s, plantilla(t), { x: x / 72, y: y / 72, w: w / 72, h: h / 72, fontSize: ajusta(plantilla(t), w, h, sz, b), bold: !!b, color: c, align: al, fontFace: TH.CF || 'Montserrat', lineSpacingMultiple: 0.92, objectName: `TEXTO_${i + 1}` }));
+  P.textos.forEach(([t, x, y, w, h, sz, b, c, al], i) => T(s, plantilla(t), { x: x / 72, y: y / 72, w: w / 72, h: h / 72, fontSize: ajusta(plantilla(t), w, altoLibre(P.textos, i), sz, b), bold: !!b, color: c, align: al, fontFace: TH.CF || 'Montserrat', lineSpacingMultiple: 0.92, objectName: `TEXTO_${i + 1}` }));
   s.addNotes(`Portada ${P.nombre}. Para cambiar una foto, abre el Panel de selección, elige FOTO_n, clic derecho y Cambiar imagen.`);
 }
 
@@ -201,8 +223,12 @@ const M = {
   async contexto(d) {
     const s = base(d.titulo || 'Contexto', d.entrada ? null : d.bisagra);
     let y = yCont;
-    if (d.entrada) { T(s, runs(d.entrada), { x: X0, y: yBis, w: CW, h: ILU ? 0.85 : 0.95, fontSize: ILU ? 14 : 15 }); y = yBis + (ILU ? 0.95 : 1.12); }
-    const n = d.columnas.length, cs = cols(n, 0.25), sz = 13;
+    if (d.entrada) {   // el alto de la entrada se mide, para que las columnas empiecen abajo de ella y no se encimen
+      const txt = d.entrada.map(r => typeof r === 'string' ? r : r.texto).join(' ');
+      let ze = ILU ? 14 : 15; const he = z => lineasB(txt, CW, z) * z * 1.25 / 72;
+      while (ze > 12 && he(ze) > (ILU ? 0.85 : 1.0)) ze -= 0.5;
+      T(s, runs(d.entrada), { x: X0, y: yBis, w: CW, h: he(ze), fontSize: ze }); y = yBis + he(ze) + 0.2; }
+    const n = d.columnas.length, cs = cols(n, 0.25), sz = 12;   // más chico que el encabezado, para marcar jerarquía
     if (ILU) { cs.forEach(({ x, w }, i) => ilustracion(s, x + w * 0.25, y, w * 0.5, 0.72, d.columnas[i].ilustracion)); y += 0.82; }
     const hC = Math.max(...d.columnas.map((c, i) => altoLista(c.texto || c.puntos, cs[i].w - 0.32, sz))) + 0.3;
     for (const [i, { x, w }] of cs.entries()) {
@@ -248,18 +274,24 @@ const M = {
     const porFila = n <= 3 ? n : (n === 4 ? 2 : 3), filas = Math.ceil(n / porFila);
     const y0 = yE + 0.4, altoTotal = 6.85 - y0, gapY = 0.15;
     const cs = cols(porFila, 0.2), li = ILU ? 0.85 : 0, disp = (altoTotal - gapY * (filas - 1)) / filas;
-    const dz = HUB ? 1.5 : 0;   // HUB: las viñetas van más chicas que el título de la tarjeta
-    const req = z => Math.max(...E.map((e, i) => altoLista(e.texto || e.puntos || e.preguntas, cs[i % porFila].w - 0.4 - li, z - dz) + lineas(e.titulo, cs[i % porFila].w - 0.4 - li, z + 2) * (z + 2) * 1.3 / 72)) + 0.35;
-    let sz = filas > 1 ? 12 : 13; while (sz > 10 && req(sz) > disp) sz -= 0.5;   // baja la letra antes que dejar texto fuera de la caja
-    const hCel = Math.min(req(sz), disp);
+    const dz = 1.5;   // AJUSTE HUB: las viñetas van más chicas que el título de la tarjeta
+    // Título y viñetas en cajas separadas. Todos los títulos ocupan el mismo alto (1 o 2 renglones, el del
+    // título más largo), así las viñetas arrancan a la misma altura en todas las tarjetas.
+    const wt = i => cs[i % porFila].w - 0.4 - li;
+    const nT = z => Math.min(2, Math.max(...E.map((e, i) => lineasB(e.titulo, wt(i), z + 2))));
+    const hT = z => nT(z) * (z + 2) * 1.2 / 72;
+    const hB = z => Math.max(...E.map((e, i) => altoLista(e.texto || e.puntos || e.preguntas, wt(i), z - dz)));
+    const req = z => 0.15 + hT(z) + 0.08 + hB(z) + 0.12;
+    let sz = filas > 1 ? 12 : 13; while (sz > 11 && req(sz) > disp) sz -= 0.5;   // baja la letra (hasta 11) antes que dejar texto fuera; el revisor avisa si no cabe
+    const hCel = Math.min(req(sz), disp), ht = hT(sz);
     E.forEach((e, i) => {
       const { x, w } = cs[i % porFila], y = y0 + Math.floor(i / porFila) * (hCel + gapY);
       box(s, x, y, w, hCel, SURF);
       if (ILU) ilustracion(s, x + 0.12, y + 0.12, 0.7, Math.min(0.7, hCel - 0.24), e.ilustracion);
-      const xt = x + 0.2 + li, wt = w - 0.4 - li;
-      const tit = { text: e.titulo, options: { bold: true, color: ACC, fontSize: sz + 2, breakLine: true, paraSpaceAfter: 6 } };
+      const xt = x + 0.2 + li;
+      T(s, e.titulo, { x: xt, y: y + 0.15, w: wt(i), h: ht, fontSize: sz + 2, bold: true, color: ACC, valign: 'top', fit: 'shrink' });
       const cuerpo = e.texto ? [{ text: e.texto, options: { fontSize: sz - dz } }] : flechas(e.puntos || e.preguntas, sz - dz);
-      T(s, [tit].concat(cuerpo), { x: xt, y: y + 0.08, w: wt, h: hCel - 0.16, valign: 'middle' });
+      T(s, cuerpo, { x: xt, y: y + 0.15 + ht + 0.08, w: wt(i), h: hCel - ht - 0.35, valign: 'top' });
     });
   },
   async enfoque(d) {
@@ -291,7 +323,8 @@ const M = {
     T(s, 'GOAL', { x: X0, y: 3.3, w: 3, h: 0.35, fontSize: 16, bold: true, color: ACC });
     T(s, d.goal, { x: X0, y: 3.68, w: wTxt, h: 0.8, fontSize: 14, bold: true });
     T(s, '¿CÓMO LO HAREMOS?', { x: X0, y: 4.55, w: 5, h: 0.35, fontSize: 16, bold: true, color: ACC });
-    const r = []; d.como.forEach((c, i) => { r.push({ text: c.titulo, options: { bold: true, breakLine: true } }); r.push({ text: c.texto, options: { breakLine: i < d.como.length - 1, paraSpaceAfter: 8 } }); });
+    // el texto de cada técnica va más chico que su título, para marcar la jerarquía (y que quepa en 2 renglones)
+    const r = []; d.como.forEach((c, i) => { r.push({ text: c.titulo, options: { bold: true, fontSize: 13.5, breakLine: true } }); r.push({ text: c.texto, options: { fontSize: 11.5, breakLine: i < d.como.length - 1, paraSpaceAfter: 10 } }); });
     T(s, r, { x: X0, y: 4.95, w: wTxt, h: 1.9, fontSize: 13.5 });
     if (conFoto) s.addImage({ path: d.foto, x: 7.6, y: 3.3, w: 2.5, h: 3.4, sizing: { type: 'cover', w: 2.5, h: 3.4 } });
     else { const p = FASES[d.fase]; box(s, 7.6, 3.3, 1.6, 3.4, p.c);
@@ -299,26 +332,43 @@ const M = {
     const xo = conFoto ? 10.35 : 9.5, wo = conFoto ? 2.4 : 3.23;
     box(s, xo - 0.15, 3.2, wo + 0.3, 3.6, SURF);
     T(s, 'OUTPUT', { x: xo, y: 3.3, w: wo, h: 0.35, fontSize: 16, bold: true, color: ACC });
-    T(s, flechas(d.output, 12.5), { x: xo, y: 3.7, w: wo, h: 3 });
+    // el espacio que sobra en la caja se reparte entre los puntos, para que no quede vacío abajo
+    const hOut = altoLista(d.output, wo, 12.5), sobra = Math.max(0, 2.85 - hOut) * 72, nO = d.output.length;
+    const espO = nO > 1 ? Math.min(28, 6 + sobra / (nO - 1)) : 6;
+    T(s, flechas(d.output, 12.5, espO), { x: xo, y: 3.72, w: wo, h: 2.95 });
   },
   async muestra(d) {
+    // Perfiles en filas y cortes en columnas. Si las fases usan participantes distintos, `grupos` pone el nombre
+    // de cada fase, en su color, sobre las columnas que le tocan (por ejemplo, sus ciudades).
     const s = base(d.titulo || 'Target y muestra', d.bisagra);
-    const lay = d.acomodo || (TH.muestra === 'table' ? 'tabla' : 'celdas');
-    const nc = d.columnas.length, wl = 3.5, gap = 0.15, wc = (CW - wl - 0.2 - gap * (nc - 1)) / nc, xc = X0 + wl + 0.2;
-    const lay0 = d.acomodo || (TH.muestra === 'table' ? 'tabla' : 'celdas');
-    const filasH = d.filas.length > 3 ? 0.6 : 0.75;
-    const yEnd = lay0 === 'tabla' ? yCont + 0.55 + d.filas.length * filasH : yCont + 0.7 + d.filas.length * (filasH + 0.2) - 0.2;
+    const lay = d.acomodo || (TH.muestra === 'table' ? 'tabla' : 'celdas'), G = d.grupos;
+    const nc = d.columnas.length, wl = 3.3, gap = 0.15, wc = (CW - wl - 0.2 - gap * (nc - 1)) / nc, xc = X0 + wl + 0.2;
+    const filasH = d.filas.length > 3 ? 0.55 : (G ? 0.62 : 0.75), gapF = G ? 0.16 : 0.2;
+    const grupo = g => { const p = FASES[g.fase]; return p ? { n: g.titulo || p.n, c: p.c, t: p.t } : { n: g.titulo, c: ACC, t: TH.ACCT || 'FFFFFF' }; };
+    let yEnd;
     if (lay === 'tabla') {
-      const hdr = [{ text: '', options: { fill: { color: BG } } }].concat(d.columnas.map(c => ({ text: c, options: { bold: true, color: TH.HDRT || 'FFFFFF', fill: { color: TH.HDR || SURF }, align: 'center' } })));
+      const vacio = { text: '', options: { fill: { color: BG } } }, filasHdr = [];
+      if (G) filasHdr.push([vacio].concat(G.map(g => { const p = grupo(g); return { text: p.n.toUpperCase(), options: { colspan: g.columnas, bold: true, color: p.t, fill: { color: p.c }, align: 'center' } }; })));
+      filasHdr.push([vacio].concat(d.columnas.map(c => ({ text: c, options: { bold: true, color: TH.HDRT || 'FFFFFF', fill: { color: TH.HDR || SURF }, align: 'center', fontSize: G ? 13 : 16 } }))));
       const rows = d.filas.map(f => [{ text: f.nombre, options: { bold: true, color: ACC } }].concat(f.celdas.map(c => ({ text: c, options: { align: 'center', color: TXT } }))));
-      s.addTable([hdr].concat(rows), { x: X0, y: yCont, w: CW, colW: [wl + 0.2].concat(Array(nc).fill((CW - wl - 0.2) / nc)), rowH: [0.55].concat(Array(d.filas.length).fill(filasH)), fontFace: F, fontSize: 16, valign: 'middle', border: { type: 'solid', pt: 1, color: LINE }, color: TXT });
+      const hs = (G ? [0.45, 0.45] : [0.55]).concat(Array(d.filas.length).fill(filasH));
+      s.addTable(filasHdr.concat(rows), { x: X0, y: yCont, w: CW, colW: [wl + 0.2].concat(Array(nc).fill((CW - wl - 0.2) / nc)), rowH: hs, fontFace: F, fontSize: 15, valign: 'middle', border: { type: 'solid', pt: 1, color: LINE }, color: TXT });
+      yEnd = yCont + hs.reduce((a, b) => a + b, 0);
     } else {
-      d.columnas.forEach((c, i) => pill(s, xc + i * (wc + gap), yCont, wc, 0.5, c, SURF, SECT, 15));
-      d.filas.forEach((f, j) => { const y = yCont + 0.7 + j * (filasH + 0.2);
+      let yC = yCont;
+      if (G) { let k = 0;
+        G.forEach(g => { const p = grupo(g), x = xc + k * (wc + gap), w = g.columnas * wc + (g.columnas - 1) * gap;
+          pill(s, x, yCont, w, 0.45, p.n.toUpperCase(), p.c, p.t, 14); k += g.columnas; });
+        yC = yCont + 0.55; }
+      const hC = G ? 0.42 : 0.5;
+      d.columnas.forEach((c, i) => pill(s, xc + i * (wc + gap), yC, wc, hC, c, SURF, SECT, G ? 13 : 15));
+      const y0 = yC + hC + gapF;
+      d.filas.forEach((f, j) => { const y = y0 + j * (filasH + gapF);
         pill(s, X0, y, wl, filasH, f.nombre, ACC, 'FFFFFF', 14);
-        f.celdas.forEach((t, i) => pill(s, xc + i * (wc + gap), y, wc, filasH, t, TH.CELL, TH.CELLT, 17, true)); });
+        f.celdas.forEach((t, i) => pill(s, xc + i * (wc + gap), y, wc, filasH, t, TH.CELL, TH.CELLT, G ? 15 : 17, true)); });
+      yEnd = y0 + d.filas.length * (filasH + gapF) - gapF;
     }
-    if (d.notas) T(s, flechas(d.notas, 13), { x: X0, y: Math.min(yEnd + 0.3, 5.7), w: CW, h: 1.2 });
+    if (d.notas) T(s, flechas(d.notas, 11.5, 4), { x: X0, y: Math.min(yEnd + 0.3, 5.8), w: CW, h: 6.85 - Math.min(yEnd + 0.3, 5.8) });
   },
   async entregables(d) {
     const s = base(d.titulo || 'Ejemplos de entregables', d.bisagra);
@@ -335,18 +385,18 @@ const M = {
         T(s, dd, { x: dx, y: y0 + 0.45, w: (cw - 0.1) / 7, h: 0.22, fontSize: 8, color: k > 4 ? DIM : MUT, align: 'center' });
         s.addShape(pres.shapes.RECTANGLE, { x: dx + 0.01, y: y0 + 0.7, w: (cw - 0.1) / 7 - 0.02, h: gh, fill: { color: k > 4 ? TH.WEND : TH.WDAY }, line: { color: BG, width: 0 } }); }); });
     const rowH = Math.min(0.75, (gh - 0.2) / d.barras.length);
-    // HUB: la barra nunca es más alta que su renglón (si no, se encima con la de abajo) y la
+    // AJUSTE HUB: la barra nunca es más alta que su renglón (si no, se encima con la de abajo) y la
     // etiqueta que no cabe dentro de la barra se escribe afuera, en vez de desbordarse.
-    const barH = HUB ? Math.min(0.45, rowH - 0.05) : 0.45, bsz = HUB && barH < 0.4 ? 10 : 12;
-    const cabe = (txt, wIn) => !HUB || Math.ceil(txt.length * 0.74 * bsz / ((wIn - 0.2) * 72)) <= (barH < 0.4 ? 1 : 2);
+    const barH = Math.min(0.45, rowH - 0.05), bsz = barH < 0.4 ? 10 : 12;
+    const cabe = (txt, wIn) => Math.ceil(txt.length * 0.74 * bsz / ((wIn - 0.2) * 72)) <= (barH < 0.4 ? 1 : 2);
     d.barras.forEach((b, j) => { const p = (b.fase === undefined || b.fase === null) ? { n: b.etiqueta, c: DIM, t: 'FFFFFF' } : FASES[b.fase], x = X0 + b.inicio * cw, y = y0 + 0.95 + j * rowH, w = Math.max((b.fin - b.inicio) * cw, 0.5);
       const txt = (b.etiqueta || p.n).toUpperCase();
       const corto = (b.fin - b.inicio) < 1 || !cabe(txt, w);
       pill(s, x, y, w, barH, corto ? '' : txt, p.c, p.t, bsz);
       if (corto) {
-        const enDerecha = HUB && x - X0 < 3.4 && X0 + CW - (x + w) > 3.4;   // sin lugar a la izquierda, va a la derecha
-        if (enDerecha) T(s, (b.etiqueta || p.n), { x: x + w + 0.1, y, w: X0 + CW - (x + w) - 0.1, h: barH, fontSize: HUB ? bsz : 11, bold: true, align: 'left', valign: 'middle' });
-        else T(s, (b.etiqueta || p.n) + ' →', { x: x - 3.3, y, w: 3.2, h: barH, fontSize: HUB ? bsz : 11, bold: true, align: 'right', valign: 'middle' });
+        const enDerecha = x - X0 < 3.4 && X0 + CW - (x + w) > 3.4;   // sin lugar a la izquierda, va a la derecha
+        if (enDerecha) T(s, (b.etiqueta || p.n), { x: x + w + 0.1, y, w: X0 + CW - (x + w) - 0.1, h: barH, fontSize: bsz, bold: true, align: 'left', valign: 'middle' });
+        else T(s, (b.etiqueta || p.n) + ' →', { x: x - 3.3, y, w: 3.2, h: barH, fontSize: bsz, bold: true, align: 'right', valign: 'middle' });
       } });
     if (d.nota) T(s, d.nota, { x: X0, y: 6.35, w: CW, h: 0.3, fontSize: 12, color: MUT });
   },
@@ -380,6 +430,7 @@ const M = {
   },
   async cierre() { const s = pres.addSlide(); s.addImage({ path: A('img', 'cierre.png'), x: 0, y: 0, w: W, h: 7.5 }); },
 };
+
 
   portada();
   for (const l of C.laminas) {
