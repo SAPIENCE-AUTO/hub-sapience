@@ -149,6 +149,11 @@ for i, l in enumerate(C.get('laminas', [])):
             problemas.append((f'laminas[{i}].columnas', 'Las columnas de la muestra mezclan fase y corte. Agrupa por fase con «grupos» y deja en columnas solo los cortes (ciudad, edad).'))
         if any(f.get('participantes') == 'nuevos' for f in C.get('fases', [])[1:]) and not l.get('grupos') and nf > 1:
             problemas.append((f'laminas[{i}]', 'Hay fases con participantes nuevos y la muestra no se agrupa por fase con «grupos».'))
+        for k, g in enumerate(l.get('grupos', [])):
+            if not isinstance(g.get('fase'), int):
+                problemas.append((f'laminas[{i}].grupos[{k}]', f'«fase» en grupos va como índice desde 0 (0, 1…), no «{g.get("fase")}».'))
+            if not g.get('detalle'):
+                problemas.append((f'laminas[{i}].grupos[{k}]', 'El grupo no dice cuántos participantes son ni qué hacen («16 participantes con diario y entrevista»).'))
         if l.get('grupos') and sum(g.get('columnas', 0) for g in l['grupos']) != len(l.get('columnas', [])):
             problemas.append((f'laminas[{i}].grupos', 'Los grupos de la muestra no suman el número de columnas.'))
         for f in l.get('filas', []):
@@ -164,10 +169,14 @@ for i, l in enumerate(C.get('laminas', [])):
                 if len(v.split()) < 2:
                     problemas.append((f'laminas[{i}].verbos[{k}]', f'«{v}» es un verbo suelto. Cada fase lleva frases cortas de verbo con objeto («Entrar a la cocina»).'))
     if tipo == 'detalle_fase':
+        if nf > 1 and any(f.get('participantes') for f in C.get('fases', [])) and not l.get('quienes'):
+            problemas.append((f'laminas[{i}]', 'El detalle de fase no dice quiénes participan («quienes»: «24 participantes nuevos»).'))
         for k, c in enumerate(l.get('como', [])):
             if renglones(c.get('texto', ''), 6.6, 11.5) > 2:
                 problemas.append((f'laminas[{i}].como[{k}]', f'La descripción de «{c.get("titulo")}» pasa de 2 renglones. Acórtala.'))
-    if tipo == 'detalle_fase' and l['fase'] >= nf:
+    if tipo == 'detalle_fase' and not isinstance(l.get('fase'), int):
+        problemas.append((f'laminas[{i}]', f'«fase» en detalle de fase va como índice desde 0 (0, 1…), no «{l.get("fase")}».'))
+    elif tipo == 'detalle_fase' and l['fase'] >= nf:
         problemas.append((f'laminas[{i}]', 'Detalle de fase apunta a una fase que no existe.'))
 
     if tipo == 'objetivos':

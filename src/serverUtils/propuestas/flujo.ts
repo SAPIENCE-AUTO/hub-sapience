@@ -67,7 +67,7 @@ ${JSON.stringify(args.esqueleto)}
 ARCHIVOS SUBIDOS POR SLOT (usa estas rutas tal cual donde corresponda):
 ${JSON.stringify(args.archivosPorSlot)}
 
-Escribe el contenido completo de la propuesta con base en el esqueleto aprobado. Respeta las fases, el índice (solo las láminas con incluir: true, en ese orden), la muestra, el precio y los tiempos tal como vienen. Responde solo con JSON en el formato del archivo de contenido descrito en references/estructura.md (el mismo de assets/ejemplo_contenido.json), con estilo, portada, paleta, ilustraciones y rutas de archivos tomados de "diseno".` },
+Escribe el contenido completo de la propuesta con base en el esqueleto aprobado. La decisión de participantes de cada fase se ve en la propuesta: llena «quienes» en cada detalle de fase y «detalle» en cada grupo de la muestra. Di el porqué una sola vez, en la bisagra de la muestra o en el detalle de la fase, y no lo repitas en las notas de la muestra, que quedan solo para los criterios de reclutamiento y la definición de cada perfil. Respeta las fases, el índice (solo las láminas con incluir: true, en ese orden), la muestra, el precio y los tiempos tal como vienen. Responde solo con JSON en el formato del archivo de contenido descrito en references/estructura.md (el mismo de assets/ejemplo_contenido.json), con estilo, portada, paleta, ilustraciones y rutas de archivos tomados de "diseno".` },
   ];
   return llamarJSON({ usuario, esquema: Contenido, maxTokens: 32000 });
 }

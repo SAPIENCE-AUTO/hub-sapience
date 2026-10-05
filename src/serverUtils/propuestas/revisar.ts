@@ -164,6 +164,10 @@ export function revisarContenido(C: any): Problema[] {
       if (fases.slice(1).some(f => f.participantes === 'nuevos') && !grupos && nf > 1) {
         add(`laminas[${i}]`, 'Hay fases con participantes nuevos y la muestra no se agrupa por fase con «grupos».');
       }
+      (l.grupos ?? []).forEach((g: any, k: number) => {
+        if (!Number.isInteger(g?.fase)) add(`laminas[${i}].grupos[${k}]`, `«fase» en grupos va como índice desde 0 (0, 1…), no «${pyStr(g?.fase)}».`);
+        if (!g?.detalle) add(`laminas[${i}].grupos[${k}]`, 'El grupo no dice cuántos participantes son ni qué hacen («16 participantes con diario y entrevista»).');
+      });
       if (grupos && grupos.reduce((a: number, g: any) => a + (g.columnas ?? 0), 0) !== (l.columnas ?? []).length) {
         add(`laminas[${i}].grupos`, 'Los grupos de la muestra no suman el número de columnas.');
       }
@@ -181,11 +185,13 @@ export function revisarContenido(C: any): Problema[] {
       });
     }
     if (tipo === 'detalle_fase') {
+      if (nf > 1 && fases.some(f => f.participantes) && !l.quienes) add(`laminas[${i}]`, 'El detalle de fase no dice quiénes participan («quienes»: «24 participantes nuevos»).');
       (l.como ?? []).forEach((c: any, k: number) => {
         if (renglones(c.texto ?? '', 6.6, 11.5) > 2) add(`laminas[${i}].como[${k}]`, `La descripción de «${pyStr(c.titulo)}» pasa de 2 renglones. Acórtala.`);
       });
     }
-    if (tipo === 'detalle_fase' && l.fase >= nf) add(`laminas[${i}]`, 'Detalle de fase apunta a una fase que no existe.');
+    if (tipo === 'detalle_fase' && !Number.isInteger(l.fase)) add(`laminas[${i}]`, `«fase» en detalle de fase va como índice desde 0 (0, 1…), no «${pyStr(l.fase)}».`);
+    else if (tipo === 'detalle_fase' && l.fase >= nf) add(`laminas[${i}]`, 'Detalle de fase apunta a una fase que no existe.');
 
     if (tipo === 'objetivos') {
       const g0 = (l.general || ' ').split(' ')[0].toLowerCase();

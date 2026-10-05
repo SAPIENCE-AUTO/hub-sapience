@@ -55,6 +55,10 @@ const casos: [string, (c: any) => void][] = [
   ['fase con participantes nuevos y muestra sin grupos', c => { c.fases[1].participantes = 'nuevos'; }],
   ['grupos que no suman las columnas', c => { c.laminas[4].grupos = [{ fase: 1, columnas: 2 }]; }],
   ['grupos bien formados (sin problemas de grupos)', c => { c.fases[1].participantes = 'nuevos'; c.laminas[4].grupos = [{ fase: 1, columnas: 3 }]; }],
+  ['fase como nombre en grupos', c => { c.laminas[4].grupos = [{ fase: 'Home Rituals', columnas: 3, detalle: '12 participantes con visita' }]; }],
+  ['grupo sin detalle', c => { c.laminas[4].grupos = [{ fase: 1, columnas: 3 }]; }],
+  ['detalle de fase sin quienes (las fases declaran participantes)', c => { c.fases.forEach((f: any, k: number) => { f.participantes = k === 0 ? 'nuevos' : 'mismos'; }); }],
+  ['fase como nombre en detalle de fase', c => { c.laminas[3].fase = 'Home Rituals'; }],
   ['cantidad en letra fuera de formato', c => { c.laminas[6].paquete.letra = 'Seiscientos veinte mil pesos 00/100 M.N.'; }],
 ];
 // Contenido de prueba con errores (assets/): exactamente 24 problemas, iguales en Python y en TS.
@@ -107,6 +111,35 @@ const impresos = salida.split('\n').filter(l => /^\s{2}\S/.test(l)).map(l => l.t
 const r2 = await construirPropuesta(conPaleta);
 if (JSON.stringify(impresos) === JSON.stringify(r2.ajustes)) ok(`ajustes con paleta propia iguales a los del original (${impresos.length})`);
 else { bad('ajustes de paleta distintos'); console.log('    original:', impresos, '\n    ts      :', r2.ajustes); }
+
+// participantes visibles (conector del enfoque, `quienes`, `detalle`) y `fase` por nombre: idéntico al original
+for (const acomodoEnfoque of ['circulos', 'banda']) for (const acomodoMuestra of ['tabla', 'celdas']) {
+  const cp = clone();
+  cp.fases.forEach((f: any, k: number) => { f.participantes = k === 0 ? 'nuevos' : (k === 1 ? 'mismos' : 'nuevos'); });
+  cp.laminas[2].acomodo = acomodoEnfoque;
+  cp.laminas[3].quienes = '12 participantes'; cp.laminas[3].fase = 'Home Rituals';
+  cp.laminas[4].acomodo = acomodoMuestra;
+  cp.laminas[4].grupos = [{ fase: 0, columnas: 2, detalle: '12 participantes con diario y entrevista' }, { fase: 'Home Rituals', columnas: 1, detalle: '6 en 1 sesión' }];
+  const pPath2 = path.join(TMP, `part_${acomodoEnfoque}_${acomodoMuestra}.json`); fs.writeFileSync(pPath2, JSON.stringify(cp), 'utf8');
+  const pOut = pPath2.replace('.json', '.pptx');
+  execFileSync('node', [path.join(SKILL, 'scripts/construir.js'), pPath2, pOut], { cwd: SKILL, stdio: 'pipe' });
+  const pts = await construirPropuesta(cp);
+  const pa = sinMeta(await entradas(fs.readFileSync(pOut))), pb = sinMeta(await entradas(pts.buffer));
+  const pd = [...new Set([...pa.keys(), ...pb.keys()])].filter(n => pa.get(n) !== pb.get(n));
+  if (pd.length === 0) ok(`participantes visibles (enfoque ${acomodoEnfoque}, muestra ${acomodoMuestra}) idénticos al original`); else bad(`participantes visibles (${acomodoEnfoque}/${acomodoMuestra}) distintos: ` + pd.join(', '));
+}
+
+// defecto de pptxgenjs 4.0.1: un <a:pPr> a media línea (tras </a:r>) deja renglones sin flecha / archivo inválido.
+// El buffer del constructor TS debe pasar por limpiarParrafos(): ningún slide trae la secuencia </a:r><a:pPr.
+{
+  const cc = clone();
+  cc.laminas[4].notas = ['Usuarios de Café Altura <es la marca que más compran en casa> y usuarios de otras marcas <no han comprado en 6 meses>', 'Todos toman café en casa'];
+  cc.laminas[3].como[0].texto = 'Cada participante nos compartirá sus momentos de café <qué prepara, con qué, con quién>, para ver el ritual real';
+  const rr = await construirPropuesta(cc);
+  const fcc = path.join(TMP, 'pPr.pptx'); fs.writeFileSync(fcc, rr.buffer);
+  const salida = execFileSync('python3', ['-c', "import sys,zipfile,re\nz=zipfile.ZipFile(sys.argv[1])\nmalos=[n for n in z.namelist() if re.match(r'ppt/slides/slide\\d+\\.xml$',n) and '</a:r><a:pPr' in z.read(n).decode('utf8')]\nprint(','.join(malos))", fcc], { encoding: 'utf8' }).trim();
+  if (salida === '') ok('ningún slide trae </a:r><a:pPr (limpiarParrafos aplicado, con <…> en notas y en «cómo»)'); else bad('XML con <a:pPr> a media línea en: ' + salida);
+}
 
 // muestra con `grupos` en los dos acomodos: el TS debe salir idéntico al original
 for (const acomodo of ['tabla', 'celdas']) {

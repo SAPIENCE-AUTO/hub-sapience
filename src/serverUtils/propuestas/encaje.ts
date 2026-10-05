@@ -73,9 +73,9 @@ export function revisarEncaje(C: any): Problema[] {
         y = yBis + he(ze) + 0.2;
       }
       if (ILU) y += 0.82;
-      const hC = Math.max(...cs.map(c => altoLista(c.texto || c.puntos, w - 0.32, 13))) + 0.3;
+      const hC = Math.max(...cs.map(c => altoLista(c.texto || c.puntos, w - 0.32, 11))) + 0.3;   // texto de las cajas a 11; el reparto del espacio sobrante solo usa lo que sobra
       const yFin = y + 0.72 + hC;
-      if (yFin > 6.85) add(`${r}.columnas`, `El contexto no cabe en la lámina: las columnas terminan en ${yFin.toFixed(1)} in y el límite es 6.9. Acorta cada punto a una oración corta (~${aprox(w - 0.57, 13, 2)} caracteres).`);
+      if (yFin > 6.85) add(`${r}.columnas`, `El contexto no cabe en la lámina: las columnas terminan en ${yFin.toFixed(1)} in y el límite es 6.9. Acorta cada punto a una oración corta (~${aprox(w - 0.57, 11, 2)} caracteres).`);
       else if (l.cierre && 6.85 - (yFin + 0.22) < 0.6) add(`${r}.cierre`, 'El cierre del contexto queda sin espacio debajo de las columnas. Acorta los puntos de las columnas o el cierre.');
     }
 
@@ -93,12 +93,13 @@ export function revisarEncaje(C: any): Problema[] {
     if (l.tipo === 'muestra') {
       // Geometría de muestra() en construir.js, con `grupos` (nombre de fase sobre sus columnas).
       const nc = (l.columnas ?? []).length, nf = (l.filas ?? []).length, gap = 0.15, wl = 3.3, G = !!(l.grupos && l.grupos.length);
+      const conDetalle = G && l.grupos.some((g: any) => g?.detalle);
       const tabla = (l.acomodo ?? (TH.muestra === 'table' ? 'tabla' : 'celdas')) === 'tabla';
       const filasH = nf > 3 ? 0.55 : (G ? 0.62 : 0.75), gapF = G ? 0.16 : 0.2;
       const wc = (CW - wl - 0.2 - gap * (nc - 1)) / Math.max(1, nc);
       let yEnd: number;
-      if (tabla) yEnd = yCont + (G ? 0.9 : 0.55) + nf * filasH;
-      else { const yC = G ? yCont + 0.55 : yCont, hC = G ? 0.42 : 0.5, y0 = yC + hC + gapF; yEnd = y0 + nf * (filasH + gapF) - gapF; }
+      if (tabla) yEnd = yCont + (G ? (conDetalle ? 0.62 : 0.45) + 0.45 : 0.55) + nf * filasH;
+      else { const yC = G ? yCont + (conDetalle ? 0.86 : 0.55) : yCont, hC = G ? 0.42 : 0.5, y0 = yC + hC + gapF; yEnd = y0 + nf * (filasH + gapF) - gapF; }
       const ptCelda = tabla ? 15 : (G ? 15 : 17), ptNombre = tabla ? 15 : 14;
       const maxLin = Math.floor((filasH * 72) / (ptCelda * 1.2));
       (l.filas ?? []).forEach((f: any, j: number) => {

@@ -7,11 +7,17 @@
 // (2) los ajustes de paleta se devuelven en vez de imprimirse; (3) las rutas
 // de fotos/ilustraciones del contenido se resuelven contra `archivos`
 // (ruta de Storage -> archivo temporal); (4) el estado (page, AJUSTES, TH)
-// vive dentro de la función, porque en el servidor se llama muchas veces.
+// vive dentro de la función, porque en el servidor se llama muchas veces;
+// (5) el buffer final pasa por limpiarParrafos() (definida en construir.js) antes de devolverse.
 import pptxgenMod from 'pptxgenjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import icon from './iconos';
+import { createRequire } from 'node:module';
+
+// jszip viene con pptxgenjs; construir.js lo usa en limpiarParrafos() para limpiar el XML al final.
+const requireCjs = createRequire(import.meta.url);
+const JSZip = requireCjs(requireCjs.resolve('jszip', { paths: [path.dirname(requireCjs.resolve('pptxgenjs'))] }));
 
 // Bajo tsx (el servidor corre con `tsx index.ts`) el import por default de este
 // paquete CJS llega envuelto en { default }; bajo Node/Vite llega directo.
@@ -70,13 +76,24 @@ const PORTADAS = JSON.parse(fs.readFileSync(A('portadas.json'), 'utf8'));
 const pres = new pptxgen(); pres.layout = 'LAYOUT_WIDE'; pres.title = `${C.proyecto} · ${C.cliente}`;
 const F = TH.F, TF = TH.TF, BG = TH.BG, SURF = TH.SURF, TXT = TH.TXT, MUT = TH.MUT, LINE = TH.LINE;
 const ACC = TH.ACC, SECT = TH.SECT, DIM = TH.DIM;
-const FASES = (C.fases || []).map((f, i) => Object.assign({ n: f.nombre, etapa: f.etapa, icono: f.icono || 'FiCircle' }, TH.colores_fase[i % TH.colores_fase.length]));
+const FASES = (C.fases || []).map((f, i) => Object.assign({ n: f.nombre, etapa: f.etapa, icono: f.icono || 'FiCircle', part: f.participantes }, TH.colores_fase[i % TH.colores_fase.length]));
+// una fase se puede indicar por índice (0, 1…) o por nombre
+const idxFase = f => typeof f === 'number' ? f : FASES.findIndex(x => x.n.toLowerCase() === String(f).toLowerCase());
+// lo que dice el conector entre una fase y la siguiente
+const textoPart = p => p === 'mismos' ? 'con los mismos participantes' : p === 'nuevos' ? 'con participantes nuevos' : '';
 const W = 13.333, X0 = 0.6, CW = 12.13;
 let page = 1;
 
 const T = (s, t, o) => s.addText(t, Object.assign({ fontFace: F, color: TXT, margin: 0, isTextBox: true, valign: 'top' }, o));
 const sinFlecha = x => String(x).replace(/^\s*(→|->|➜|•|-)\s*/, '');   // si el texto ya trae flecha, no se duplica
-const flechas = (arr, sz = 13.5, esp = 6) => arr.map((t, i) => ({ text: sinFlecha((t && t.texto) ? t.texto : t), options: { bullet: { code: '2192', indent: 18 }, breakLine: i < arr.length - 1, paraSpaceAfter: esp, fontSize: sz } }));
+// La aclaración entre corchetes angulares va 1.5 pt más chica que el resto del renglón
+const partesAng = (txt, sz) => String(txt).split(/(<[^>]+>)/).filter(Boolean).map(p => ({ text: p, options: { fontSize: p.startsWith('<') ? sz - 1.5 : sz } }));
+const flechas = (arr, sz = 13.5, esp = 6) => arr.flatMap((t, i) => {
+  const ps = partesAng(sinFlecha((t && t.texto) ? t.texto : t), sz);
+  // solo el primer pedazo lleva el formato de párrafo; si los demás lo traen, pptxgenjs parte el renglón o pierde la viñeta
+  Object.assign(ps[0].options, { paraSpaceAfter: esp, bullet: { code: '2192', indent: 18 } });
+  ps[ps.length - 1].options.breakLine = i < arr.length - 1;
+  return ps; });
 // Si Claude parte una oración en pedazos con distinto formato y olvida el espacio («recompra.Con»), se agrega.
 const espaciado = arr => arr.map((r, i) => {
   if (i === 0) return r; const txt = x => typeof x === 'string' ? x : (x.texto || '');
@@ -122,10 +139,10 @@ function renglonesTexto(t, w, sz, k) {
 const esMayus = t => String(t) === String(t).toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(t);
 function lineasB(t, w, sz) { return renglonesTexto(t, w, sz, esMayus(t) ? 0.70 : 0.55); }
 function lineas(t, w, sz) { return renglonesTexto(t, w, sz, esMayus(t) ? 0.66 : 0.54); }
-function altoLista(items, w, sz) { // alto en pulgadas de una lista de flechas o de un texto
+function altoLista(items, w, sz, esp = 6) { // alto en pulgadas de una lista de flechas o de un texto
   if (!items) return 0;
   if (typeof items === 'string') return lineas(items, w, sz) * sz * 1.25 / 72;
-  return items.reduce((h, it) => h + lineas(it.texto || it, w - 0.25, sz) * sz * 1.22 / 72 + 6 / 72, 0);
+  return items.reduce((h, it) => h + lineas(it.texto || it, w - 0.25, sz) * sz * 1.22 / 72 + esp / 72, 0);
 }
 function ilustracion(s, x, y, w, h, archivo) {
   if (archivo) { s.addImage({ path: archivo, x, y, w, h, sizing: { type: 'contain', w, h } }); return; }
@@ -228,9 +245,14 @@ const M = {
       let ze = ILU ? 14 : 15; const he = z => lineasB(txt, CW, z) * z * 1.25 / 72;
       while (ze > 12 && he(ze) > (ILU ? 0.85 : 1.0)) ze -= 0.5;
       T(s, runs(d.entrada), { x: X0, y: yBis, w: CW, h: he(ze), fontSize: ze }); y = yBis + he(ze) + 0.2; }
-    const n = d.columnas.length, cs = cols(n, 0.25), sz = 12;   // más chico que el encabezado, para marcar jerarquía
+    const n = d.columnas.length, cs = cols(n, 0.25), sz = 11;   // más chico que el encabezado, para marcar jerarquía
     if (ILU) { cs.forEach(({ x, w }, i) => ilustracion(s, x + w * 0.25, y, w * 0.5, 0.72, d.columnas[i].ilustracion)); y += 0.82; }
-    const hC = Math.max(...d.columnas.map((c, i) => altoLista(c.texto || c.puntos, cs[i].w - 0.32, sz))) + 0.3;
+    const altoC = e => Math.max(...d.columnas.map((c, i) => altoLista(c.texto || c.puntos, cs[i].w - 0.32, sz, e))) + 0.3;
+    // si sobra espacio en la lámina, se reparte entre los puntos para que el texto respire y no quede hueco abajo
+    const nP = Math.max(...d.columnas.map(c => (c.puntos || []).length || 1));
+    const libre = 6.75 - (y + 0.72 + altoC(6) + 0.22 + (d.cierre ? 0.95 : 0));
+    const espC = libre > 0 ? Math.min(18, 6 + libre * 72 * 0.7 / nP) : 6;
+    const hC = altoC(espC);
     for (const [i, { x, w }] of cs.entries()) {
       const c = d.columnas[i], p = TH.colores_fase[i % TH.colores_fase.length];
       box(s, x, y, w, 0.62, p.c);
@@ -239,7 +261,7 @@ const M = {
       T(s, c.titulo.toUpperCase(), { x: x + (ic ? 0.6 : 0.1), y, w: w - (ic ? 0.7 : 0.2), h: 0.62, fontSize: 14, bold: true, color: p.t, align: ic ? 'left' : 'center', valign: 'middle' });
       box(s, x, y + 0.72, w, hC, SURF);
       if (c.texto) T(s, c.texto, { x: x + 0.18, y: y + 0.77, w: w - 0.32, h: hC - 0.1, fontSize: sz, align: 'center', valign: 'middle' });
-      else T(s, flechas(c.puntos, sz), { x: x + 0.18, y: y + 0.77, w: w - 0.32, h: hC - 0.1, valign: 'middle' });
+      else T(s, flechas(c.puntos, sz, espC), { x: x + 0.18, y: y + 0.77, w: w - 0.32, h: hC - 0.1, valign: 'middle' });
     }
     if (d.cierre) {
       const f = band ? TH.BAND : (TH.BG === 'FFFFFF' ? '323F4F' : SURF);
@@ -274,24 +296,27 @@ const M = {
     const porFila = n <= 3 ? n : (n === 4 ? 2 : 3), filas = Math.ceil(n / porFila);
     const y0 = yE + 0.4, altoTotal = 6.85 - y0, gapY = 0.15;
     const cs = cols(porFila, 0.2), li = ILU ? 0.85 : 0, disp = (altoTotal - gapY * (filas - 1)) / filas;
-    const dz = 1.5;   // AJUSTE HUB: las viñetas van más chicas que el título de la tarjeta
+    const dz = 2;   // las viñetas van 4 pt más chicas que el título de la tarjeta (el título es sz + 2)
     // Título y viñetas en cajas separadas. Todos los títulos ocupan el mismo alto (1 o 2 renglones, el del
     // título más largo), así las viñetas arrancan a la misma altura en todas las tarjetas.
     const wt = i => cs[i % porFila].w - 0.4 - li;
     const nT = z => Math.min(2, Math.max(...E.map((e, i) => lineasB(e.titulo, wt(i), z + 2))));
     const hT = z => nT(z) * (z + 2) * 1.2 / 72;
-    const hB = z => Math.max(...E.map((e, i) => altoLista(e.texto || e.puntos || e.preguntas, wt(i), z - dz)));
-    const req = z => 0.15 + hT(z) + 0.08 + hB(z) + 0.12;
+    const hB = (z, e = 6) => Math.max(...E.map((x, i) => altoLista(x.texto || x.puntos || x.preguntas, wt(i), z - dz, e)));
+    const req = (z, e = 6) => 0.15 + hT(z) + 0.1 + hB(z, e) + 0.15;
     let sz = filas > 1 ? 12 : 13; while (sz > 11 && req(sz) > disp) sz -= 0.5;   // baja la letra (hasta 11) antes que dejar texto fuera; el revisor avisa si no cabe
-    const hCel = Math.min(req(sz), disp), ht = hT(sz);
+    // si sobra espacio, se reparte entre las viñetas para que el texto respire y no quede hueco abajo
+    const nV = Math.max(...E.map(e => (e.puntos || e.preguntas || []).length || 1));
+    const espV = req(sz) < disp ? Math.min(16, 6 + (disp - req(sz)) * 72 * 0.6 / nV) : 6;
+    const hCel = Math.min(req(sz, espV), disp), ht = hT(sz);
     E.forEach((e, i) => {
       const { x, w } = cs[i % porFila], y = y0 + Math.floor(i / porFila) * (hCel + gapY);
       box(s, x, y, w, hCel, SURF);
       if (ILU) ilustracion(s, x + 0.12, y + 0.12, 0.7, Math.min(0.7, hCel - 0.24), e.ilustracion);
       const xt = x + 0.2 + li;
       T(s, e.titulo, { x: xt, y: y + 0.15, w: wt(i), h: ht, fontSize: sz + 2, bold: true, color: ACC, valign: 'top', fit: 'shrink' });
-      const cuerpo = e.texto ? [{ text: e.texto, options: { fontSize: sz - dz } }] : flechas(e.puntos || e.preguntas, sz - dz);
-      T(s, cuerpo, { x: xt, y: y + 0.15 + ht + 0.08, w: wt(i), h: hCel - ht - 0.35, valign: 'top' });
+      const cuerpo = e.texto ? partesAng(e.texto, sz - dz) : flechas(e.puntos || e.preguntas, sz - dz, espV);
+      T(s, cuerpo, { x: xt, y: y + 0.15 + ht + 0.1, w: wt(i), h: hCel - ht - 0.4, valign: 'top' });
     });
   },
   async enfoque(d) {
@@ -302,6 +327,7 @@ const M = {
       for (let i = 0; i < n; i++) { const x = X0 + i * (w - 0.12), p = FASES[i];
         s.addShape(i === 0 ? pres.shapes.PENTAGON : pres.shapes.CHEVRON, { x, y: yCont, w, h: 0.9, fill: { color: p.c }, line: { color: p.c } });
         T(s, p.n.toUpperCase(), { x: x + (i ? 0.45 : 0.15), y: yCont, w: w - 0.75, h: 0.9, fontSize: 15, bold: true, color: p.t, align: 'center', valign: 'middle' });
+        if (i > 0 && textoPart(p.part)) T(s, textoPart(p.part), { x: x + 0.3, y: yCont + 0.95, w: w - 0.6, h: 0.3, fontSize: 11, bold: true, color: MUT, align: 'center' });
         if (ILU) ilustracion(s, x + 0.35, 3.8, w - 0.9, 1.1, (d.ilustraciones || [])[i]);
         else { iconBox(s, x + w / 2 - 0.1, 4.35, 0.95, SURF);
         s.addImage({ data: await icon(p.icono, '#' + (p.tx || p.c)), x: x + w / 2 - 0.35, y: 4.1, w: 0.5, h: 0.5 }); }
@@ -313,22 +339,28 @@ const M = {
         else { iconBox(s, cx, 3.5, dia, p.c);
         s.addImage({ data: await icon(p.icono, p.t === 'FFFFFF' ? '#FFFFFF' : '#212833'), x: cx - dia * 0.25, y: 3.5 - dia * 0.25, w: dia * 0.5, h: dia * 0.5 }); }
         if (i < n - 1 && !ILU) T(s, '➜', { x: cx + step / 2 - 0.3, y: 3.2, w: 0.6, h: 0.6, fontSize: 26, color: LINE, align: 'center' });
+        if (i < n - 1 && textoPart(FASES[i + 1].part)) { const wl = Math.min(2.2, step - dia - 0.2);
+          T(s, textoPart(FASES[i + 1].part), { x: cx + step / 2 - wl / 2, y: ILU ? 4.4 : 3.82, w: wl, h: 0.5, fontSize: 11, bold: true, color: MUT, align: 'center' }); }
         T(s, p.n.toUpperCase(), { x: cx - step / 2, y: 4.5, w: step, h: 0.45, fontSize: 17, bold: true, align: 'center', color: p.tx || p.c });
         T(s, (d.verbos[i] || []).join('\n'), { x: cx - step / 2 + 0.1, y: 5.0, w: step - 0.2, h: 1.4, fontSize: 13, align: 'center', color: MUT, paraSpaceAfter: 4 }); }
     }
   },
   async detalle_fase(d) {
-    const s = base(d.titulo || 'Metodología a detalle'); nav(s, d.fase);
+    const s = base(d.titulo || 'Metodología a detalle'); nav(s, idxFase(d.fase));
     const conFoto = !!d.foto, wTxt = 6.6;
     T(s, 'GOAL', { x: X0, y: 3.3, w: 3, h: 0.35, fontSize: 16, bold: true, color: ACC });
     T(s, d.goal, { x: X0, y: 3.68, w: wTxt, h: 0.8, fontSize: 14, bold: true });
     T(s, '¿CÓMO LO HAREMOS?', { x: X0, y: 4.55, w: 5, h: 0.35, fontSize: 16, bold: true, color: ACC });
     // el texto de cada técnica va más chico que su título, para marcar la jerarquía (y que quepa en 2 renglones)
-    const r = []; d.como.forEach((c, i) => { r.push({ text: c.titulo, options: { bold: true, fontSize: 13.5, breakLine: true } }); r.push({ text: c.texto, options: { fontSize: 11.5, breakLine: i < d.como.length - 1, paraSpaceAfter: 10 } }); });
+    const r = []; d.como.forEach((c, i) => { r.push({ text: c.titulo, options: { bold: true, fontSize: 13.5, breakLine: true } }); const ps = partesAng(c.texto, 11.5); ps[0].options.paraSpaceAfter = 10; ps[ps.length - 1].options.breakLine = i < d.como.length - 1; r.push(...ps); });
     T(s, r, { x: X0, y: 4.95, w: wTxt, h: 1.9, fontSize: 13.5 });
     if (conFoto) s.addImage({ path: d.foto, x: 7.6, y: 3.3, w: 2.5, h: 3.4, sizing: { type: 'cover', w: 2.5, h: 3.4 } });
-    else { const p = FASES[d.fase]; box(s, 7.6, 3.3, 1.6, 3.4, p.c);
-      s.addImage({ data: await icon(p.icono, p.t === 'FFFFFF' ? '#FFFFFF' : '#212833'), x: 7.95, y: 4.55, w: 0.9, h: 0.9 }); }
+    else { const p = FASES[idxFase(d.fase)]; box(s, 7.6, 3.3, 1.6, 3.4, p.c);
+      const colIc = p.t === 'FFFFFF' ? '#FFFFFF' : '#212833';
+      if (d.quienes) {   // quiénes participan en esta fase, a la vista («24 participantes nuevos»)
+        s.addImage({ data: await icon(p.icono, colIc), x: 8.0, y: 3.95, w: 0.8, h: 0.8 });
+        T(s, d.quienes, { x: 7.7, y: 4.95, w: 1.4, h: 1.2, fontSize: 13, bold: true, color: p.t, align: 'center' });
+      } else s.addImage({ data: await icon(p.icono, colIc), x: 7.95, y: 4.55, w: 0.9, h: 0.9 }); }
     const xo = conFoto ? 10.35 : 9.5, wo = conFoto ? 2.4 : 3.23;
     box(s, xo - 0.15, 3.2, wo + 0.3, 3.6, SURF);
     T(s, 'OUTPUT', { x: xo, y: 3.3, w: wo, h: 0.35, fontSize: 16, bold: true, color: ACC });
@@ -344,22 +376,26 @@ const M = {
     const lay = d.acomodo || (TH.muestra === 'table' ? 'tabla' : 'celdas'), G = d.grupos;
     const nc = d.columnas.length, wl = 3.3, gap = 0.15, wc = (CW - wl - 0.2 - gap * (nc - 1)) / nc, xc = X0 + wl + 0.2;
     const filasH = d.filas.length > 3 ? 0.55 : (G ? 0.62 : 0.75), gapF = G ? 0.16 : 0.2;
-    const grupo = g => { const p = FASES[g.fase]; return p ? { n: g.titulo || p.n, c: p.c, t: p.t } : { n: g.titulo, c: ACC, t: TH.ACCT || 'FFFFFF' }; };
+    const grupo = g => { const p = FASES[idxFase(g.fase)]; return p ? { n: g.titulo || p.n, c: p.c, t: p.t } : { n: g.titulo, c: ACC, t: TH.ACCT || 'FFFFFF' }; };
     let yEnd;
     if (lay === 'tabla') {
       const vacio = { text: '', options: { fill: { color: BG } } }, filasHdr = [];
-      if (G) filasHdr.push([vacio].concat(G.map(g => { const p = grupo(g); return { text: p.n.toUpperCase(), options: { colspan: g.columnas, bold: true, color: p.t, fill: { color: p.c }, align: 'center' } }; })));
+      if (G) filasHdr.push([vacio].concat(G.map(g => { const p = grupo(g);
+        const txt = g.detalle ? [{ text: p.n.toUpperCase(), options: { bold: true, breakLine: true } }, { text: g.detalle, options: { fontSize: 11, bold: false } }] : p.n.toUpperCase();
+        return { text: txt, options: { colspan: g.columnas, bold: !g.detalle, color: p.t, fill: { color: p.c }, align: 'center' } }; })));
       filasHdr.push([vacio].concat(d.columnas.map(c => ({ text: c, options: { bold: true, color: TH.HDRT || 'FFFFFF', fill: { color: TH.HDR || SURF }, align: 'center', fontSize: G ? 13 : 16 } }))));
       const rows = d.filas.map(f => [{ text: f.nombre, options: { bold: true, color: ACC } }].concat(f.celdas.map(c => ({ text: c, options: { align: 'center', color: TXT } }))));
-      const hs = (G ? [0.45, 0.45] : [0.55]).concat(Array(d.filas.length).fill(filasH));
+      const hs = (G ? [G.some(g => g.detalle) ? 0.62 : 0.45, 0.45] : [0.55]).concat(Array(d.filas.length).fill(filasH));
       s.addTable(filasHdr.concat(rows), { x: X0, y: yCont, w: CW, colW: [wl + 0.2].concat(Array(nc).fill((CW - wl - 0.2) / nc)), rowH: hs, fontFace: F, fontSize: 15, valign: 'middle', border: { type: 'solid', pt: 1, color: LINE }, color: TXT });
       yEnd = yCont + hs.reduce((a, b) => a + b, 0);
     } else {
       let yC = yCont;
       if (G) { let k = 0;
         G.forEach(g => { const p = grupo(g), x = xc + k * (wc + gap), w = g.columnas * wc + (g.columnas - 1) * gap;
-          pill(s, x, yCont, w, 0.45, p.n.toUpperCase(), p.c, p.t, 14); k += g.columnas; });
-        yC = yCont + 0.55; }
+          pill(s, x, yCont, w, 0.45, p.n.toUpperCase(), p.c, p.t, 14);
+          if (g.detalle) T(s, g.detalle, { x, y: yCont + 0.5, w, h: 0.28, fontSize: 11.5, color: MUT, align: 'center' });
+          k += g.columnas; });
+        yC = yCont + (G.some(g => g.detalle) ? 0.86 : 0.55); }
       const hC = G ? 0.42 : 0.5;
       d.columnas.forEach((c, i) => pill(s, xc + i * (wc + gap), yC, wc, hC, c, SURF, SECT, G ? 13 : 15));
       const y0 = yC + hC + gapF;
@@ -431,12 +467,24 @@ const M = {
   async cierre() { const s = pres.addSlide(); s.addImage({ path: A('img', 'cierre.png'), x: 0, y: 0, w: W, h: 7.5 }); },
 };
 
+// pptxgenjs 4.0.1 escribe las propiedades de párrafo (<a:pPr>) en cada pedazo de un renglón, no solo en el
+// primero. Un <a:pPr> a media línea es XML inválido: el segundo pedazo apaga la viñeta del primero o PowerPoint
+// pide reparar el archivo. Aquí se quitan los <a:pPr> que vienen después de un pedazo de texto.
+async function limpiarParrafos(buf) {
+  const z = await JSZip.loadAsync(buf);
+  for (const n of Object.keys(z.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))) {
+    const x = await z.file(n).async('string');
+    z.file(n, x.replace(/(<\/a:r>)<a:pPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:pPr>)/g, '$1'));
+  }
+  return z.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
 
   portada();
   for (const l of C.laminas) {
     if (!M[l.tipo]) throw new Error('Módulo desconocido: ' + l.tipo);
     await M[l.tipo](l);
   }
-  const buffer = await pres.write({ outputType: 'nodebuffer' });
+  const buffer = await limpiarParrafos(await pres.write({ outputType: 'nodebuffer' }));
   return { buffer: Buffer.from(buffer as ArrayBuffer), ajustes: AJUSTES };
 }
