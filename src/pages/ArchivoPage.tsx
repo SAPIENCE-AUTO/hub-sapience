@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getArchivedFiles } from 'zite-endpoints-sdk';
-import { Archive, ChevronDown, ChevronRight, Loader2, Search } from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight, Loader2, Search, Share2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import ArchivedFileList from '@/components/archivo/ArchivedFileList';
+import AssignProjectPopover from '@/components/archivo/AssignProjectPopover';
 import ArchivedFilePlayerDialog from '@/components/archivo/ArchivedFilePlayerDialog';
+import ShareScopeDialog, { type ScopeToShare } from '@/components/archivo/ShareScopeDialog';
 import { type ArchivedFile, formatBytes, groupBy } from '@/components/archivo/utils';
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -18,12 +20,12 @@ export default function ArchivoPage() {
   const [files, setFiles] = useState<ArchivedFile[] | null>(null);
   const [query, setQuery] = useState('');
   const [openProjects, setOpenProjects] = useState<Record<string, boolean>>({});
+  const [shareTarget, setShareTarget] = useState<ScopeToShare | null>(null);
 
-  useEffect(() => {
-    getArchivedFiles({})
-      .then(res => setFiles(res.files))
-      .catch(() => setFiles([]));
-  }, []);
+  const load = () => getArchivedFiles({})
+    .then(res => setFiles(res.files))
+    .catch(() => setFiles([]));
+  useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
     if (!files) return [];
@@ -67,23 +69,42 @@ export default function ArchivoPage() {
                 const first = items[0];
                 return (
                   <div key={folder} className="border border-border rounded-lg">
-                    <button
-                      onClick={() => setOpenProjects(prev => ({ ...prev, [folder]: !isOpen }))}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
-                    >
-                      {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      <span className="text-sm font-semibold truncate">{folder}</span>
-                      {first.projectCode && first.projectCode !== folder && (
-                        <span className="text-xs text-muted-foreground truncate">→ {first.projectCode}</span>
-                      )}
-                      {!first.projectId && <span className="text-[10px] uppercase tracking-wide text-amber-600 shrink-0">sin proyecto</span>}
-                      <span className="ml-auto text-xs text-muted-foreground shrink-0">
-                        {items.length} · {formatBytes(items.reduce((s, f) => s + f.sizeBytes, 0))}
-                      </span>
-                    </button>
+                    <div className="flex items-center pr-2">
+                      <button
+                        onClick={() => setOpenProjects(prev => ({ ...prev, [folder]: !isOpen }))}
+                        className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 text-left"
+                      >
+                        {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        <span className="text-sm font-semibold truncate">{folder}</span>
+                        {first.projectCode && first.projectCode !== folder && (
+                          <span className="text-xs text-muted-foreground truncate">→ {first.projectCode}</span>
+                        )}
+                        {!first.projectId && (
+                          <AssignProjectPopover
+                            projectFolder={folder}
+                            onAssigned={load}
+                            label={
+                              <span role="button" className="text-[10px] uppercase tracking-wide text-amber-600 shrink-0 underline decoration-dotted hover:text-amber-700">
+                                sin proyecto · asignar
+                              </span>
+                            }
+                          />
+                        )}
+                        <span className="ml-auto text-xs text-muted-foreground shrink-0">
+                          {items.length} · {formatBytes(items.reduce((s, f) => s + f.sizeBytes, 0))}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setShareTarget({ scope: 'project', pathPrefix: folder, label: folder, fileCount: items.length })}
+                        className="text-muted-foreground hover:text-primary p-1.5 shrink-0"
+                        title="Compartir proyecto con cliente"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </button>
+                    </div>
                     {isOpen && (
                       <div className="px-3 pb-3">
-                        <ArchivedFileList files={items} onOpen={fid => navigate(`/archivo/${fid}`)} defaultOpen={!!query.trim()} />
+                        <ArchivedFileList files={items} onOpen={fid => navigate(`/archivo/${fid}`)} onShare={setShareTarget} defaultOpen={!!query.trim()} />
                       </div>
                     )}
                   </div>
@@ -94,6 +115,7 @@ export default function ArchivoPage() {
         )}
       </div>
       <ArchivedFilePlayerDialog fileId={id ?? null} onClose={() => navigate('/archivo')} />
+      <ShareScopeDialog target={shareTarget} onClose={() => setShareTarget(null)} />
     </div>
   );
 }

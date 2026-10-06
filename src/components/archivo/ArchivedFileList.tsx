@@ -1,17 +1,19 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, FileAudio, FileVideo, File } from 'lucide-react';
-import { type ArchivedFile, formatBytes, formatDate, groupBy, mediaKind, subfolder } from './utils';
+import { ChevronDown, ChevronRight, FileAudio, FileVideo, File, Share2 } from 'lucide-react';
+import type { ScopeToShare } from './ShareScopeDialog';
+import { type ArchivedFile, dirPath, displayFolder, formatBytes, formatDate, groupBy, mediaKind } from './utils';
 
 const ICONS = { video: FileVideo, audio: FileAudio, other: File };
 
 // Lista de archivos agrupada por subcarpeta original de SharePoint. La usan
 // la sección del proyecto y cada proyecto dentro de /archivo.
-export default function ArchivedFileList({ files, onOpen, defaultOpen = false }: {
+export default function ArchivedFileList({ files, onOpen, onShare, defaultOpen = false }: {
   files: ArchivedFile[];
   onOpen: (id: string) => void;
+  onShare?: (target: ScopeToShare) => void;
   defaultOpen?: boolean;
 }) {
-  const groups = groupBy(files, subfolder);
+  const groups = groupBy(files, dirPath);
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   return (
@@ -21,14 +23,25 @@ export default function ArchivedFileList({ files, onOpen, defaultOpen = false }:
         const total = items.reduce((s, f) => s + f.sizeBytes, 0);
         return (
           <div key={folder}>
-            <button
-              onClick={() => setOpen(prev => ({ ...prev, [folder]: !isOpen }))}
-              className="w-full flex items-center gap-1.5 py-1.5 text-left text-xs font-semibold text-muted-foreground hover:text-foreground"
-            >
-              {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-              <span className="truncate">{folder}</span>
-              <span className="font-normal shrink-0">· {items.length} · {formatBytes(total)}</span>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setOpen(prev => ({ ...prev, [folder]: !isOpen }))}
+                className="flex-1 min-w-0 flex items-center gap-1.5 py-1.5 text-left text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                {isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                <span className="truncate">{displayFolder(folder)}</span>
+                <span className="font-normal shrink-0">· {items.length} · {formatBytes(total)}</span>
+              </button>
+              {onShare && folder.includes('/') && (
+                <button
+                  onClick={() => onShare({ scope: 'folder', pathPrefix: folder, label: folder.split('/').pop()!, fileCount: items.length })}
+                  className="text-muted-foreground hover:text-primary p-1 shrink-0"
+                  title="Compartir esta carpeta con cliente"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             {isOpen && (
               <div className="space-y-1 pl-5">
                 {items.map(f => {

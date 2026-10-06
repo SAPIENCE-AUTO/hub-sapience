@@ -238,12 +238,49 @@ const blockId = (n: number) => Buffer.from(String(n).padStart(8, '0')).toString(
  * SharePoint (Put Block From URL). Los bytes no pasan por esta máquina, así
  * que la velocidad no depende del internet local.
  */
+/**
+ * SharePoint limita las descargas (429 / 503). Cuando cualquier petición al
+ * origen se topa con el límite, TODAS las copias en curso esperan juntas
+ * (Retry-After) en vez de seguir golpeando — si no, el límite se alarga.
+ */
+let sourceThrottledUntil = 0;
+let throttleNotices = 0;
+
+function throttleSource(retryAfter: string | null, attempt: number) {
+  const seconds = Number(retryAfter) || Math.min(5 * 2 ** attempt, 120);
+  const until = Date.now() + seconds * 1000;
+  if (until > sourceThrottledUntil) {
+    sourceThrottledUntil = until;
+    if (throttleNotices++ % 10 === 0) console.warn(`  ⏸  SharePoint pidió bajar el ritmo; pausa de ${seconds}s`);
+  }
+}
+
+async function waitForSource() {
+  const wait = sourceThrottledUntil - Date.now();
+  if (wait > 0) await sleep(wait);
+}
+
+const SOURCE_RETRIES = 8;
+
 async function stageServerSide(src: string, blobName: string): Promise<{ ids: string[]; total: number }> {
   // Tamaño real de lo que sirve SharePoint (en Office puede diferir de item.size).
-  const probe = await fetch(src, { headers: { Range: 'bytes=0-0' } });
-  await probe.body?.cancel();
-  const total = Number(probe.headers.get('content-range')?.split('/')[1] ?? probe.headers.get('content-length'));
-  if (!probe.ok || !Number.isFinite(total)) throw new Error(`no se pudo leer el tamaño en origen (${probe.status})`);
+  let total = NaN;
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < SOURCE_RETRIES; attempt++) {
+    await waitForSource();
+    const probe = await fetch(src, { headers: { Range: 'bytes=0-0' } });
+    await probe.body?.cancel();
+    lastStatus = probe.status;
+    if (probe.status === 429 || probe.status === 503) {
+      throttleSource(probe.headers.get('Retry-After'), attempt);
+      continue;
+    }
+    // 416 a bytes=0-0: el archivo pesa 0 bytes.
+    if (probe.status === 416) { total = 0; break; }
+    total = Number(probe.headers.get('content-range')?.split('/')[1] ?? probe.headers.get('content-length'));
+    if (probe.ok) break;
+  }
+  if (!Number.isFinite(total)) throw new Error(`no se pudo leer el tamaño en origen (${lastStatus})`);
 
   const ids: string[] = [];
   for (let start = 0, n = 0; start < total; start += SERVER_BLOCK_SIZE, n++) ids.push(blockId(n));
@@ -253,12 +290,24 @@ async function stageServerSide(src: string, blobName: string): Promise<{ ids: st
       const n = next++;
       const start = n * SERVER_BLOCK_SIZE;
       const end = Math.min(start + SERVER_BLOCK_SIZE, total) - 1;
-      const res = await blobFetch(blobUrl(blobName, `comp=block&blockid=${encodeURIComponent(ids[n])}`), {
-        method: 'PUT',
-        headers: { 'x-ms-version': BLOB_VERSION, 'x-ms-copy-source': src, 'x-ms-source-range': `bytes=${start}-${end}` },
-        body: '',
-      });
-      if (!res.ok) throw new Error(`Put Block From URL ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      for (let attempt = 0; ; attempt++) {
+        await waitForSource();
+        const res = await blobFetch(blobUrl(blobName, `comp=block&blockid=${encodeURIComponent(ids[n])}`), {
+          method: 'PUT',
+          headers: { 'x-ms-version': BLOB_VERSION, 'x-ms-copy-source': src, 'x-ms-source-range': `bytes=${start}-${end}` },
+          body: '',
+        });
+        if (res.ok) break;
+        // Si el que se negó fue SharePoint, Azure responde CannotVerifyCopySource
+        // con el status del origen (p. ej. 429) en el mensaje.
+        const text = await res.text();
+        const sourceThrottled = res.headers.get('x-ms-error-code') === 'CannotVerifyCopySource' && /\b(429|503)\b|Too Many|throttl/i.test(text);
+        if (sourceThrottled && attempt < SOURCE_RETRIES) {
+          throttleSource(null, attempt);
+          continue;
+        }
+        throw new Error(`Put Block From URL ${res.status}: ${text.slice(0, 200)}`);
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(BLOCKS_IN_PARALLEL, ids.length) }, worker));
@@ -356,6 +405,13 @@ async function loadProjectIndex(): Promise<Map<string, string>> {
   }
   const index = new Map<string, string>();
   for (const [k, ids] of hits) if (ids.size === 1) index.set(k, [...ids][0]);
+  // Asignaciones hechas a mano en /archivo ("Asignar a proyecto") mandan sobre
+  // el cruce por nombre, para que lo nuevo de esa carpeta caiga en el mismo
+  // proyecto.
+  const manual = await pool!.query(
+    'select distinct on (project_folder) project_folder, project_id from archived_files where project_id is not null order by project_folder, updated_at desc',
+  );
+  for (const m of manual.rows) index.set(normName(m.project_folder), m.project_id);
   return index;
 }
 

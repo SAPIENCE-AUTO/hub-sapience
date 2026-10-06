@@ -1,40 +1,59 @@
 import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
-import { archiveBlobSasUrl } from '../../server/azure/blobSas';
+import { filesInScope, scopeLabel } from '../serverUtils/archivedShares';
 
 // Página pública /grabacion/<token> (link de cliente). Sin sesión: el token es
-// la única autorización. Devuelve un SAS de 2 h para reproducir y, si el link
-// lo permite, otro para descargar. Cada apertura suma a access_count.
+// la única autorización. Devuelve qué se compartió (un video, o la lista de
+// una carpeta/proyecto, calculada en vivo); el link de reproducción de cada
+// video se pide aparte con getSharedArchivedFileUrl. Cada apertura suma a
+// access_count.
 export default createEndpoint({
   authenticated: false,
-  description: 'Datos y link de reproducción de un archivo compartido con un cliente (por token)',
+  description: 'Contenido de un link de cliente del archivo de grabaciones (por token)',
   inputSchema: z.object({ token: z.string().min(20).max(64) }),
   outputSchema: z.object({
-    fileName: z.string(),
-    contentType: z.string().optional(),
-    url: z.string(),
-    downloadUrl: z.string().optional(),
+    scope: z.string(),
+    title: z.string(),
+    allowDownload: z.boolean(),
     expiresAt: z.string(),
+    files: z.array(z.object({
+      id: z.string(),
+      fileName: z.string(),
+      folder: z.string(),
+      sizeBytes: z.number(),
+      contentType: z.string().optional(),
+    })),
   }),
   execute: async ({ input }) => {
     const r = await pool.query(
-      `update archived_file_shares s
-          set access_count = s.access_count + 1, last_accessed_at = now()
-         from archived_files a
-        where s.token = $1 and a.id = s.archived_file_id
-          and s.revoked_at is null and s.expires_at > now()
-       returning a.file_name, a.content_type, a.blob_name, s.allow_download, s.expires_at`,
+      `update archived_file_shares
+          set access_count = access_count + 1, last_accessed_at = now()
+        where token = $1 and kind = 'page' and revoked_at is null and expires_at > now()
+       returning scope, archived_file_id, path_prefix, allow_download, expires_at`,
       [input.token],
     );
-    const row = r.rows[0];
+    const share = r.rows[0];
     // Mismo mensaje para inexistente, vencido o revocado: no se revela cuál.
-    if (!row) throw new ZiteError({ code: 'NOT_FOUND', message: 'Este link no existe o ya no está disponible.' });
+    const gone = () => new ZiteError({ code: 'NOT_FOUND', message: 'Este link no existe o ya no está disponible.' });
+    if (!share) throw gone();
+
+    const files = await filesInScope({ archivedFileId: share.archived_file_id, pathPrefix: share.path_prefix });
+    if (files.length === 0) throw gone();
+    const prefixLen = share.path_prefix ? share.path_prefix.length + 1 : 0;
+
     return {
-      fileName: row.file_name,
-      contentType: row.content_type ?? undefined,
-      url: archiveBlobSasUrl(row.blob_name),
-      downloadUrl: row.allow_download ? archiveBlobSasUrl(row.blob_name, { downloadName: row.file_name }) : undefined,
-      expiresAt: row.expires_at,
+      scope: share.scope,
+      title: scopeLabel(share.scope, share.path_prefix, files[0].fileName),
+      allowDownload: share.allow_download,
+      expiresAt: share.expires_at,
+      files: files.map((f) => ({
+        id: f.id,
+        fileName: f.fileName,
+        // subcarpeta relativa a lo compartido ('' = raíz de lo compartido)
+        folder: prefixLen ? f.sharepointPath.slice(prefixLen).split('/').slice(0, -1).join(' / ') : '',
+        sizeBytes: f.sizeBytes,
+        contentType: f.contentType,
+      })),
     };
   },
 });

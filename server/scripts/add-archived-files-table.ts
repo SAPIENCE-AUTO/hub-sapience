@@ -75,6 +75,36 @@ async function main() {
     );
 
     create index if not exists archived_file_shares_file_idx on archived_file_shares (archived_file_id);
+
+    -- 'direct': link SAS directo a Blob para clientes cuya red bloquea el
+    -- dominio del Hub. No pasa por /grabacion, así que no se puede revocar ni
+    -- cuenta aperturas — la fila queda solo como registro (token sin uso).
+    alter table archived_file_shares add column if not exists kind text not null default 'page';
+    alter table archived_file_shares drop constraint if exists archived_file_shares_kind_chk;
+    alter table archived_file_shares add constraint archived_file_shares_kind_chk check (kind in ('page', 'direct'));
+
+    -- Alcance: un video (archived_file_id), o una carpeta/proyecto completo
+    -- (path_prefix = ruta de SharePoint, p. ej. 'AGOSTO' o
+    -- 'AGOSTO/GRABACIONES/SESIONES'). Los links 'page' de carpeta/proyecto son
+    -- dinámicos: lo que se archive después bajo ese prefijo también se ve.
+    alter table archived_file_shares alter column archived_file_id drop not null;
+    alter table archived_file_shares add column if not exists scope text not null default 'file';
+    alter table archived_file_shares add column if not exists path_prefix text;
+    alter table archived_file_shares drop constraint if exists archived_file_shares_scope_chk;
+    alter table archived_file_shares add constraint archived_file_shares_scope_chk check (
+      (scope = 'file' and archived_file_id is not null)
+      or (scope in ('folder', 'project') and path_prefix is not null)
+    );
+    create index if not exists archived_file_shares_prefix_idx on archived_file_shares (path_prefix);
+
+    -- Qué videos se abrieron desde cada link (para carpeta/proyecto).
+    create table if not exists archived_file_share_views (
+      id                uuid primary key default gen_random_uuid(),
+      share_id          uuid not null references archived_file_shares(id) on delete cascade,
+      archived_file_id  uuid not null references archived_files(id) on delete cascade,
+      viewed_at         timestamptz not null default now()
+    );
+    create index if not exists archived_file_share_views_share_idx on archived_file_share_views (share_id);
   `);
   console.log('archived_files y archived_file_shares listas.');
 }

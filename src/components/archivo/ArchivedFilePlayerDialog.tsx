@@ -99,7 +99,7 @@ export default function ArchivedFilePlayerDialog({ fileId, onClose }: { fileId: 
             </div>
           </div>
         )}
-        {file && sharing && <ShareWithClientPanel fileId={file.id} />}
+        {file && sharing && <ShareWithClientPanel target={{ scope: 'file', fileId: file.id }} />}
       </DialogContent>
     </Dialog>
   );

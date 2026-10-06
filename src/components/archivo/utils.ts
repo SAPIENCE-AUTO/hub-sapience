@@ -32,9 +32,12 @@ export function mediaKind(f: { fileName: string; contentType?: string }): 'video
   return 'other';
 }
 
-/** Subcarpeta dentro del proyecto: "INSANITY/GRABACIONES/SESIONES/x.mp4" → "GRABACIONES / SESIONES". */
-export function subfolder(f: ArchivedFile): string {
-  const parts = f.sharepointPath.split('/').slice(1, -1);
+/** Carpeta del archivo en SharePoint: "INSANITY/GRABACIONES/SESIONES/x.mp4" → "INSANITY/GRABACIONES/SESIONES". */
+export const dirPath = (f: { sharepointPath: string }) => f.sharepointPath.split('/').slice(0, -1).join('/');
+
+/** Carpeta para mostrar, sin el proyecto: "INSANITY/GRABACIONES/SESIONES" → "GRABACIONES / SESIONES". */
+export function displayFolder(dir: string): string {
+  const parts = dir.split('/').slice(1);
   return parts.length ? parts.join(' / ') : '(raíz)';
 }
 

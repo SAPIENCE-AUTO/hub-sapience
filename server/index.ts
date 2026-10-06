@@ -134,6 +134,7 @@ const PUBLIC_RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = 
   postObserverHeartbeat: { limit: 10, windowMs: 60_000 },
   // link de cliente del archivo de grabaciones: tope contra fuerza bruta de tokens
   getSharedArchivedFile: { limit: 30, windowMs: 60_000 },
+  getSharedArchivedFileUrl: { limit: 60, windowMs: 60_000 },
 };
 
 app.post('/api/:name', async (c) => {

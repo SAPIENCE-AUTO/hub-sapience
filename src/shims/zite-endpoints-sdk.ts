@@ -145,6 +145,7 @@ export const approveDeal = (input?: any): Promise<any> => call('approveDeal', in
 export const approveExpense = (input?: any): Promise<any> => call('approveExpense', input);
 export const approvePurchaseOrder = (input?: any): Promise<any> => call('approvePurchaseOrder', input);
 export const approveSelectedCotizaciones = (input?: any): Promise<any> => call('approveSelectedCotizaciones', input);
+export const assignArchivedFolderProject = (input?: any): Promise<any> => call('assignArchivedFolderProject', input);
 export const backfillExchangeRates = (input?: any): Promise<any> => call('backfillExchangeRates', input);
 export const bulkDeletePayments = (input?: any): Promise<any> => call('bulkDeletePayments', input);
 export const bulkUpdatePayments = (input?: any): Promise<any> => call('bulkUpdatePayments', input);
@@ -317,6 +318,7 @@ export const getRecruitmentSummary = (input?: any): Promise<any> => call('getRec
 export const getReferenceOptions = (input?: any): Promise<any> => call('getReferenceOptions', input);
 export const getRubroAssignments = (input?: any): Promise<any> => call('getRubroAssignments', input);
 export const getSharedArchivedFile = (input?: any): Promise<any> => call('getSharedArchivedFile', input);
+export const getSharedArchivedFileUrl = (input?: any): Promise<any> => call('getSharedArchivedFileUrl', input);
 export const getSharedViewData = (input?: any): Promise<any> => call('getSharedViewData', input);
 export const getSharedViews = (input?: any): Promise<any> => call('getSharedViews', input);
 export const getSharpliAppToken = (input?: any): Promise<any> => call('getSharpliAppToken', input);
