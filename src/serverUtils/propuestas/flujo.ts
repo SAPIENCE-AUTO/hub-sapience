@@ -5,6 +5,7 @@ import { llamarJSON, type Contenido as ContenidoMsg } from './claude';
 import { Esqueleto, PaletasPropuestas, Contenido, type EsqueletoT } from './esquemas';
 import type { Problema } from './revisar';
 import { revisarTodo } from './revision';
+import { ajustarAcomodoMuestra } from './encaje';
 import { tiemposALamina, precargarAnalisis } from './tiempos';
 
 export interface BriefInput { texto?: string | null; pdfBase64?: string | null }
@@ -218,7 +219,8 @@ export function fijarDesdeEsqueleto(contenido: any, esq: EsqueletoT, rutasFotosP
     return l.imagenes.length > 0;
   });
   if (c.laminas.length < antes) avisos.push('Se omitió la lámina de ejemplos de entregables porque no se subieron capturas.');
-  avisos.push(...validarPrecios(c, esq));   // ningún precio sale de Claude: el del esqueleto o «pendiente»
+  avisos.push(...validarPrecios(c, esq));
+  avisos.push(...ajustarAcomodoMuestra(c));   // muestra en celdas con notas que no caben → tabla   // ningún precio sale de Claude: el del esqueleto o «pendiente»
   return { contenido: c, avisos };
 }
 

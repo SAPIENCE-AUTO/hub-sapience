@@ -4,6 +4,7 @@ import { createEndpoint, Propuestas } from '../../server/compat';
 import { exigirAccesoPropuestas } from '../serverUtils/propuestas/acceso';
 import { cargarPropuesta, cargarArchivos } from '../serverUtils/propuestas/datos';
 import { construirPropuesta } from '../serverUtils/propuestas/construir';
+import { ajustarAcomodoMuestra } from '../serverUtils/propuestas/encaje';
 import { descargarATmp, subirArchivo } from '../serverUtils/propuestas/storage';
 
 const PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
@@ -20,7 +21,7 @@ export default createEndpoint({
     const archivos = await cargarArchivos(input.id);
     const { archivos: mapa, dir } = await descargarATmp(input.id, archivos.map(a => a.path!).filter(Boolean));
     try {
-      const { buffer, ajustes } = await construirPropuesta(p.contenido, mapa);
+      const { buffer, ajustes } = await construirPropuesta((() => { const c = JSON.parse(JSON.stringify(p.contenido)); ajustarAcomodoMuestra(c); return c; })(), mapa)   // muestra en celdas con notas que no caben → tabla, también al construir de todos modos;
       // v1 la primera vez; cada reconstrucción sube la versión y conserva las anteriores.
       const version = p.pptxPath ? Number(p.version ?? 1) + 1 : Number(p.version ?? 1);
       const ruta = `${input.id}/pptx/v${version}.pptx`;

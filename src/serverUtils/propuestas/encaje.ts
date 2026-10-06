@@ -38,6 +38,38 @@ function estilo(id: string): any {
   return estilos[id];
 }
 
+// ¿Caben las notas de la muestra debajo de la tabla con este acomodo? (geometría de muestra() en construir.js)
+export function notasCabenEnMuestra(C: any, l: any, acomodo: 'tabla' | 'celdas'): boolean {
+  const TH = estilo(C.estilo ?? 'A'), yCont = 2.75;
+  if (!l.notas?.length) return true;
+  const nc = (l.columnas ?? []).length, nf = (l.filas ?? []).length, G = !!(l.grupos && l.grupos.length);
+  const conDetalle = G && l.grupos.some((g: any) => g?.detalle);
+  const conComp = (l.filas ?? []).some((f: any) => (f.celdas ?? []).some((c: string) => /</.test(c)));
+  const filasH = conComp ? (nf > 3 ? 0.62 : 0.7) : (nf > 3 ? 0.55 : (G ? 0.62 : 0.75)), gapF = G || conComp ? 0.14 : 0.2;
+  let yEnd: number;
+  if (acomodo === 'tabla') yEnd = yCont + (G ? (conDetalle ? 0.62 : 0.45) + 0.45 : 0.55) + nf * filasH;
+  else { const yC = G ? yCont + (conDetalle ? 0.86 : 0.55) : yCont, hC = G ? 0.42 : 0.5, y0 = yC + hC + gapF; yEnd = y0 + nf * (filasH + gapF) - gapF; }
+  void nc; void TH;
+  const notas = l.notas.map((x: any) => textoDe(x).replace(/^\s*(→|->|➜|•|-)\s*/, ''));
+  return altoLista(notas, CW, 9.5, 4) <= 6.88 - (yEnd + 0.22);
+}
+
+// Si la muestra está en celdas (por el estilo o por el contenido) y las notas no caben, pero en tabla sí, pasa a tabla.
+// Devuelve cuántas láminas cambió (para registrarlo en los avisos).
+export function ajustarAcomodoMuestra(C: any): string[] {
+  const avisos: string[] = [];
+  const TH = estilo(C.estilo ?? 'A');
+  for (const l of C.laminas ?? []) {
+    if (l.tipo !== 'muestra') continue;
+    const actual: 'tabla' | 'celdas' = (l.acomodo ?? (TH.muestra === 'table' ? 'tabla' : 'celdas'));
+    if (actual === 'celdas' && !notasCabenEnMuestra(C, l, 'celdas') && notasCabenEnMuestra(C, l, 'tabla')) {
+      l.acomodo = 'tabla';
+      avisos.push('La muestra pasó a formato tabla porque en celdas las notas no cabían debajo.');
+    }
+  }
+  return avisos;
+}
+
 export function revisarEncaje(C: any): Problema[] {
   const out: Problema[] = [];
   const add = (ruta: string, problema: string) => out.push({ ruta, problema });
@@ -119,7 +151,9 @@ export function revisarEncaje(C: any): Problema[] {
         // las notas empiezan siempre debajo de la tabla y bajan de tamaño hasta 9.5 pt si no caben
         const yN = yEnd + 0.22, notas = l.notas.map((x: any) => textoDe(x).replace(/^\s*(→|->|➜|•|-)\s*/, ''));
         if (altoLista(notas, CW, 9.5, 4) > 6.88 - yN) {
-          add(`${r}.notas`, `Las notas no caben bajo la tabla ni a 9.5 pt (la tabla llega a ${yEnd.toFixed(1)} in). Reduce las filas o acorta las notas.`);
+          add(`${r}.notas`, !tabla && notasCabenEnMuestra(C, l, 'tabla')
+            ? `Las notas no caben bajo la muestra en formato de celdas (llega a ${yEnd.toFixed(1)} in). Pon "acomodo": "tabla" en esta lámina de muestra: en tabla caben las ${nf} filas y las notas.`
+            : `Las notas no caben bajo la tabla ni a 9.5 pt (la tabla llega a ${yEnd.toFixed(1)} in). Reduce las filas o acorta las notas.`);
         }
       }
     }
