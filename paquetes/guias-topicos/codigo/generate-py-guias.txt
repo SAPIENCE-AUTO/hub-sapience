@@ -1,0 +1,22 @@
+    # Generador de guías de tópicos (paquetes/guias-topicos). El estado completo (datos del
+    # proyecto, roadmap y guía escrita) va en jsonb porque es la salida de Claude y el formato del
+    # Word: se lee y escribe entero, nunca se consulta por dentro. `version` sube con cada guardado
+    # para que dos personas no se pisen (saveGuia). Borrado suave con deleted_at.
+    'GuiasTopicos': dict(
+        table='guias_topicos',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='project', col='project_id', pg='uuid', kind='link', extra=dict(target='projects')),
+            dict(prop='titulo', col='titulo', pg='text', kind='text', extra=None),
+            dict(prop='estado', col='estado', pg='jsonb', kind='json', extra=None),
+            dict(prop='version', col='version', pg='integer', kind='number', extra=None),
+            dict(prop='createdBy', col='created_by_id', pg='uuid', kind='link', extra=dict(target='users')),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+            dict(prop='updatedAt', col='updated_at', pg='timestamptz', kind='datetime', extra='now'),
+            dict(prop='deletedAt', col='deleted_at', pg='timestamptz', kind='datetime', extra=None),
+        ],
+        checks=[],
+        notes=[],
+        many={},
+        name='GuiasTopicos',
+    ),

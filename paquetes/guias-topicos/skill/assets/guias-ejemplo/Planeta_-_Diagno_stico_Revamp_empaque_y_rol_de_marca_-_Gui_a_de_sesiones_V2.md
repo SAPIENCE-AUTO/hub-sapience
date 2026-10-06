@@ -1,0 +1,49 @@
+**Guía de ****sesiones de grupo**
+
+Los bloques temáticos que se muestran a continuación contienen una serie de ejercicios y preguntas que buscan respuestas abiertas.
+
+- Las preguntas expresadas son ejemplos de cómo abordar la temática, pero pueden modificarse de acuerdo con el flujo natural de la conversación.
+
+- No son preguntas cerradas que deban contestarse una a una.
+
+- Algunas preguntas pueden omitirse porque la respuesta está implícita o surge de manera espontánea en la conversación.
+
+- Algunas preguntas pueden postergarse, con el fin de ir hilando la conversación de manera natural.
+
+INDICACIONES GENERALES
+
+- El moderador establecerá el tono de la conversación y dejará claro que no trabaja para una marca específica, que todas las opiniones (respetuosas) son válidas, que se puede hablar sin miedo al juicio.
+
+_____________________________________________________________________________________
+
+| **1. ****Presentación / Warm Up**** (5 min)** |
+| --- |
+| **Moderador:** *me gustaría conocer** un poco más sobre ustedes y su mascota**…* **Presentación** ¿Con quién viven? ¿A qué se dedican? ¿Qué es lo que más disfrutan hacer cuando tienen tiempo libre? ¿Cuántas mascotas tienen? ¿cómo se llaman? ¿Qué edad tienen? ¿de qué tamaño eso?  Si su mascota estuviera aquí, ¿qué me diría de ustedes? ¿Qué me contaría su mascota sobre la comida – croquetas que le dan? |
+
+| **2****. ****Introducción a la categoría (****10**** min)** |
+| --- |
+| **Moderador:** *hablando de la comida – croquetas de su mascota**…* **Awareness**** de marcas** ¿Qué marcas conocen? ¿Qué marcas recuerdan haber visto la última vez que fueron a comprar croquetas? ¿Hay alguna que les haya llamado la atención últimamente? ¿Cuál o cuáles? ¿Por qué? Nota: el moderador estará pendiente a menciones espontáneas de Apawpacho **Cue de comunicación de empaque** Imaginen que están en el pasillo de las croquetas, ¿qué imágenes vienen a su mente? ¿Con qué lo asocian? ¿Qué colores vienen a su mente? ¿Con qué los asocian? Nota: el moderador explorará si existe una asociación entre etapas – tamaño de mascota y paleta de color ¿Hay algún empaque que les llame más la atención? ¿Cuál? ¿Por qué? ¿Qué más llama su atención a la hora de elegir las croquetas para su mascota? Nota: el moderador estará pendiente a menciones espontáneas de Apawpacho |
+
+| **3****. Diagnóstico ****inicial nueva propuesta de empaque ****Apawpacho**** (30 min)** |
+| --- |
+| **Moderador:**** ***les voy a mostrar unos empaques de alimento para mascota y vamos a hacer una dinámica inicial…* Van a observar los empaques y van a contestar unas preguntas (sin mencionar nada) Una vez que hayan contestado sus preguntas me van a contar sus primeras impresiones **Ejercicio individual ** Del 1 al 10, ¿qué tan llamativo – atractivo les parece? ¿Qué fue lo primero que llamó su atención? Escriban 3 palabras para describir este empaque y marca Del 1 al 10, ¿qué tanto los invita a probar esta marca pensando en su mascota? ¿Qué costo creen que tendría? (bajo, medio, alto) **Primeras ****impresiones - ****overall** ¿Ya conocían esta marca? ¿Ya la han visto o no? ¿Qué calificación le pusieron? ¿Por qué? ¿Qué palabras usaron para describir este empaque - marca? ¿Qué fue lo que llamó más su atención? ¿Por qué?  ¿Hay algo que le haga pensar que es una marca diferente vs otras marcas? De primera impresión, ¿considerarían esta opción para su mascota?  ¿Por qué? **Primeras impresiones – nombre ** Todos al mismo tiempo me van a decir, ¿cómo pronunciaran el nombre de la marca? ¿Qué les parece el nombre? ¿Qué les transmite? El nombre, ¿qué les dice sobre la marca? **Propuesta - rol de marca** Antes de hablar de detalles, ¿qué les transmite esta marca? Esta marca, ¿qué ofrece? Es para dueños que buscan… para dueños que quieren… ¿Para qué tipo de mascotas? **Diferenciación ****propuesta de ****marca** ¿Qué elementos son los que más llamaron su atención? ¿Por qué?   ¿Creen que lo que les ofrece esta marca es similar o diferente a otras marcas? ¿En qué es similar? ¿En qué es diferente? A partir de lo que les transmite el empaque, imaginen lo siguiente: si existiera el planeta Apawpacho, ¿cómo sería?  **Paleta de color** ¿Qué les transmite el color – colores del empaque? ¿Con qué atributos lo asocian? ¿El color ayuda a diferenciar esta marca del resto de marcas de alimento para perro? ¿Notaron las diferencias entre la opción para cachorro vs. mini vs. adultos? ¿Cómo lo notaron? ¿Los colores para cada etapa – tamaño de mascota, ¿les parecen claros? ¿les ayudan en algo o no? Este/estos color (es, ¿les parece apropiado para la edad o necesidad de la mascota a la que está dirigido? **Cues de comunicación** Hablemos ahora sí de los detalles: Beneficios: ¿Qué ‘frases’ les parecieron importantes? ¿qué entendieron? ¿hay algo que no entiendan? ¿Qué beneficio llamó más la atención?  ¿Cuál recuerdan más?  ¿Qué beneficios consideran más importante?  ¿Hay algún beneficio que pasó desapercibido? Colitometro: ¿notaron esta imagen – frase? ¿qué entendieron? ¿qué les transmite? ¿qué les parece? Sello Sanuren: ¿notaron esta imagen? ¿con qué lo asocian? ¿Hay demasiada información o le parece adecuada?  ¿Existe algo que le sobre o le falte a este empaque? ¿Qué es? |
+
+| **4****. Diagnóstico ****comparativo competencia**** ****(****3****0 min)**** ** |
+| --- |
+| **Moderador:**** ***ahora les voy a mostrar los empaques de otras marcas para que comparemos con **Apawpacho**…* **Comparativo espontáneo** Viéndolas lado a lado, ¿qué es lo primero que les gustaría decirme? ¿Qué llama su atención de cada una? Comparándolas, Apawpacho se ve más… se ve menos… **Propuesta – rol de marcas** Viéndolas lado a lado, ¿qué ofrece cada marca? X marca ofrece sobre todo… y casi no ofrece… Apawpacho ofrece más… y ofrece menos… **Diferenciación propuesta de marca** Estas marcas, ¿en qué son similares? ¿en qué son diferentes? A partir de lo que les transmite el empaque, imaginen lo siguiente: si existiera el planeta Dog Chow / Pedigree / Ganador, ¿cómo sería?  ¿Sería diferente el planeta Apawpacho o no? ¿Por qué? **Paleta de color** ¿Qué les transmite el color – colores de cada marca? ¿Con qué lo asocian? ¿Qué les parece el color – colores de Apawpacho? ¿Los colores para cada etapa – tamaño de mascota, ¿les parecen claros? ¿les ayudan en algo o no? **Oportunidades ** Comparando estos empaques, ¿hay algo que no les guste de Apawpacho? ¿Qué no les gusta? ¿Hay algo que le falte a Apawpacho? ¿Qué le falta? ¿Por qué no es la opción que los invita a probar – comprar esta marca pensando en su mascota? **Tier – ****call**** ****to**** ****action** ¿Qué precio creen que tenga Apawpacho? ¿Por qué creen esto? ¿Contra quién creen que quiera competir? ¿Creen que lo pueda hacer? ¿Por qué? Siendo honestos, ¿ustedes considerarían comprar Apawpacho? ¿Por qué? |
+
+| **5****. Diagnóstico ****comparativo empaque actual ****Apawpacho**** (****15**** min)** |
+| --- |
+| **Moderador:**** ***ahora** les voy a mostrar el empaque actual de **Apawpacho**…* **Comparativo espontáneo** Viéndolas lado a lado, ¿qué es lo primero que les gustaría decirme? ¿Qué les gusta de cada opción? ¿qué fortalezas le ven a cada uno? ¿Qué no les gusta de cada opción? ¿qué debilidades le ven a cada uno? ¿Cuál es más fácil de identificar en el anaquel?  **Beneficios** ¿Cuál comunica mejor los beneficios? ¿Cuál parece ofrecer mejores beneficios para su mascota?  ¿Qué tan diferente son los beneficios que ofrece vs. otras marcas? **Percepción nombre** Viéndolas lado a lado, ¿qué impacto – percepción genera el nombre? La nueva propuesta, ¿ayuda en algo? ¿o lo complica? ¿Qué opción sienten que es más clara? ¿Por qué? **Propuesta de marca** ¿Les transmiten la misma idea sobre la marca o cambia? ¿Por qué? La propuesta actual les da más la idea de ser… de ofrecer… Y la nueva propuesta les transmite la imagen de una marca que es… que ofrece… ¿Este cambio es congruente con la marca?  Con la nueva propuesta, ¿se está perdiendo algo? **Nuevos cues de comunicación** ¿Qué cambios son muy evidentes? ¿Y qué les parecen estos cambios? Colitometro: ¿Qué les parece que ahora incluyan esto’? ¿qué impacto creen que tenga? Otros cues: ¿qué les parece X cambio? ¿qué impacto tiene en ustedes? ¿es positivo o negativo? **Específico usuarios actuales** ¿Cómo conocieron la marca? ¿Cómo la llaman / nombran? ¿Qué los llevó a probar la marca? Del empaque, ¿qué los llevó a decidir sí comprarla? ¿La han recomendado? Sí / no ¿por qué? Este cambio de empaque, ¿qué les parece? ¿creen que la marca gane algo? ¿qué gana? ¿Creen que la marca pierda algo con este cambio de empaque? ¿qué pierde? |
+
+| **6****. ****Diagnóstico opciones de ****color  -**** mascotas (10 min) ** |
+| --- |
+| **Moderador:** *para **terminar** me gustaría mostrarles unas opciones **adicionales, pero ahora en la pantalla**…* **Paleta de color ****(adulto)** Viendo estas opciones, ¿qué les transmite cada color? ¿con qué lo asocian? ¿Qué opción les ayuda a identificar más que es para adulto? ¿Qué opción creen que es más congruente para cada etapa – tamaño de mascota? ¿Por qué? **Imagen de mascota** Viendo estas opciones, ¿qué les parece cada mascota? ¿con qué lo asocian? Nota: el moderador profundizará si la mascota representa a la etapa y qué mascota prefieren para las opciones de cachorro y pequeño y mini adulto ¿Ya lo han visto en otras marcas? ¿Qué opción les ayuda a identificar más que es para X (cachorro – mini)? ¿Qué opción creen que es más congruente para una marca como Apawpacho? ¿Por qué? **Oportunidades** Considerando todo lo que vimos, ¿qué consejos le darían a la marca? ¿Qué recomendaciones le darían para que más personas se acerquen a Apawpacho? |
+
+**Cierre y agradecimientos.**
+
+K-C Internal Only
+
+K-C Internal Only
+
+K-C Internal Only

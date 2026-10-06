@@ -1,0 +1,602 @@
+{
+  "proyecto": "Gamers y snacks (Oreo, Kranky, Ritz)",
+  "tipo": "Sesión de grupo",
+  "duracion": 120,
+  "tema": "Entender qué snacks acompañan los momentos de jugar videojuegos, qué papel juegan Oreo, Kranky y Ritz en esas ocasiones frente a la competencia, y qué barreras y oportunidades hay para que las elijan.",
+  "muestra": [
+    "Un grupo completo con seis personas de 18–24 años · Gamers consumidores de snacks · de Guadalajara y Monterrey"
+  ],
+  "estimulos": "",
+  "notas": "",
+  "bloques": [
+    {
+      "nombre": "Warm up",
+      "minutos": 5,
+      "objetivos": [
+        "Get the ball rolling / entrar en calor",
+        "Conocer un poco el contexto de los participantes: qué juegan, con qué frecuencia y con quién",
+        "Establecer el tono de la conversación y generar confianza dentro del grupo"
+      ]
+    },
+    {
+      "nombre": "Rutina y momentos de juego",
+      "minutos": 15,
+      "objetivos": [
+        "Entender cómo son sus sesiones de juego: cuándo, dónde, cuánto duran, solos o acompañados y en qué plataforma",
+        "Identificar los momentos dentro de la sesión (antes, durante, después) en los que surge el antojo o la necesidad de comer algo",
+        "Entender qué necesidades emocionales y funcionales tienen mientras juegan: concentración, energía, convivencia, premio, desestrés"
+      ]
+    },
+    {
+      "nombre": "Snacks y gaming: asociaciones, razones y barreras",
+      "minutos": 25,
+      "objetivos": [
+        "Identificar los snacks y bebidas que acompañan los momentos de juego y cómo los eligen",
+        "Entender las razones de existir (y de compra) de cada snack en el contexto de jugar",
+        "Identificar criterios de elección: practicidad, limpieza en manos y control, duración, sabor, precio, para compartir",
+        "Identificar barreras y downsides de los snacks en el momento de jugar",
+        "Explorar el papel de galletas y chocolates dentro del repertorio de snacks de un gamer, sin mencionar marcas"
+      ]
+    },
+    {
+      "nombre": "Awareness y percepción de marcas",
+      "minutos": 25,
+      "objetivos": [
+        "Medir awareness espontáneo de marcas de snacks asociadas a jugar videojuegos",
+        "Hacer una radiografía de Oreo, Kranky y Ritz en cuanto a: asociaciones, personalidad, calidad, actualidad y relevancia para gamers",
+        "Entender qué marcas (incluida la competencia que mencionen espontáneamente) sienten más cercanas a su estilo de vida gamer y por qué",
+        "Identificar la diferenciación percibida entre las tres marcas y frente a otras opciones de snack"
+      ]
+    },
+    {
+      "nombre": "Ocasiones y rol de Oreo, Kranky y Ritz en el juego",
+      "minutos": 30,
+      "objetivos": [
+        "Entender en qué momentos de juego (antes, durante, después) encaja o no cada marca",
+        "Identificar qué papel les gustaría que cada marca jugara en sus sesiones: compañía, premio, pausa, para compartir",
+        "Explorar el fit de cada marca con el perfil del gamer y con distintos tipos de jugador y de juego",
+        "Entender cómo se comparan las marcas contra los snacks que hoy eligen para jugar",
+        "Identificar barreras específicas de cada marca para ser elegida en una sesión de juego"
+      ]
+    },
+    {
+      "nombre": "Oportunidades",
+      "minutos": 15,
+      "objetivos": [
+        "Identificar qué haría que Oreo, Kranky y Ritz fueran su opción para acompañar el juego: formato, empaque, sabor, momento, precio",
+        "Explorar ideas y expectativas espontáneas sobre cómo las marcas podrían estar más presentes en el mundo gamer",
+        "Priorizar con el grupo las oportunidades más relevantes y con mayor potencial de cambiar su elección"
+      ]
+    },
+    {
+      "nombre": "Cierre",
+      "minutos": 5,
+      "objetivos": [
+        "Recoger aprendizajes y la idea más importante de cada participante",
+        "Validar si falta algo por comentar sobre snacks y juego",
+        "Agradecer y cerrar la sesión"
+      ]
+    }
+  ],
+  "supuestos": [
+    "Como el objetivo del estudio no se indicó, lo inferí a partir del tema: ocasiones de consumo, rol de las marcas, barreras y oportunidades.",
+    "No se indicaron estímulos, así que la guía es toda de conversación y ejercicios proyectivos, sin evaluación de empaques, comerciales o conceptos.",
+    "No hay competencia definida; la exploro de forma espontánea en el repertorio de snacks y en awareness, sin una lista predeterminada de marcas.",
+    "El bloque más largo es el de ocasiones y rol de las marcas porque es el diagnóstico central del tema.",
+    "Galletas y chocolates se exploran juntos en el bloque de categoría, y las tres marcas se revisan en conjunto en los bloques de marcas, rotando el orden de las marcas entre ejercicios.",
+    "Con un solo grupo de seis personas de Guadalajara y Monterrey, asumo que no se divide la sesión por ciudad y que se analiza el grupo como un solo conjunto.",
+    "El bloque de oportunidades también sirve para reaccionar a lo que surja y no se evalúan conceptos formales porque no hay estímulos.",
+    "Incluí un bloque de cierre de 5 minutos para que sean 7 bloques y se pueda recoger una conclusión individual."
+  ],
+  "guia": [
+    {
+      "moderador": "Hola a todos, bienvenidos y muchas gracias por estar aquí. Antes de empezar, les cuento cómo funciona: aquí no hay respuestas buenas ni malas, lo que nos interesa es su opinión tal cual, así que con toda confianza. Si alguien piensa distinto, qué mejor, eso también nos sirve mucho. Vamos a platicar un buen rato de algo que creo que a todos nos gusta: los videojuegos. Para arrancar, vamos a conocernos un poquito.",
+      "secciones": [
+        {
+          "intro": "Vamos a hacer una ronda rápida para presentarnos.",
+          "notas": [
+            "El moderador mantendrá un tono relajado y cercano, usando el lenguaje gamer que salga de los participantes para generar confianza.",
+            "El moderador cuidará que todos participen desde esta primera ronda y que nadie acapare la conversación."
+          ],
+          "subtema": "Presentación y rompehielo",
+          "preguntas": [
+            "Cuéntennos su nombre, cuántos años tienen, de qué ciudad son y a qué se dedican: ¿estudian, trabajan, las dos cosas?",
+            "Si tuvieran que describirse como jugadores en una sola palabra, ¿cuál sería? ¿Por qué esa palabra?"
+          ]
+        },
+        {
+          "intro": "Ahora platíquenme un poquito de ustedes como jugadores.",
+          "notas": [
+            "El moderador mantendrá estas respuestas a nivel general; los detalles de horarios, lugares, duración de las sesiones y plataformas se exploran en el siguiente bloque.",
+            "El moderador estará pendiente de menciones espontáneas de comida, snacks o bebidas, tomando nota sin profundizar en este momento."
+          ],
+          "subtema": "Contexto gamer",
+          "preguntas": [
+            "¿Qué están jugando ahorita? ¿Y cuál es su juego favorito de todos los tiempos? ¿Por qué ese?",
+            "Más o menos, ¿qué tan seguido juegan? ¿Cuántos días a la semana le dedican?",
+            "¿Con quién suelen jugar: solos, con amigos, con familia, con gente en línea que no conocen? ¿Con quién lo disfrutan más y por qué?"
+          ]
+        }
+      ]
+    },
+    {
+      "moderador": "Ya que nos conocimos un poquito y nos platicaron qué juegan y con quién, ahora vamos a meternos más a fondo en cómo son sus sesiones de juego, desde que deciden ponerse a jugar hasta que apagan la consola o la compu.",
+      "secciones": [
+        {
+          "intro": "",
+          "notas": [
+            "el moderador estará pendiente de los distintos tipos de sesión que surjan (solo / con amigos en línea / reunión presencial; competitiva / relajada), ya que servirán de referencia en los bloques siguientes."
+          ],
+          "subtema": "Cómo son sus sesiones de juego",
+          "preguntas": [
+            "Platíquenme cómo es una sesión típica de juego para ustedes. ¿A qué hora suelen jugar? ¿Es entre semana, en fin de semana o igual?",
+            "¿En dónde juegan normalmente? ¿En su cuarto, en la sala, en casa de alguien más? ¿Cómo es ese lugar?",
+            "¿Cuánto les dura una sesión normal? ¿Y una de esas largas que se les va el tiempo? ¿Qué hace que una sesión se alargue?",
+            "¿En qué plataforma juegan más: consola, PC, celular? ¿Cambia la sesión dependiendo de en qué estén jugando? ¿Cómo?",
+            "¿Juegan más solos, en línea con amigos o con gente en el mismo cuarto? ¿Qué cambia de una sesión a otra dependiendo de con quién estén?",
+            "¿Cómo es diferente una sesión cuando juegan algo competitivo, como una ranked, frente a cuando juegan algo más relajado o una historia? Denme un ejemplo."
+          ]
+        },
+        {
+          "intro": "**Ejercicio individual:** piensen en la última vez que jugaron y, sin comentarlo todavía, escriban en su hoja qué hicieron antes de empezar, qué pasó durante la partida y qué hicieron al terminar.",
+          "notas": [
+            "el moderador profundizará en el momento exacto en que surge el antojo y en qué lo detona (hambre real, aburrimiento, ansiedad, costumbre), sin entrar todavía a qué snacks o marcas eligen; eso se explora en el siguiente bloque.",
+            "el moderador estará pendiente de menciones espontáneas de comida o bebida y las dejará anotadas para retomarlas después."
+          ],
+          "subtema": "Antes / durante / después de jugar",
+          "preguntas": [
+            "¿Qué escribieron? Platíquenme cómo fue esa última sesión de principio a fin.",
+            "Antes de sentarse a jugar, ¿qué cosas preparan o tienen que tener a la mano? ¿Por qué?",
+            "Ya en plena partida, ¿en qué momentos les da hambre o se les antoja algo? ¿Qué está pasando en el juego en ese momento?",
+            "¿Hay momentos en los que de plano no pueden o no quieren comer nada mientras juegan? ¿Cuáles y por qué?",
+            "¿Qué pasa en las pausas: entre partidas, en las cargas, cuando los matan o mientras esperan a los demás? ¿Qué suelen hacer en esos ratos?",
+            "Y cuando terminan de jugar, ¿qué sigue? ¿Les da hambre, se paran por algo, se van directo a otra cosa? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "el moderador dejará que las necesidades salgan primero de forma espontánea y solo después leerá la lista para calificar.",
+            "el moderador profundizará en si las necesidades cambian según el tipo de sesión (solo vs. acompañado, competitiva vs. relajada) y en qué momento de la sesión pesan más."
+          ],
+          "subtema": "Lo que buscan sentir mientras juegan",
+          "preguntas": [
+            "¿Para qué juegan ustedes? ¿Qué les da jugar que no les dan otras cosas?",
+            "¿Cómo se sienten antes de empezar una sesión y cómo se sienten al terminar? ¿Cambia si ganaron o perdieron?",
+            "Durante una partida que se pone intensa, ¿qué necesitan para mantenerse concentrados o con pila? ¿Qué los saca de onda?",
+            "Cuando juegan con sus amigos, ya sea en línea o en persona, ¿qué hace que esa sesión sea buena? ¿Qué no puede faltar?",
+            {
+              "sub": [
+                "Desestresarse / desconectarse",
+                "Concentrarse",
+                "Tener energía para aguantar la sesión",
+                "Convivir con amigos",
+                "Darse un gustito o premiarse"
+              ],
+              "texto": "Del 0 al 10, ¿qué tanto buscan cada una de estas cosas cuando juegan? ¿Por qué esa calificación?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "moderador": "Ya que nos platicaron cómo son sus retas, a qué hora juegan, con quién y en qué momentos les da hambre, ahora vamos a hablar de lo que comen y toman mientras están jugando. Primero vamos a hacer una dinámica rápida y luego lo comentamos entre todos.",
+      "secciones": [
+        {
+          "intro": "**Cada quien va a escribir en su hoja, sin comentar nada todavía.**",
+          "notas": [
+            "El moderador pedirá que no mencionen marcas por ahora; si salen espontáneamente, las anotará sin profundizar, porque eso se retoma en el siguiente bloque."
+          ],
+          "subtema": "Ejercicio individual",
+          "preguntas": [
+            "Escriban todo lo que suelen comer y tomar cuando se sientan a jugar, lo que sea que tengan a la mano.",
+            "De esa lista, marquen con una estrella su favorito para jugar y encierren en un círculo el que más seguido terminan comiendo.",
+            "Escriban un snack que nunca comerían mientras juegan."
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "El moderador estará pendiente de menciones espontáneas de galletas y chocolates dentro del repertorio, sin profundizar todavía."
+          ],
+          "subtema": "Snacks y bebidas que acompañan el juego",
+          "preguntas": [
+            "¿Qué escribieron en su lista? ¿Cuál es el que más se repite entre ustedes? ¿Por qué creen que pasa eso?",
+            "¿Y de tomar, qué no puede faltar cuando juegan? ¿Por qué esa bebida y no otra?",
+            "¿Hay combinaciones de snack y bebida que sientan que van perfecto para jugar? ¿Cuáles? ¿Qué tienen?",
+            "¿Cambia lo que comen cuando juegan solos y cuando están en reta con amigos, ya sea en persona o en línea? ¿En qué cambia?",
+            "¿Y según el juego? Por ejemplo, en una partida competitiva contra algo más relajado, ¿comen lo mismo? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [],
+          "subtema": "Cómo los eligen y los consiguen",
+          "preguntas": [
+            "¿Cómo deciden qué comprar para jugar? ¿Lo planean desde antes o es al momento? Cuéntenme la última vez.",
+            "¿Dónde lo consiguen normalmente? ¿Por qué ahí?",
+            "Cuando juegan con más gente, ¿quién lleva o compra los snacks? ¿Cómo se ponen de acuerdo?",
+            "¿Más o menos cuánto se gastan en snacks para una sesión de juego? ¿Les parece mucho, poco o lo justo? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [],
+          "subtema": "Razones de existir (y de compra) de cada snack",
+          "preguntas": [
+            "Pensando en los snacks que pusieron, ¿qué les da cada uno cuando están jugando? ¿Para qué lo comen?",
+            "¿Hay snacks que sean más para aguantar una sesión larga y otros más de puro antojo? ¿Cuáles van en cada lado? ¿Por qué?",
+            "¿Hay alguno que sientan como premio, por ejemplo después de ganar o pasar un nivel difícil? ¿Cuál y por qué ese?",
+            "¿Y cuando pierden o se frustran, se les antoja algo distinto? ¿Qué y por qué?",
+            "**Completen la frase:** \"Cuando juego, como ___ porque ___\". ¿Qué pusieron? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "El moderador profundizará en el tema de limpieza de manos y cuidado del control o teclado, pidiendo ejemplos concretos."
+          ],
+          "subtema": "Criterios de elección",
+          "preguntas": [
+            "Para ustedes, ¿qué tiene que tener un snack para que sea bueno para jugar? ¿Por qué eso es importante?",
+            {
+              "sub": [
+                "Que no deje las manos sucias ni grasosas (ni el control o el teclado)",
+                "Que se pueda comer con una mano o sin soltar el control",
+                "Que rinda o dure toda la sesión",
+                "El sabor",
+                "El precio",
+                "Que alcance para compartir",
+                "Que no haga mucho ruido o tiradero"
+              ],
+              "texto": "Del 0 al 10, ¿qué tan importante es cada uno de estos puntos cuando escogen algo para jugar? ¿Por qué esa calificación?"
+            },
+            "De todo eso, ¿qué es lo que más pesa al final para que escojan uno y no otro? ¿Por qué?",
+            "¿A qué estarían dispuestos a renunciar? Por ejemplo, ¿preferirían algo muy rico aunque ensucie, o algo práctico aunque no les encante? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [],
+          "subtema": "Barreras / downsides",
+          "preguntas": [
+            "¿Qué snacks definitivamente no comen mientras juegan? ¿Qué tienen que los descarta?",
+            "¿Les ha tocado alguna mala experiencia comiendo mientras juegan? Cuéntenme qué pasó.",
+            "¿Qué trucos usan para comer sin ensuciar ni perder la partida? ¿De dónde los sacaron?",
+            "¿Cómo se sienten después de comer mucho durante una sesión larga? ¿Eso cambia lo que eligen la siguiente vez?"
+          ]
+        },
+        {
+          "intro": "Ahora vamos a pensar solo en galletas y chocolates, en general, sin pensar en ninguna marca.",
+          "notas": [
+            "El moderador no mencionará ninguna marca en este subtema; si los participantes las nombran, anotará cuáles salen de forma espontánea sin ahondar, ya que la percepción de marcas se explora en el siguiente bloque."
+          ],
+          "subtema": "Galletas y chocolates en el repertorio del gamer",
+          "preguntas": [
+            "¿Qué lugar tienen las galletas cuando juegan? ¿En qué momento aparecen: antes, durante o después? ¿Por qué ahí?",
+            "¿Y los chocolates? ¿Cuándo sí y cuándo no se les antojan mientras juegan? ¿Por qué?",
+            "Comparadas con otros snacks como papitas, cacahuates o palomitas, ¿qué tienen a favor y qué tienen en contra las galletas y los chocolates para jugar?",
+            "¿Hay diferencia entre galletas dulces y saladas a la hora de jugar? ¿Cuál va mejor con qué momento o qué tipo de juego? ¿Por qué?",
+            "**Si las galletas y los chocolates fueran personajes en un equipo de un videojuego**, ¿qué papel tendría cada uno? ¿Por qué? ¿Y qué papel tendrían las papitas?"
+          ]
+        }
+      ]
+    },
+    {
+      "moderador": "Ya que platicamos de qué snacks los acompañan cuando juegan, por qué los escogen y qué no les late de algunos, ahora vamos a hablar de marcas: qué marcas se les vienen a la mente, qué piensan de algunas en particular y cuáles sienten más de su rollo.",
+      "secciones": [
+        {
+          "intro": "Antes de hablar de marcas específicas, quiero que me digan lo primero que se les venga a la cabeza.",
+          "notas": [
+            "El moderador estará pendiente de menciones espontáneas de Oreo, Kranky y Ritz, y anotará qué otras marcas de snacks y bebidas salen y en qué orden.",
+            "El moderador no mencionará ninguna marca hasta terminar este subtema."
+          ],
+          "subtema": "Awareness espontáneo de marcas",
+          "preguntas": [
+            "Cuando piensan en botanas, galletas o chocolates para jugar, ¿qué marcas se les vienen a la mente? ¿Cuál fue la primera? ¿Por qué esa?",
+            "¿Qué marcas de snacks sienten que tienen algo que ver con el mundo de los videojuegos? ¿Qué hace que las relacionen? ¿Dónde las han visto?",
+            "¿Han visto alguna marca de snacks en streams, torneos, con creadores de contenido o dentro de algún juego? ¿Cuál? ¿Qué les pareció?",
+            "Y pensando solo en galletas y chocolates, ¿qué marcas conocen? ¿Cuáles han comprado últimamente?",
+            "De todas las que mencionaron, ¿cuál sienten que es la más conocida entre la banda que juega? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "Ahora vamos a hablar de tres marcas en específico: Oreo, Kranky y Ritz.",
+          "notas": [
+            "Rotar el orden en que se mencionan las tres marcas a lo largo del subtema.",
+            "El moderador profundizará en asociaciones con sabor, textura, ocasiones de la infancia y comunicación reciente."
+          ],
+          "subtema": "Asociaciones principales hacia Oreo, Kranky y Ritz",
+          "preguntas": [
+            "¿Qué es lo primero que se les viene a la mente cuando escuchan Oreo? ¿Y Kranky? ¿Y Ritz? ¿Por qué?",
+            "¿Qué recuerdos o experiencias tienen con cada una? Cuéntenme algún ejemplo.",
+            "¿Qué tanto las consumen hoy? ¿Ha cambiado eso con el tiempo? ¿Por qué?",
+            "¿Qué es lo que más les gusta de cada una? ¿Y lo que menos?",
+            "¿Qué han visto o escuchado de estas marcas últimamente: anuncios, sabores nuevos, colaboraciones, algo en redes? ¿Qué les pareció?"
+          ]
+        },
+        {
+          "intro": "Vamos a hacer un ejercicio de imaginación. **Imaginen que cada marca es una persona que llega a jugar con ustedes.**",
+          "notas": [
+            "El moderador pedirá que cada participante escriba su frase antes de compartirla, para evitar que se contagien las respuestas."
+          ],
+          "subtema": "Personificación de las marcas",
+          "preguntas": [
+            {
+              "sub": [
+                "¿Hombre o mujer? ¿Qué edad tendrían?",
+                "¿Cómo se vestirían? ¿Cómo hablarían?",
+                "¿A qué se dedicarían?",
+                "¿Qué juego jugarían? ¿Y en qué plataforma?"
+              ],
+              "texto": "Si Oreo, Kranky y Ritz fueran personas, ¿cómo serían?"
+            },
+            "¿Qué tipo de jugador sería cada una: el tryhard, el casual, el que juega por convivir, el que nomás ve? ¿Por qué?",
+            "¿Cuál de las tres invitarían a su squad? ¿Cuál no? ¿Por qué?",
+            "Completen la frase: **'Oreo es para personas ___', 'Kranky es para personas ___', 'Ritz es para personas ___'**. ¿Por qué lo pusieron así?"
+          ]
+        },
+        {
+          "intro": "Ahora vamos a hacer unos rounds rápidos. Les digo una frase y me dicen cuál de las tres marcas les queda mejor, y por qué.",
+          "notas": [
+            "El moderador pedirá el porqué de cada elección en los rounds y explorará los desacuerdos entre participantes."
+          ],
+          "subtema": "Rounds de marcas: calidad y actualidad",
+          "preguntas": [
+            {
+              "sub": [
+                "La de mejor calidad",
+                "La más actual",
+                "La más divertida",
+                "La más aburrida o pasada de moda",
+                "La que más vale lo que cuesta",
+                "La más rica"
+              ],
+              "texto": "¿Cuál de las tres es…?"
+            },
+            "Del 0 al 10, ¿qué calificación le pondrían a cada una en calidad? ¿Por qué esa calificación? ¿Qué le faltaría para llegar al 10?",
+            "Del 0 al 10, ¿qué tan actual o vigente sienten a cada marca? ¿Por qué?",
+            "¿Alguna de las tres sienten que se ha quedado atrás o que es 'de antes'? ¿Qué les hace pensar eso?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "El moderador estará pendiente de la competencia que mencionen espontáneamente y profundizará en qué hacen esas marcas para sentirse cercanas."
+          ],
+          "subtema": "Cercanía con su estilo de vida gamer",
+          "preguntas": [
+            "Del 0 al 10, ¿qué tanto sienten que cada una de estas marcas tiene que ver con alguien que juega videojuegos? ¿Por qué?",
+            "Imaginen el planeta de los gamers: **¿qué marcas de snacks vivirían ahí?** ¿Estarían Oreo, Kranky o Ritz? ¿En qué parte del planeta? ¿Por qué?",
+            "De todas las marcas de snacks que conocen, incluyendo las que mencionaron al principio, ¿cuál sienten más de su mismo rollo? ¿Qué hace que la sientan así?",
+            "¿Hay alguna marca que sientan que quiere hablarle a los gamers pero no le sale natural? ¿Cuál? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "El moderador mantendrá la conversación en la percepción de las marcas; los momentos de la sesión de juego en que encaja cada una se exploran en el siguiente bloque."
+          ],
+          "subtema": "Diferenciación frente a otras marcas",
+          "preguntas": [
+            "¿Qué tiene cada una de las tres que no tengan las otras? ¿Qué las hace diferentes entre sí?",
+            "Comparadas con las papitas, los cacahuates o las otras botanas que suelen comer, ¿qué tienen de especial Oreo, Kranky o Ritz? ¿En qué se quedan cortas?",
+            "Si alguna de estas tres marcas desapareciera mañana, ¿la extrañarían? ¿Cuál sí y cuál no? ¿Por qué?"
+          ]
+        }
+      ]
+    },
+    {
+      "moderador": "Ya que platicamos de lo que piensan de Oreo, Kranky y Ritz como marcas, ahora vamos a llevarlas a sus sesiones de juego: en qué momento sí entran, en cuál no, qué papel tienen mientras juegan y cómo les va contra lo que hoy comen cuando agarran el control.",
+      "secciones": [
+        {
+          "intro": "**En su hoja van a dibujar una línea con tres partes: antes de jugar, mientras juegan y después de jugar. Sin comentar nada, escriban en qué parte pondrían a Oreo, a Kranky y a Ritz. Si alguna no la pondrían en ninguna parte, escríbanla aparte. Al lado de cada una pongan del 0 al 10 qué tanto se les antoja para una sesión de juego.**",
+          "notas": [
+            "Rotar el orden en que se mencionan las tres marcas a lo largo del bloque para no sesgar las respuestas."
+          ],
+          "subtema": "Ejercicio individual",
+          "preguntas": [
+            "¿Dónde pusieron a Oreo? ¿Por qué ahí y no en otro momento?",
+            "¿Y a Kranky? ¿Qué tiene que la hace encajar en ese momento?",
+            "¿Y a Ritz? ¿Por qué ahí?",
+            "¿Alguna se quedó fuera de la línea? ¿Cuál y por qué?",
+            "¿Qué calificación le pusieron a cada una? ¿Qué le faltó para llegar al 10?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [],
+          "subtema": "Antes, durante y después del juego",
+          "preguntas": [
+            "Piensen en la última vez que jugaron y tenían alguna de estas tres marcas cerca: ¿qué estaban jugando, a qué hora y con quién? Cuéntenme cómo fue.",
+            "¿Cuál se imaginan agarrando a media partida, con el control o el mouse en la mano? ¿Por qué esa?",
+            "¿Cuál dejarían para la pausa, mientras carga la partida o entre una ranked y otra? ¿Por qué?",
+            "¿Cuál se antoja más ya que terminaron de jugar? ¿Qué cambia en ese momento?",
+            "¿Cambia algo si es una sesión cortita de media hora o una de toda la noche? ¿Qué cambia y con cuál marca?",
+            "¿Hay alguna que asocien más con jugar solos y otra con jugar con amigos, ya sea en persona o en línea? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "El moderador profundizará cuando el papel que le dan a una marca no coincida con el momento en que la pusieron en el ejercicio individual."
+          ],
+          "subtema": "El papel de cada marca en la sesión",
+          "preguntas": [
+            {
+              "sub": [
+                "La que te acompaña toda la partida",
+                "El premio cuando ganas o subes de nivel",
+                "La pausa para despejarte",
+                "La que se comparte con los cuates",
+                "La que te baja el coraje cuando pierdes"
+              ],
+              "texto": "Si cada marca tuviera un papel en su sesión de juego, ¿cuál le darían a Oreo, a Kranky y a Ritz? ¿Por qué?"
+            },
+            "¿Qué tiene Oreo para quedarse con ese papel? ¿Y qué le falta para los otros?",
+            "¿Y Kranky? ¿Qué la hace buena para ese papel y para cuál no le alcanza?",
+            "¿Y Ritz? ¿Por qué ese papel y no otro?",
+            "¿Cuál se siente como un gustito o un premio y cuál como algo más del diario? ¿Por qué?",
+            "Cuando llegan sus amigos a jugar, ¿cuál pondrían en medio de la mesa y cuál se guardarían para ustedes solos? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "**Ahora imaginen que Oreo, Kranky y Ritz fueran gamers.**",
+          "notas": [],
+          "subtema": "Fit con el gamer y el tipo de juego",
+          "preguntas": [
+            "¿Cuál sería el juego favorito de cada una? ¿Por qué ese?",
+            "¿En qué jugaría cada una: PC, consola o celular? ¿Qué les hace pensar eso?",
+            "¿Sería de los que juegan competitivo, de ranked, o más casual, nomás para relajarse? ¿Por qué?",
+            "¿Qué tipo de compañero de squad sería cada una? ¿El que carga al equipo, el que se la pasa platicando, el que se enoja y se sale? Cuéntenme.",
+            "¿Con qué tipo de juego no se la imaginan para nada? ¿Por qué no?",
+            "Completen la frase para cada marca: \"Esta marca es para el gamer que ___\". ¿Por qué lo pusieron así?"
+          ]
+        },
+        {
+          "intro": "**Vamos a hacer unos rounds: en cada uno piensen en Oreo, Kranky, Ritz y en el snack que más comen hoy cuando juegan, y díganme quién gana.**",
+          "notas": [
+            "El moderador estará pendiente de menciones espontáneas de otros snacks y marcas de la competencia, y profundizará en qué les dan que estas tres no."
+          ],
+          "subtema": "Frente a los snacks que hoy eligen para jugar",
+          "preguntas": [
+            {
+              "sub": [
+                "La que menos ensucia las manos y el control",
+                "La que aguanta toda una partida larga",
+                "La que mejor va con lo que toman cuando juegan",
+                "La mejor para compartir con el squad",
+                "La que más rinde por lo que cuesta",
+                "La que da más pila para seguirle"
+              ],
+              "texto": "¿Quién gana el round de…? ¿Por qué?"
+            },
+            "¿Contra cuál de los snacks que hoy comen al jugar compite cada marca? ¿Quién gana y por qué?",
+            "¿Qué tiene lo que hoy comen que no tengan Oreo, Kranky o Ritz?",
+            "¿Y qué tienen estas tres marcas que no tenga lo que hoy comen?",
+            "Si mañana en lugar de su snack de siempre solo pudieran escoger entre Oreo, Kranky y Ritz para jugar, ¿cuál agarrarían? ¿Por qué? ¿Y cuál dejarían al último?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "Si el grupo empieza a proponer cambios o ideas para las marcas, el moderador las anotará y las retomará en el siguiente bloque, sin profundizar en ellas aquí."
+          ],
+          "subtema": "Barreras de cada marca",
+          "preguntas": [
+            "¿Qué hace que no agarren Oreo cuando se sientan a jugar? Denme un ejemplo.",
+            "¿Y Kranky? ¿Qué la deja fuera de la sesión?",
+            "¿Y Ritz? ¿Qué hace que no la piensen para jugar?",
+            "¿Hay algo de cómo se come cada una, que se desmorone, deje migajas, se derrita o se acabe muy rápido, que les estorbe para jugar? ¿Cuál y cómo les ha pasado?",
+            "¿Y algo de dónde la encuentran, el tamaño o el precio que haga que no llegue a sus manos a la hora de jugar? ¿Qué pasa con cada una?",
+            "¿Alguna de las tres sienten que de plano no es para gamers? ¿Cuál y por qué?"
+          ]
+        }
+      ]
+    },
+    {
+      "moderador": "Ya que platicamos en qué momentos de juego entran o no Oreo, Kranky y Ritz y qué las frena, ahora vamos a imaginar qué tendría que pasar para que fueran su snack para jugar. Aquí no hay ideas malas: entre más locas, mejor.",
+      "secciones": [
+        {
+          "intro": "Piensen en su próxima sesión larga de juego, de esas que se avientan varias horas.",
+          "notas": [
+            "Rotar el orden en que se mencionan Oreo, Kranky y Ritz.",
+            "El moderador profundizará en ejemplos concretos de formato y empaque (por ejemplo, cómo se abre, cómo se guarda o cómo se comparte) sin sugerir opciones antes de que salgan de forma espontánea."
+          ],
+          "subtema": "Qué las haría su opción para jugar",
+          "preguntas": [
+            "¿Qué tendría que tener Oreo para que la escogieran en lugar del snack que comen hoy cuando juegan? ¿Y Kranky? ¿Y Ritz? ¿Por qué?",
+            "Pensando en el tamaño y la forma, ¿cómo se imaginan la versión ideal de cada marca para jugar? ¿Cómo sería? ¿Por qué así?",
+            "¿Qué tendría que tener el empaque para que funcione mientras están jugando? ¿Qué le cambiarían al que tienen hoy? ¿Por qué?",
+            "¿Qué sabores o combinaciones se les antojarían de cada marca para una noche de juego? ¿Por qué ese?",
+            "Esa versión que se imaginaron, ¿en qué momento de la sesión la comerían: antes, durante, en una pausa o al terminar? ¿Por qué en ese momento?",
+            "¿Cuánto estarían dispuestos a pagar por una presentación pensada para jugar? ¿Qué tendría que traer para que valiera ese precio?",
+            {
+              "sub": [
+                "Tamaño / formato",
+                "Empaque",
+                "Sabor",
+                "Momento de la sesión",
+                "Precio"
+              ],
+              "texto": "De estas cosas, ¿cuál pesaría más para que cambiaran su snack de siempre por alguna de estas marcas? ¿Por qué?"
+            }
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "El moderador estará pendiente de menciones espontáneas de recompensas dentro de los juegos, torneos, streamers, colaboraciones con juegos o plataformas y marcas de la competencia que hoy sí estén presentes en el mundo gamer."
+          ],
+          "subtema": "Las marcas en el mundo gamer",
+          "preguntas": [
+            "¿Dónde les gustaría encontrarse a Oreo, Kranky o Ritz dentro de su mundo de videojuegos? ¿Por qué ahí?",
+            "¿Qué marcas de comida o bebida sienten que sí están metidas en el mundo gamer? ¿Qué hacen que les late? ¿Qué podrían aprenderles estas tres marcas?",
+            "Si cada una de estas marcas se juntara con un juego, un streamer o una comunidad, ¿con cuál harían match? ¿Cómo se lo imaginan? ¿Por qué?",
+            "Más allá del snack, ¿qué les podría dar una de estas marcas que de verdad tuviera valor para ustedes como gamers? Denme ejemplos.",
+            "¿Qué tendría que hacer una marca para que la sientan auténtica entre gamers y no forzada? ¿Qué cosas les darían cringe? ¿Por qué?"
+          ]
+        },
+        {
+          "intro": "**El moderador anota en el rotafolio todas las ideas que salieron. Cada participante elige en silencio las 2 que más lo harían cambiar su snack para jugar y después las comparte con el grupo.**",
+          "notas": [
+            "El moderador buscará consenso del grupo sobre las 2 o 3 ideas con mayor potencial y registrará en qué no se ponen de acuerdo y por qué.",
+            "No pedir todavía la conclusión o el aprendizaje principal de cada participante; eso se recoge en el cierre."
+          ],
+          "subtema": "Priorización de oportunidades",
+          "preguntas": [
+            "¿Cuáles dos escogieron? ¿Por qué esas harían que de verdad cambiaran lo que comen cuando juegan?",
+            "De todas las ideas, ¿cuál le queda mejor a Oreo? ¿Y a Kranky? ¿Y a Ritz? ¿Por qué?",
+            "¿Hay alguna idea que, aunque suene padre, no los haría comprar? ¿Por qué?"
+          ]
+        }
+      ]
+    },
+    {
+      "moderador": "Ya que platicamos de todo lo que haría que Oreo, Kranky y Ritz fueran su opción para acompañar sus partidas, ya estamos por cerrar. Antes de despedirnos me gustaría escucharlos a cada uno una última vez.",
+      "secciones": [
+        {
+          "intro": "Vamos a hacer una ronda rápida en la que cada quien comparta su respuesta en una o dos frases.",
+          "notas": [
+            "El moderador pedirá que todos participen en la ronda y no solo los más activos, para tener la idea principal de cada uno de los seis participantes.",
+            "El moderador estará pendiente de si la idea principal menciona espontáneamente a Oreo, Kranky, Ritz o alguna otra marca, y de en qué sentido lo hace."
+          ],
+          "subtema": "Aprendizajes e idea principal",
+          "preguntas": [
+            "Si tuvieran que quedarse con una sola idea de todo lo que platicamos hoy sobre snacks y videojuegos, ¿cuál sería? ¿Por qué esa?",
+            "¿Hubo algo que dijo alguien más en el grupo que les hizo cambiar de opinión o que no se les había ocurrido? ¿Qué fue y por qué les llamó la atención?",
+            "Completen la frase: **\"El snack ideal para jugar es aquel que ___\"**. ¿Por qué lo dijeron así?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "El moderador buscará un consejo concreto por marca y evitará reabrir la discusión de oportunidades del bloque anterior. Si el tiempo es corto, puede pedir solo el consejo para la marca que cada participante sienta más lejana a sus partidas."
+          ],
+          "subtema": "Consejos finales a las marcas",
+          "preguntas": [
+            "Imaginen que tienen enfrente a la gente que hace Oreo, Kranky y Ritz. ¿Qué consejo le darían a cada una para que se la lleven a su próxima sesión de juego? ¿Por qué ese consejo?"
+          ]
+        },
+        {
+          "intro": "",
+          "notas": [
+            "El moderador dejará unos segundos de silencio para dar espacio a comentarios espontáneos y anotará cualquier tema nuevo que no se haya cubierto en la sesión."
+          ],
+          "subtema": "Algo más por comentar",
+          "preguntas": [
+            "¿Hay algo sobre lo que comen o toman mientras juegan que no les pregunté y que creen que es importante que sepamos? ¿Qué sería?"
+          ]
+        },
+        {
+          "intro": "Les agradezco muchísimo su tiempo y que hayan compartido con tanta confianza cómo juegan y qué se les antoja mientras lo hacen. Todo lo que nos dijeron nos ayuda muchísimo. ¡Que tengan muy buenas partidas!",
+          "notas": [
+            "El moderador recordará a los participantes cómo recibirán su incentivo y les agradecerá su participación antes de dar por terminada la sesión."
+          ],
+          "subtema": "Agradecimiento y despedida",
+          "preguntas": []
+        }
+      ]
+    }
+  ]
+}

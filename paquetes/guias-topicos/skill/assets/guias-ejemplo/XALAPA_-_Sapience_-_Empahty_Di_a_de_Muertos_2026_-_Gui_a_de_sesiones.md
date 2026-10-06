@@ -1,0 +1,39 @@
+**Guía de ****sesiones de grupo**
+
+___________________________________________________________________________
+
+Los bloques temáticos que se muestran a continuación contienen una serie de ejercicios y preguntas que buscan respuestas abiertas.
+
+- Las preguntas son ejemplos de cómo abordar la temática, pero pueden modificarse de acuerdo con el flujo natural de la conversación.
+
+- No son preguntas cerradas que deban contestarse una a una.
+
+- Algunas preguntas pueden omitirse porque la respuesta está implícita o surge de manera espontánea en la conversación.
+
+- Algunas preguntas pueden postergarse, con el fin de ir hilando la conversación de manera natural.
+
+INDICACIONES GENERALES
+
+- El moderador establecerá el tono de la conversación y dejará claro que no trabaja para una marca específica, que todas las opiniones (respetuosas) son válidas, que se puede hablar sin miedo al juicio.
+
+| **1. Presentación / Warm Up**** (5 min)** |
+| --- |
+| **Moderador:** *me gustaría conocer** un poco sobre ustedes**…** * ¿Cuántos años tienen y en qué ciudad viven? ¿Con quién viven actualmente? ¿A qué se dedican? ¿Qué disfrutan hacer cuando tienen tiempo libre? |
+
+| **2****.**** ****INTRODUCCIÓN TEMÁTICA M****ÚSICA**** + DÍA DE MUERTOS ****(****20**** min.)** |
+| --- |
+| **In****dicación general: ***D**urante esta conversación vamos a platicar de **muchos **temas **diferentes…* ¿Quién de ustedes ha perdido a algún ser querido? *(familia, amigos, compañeros de trabajo…)* ¿Cómo ha sido ‘despedirse’ de esas personas? ¿Qué tan importante era esa persona que ya no está con ustedes? ¿Se han acordado de esas personas recientemente? Cuéntenme cómo fue… ¿Cómo se sentían en ese momento: felices, tristes, etc.? Pensando en estas personas, ¿buscan mantenerlos ‘vivos o presentes’ de alguna forma? ¿Cómo lo hacen y por qué? ¿Qué símbolos les son más importantes para ustedes en esa celebración? *(**atención **menciones de colibríes)* ¿Cuáles tienen más presentes o recuerdan más? Hablando de ese tema, ¿cómo viven ustedes el Día de Muertos? ¿Qué significa para ustedes esa celebración? ¿Qué suelen hacen en esas fechas? ¿Toda su familia lo celebra igual? ¿Cuándo cambia? ¿Tienen familiares o conocidos en otras ciudades que hagan algo distinto? ¿Qué los diferencia? ¿Qué cosas no les pueden faltar en esas fechas? ¿Qué rol tiene la música durante esa temporada? ¿Qué canciones asocian con Día de Muertos? ¿Cuáles son las más emblemáticas? ¿Qué tienen esas canciones para ‘vivir en esas fechas’? ¿Cuáles usan ustedes para recordar a las personas que ya no están? ¿Escuchan esas canciones en algún otro momento del año? |
+
+| **3. ****E****VALU****ACIÓN DE ****FILM**** (****30**** min)** |
+| --- |
+| **Indicación general:** *Les vamos a mostrar una propuesta que forma**n** parte de una campaña de comunicación** de una marca**. **Es un video, per**o **no e**s **material final. Queremos saber qué les transmite* **A. Reacción espontánea y emoción inicial** ¿Qué fue lo primero que pensaron al verlo? y ¿Qué parte les llamó más la atención? ¿Les gustó? ¿Sí o no y por qué? ¿Qué emoción les generó? ¿Qué elementos les gustaron más o menos? ¿Qué opinan de cómo está contada la historia (estilo gráfico)? ¿Y de la canción? ¿Qué opinan que usen esa canción de Juan Gabriel? ¿Qué emociones les despertó? ¿Ustedes la asocian con esas fechas? ¿Y qué papel tiene en el comercial en general? ¿El video funcionaría sin esa canción / con alguna otra? ¿Por qué? **B. Comprensión del mensaje**** – rol del colibrí** ¿Si tuvieran que platicarle a un amigo de qué trata, cómo lo explicarían/resumirían? ¿Hay algo que no entendieron o que no les gustó? ¿Les parece que conecta con el Día de Muertos? ¿Por qué? ¿Qué parte les pareció más significativa? ¿Por qué? ¿Qué me pueden decir del colibrí? ¿Qué papel tiene en la historia? ¿Qué tan claro les parece? ¿Ya sabían ustedes algo del significado del colibrí? ¿Es lo que esperaban ver? **Afinidad con el target** ¿A quién le está hablando? ¿Sienten que pensada para alguien como ustedes? ¿Por qué? ¿Qué tan auténtica o cercana se siente? ¿Refleja la forma en cómo ustedes se relacionan, viven o celebran el Día de Muertos? ¿Por qué? **Curiosidad y potencial de reclutamiento** ¿Qué emociones les despertó esta campaña? ¿Quisieran ver más? ¿Les despertó curiosidad esta propuesta? ¿Quisieran ver más de esta campaña? ¿Les dan ganas de compartirla o comentarla con alguien? ¿Qué tipo de personas creen que conectarían más con esta Campaña? ¿Creen que esta campaña podría cambiar la percepción que alguien tiene de Victoria? ¿En qué sentido? **Conexión con Victoria** Si alguien más viera esta campaña sin saber la marca, ¿creen que diría “esto es 100% Victoria” o lo podría decir alguna otra marca? ¿Cuál y por qué? ¿Qué tanto se alinea con lo que esperarían de una campaña de Victoria para Día de Muertos? ¿Han visto campañas anteriores de Victoria para estas fechas? ¿Qué recuerdan? ¿Esta propuesta se siente como más de lo mismo o como algo que rompe con lo anterior? ¿Por qué? ¿Le quitarían o cambiarían algo? ¿Qué y por qué? |
+
+| **5****. ****Fit con la marca**** ****–**** ****20**** min** |
+| --- |
+| **Indicación general:** *Ahora l**es vamos a mostrar **dos formas en que se puede **comunica**r visualmente** **la campaña**. No **son **material**es** final**es**. Queremos saber qué les transmite* **Profundización** ¿Qué opinan de los visuales / posters? ¿Qué es lo primero que sienten al verlos? ¿Qué les transmite? ¿Qué elementos gráficos / visuales destacan o les llaman más la atención? ¿Qué tan diferente se siente de lo que ya conocen o han visto de campañas de Día de Muertos? ¿Qué la hace diferente / única? ¿Qué opinan de las personas que aparecen en las imágenes? ¿Qué les comunican? ¿Qué les parece el colibrí? ¿Qué transmite en las imágenes? ¿Y cómo lo ven en la lata? ¿Les gusta el diseño? ¿Notan algo diferente? ¿Qué tanto les llama la atención? **Específico Amplificadores ** ¿Qué tanto les llaman la atención esas ideas? ¿Qué destacarían de ellas? ¿Cuáles le van más / menos a la campaña? ¿En cuáles sí / no participarían? ¿Por qué? **Diferenciación ****frente a otras marcas** ¿Qué tanto se alinea con lo que esperarían de una campaña de Victoria para Día de Muertos? ¿Han visto campañas anteriores de Victoria para estas fechas? ¿Qué recuerdan? ¿Esta propuesta se siente como una evolución natural de la marca o como algo que rompe con lo anterior? ¿Después de ver esto, cómo describirían la imagen que les deja Victoria? ¿Esta campaña hace que Victoria se vea como marca diferente del resto? ¿Por qué? ¿Les transmite que Victoria genera / marca tendencias? ¿Por qué? ¿Les hace sentir que Victoria es una marca única? ¿Por qué? **Shareability**** y tono de conversación** ¿Qué creen que diría la gente si Victoria lanzara esta campaña?  ¿Qué tipo de conversación generaría? ¿Qué creen que se diría sobre cómo aborda las tradiciones / Día de Muertos? ¿Qué dirían sus familiares al ver esta campaña de la marca? |
+
+| **6****. ****Comparativa y ****conclusiones ****–**** ****10**** min** |
+| --- |
+| ¿Cuál de las dos prefieren y por qué? ¿Cuál creen que representa mejor el espíritu del Día de Muertos?  ¿Cuál les pareció más original o diferente a lo que hacen otras marcas?  ¿Cuál sintieron más conectada con la identidad de Victoria? ¿Qué fue lo que más les gustó de lo que vimos? ¿Y lo que menos? Si pudieran combinar elementos de las 2 campañas que vimos para hacer la mejor versión de la campaña, ¿qué tomarían de cada una? ¿Qué parte mantendrían porque funciona muy bien? ¿Qué parte cambiarían para que conecte más con ustedes? ¿Qué le quitarían o agregarían? Si pudieran hacer alguna sugerencia adicional al equipo creativo, ¿cuál sería? |
+
+**Cierre y agradecimientos**
