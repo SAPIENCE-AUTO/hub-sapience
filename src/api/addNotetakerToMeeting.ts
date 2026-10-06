@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, MeetingRecordings } from '../../server/compat';
+import { createEndpoint, MeetingRecordings, ZiteError } from '../../server/compat';
 import { createRecallBot } from '../serverUtils/recallClient';
 
 // Piloto notetaker (sep 2026): "Agregar notetaker a la junta" — manda un bot
@@ -30,7 +30,21 @@ export default createEndpoint({
   execute: async ({ input, context }) => {
     // bot_name tiene un máximo de 100 caracteres en la API de Recall.
     const botName = input.subject ? `Sapience Notetaker — ${input.subject}`.slice(0, 100) : undefined;
-    const bot = await createRecallBot(input.meetingUrl, botName);
+    // Cualquier excepción que no sea ZiteError llega al front como «Error interno» sin motivo. Aquí el motivo
+    // casi siempre es de Recall (URL de junta no válida, plataforma no soportada, límite del plan…), así que
+    // se devuelve legible para que la persona sepa qué pasó.
+    let bot;
+    try {
+      bot = await createRecallBot(input.meetingUrl, botName);
+    } catch (e) {
+      const detalle = e instanceof Error ? e.message : String(e);
+      console.error('[addNotetakerToMeeting] Recall falló', { meetingUrl: input.meetingUrl, detalle });
+      const motivo = /meeting_url/i.test(detalle) ? 'El enlace de la junta no es válido o no es de una plataforma soportada (Teams, Zoom o Meet).'
+        : /\(40[13]\)/.test(detalle) ? 'Recall rechazó las credenciales del Hub.'
+        : /\(402\)|\(429\)/.test(detalle) ? 'Recall rechazó la solicitud por límite o plan.'
+        : 'Recall no pudo crear el notetaker.';
+      throw new ZiteError({ code: 'BAD_REQUEST', message: `${motivo} Detalle: ${detalle.slice(0, 250)}` });
+    }
 
     const recording = await MeetingRecordings.create({
       record: {
