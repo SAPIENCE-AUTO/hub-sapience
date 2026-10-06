@@ -6,3 +6,6 @@ dist/
 *.log
 datos-zite/
 datos-monday/
+
+# logs de reanudación de server/scripts/sharepoint-to-blob.ts
+sharepoint-to-blob-*.jsonl

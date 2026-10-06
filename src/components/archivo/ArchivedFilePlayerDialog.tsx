@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getArchivedFileUrl } from 'zite-endpoints-sdk';
-import { Download, Link2, Loader2 } from 'lucide-react';
+import { Download, Link2, Loader2, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import ShareWithClientPanel from './ShareWithClientPanel';
 import { archivoLink, formatBytes, formatDate, mediaKind } from './utils';
 
 interface FileInfo {
@@ -24,11 +25,13 @@ export default function ArchivedFilePlayerDialog({ fileId, onClose }: { fileId: 
   const [file, setFile] = useState<FileInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     setUrl(null);
     setFile(null);
     setError(null);
+    setSharing(false);
     if (!fileId) return;
     getArchivedFileUrl({ id: fileId })
       .then(res => { setUrl(res.url); setFile(res.file); })
@@ -83,7 +86,10 @@ export default function ArchivedFilePlayerDialog({ fileId, onClose }: { fileId: 
               <p className="truncate" title={file.sharepointPath}>SharePoint: {file.sharepointPath}</p>
               <p>{formatBytes(file.sizeBytes)} · modificado {formatDate(file.originalModifiedAt)}</p>
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Button size="sm" variant={sharing ? 'secondary' : 'outline'} className="h-8 gap-1.5" onClick={() => setSharing(v => !v)}>
+                <Share2 className="h-3.5 w-3.5" /> Compartir con cliente
+              </Button>
               <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={handleCopyLink}>
                 <Link2 className="h-3.5 w-3.5" /> Copiar link
               </Button>
@@ -93,6 +99,7 @@ export default function ArchivedFilePlayerDialog({ fileId, onClose }: { fileId: 
             </div>
           </div>
         )}
+        {file && sharing && <ShareWithClientPanel fileId={file.id} />}
       </DialogContent>
     </Dialog>
   );

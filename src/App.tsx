@@ -31,6 +31,7 @@ import MigrationRunnerPage from './pages/MigrationRunnerPage';
 import SharpliPage from './pages/SharpliPage';
 import MinutasPage from './pages/MinutasPage';
 import ArchivoPage from './pages/ArchivoPage';
+import SharedRecordingPage from './pages/SharedRecordingPage';
 import ObservationRoomPage from './pages/ObservationRoomPage';
 import SwipePage from './pages/SwipePage';
 import EjesPage from './pages/EjesPage';
@@ -85,6 +86,7 @@ export default function App() {
               <Route path="/shared/:token" element={<SharedViewPage />} />
               <Route path="/portal/:token" element={<SupplierPortalPage />} />
               <Route path="/s/:slug" element={<ObservationRoomPage />} />
+              <Route path="/grabacion/:token" element={<SharedRecordingPage />} />
               <Route path="/swipe/:codigo" element={<SwipePage />} />
               <Route path="/ejes/:codigo" element={<EjesPage />} />
               <Route path="/prework/login" element={<PreworkLoginPage />} />

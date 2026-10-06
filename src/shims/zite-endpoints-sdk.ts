@@ -156,6 +156,7 @@ export const checkNewSubmissions = (input?: any): Promise<any> & AsyncIterable<a
 export const cleanupDuplicateCellValues = (input?: any): Promise<any> => call('cleanupDuplicateCellValues', input);
 export const cleanupPJT001 = (input?: any): Promise<any> => call('cleanupPJT001', input);
 export const countFilloutSubmissions = (input?: any): Promise<any> => call('countFilloutSubmissions', input);
+export const createArchivedFileShare = (input?: any): Promise<any> => call('createArchivedFileShare', input);
 export const createBoardWithTemplate = (input?: any): Promise<any> => call('createBoardWithTemplate', input);
 export const createEjesIdea = (input?: any): Promise<any> => call('createEjesIdea', input);
 export const createEjesIdeasBulk = (input?: any): Promise<any> => call('createEjesIdeasBulk', input);
@@ -228,6 +229,7 @@ export const getApprovalLimits = (input?: any): Promise<any> => call('getApprova
 export const getApprovalPreview = (input?: any): Promise<any> => call('getApprovalPreview', input);
 export const getArchivedFileUrl = (input?: any): Promise<any> => call('getArchivedFileUrl', input);
 export const getArchivedFiles = (input?: any): Promise<any> => call('getArchivedFiles', input);
+export const getArchivedFileShares = (input?: any): Promise<any> => call('getArchivedFileShares', input);
 export const getBoardColumns = (input?: any): Promise<any> => call('getBoardColumns', input);
 export const getBoardDuplicateBadges = (input?: any): Promise<any> => call('getBoardDuplicateBadges', input);
 export const getBoardGroups = (input?: any): Promise<any> => call('getBoardGroups', input);
@@ -314,6 +316,7 @@ export const getRecruitmentRows = (input?: any): Promise<any> => call('getRecrui
 export const getRecruitmentSummary = (input?: any): Promise<any> => call('getRecruitmentSummary', input);
 export const getReferenceOptions = (input?: any): Promise<any> => call('getReferenceOptions', input);
 export const getRubroAssignments = (input?: any): Promise<any> => call('getRubroAssignments', input);
+export const getSharedArchivedFile = (input?: any): Promise<any> => call('getSharedArchivedFile', input);
 export const getSharedViewData = (input?: any): Promise<any> => call('getSharedViewData', input);
 export const getSharedViews = (input?: any): Promise<any> => call('getSharedViews', input);
 export const getSharpliAppToken = (input?: any): Promise<any> => call('getSharpliAppToken', input);
@@ -410,6 +413,7 @@ export const reorderRecruitmentRows = (input?: any): Promise<any> => call('reord
 export const reorderTasks = (input?: any): Promise<any> => call('reorderTasks', input);
 export const restoreFromTrash = (input?: any): Promise<any> => call('restoreFromTrash', input);
 export const reviewSupplierInvoice = (input?: any): Promise<any> => call('reviewSupplierInvoice', input);
+export const revokeArchivedFileShare = (input?: any): Promise<any> => call('revokeArchivedFileShare', input);
 export const saveAppSettings = (input?: any): Promise<any> => call('saveAppSettings', input);
 export const saveApprovalLimit = (input?: any): Promise<any> => call('saveApprovalLimit', input);
 export const saveBoard = (input?: any): Promise<any> => call('saveBoard', input);

@@ -1,8 +1,9 @@
-// Crea la tabla `archived_files`: inventario de los archivos que
-// sharepoint-to-blob.ts movió de SharePoint a Azure Blob (oct 2026, cuota del
-// tenant llena). Cada fila es un archivo que ya no está en SharePoint — en su
-// lugar quedó un acceso directo `<nombre>.url` que apunta a
-// /archivo/<id> del Hub, donde se reproduce con un SAS de vida corta.
+// Crea `archived_files` y `archived_file_shares`. archived_files es el
+// inventario de los archivos que sharepoint-to-blob.ts movió de SharePoint a
+// Azure Blob (oct 2026, cuota del tenant llena). Cada fila es un archivo que
+// ya no está en SharePoint — en su lugar quedó un acceso directo
+// `<nombre>.url` que apunta a /archivo/<id> del Hub, donde se reproduce con un
+// SAS de vida corta.
 //
 // Igual que las tablas de observación (add-observation-room-tables.ts), nunca
 // existió en Zite, así que vive fuera de generate.py / schema.sql y los
@@ -54,8 +55,28 @@ async function main() {
 
     create index if not exists archived_files_project_idx on archived_files (project_id);
     create index if not exists archived_files_folder_idx on archived_files (project_folder);
+
+    -- Links para clientes: token aleatorio con vigencia, revocable, con
+    -- registro de uso. La página pública /grabacion/<token> los consume vía
+    -- getSharedArchivedFile (authenticated: false).
+    create table if not exists archived_file_shares (
+      id                uuid primary key default gen_random_uuid(),
+      archived_file_id  uuid not null references archived_files(id) on delete cascade,
+      token             text not null unique,
+      -- para quién es ("Danone – Mariana"); solo referencia interna
+      nota              text,
+      allow_download    boolean not null default false,
+      expires_at        timestamptz not null,
+      revoked_at        timestamptz,
+      created_by_email  text not null,
+      access_count      integer not null default 0,
+      last_accessed_at  timestamptz,
+      created_at        timestamptz not null default now()
+    );
+
+    create index if not exists archived_file_shares_file_idx on archived_file_shares (archived_file_id);
   `);
-  console.log('archived_files lista.');
+  console.log('archived_files y archived_file_shares listas.');
 }
 
 main()
