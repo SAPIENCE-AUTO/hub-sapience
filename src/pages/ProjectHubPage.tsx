@@ -18,6 +18,7 @@ import ChatPage from './ChatPage';
 import ProjectDocuments from '../components/ProjectDocuments';
 import ProjectMinutas from '../components/ProjectMinutas';
 import MeetingRecordingsSection from '../components/minutas/MeetingRecordingsSection';
+import ArchivedFilesSection from '../components/archivo/ArchivedFilesSection';
 import ProjectBudgetTab from '../components/pm/ProjectBudgetTab';
 import CollectionProcessTab from '../components/cobranza/CollectionProcessTab';
 import { saveProject, getProjects } from 'zite-endpoints-sdk';
@@ -303,6 +304,7 @@ export default function ProjectHubPage() {
                 )}
                 <ProjectMinutas projectCode={projectId ?? ''} />
                 <ProjectDocuments projectCode={projectId ?? ''} />
+                {project?.id && <ArchivedFilesSection projectId={project.id} />}
               </div>
             )}
             {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} />}

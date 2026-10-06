@@ -226,6 +226,8 @@ export const getAllCalendarEvents = (input?: any): Promise<any> => call('getAllC
 export const getAppSettings = (input?: any): Promise<any> => call('getAppSettings', input);
 export const getApprovalLimits = (input?: any): Promise<any> => call('getApprovalLimits', input);
 export const getApprovalPreview = (input?: any): Promise<any> => call('getApprovalPreview', input);
+export const getArchivedFileUrl = (input?: any): Promise<any> => call('getArchivedFileUrl', input);
+export const getArchivedFiles = (input?: any): Promise<any> => call('getArchivedFiles', input);
 export const getBoardColumns = (input?: any): Promise<any> => call('getBoardColumns', input);
 export const getBoardDuplicateBadges = (input?: any): Promise<any> => call('getBoardDuplicateBadges', input);
 export const getBoardGroups = (input?: any): Promise<any> => call('getBoardGroups', input);
