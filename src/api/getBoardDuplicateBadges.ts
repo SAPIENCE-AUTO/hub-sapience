@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createEndpoint } from '../../server/compat';
 import {
   buildIdentityClusters, resolveSignals, DuplicateSignalEnum,
-  Signal, IdentityRow,
+  Signal, IdentityRow, participoEnProyecto,
 } from '../lib/duplicateIdentity';
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
 
@@ -105,7 +105,7 @@ export default createEndpoint({
             const peerStartDate = peerProjData?.startDate ? new Date(peerProjData.startDate) : null;
             if (peerStartDate && peerStartDate > referenceDate) continue;
 
-            const rawParticipated = peer.status === 'Asistió' || (!!peer.group && String(peer.group).trim() !== '');
+            const rawParticipated = participoEnProyecto(peer);
             const isSameClient = !!currentClientNorm && !!peerProjData?.client && normClient(peerProjData.client) === currentClientNorm;
             const isRecent = !peerStartDate || peerStartDate > sixMonthsAgo;
 

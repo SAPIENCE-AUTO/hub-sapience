@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, RecruitmentRows, Projects } from '../../server/compat';
 import {
   buildIdentityClusters, findClusterForRow, aggregateClusterReasons,
-  resolveSignals, DuplicateSignalEnum, Signal, IdentityRow,
+  resolveSignals, DuplicateSignalEnum, Signal, IdentityRow, participoEnProyecto,
 } from '../lib/duplicateIdentity';
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
 import { getInferredStartDates } from '../lib/projectStartFallback';
@@ -82,7 +82,7 @@ function buildPersonResult(
   for (const row of personRows) {
     if (!row.projectCode) continue;
 
-    const rawParticipated = row.status === 'Asistió' || (!!row.group && String(row.group).trim() !== '');
+    const rawParticipated = participoEnProyecto(row);
     const sameProject     = !!projectCode && row.projectCode === projectCode;
     const sameBoard       = sameProject && !!boardName && row.boardName === boardName;
     const isCurrentRow    = !!rowId && row.id === rowId;

@@ -289,3 +289,20 @@ export function aggregateClusterReasons(cluster: IdentityCluster): MatchReason[]
   }
   return [...all];
 }
+
+
+/**
+ * ¿Esta fila cuenta como que la persona PARTICIPÓ? (oct 2026) — única definición para los íconos de duplicados,
+ * el historial del participante y la fecha de respaldo de proyectos sin fecha.
+ *  - Estatus «Asistió»: sí, con o sin grupo.
+ *  - En un grupo: sí solo si el estatus está vacío, «Pendiente» o «Confirmado» (aún no se sabe que no fue).
+ *  - En un grupo pero con No show, Descartado, Rechazado, No respondió, No puede… : NO.
+ *  - Sin grupo y sin Asistió (Pendiente, Contactado, etc.): no, solo registrado.
+ * Mantener alineado con el SQL de projectStartFallback.ts.
+ */
+export function participoEnProyecto(row: { status?: string | null; group?: string | null }): boolean {
+  const estatus = String(row.status ?? '').trim().toLowerCase();
+  if (estatus === 'asistió' || estatus === 'asistio') return true;
+  const enGrupo = !!row.group && String(row.group).trim() !== '';
+  return enGrupo && (estatus === '' || estatus === 'pendiente' || estatus === 'confirmado');
+}
