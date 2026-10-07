@@ -38,7 +38,8 @@ export default createEndpoint({
     const { activeRows, projectMap, globalClusters, rowToGlobalCluster } = await getGlobalIdentityData();
 
     const currentProjData = projectMap.get(projectCode);
-    const referenceDate   = currentProjData?.startDate ? new Date(currentProjData.startDate) : new Date();
+    // La fecha de respaldo de un proyecto sin fecha NO se usa como referencia del proyecto actual: se sigue midiendo contra hoy.
+    const referenceDate   = currentProjData?.startDate && !currentProjData.startDateInferred ? new Date(currentProjData.startDate) : new Date();
     const sixMonthsAgo   = new Date(referenceDate);
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     const currentClientNorm = normClient(currentProjData?.client);

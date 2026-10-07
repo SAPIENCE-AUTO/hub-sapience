@@ -5,6 +5,7 @@ import {
   resolveSignals, DuplicateSignalEnum, Signal, IdentityRow,
 } from '../lib/duplicateIdentity';
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
+import { getInferredStartDates } from '../lib/projectStartFallback';
 
 const normalizeClient = (s?: string) => (s ?? '').toLowerCase().trim();
 
@@ -58,7 +59,7 @@ function buildPersonResult(
     currentClientNorm: string;
     referenceDate: Date;
     sixMonthsAgo: Date;
-    projectMap: Map<string, { client?: string; startDate?: string }>;
+    projectMap: Map<string, { client?: string; startDate?: string; startDateInferred?: boolean }>;
     clusterId: string;
     clusterReasons: ('email' | 'name' | 'phone')[];
     matchedBy: string[];
@@ -194,8 +195,8 @@ function buildPersonResult(
 }
 
 // ── Helper: load project metadata ───────────────────────────────────────────
-async function loadProjectMap(projectCodes: string[]): Promise<Map<string, { client?: string; startDate?: string }>> {
-  const projectMap = new Map<string, { client?: string; startDate?: string }>();
+async function loadProjectMap(projectCodes: string[]): Promise<Map<string, { client?: string; startDate?: string; startDateInferred?: boolean }>> {
+  const projectMap = new Map<string, { client?: string; startDate?: string; startDateInferred?: boolean }>();
   if (projectCodes.length === 0) return projectMap;
   const { records } = await Projects.findAll({
     filters: { projectCode: { in: [...new Set(projectCodes)] } },
@@ -204,6 +205,11 @@ async function loadProjectMap(projectCodes: string[]): Promise<Map<string, { cli
   });
   for (const p of records) {
     if (p.projectCode) projectMap.set(p.projectCode, { client: p.client, startDate: p.startDate });
+  }
+  // Proyectos sin fecha de inicio: respaldo con su última actividad real (ver projectStartFallback.ts).
+  for (const [code, fecha] of await getInferredStartDates([...projectMap.keys()])) {
+    const pd = projectMap.get(code);
+    if (pd && !pd.startDate) { pd.startDate = fecha; pd.startDateInferred = true; }
   }
   return projectMap;
 }
@@ -245,7 +251,7 @@ export default createEndpoint({
       const rowById = new Map(activeRows.map(r => [r.id, r]));
       const personRows = cluster.rowIds.map(id => rowById.get(id)).filter((r): r is IdentityRow => !!r);
 
-      const currentProjectStartDate = input.projectCode ? projectMap.get(input.projectCode)?.startDate : undefined;
+      const currentProjectStartDate = input.projectCode && !projectMap.get(input.projectCode)?.startDateInferred ? projectMap.get(input.projectCode)?.startDate : undefined;
       const referenceDate = currentProjectStartDate ? new Date(currentProjectStartDate) : new Date();
       const sixMonthsAgo = new Date(referenceDate);
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -302,7 +308,7 @@ export default createEndpoint({
     if (input.projectCode) rowProjectCodes.push(input.projectCode);
     const projectMap = await loadProjectMap(rowProjectCodes);
 
-    const currentProjectStartDate = input.projectCode ? projectMap.get(input.projectCode)?.startDate : undefined;
+    const currentProjectStartDate = input.projectCode && !projectMap.get(input.projectCode)?.startDateInferred ? projectMap.get(input.projectCode)?.startDate : undefined;
     const referenceDate = currentProjectStartDate ? new Date(currentProjectStartDate) : new Date();
     const sixMonthsAgo = new Date(referenceDate);
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);

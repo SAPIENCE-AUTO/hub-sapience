@@ -1,5 +1,6 @@
 import { RecruitmentRows, Projects } from '../../server/compat';
 import { buildIdentityClusters, IdentityRow, IdentityCluster } from './duplicateIdentity';
+import { getInferredStartDates } from './projectStartFallback';
 
 /**
  * Cache compartido del clustering global de identidades (capas "otros
@@ -18,7 +19,7 @@ const CACHE_TTL_MS = 90_000;
 
 export type GlobalIdentityData = {
   activeRows: IdentityRow[];
-  projectMap: Map<string, { startDate?: string; client?: string }>;
+  projectMap: Map<string, { startDate?: string; client?: string; startDateInferred?: boolean }>;
   globalClusters: Map<string, IdentityCluster>;
   rowToGlobalCluster: Map<string, string>;
 };
@@ -32,9 +33,14 @@ export async function getGlobalIdentityData(): Promise<GlobalIdentityData> {
     limit: 500,
     fields: ['projectCode', 'startDate', 'client'],
   });
-  const projectMap = new Map<string, { startDate?: string; client?: string }>();
+  const projectMap = new Map<string, { startDate?: string; client?: string; startDateInferred?: boolean }>();
   for (const p of allProjects) {
     if (p.projectCode) projectMap.set(p.projectCode, { startDate: p.startDate, client: p.client });
+  }
+  // Proyectos sin fecha de inicio: se usa su última actividad real en vez de asumir «reciente» para siempre.
+  for (const [code, fecha] of await getInferredStartDates()) {
+    const pd = projectMap.get(code);
+    if (pd && !pd.startDate) { pd.startDate = fecha; pd.startDateInferred = true; }
   }
 
   // 10_000 = MAX_LIMIT del modelo (server/compat/model.ts).
