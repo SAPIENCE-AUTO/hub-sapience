@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { createEndpoint, Tasks, Projects, BoardColumns, CellValues, Documents, Boards } from '../../server/compat';
-import { buildSapienceDocumentName } from '../serverUtils/documentNaming';
+import { createEndpoint, Tasks, Projects, BoardColumns, CellValues, Documents, Boards, ZiteError } from '../../server/compat';
+import { buildSapienceDocumentName, nombreSeguroParaHeader } from '../serverUtils/documentNaming';
 import { uploadFileToTeamsChannel } from '../serverUtils/teamsFileUpload';
 
 const TIMELINE_FOLDER = 'TIMELINE';
@@ -268,7 +268,7 @@ export default createEndpoint({
           groups: ganttGroups,
           logo_url: 'https://i.postimg.cc/hjCKc6D1/logo-sapience-transparente.png',
           version_info: versionStr,
-          file_name: fileName,
+          file_name: nombreSeguroParaHeader(fileName),
         }),
       });
       if (!ganttRes.ok) {
@@ -326,7 +326,13 @@ export default createEndpoint({
       if (projectResult?.id) {
         try { await Projects.update({ id: projectResult.id, record: { timelineStatus: 'Error', timelineUpdatedAt: new Date().toISOString() } }); } catch { /* best-effort */ }
       }
-      throw err;
+      // Cualquier excepción que no sea ZiteError llega al front como «Error interno» sin motivo. Lo que puede
+      // fallar aquí es solo la generación del Excel (gantt-service caído, tardó de más o rechazó el pedido),
+      // así que se devuelve con su detalle para que la persona (y quien le dé soporte) sepa qué pasó.
+      if (err instanceof ZiteError) throw err;
+      const detalle = err instanceof Error ? err.message : String(err);
+      console.error('[sendTimelineToWebhook] no se pudo generar el timeline', { projectCode: input.projectCode, boardId: input.boardId, detalle });
+      throw new ZiteError({ code: 'INTERNAL_ERROR', message: `No se pudo armar el Excel del timeline (${detalle.slice(0, 250)})` });
     }
   },
 });

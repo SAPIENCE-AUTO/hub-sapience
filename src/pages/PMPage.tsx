@@ -1104,9 +1104,10 @@ export default function PMPage({ initialSection = 'timelines', onSectionChange }
       } else {
         toast.error('El timeline se procesó pero n8n reportó un error.');
       }
-    } catch {
+    } catch (e) {
       setBoardTimelineStates(prev => ({ ...prev, [activeBoardId]: { ...prev[activeBoardId], status: 'Error' } }));
-      toast.error('Error al enviar el timeline');
+      // El servidor manda el motivo cuando lo conoce; «Error interno» no dice nada, así que ahí queda el mensaje de siempre.
+      toast.error(e instanceof Error && e.message && e.message !== 'Error interno' ? e.message : 'Error al enviar el timeline');
     } finally {
       setTimelineLoading(false);
     }
