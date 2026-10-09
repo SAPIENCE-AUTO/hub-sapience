@@ -58,8 +58,27 @@ export default createEndpoint({
     billingEntityOptions: z.array(billingEntityOptionSchema),
   }),
   execute: async ({ input }) => {
-    // Step 1: Fetch payments
-    const paymentsResult = await Payments.findAll({ filters: { type: 'Pago a proveedor' }, limit: 500 });
+    // Step 1: Fetch ALL payments, paginated.
+    // Antes: limit: 500 sin paginar ni orden — con 572 pagos reales, los 72 que quedaban
+    // fuera (casi todos recientes, 12 de ellos Programados) no salían en Pagos ni en el
+    // detalle de la ODC aunque sí estaban en la base (RI-03642, oct 2026). El orden por
+    // paymentId hace estable el offset entre páginas.
+    const paymentRecords: Awaited<ReturnType<typeof Payments.findAll>>['records'] = [];
+    {
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const page = await Payments.findAll({
+          filters: { type: 'Pago a proveedor' },
+          sorts: [{ field: 'paymentId', direction: 'asc' }],
+          limit: 2000,
+          offset,
+        });
+        paymentRecords.push(...page.records);
+        hasMore = page.hasMore && page.records.length > 0;
+        offset += page.records.length;
+      }
+    }
 
     // Small delay between DB calls to avoid rate limiting
     await delay(150);
@@ -70,7 +89,7 @@ export default createEndpoint({
     // así tardó 37s y sumó ~35 MB de heap. Ninguno de los dos usos de
     // PurchaseOrders en este archivo (poMap ni poOptions) lee pdfBase64/pdfFile.
     const PO_FIELDS = ['poNumber', 'supplierName', 'projectCode', 'totalAmount', 'billingEntity'];
-    const uniquePoIds = [...new Set(paymentsResult.records.map(p => p.poId).filter(Boolean))] as string[];
+    const uniquePoIds = [...new Set(paymentRecords.map(p => p.poId).filter(Boolean))] as string[];
     let referencedPOs: Awaited<ReturnType<typeof PurchaseOrders.findAll>>['records'] = [];
     if (uniquePoIds.length > 0) {
       const BATCH = 100;
@@ -142,14 +161,14 @@ export default createEndpoint({
 
     // Calculate paid amount per PO
     const paidPerPo: Record<string, number> = {};
-    paymentsResult.records.forEach(p => {
+    paymentRecords.forEach(p => {
       if (p.poId && p.status === 'Realizado') {
         paidPerPo[p.poId] = (paidPerPo[p.poId] ?? 0) + (p.amount ?? 0);
       }
     });
 
     // Enrich payments
-    let payments = paymentsResult.records.map(p => {
+    let payments = paymentRecords.map(p => {
       const po = p.poId ? poMap[p.poId] : undefined;
       const poTotal = po?.totalAmount ?? 0;
       const paid = p.poId ? (paidPerPo[p.poId] ?? 0) : 0;
