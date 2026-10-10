@@ -6,16 +6,19 @@ import { Progress } from '@/components/ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { fmtFechaCorta, hoyLocalISO } from '../../lib/payments/fechas';
+import { etiquetaComprobante } from '../../lib/payments/comprobante';
 import { fmtMonto } from '../../lib/payments/formato';
 import { motivoDelError } from '../../lib/payments/errores';
+import { CLASE_BOTON_SUAVE } from './estilos';
 import { ConceptosOdc } from './ConceptosOdc';
 import { PdfOdc } from './PdfOdc';
 import { PillPago } from './PillPago';
+import { VistaPreviaComprobante } from './VistaPreviaComprobante';
 import { sendPaymentReceipt, savePayment, GetPaymentsOutputType } from 'zite-endpoints-sdk';
 import { uploadFile } from 'zite-file-upload-sdk';
 import {
   CreditCard, Paperclip, FileText, Landmark, Receipt,
-  Pencil, Trash2, Send, AlertCircle, Upload, Building2, X, CheckCircle, XCircle,
+  Pencil, Trash2, Send, AlertCircle, Upload, Building2, X, CheckCircle, XCircle, Eye,
 } from 'lucide-react';
 
 type Payment = GetPaymentsOutputType['payments'][0];
@@ -47,10 +50,14 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
   const [localAttachment, setLocalAttachment] = useState<{ url: string }[] | null>(null);
   const [localStatus, setLocalStatus] = useState<string | null>(null);
   const [localPaymentDate, setLocalPaymentDate] = useState<string | null>(null);
+  const [seleccionado, setSeleccionado] = useState(0); // cuál comprobante se ve en la vista previa
+  const [vistaPreviaVisible, setVistaPreviaVisible] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentAttachment = localAttachment ?? (payment?.attachment ?? []);
   const hasAttachment = currentAttachment.length > 0;
+  const indiceVisible = Math.min(seleccionado, Math.max(0, currentAttachment.length - 1));
+  const adjuntoVisible = currentAttachment[indiceVisible];
   const displayStatus = localStatus ?? payment?.status;
   const displayPaymentDate = localPaymentDate ?? payment?.paymentDate;
 
@@ -73,6 +80,8 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
       const newAttachment = [...currentAttachment, { url: fileUrl }];
       await savePayment({ id: payment.id, attachment: newAttachment });
       setLocalAttachment(newAttachment);
+      setSeleccionado(newAttachment.length - 1); // se ve el que se acaba de subir
+      setVistaPreviaVisible(true);
       onAttachmentUploaded?.(newAttachment);
       toast.success('Comprobante subido correctamente');
     } catch (e) {
@@ -86,6 +95,7 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
     try {
       await savePayment({ id: payment.id, attachment: newAttachment });
       setLocalAttachment(newAttachment);
+      setSeleccionado(0);
       onAttachmentUploaded?.(newAttachment);
       toast.success('Comprobante eliminado');
     } catch (e) {
@@ -150,9 +160,138 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
     setSending(false);
   };
 
+  // Con el pago ya realizado el comprobante es lo principal: sube justo después de los datos del pago.
+  const comprobanteArriba = displayStatus === 'Realizado' && hasAttachment;
+  const bloqueComprobante = (
+    <>
+      {/* Attachment / Upload */}
+      <Separator />
+      <div>
+        <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold mb-3 flex items-center gap-1.5">
+          <Paperclip className="w-3.5 h-3.5" /> Comprobante de pago
+        </p>
+
+        {isProgramado && !hasAttachment && (
+          <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <p className="text-xs font-medium">Sube un comprobante antes de registrar el pago</p>
+          </div>
+        )}
+
+        {hasAttachment && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {currentAttachment.map((a, i) => {
+              const activo = i === indiceVisible;
+              return (
+                <div key={i} className={`group flex items-center gap-1 pl-1 pr-1.5 py-1 rounded-lg text-sm font-medium ${activo ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                  <button
+                    type="button"
+                    aria-pressed={activo}
+                    title={a.filename}
+                    onClick={() => { setSeleccionado(i); setVistaPreviaVisible(true); }}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-0.5 hover:underline"
+                  >
+                    <Paperclip className="w-3.5 h-3.5" />
+                    {etiquetaComprobante(i, currentAttachment.length)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAttachment(i)}
+                    className="ml-1 p-0.5 rounded opacity-50 hover:opacity-100 hover:text-destructive transition-all"
+                    title="Eliminar"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {hasAttachment && (
+          <div className="mb-3">
+            {vistaPreviaVisible ? (
+              <VistaPreviaComprobante
+                key={adjuntoVisible.url}
+                adjunto={adjuntoVisible}
+                poNumber={payment.poNumber}
+                indice={indiceVisible}
+                etiqueta={etiquetaComprobante(indiceVisible, currentAttachment.length)}
+                onOcultar={() => setVistaPreviaVisible(false)}
+              />
+            ) : (
+              <button type="button" onClick={() => setVistaPreviaVisible(true)} className={CLASE_BOTON_SUAVE}>
+                <Eye className="w-3.5 h-3.5" /> Ver vista previa
+              </button>
+            )}
+          </div>
+        )}
+
+        <div
+          className={`relative border-2 border-dashed rounded-xl p-5 text-center transition-colors cursor-pointer ${dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/30'} ${uploading ? 'pointer-events-none opacity-60' : ''}`}
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadFile(f); e.target.value = ''; }}
+          />
+          {uploading ? (
+            <div className="flex flex-col items-center gap-2">
+              <span className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+              <p className="text-sm text-muted-foreground">Subiendo comprobante…</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                <Upload className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground">
+                {hasAttachment ? 'Agregar otro comprobante' : 'Subir comprobante'}
+              </p>
+              <p className="text-xs text-muted-foreground">Arrastra un archivo aquí o haz clic para buscar</p>
+              <p className="text-[10px] text-muted-foreground/60">PDF, JPG, PNG · Máx. 10 MB</p>
+            </div>
+          )}
+        </div>
+
+        {hasAttachment && (
+          <div className="pt-3">
+            {payment.supplierEmail ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={sending}
+                className="gap-2 border-primary/40 text-primary hover:bg-primary/5"
+                onClick={handleSendReceipt}
+              >
+                {sending ? (
+                  <span className="animate-spin w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                {sending ? 'Enviando…' : `Enviar comprobante a ${payment.supplierEmail}`}
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" />
+                No se puede enviar: el proveedor no tiene email registrado
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <>
-      <Dialog open={open} onOpenChange={(v) => { if (!v) { setLocalAttachment(null); setLocalStatus(null); setLocalPaymentDate(null); } onOpenChange(v); }}>
+      <Dialog open={open} onOpenChange={(v) => { if (!v) { setLocalAttachment(null); setLocalStatus(null); setLocalPaymentDate(null); setSeleccionado(0); setVistaPreviaVisible(true); } onOpenChange(v); }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <div className="flex items-start gap-3">
@@ -226,6 +365,8 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
               </div>
             </div>
 
+            {comprobanteArriba && bloqueComprobante}
+
             {/* PO */}
             {payment.poId && (
               <>
@@ -292,99 +433,7 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
               </div>
             </div>
 
-            {/* Attachment / Upload */}
-            <Separator />
-            <div>
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold mb-3 flex items-center gap-1.5">
-                <Paperclip className="w-3.5 h-3.5" /> Comprobante de pago
-              </p>
-
-              {isProgramado && !hasAttachment && (
-                <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  <p className="text-xs font-medium">Sube un comprobante antes de registrar el pago</p>
-                </div>
-              )}
-
-              {hasAttachment && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {currentAttachment.map((a, i) => (
-                    <div key={i} className="group flex items-center gap-1 pl-3 pr-1.5 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-medium">
-                      <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:underline">
-                        <Paperclip className="w-3.5 h-3.5" />
-                        Ver comprobante{currentAttachment.length > 1 ? ` ${i + 1}` : ''}
-                      </a>
-                      <button
-                        onClick={() => handleRemoveAttachment(i)}
-                        className="ml-1 p-0.5 rounded opacity-50 hover:opacity-100 hover:text-destructive transition-all"
-                        title="Eliminar"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div
-                className={`relative border-2 border-dashed rounded-xl p-5 text-center transition-colors cursor-pointer ${dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/30'} ${uploading ? 'pointer-events-none opacity-60' : ''}`}
-                onDragOver={e => { e.preventDefault(); setDragging(true); }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadFile(f); e.target.value = ''; }}
-                />
-                {uploading ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <span className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
-                    <p className="text-sm text-muted-foreground">Subiendo comprobante…</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
-                      <Upload className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground">
-                      {hasAttachment ? 'Agregar otro comprobante' : 'Subir comprobante'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Arrastra un archivo aquí o haz clic para buscar</p>
-                    <p className="text-[10px] text-muted-foreground/60">PDF, JPG, PNG · Máx. 10 MB</p>
-                  </div>
-                )}
-              </div>
-
-              {hasAttachment && (
-                <div className="pt-3">
-                  {payment.supplierEmail ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={sending}
-                      className="gap-2 border-primary/40 text-primary hover:bg-primary/5"
-                      onClick={handleSendReceipt}
-                    >
-                      {sending ? (
-                        <span className="animate-spin w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full" />
-                      ) : (
-                        <Send className="w-3.5 h-3.5" />
-                      )}
-                      {sending ? 'Enviando…' : `Enviar comprobante a ${payment.supplierEmail}`}
-                    </Button>
-                  ) : (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      No se puede enviar: el proveedor no tiene email registrado
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+            {!comprobanteArriba && bloqueComprobante}
 
             {/* Notes */}
             {payment.notes && (
