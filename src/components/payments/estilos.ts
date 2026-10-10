@@ -33,6 +33,10 @@ export const FONDO_PELIGRO = 'hsl(0 72% 96%)';
 export const FONDO_ALERTA = 'hsl(38 92% 94%)';
 export const TEXTO_ALERTA = 'hsl(32 92% 28%)';
 
+/** Botón secundario «profundidad suave»: blanco con un degradado mínimo, borde y sombra suave. Va con `inline-flex` incluido. */
+export const CLASE_BOTON_SUAVE =
+  'inline-flex items-center gap-1.5 whitespace-nowrap rounded-[10px] border bg-gradient-to-b from-white to-[hsl(220_20%_98%)] px-[11px] py-[5px] text-xs font-semibold text-foreground/80 shadow-sm transition-colors hover:to-muted disabled:opacity-60';
+
 /** Botón principal «profundidad suave»: teal con un brillo interior y una sombra suave. */
 export const ESTILO_BOTON_PRIMARIO: CSSProperties = {
   backgroundColor: TEAL,

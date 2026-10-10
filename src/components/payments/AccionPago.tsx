@@ -1,6 +1,7 @@
 import { CheckCircle2, Paperclip } from 'lucide-react';
 import type { GetPaymentsOutputType } from 'zite-endpoints-sdk';
 import { EXITO } from '../../lib/toolColors';
+import { CLASE_BOTON_SUAVE } from './estilos';
 
 type Payment = GetPaymentsOutputType['payments'][0];
 
@@ -17,7 +18,7 @@ export function AccionPago({ p, onAbrir }: { p: Payment; onAbrir: (p: Payment) =
         <button
           type="button"
           onClick={() => onAbrir(p)}
-          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[10px] border bg-gradient-to-b from-white to-[hsl(220_20%_98%)] px-[11px] py-[5px] text-xs font-semibold text-foreground/80 shadow-sm transition-colors hover:to-muted"
+          className={CLASE_BOTON_SUAVE}
         >
           <CheckCircle2 className="w-3.5 h-3.5" style={{ color: EXITO }} />
           Registrar pago

@@ -5,10 +5,11 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { fmtCurrency } from '../../lib/format';
 import { fmtFechaCorta, hoyLocalISO } from '../../lib/payments/fechas';
 import { fmtMonto } from '../../lib/payments/formato';
 import { motivoDelError } from '../../lib/payments/errores';
+import { ConceptosOdc } from './ConceptosOdc';
+import { PdfOdc } from './PdfOdc';
 import { PillPago } from './PillPago';
 import { sendPaymentReceipt, savePayment, GetPaymentsOutputType } from 'zite-endpoints-sdk';
 import { uploadFile } from 'zite-file-upload-sdk';
@@ -234,18 +235,17 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
                     <FileText className="w-3.5 h-3.5" /> ODC vinculada
                   </p>
                   <div className="bg-muted/40 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold font-mono">{payment.poNumber}</span>
-                      <span className="text-xs text-muted-foreground">{fmtCurrency(payment.poTotalAmount, payment.currency)}</span>
-                    </div>
+                    <span className="block text-sm font-bold font-mono">{payment.poNumber}</span>
+                    <ConceptosOdc poId={payment.poId} moneda={payment.currency} total={payment.poTotalAmount} />
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Saldo pendiente</span>
-                        <span className="font-semibold text-foreground">{fmtCurrency(payment.poPendingAmount, payment.currency)}</span>
+                        <span className="font-semibold text-foreground">{fmtMonto(payment.poPendingAmount, payment.currency)}</span>
                       </div>
                       <Progress value={100 - paidPct} className="h-1.5" />
                     </div>
                   </div>
+                  <PdfOdc poId={payment.poId} poNumber={payment.poNumber} />
                 </div>
               </>
             )}
