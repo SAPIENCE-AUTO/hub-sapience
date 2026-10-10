@@ -6,6 +6,10 @@ import { Progress } from '@/components/ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { fmtCurrency } from '../../lib/format';
+import { fmtFechaCorta, hoyLocalISO } from '../../lib/payments/fechas';
+import { fmtMonto } from '../../lib/payments/formato';
+import { motivoDelError } from '../../lib/payments/errores';
+import { PillPago } from './PillPago';
 import { sendPaymentReceipt, savePayment, GetPaymentsOutputType } from 'zite-endpoints-sdk';
 import { uploadFile } from 'zite-file-upload-sdk';
 import {
@@ -19,19 +23,6 @@ type Payment = GetPaymentsOutputType['payments'][0];
 function fmtDate(d?: string) {
   if (!d) return '—';
   return new Date(d.split('T')[0] + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function StatusBadge({ status }: { status?: string }) {
-  const styles: Record<string, string> = {
-    'Programado': 'bg-yellow-100 text-yellow-700 border-yellow-200',
-    'Realizado': 'bg-green-100 text-green-700 border-green-200',
-    'Cancelado': 'bg-red-100 text-red-700 border-red-200',
-  };
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${styles[status ?? ''] ?? 'bg-muted text-muted-foreground border-border'}`}>
-      {status || '—'}
-    </span>
-  );
 }
 
 interface Props {
@@ -51,6 +42,7 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
   const [registering, setRegistering] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [registerConfirmOpen, setRegisterConfirmOpen] = useState(false);
   const [localAttachment, setLocalAttachment] = useState<{ url: string }[] | null>(null);
   const [localStatus, setLocalStatus] = useState<string | null>(null);
   const [localPaymentDate, setLocalPaymentDate] = useState<string | null>(null);
@@ -82,8 +74,8 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
       setLocalAttachment(newAttachment);
       onAttachmentUploaded?.(newAttachment);
       toast.success('Comprobante subido correctamente');
-    } catch {
-      toast.error('Error al subir el comprobante');
+    } catch (e) {
+      toast.error(motivoDelError(e, 'No se pudo subir el comprobante'));
     }
     setUploading(false);
   };
@@ -95,8 +87,8 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
       setLocalAttachment(newAttachment);
       onAttachmentUploaded?.(newAttachment);
       toast.success('Comprobante eliminado');
-    } catch {
-      toast.error('Error al eliminar el comprobante');
+    } catch (e) {
+      toast.error(motivoDelError(e, 'No se pudo eliminar el comprobante'));
     }
   };
 
@@ -107,21 +99,27 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
     if (file) handleUploadFile(file);
   };
 
-  const handleRegisterPayment = async () => {
+  // Registrar no se puede deshacer (un pago realizado no vuelve a programado), así que primero se confirma.
+  const pedirConfirmacion = () => {
     if (!hasAttachment) {
       toast.error('Sube un comprobante antes de registrar el pago');
       return;
     }
+    setRegisterConfirmOpen(true);
+  };
+
+  const handleRegisterPayment = async () => {
+    setRegisterConfirmOpen(false);
     setRegistering(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = hoyLocalISO();
       await savePayment({ id: payment.id, status: 'Realizado', paymentDate: today });
       setLocalStatus('Realizado');
       setLocalPaymentDate(today);
       onPaymentUpdated?.({ status: 'Realizado', paymentDate: today });
       toast.success('Pago registrado como realizado');
-    } catch {
-      toast.error('Error al registrar el pago');
+    } catch (e) {
+      toast.error(motivoDelError(e, 'No se pudo registrar el pago'));
     }
     setRegistering(false);
   };
@@ -134,8 +132,8 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
       setLocalStatus('Cancelado');
       onPaymentUpdated?.({ status: 'Cancelado' });
       toast.success('Pago cancelado');
-    } catch {
-      toast.error('Error al cancelar el pago');
+    } catch (e) {
+      toast.error(motivoDelError(e, 'No se pudo cancelar el pago'));
     }
     setCancelling(false);
   };
@@ -146,8 +144,7 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
       const result = await sendPaymentReceipt({ paymentId: payment.id });
       toast.success(result.message);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al enviar comprobante';
-      toast.error(msg);
+      toast.error(motivoDelError(e, 'No se pudo enviar el comprobante'));
     }
     setSending(false);
   };
@@ -163,13 +160,16 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <DialogTitle className="text-base font-bold">{String(payment.paymentId ?? '—')}</DialogTitle>
-                  <StatusBadge status={displayStatus} />
+                  <DialogTitle className="text-base font-bold font-mono">{payment.poNumber ?? `Pago ${String(payment.paymentId ?? '—')}`}</DialogTitle>
+                  <PillPago status={displayStatus} />
                   {payment.currency && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-blue-100 text-blue-700 border-blue-200">{payment.currency}</span>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground mt-0.5">{payment.supplierName ?? '—'}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {payment.supplierName ?? '—'}
+                  {payment.poNumber && <span className="text-xs"> · pago {String(payment.paymentId ?? '—')}</span>}
+                </p>
               </div>
             </div>
           </DialogHeader>
@@ -183,11 +183,11 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
               <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">Monto</p>
-                  <p className="text-xl font-black text-primary">{fmtCurrency(payment.amount, payment.currency)}</p>
+                  <p className="text-xl font-black text-primary">{fmtMonto(payment.amount, payment.currency)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">Método</p>
-                  <p className="text-sm font-medium">{payment.method || 'Transferencia'}</p>
+                  <p className="text-sm font-medium">{payment.method || '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">Fecha comprometida</p>
@@ -210,7 +210,7 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">ODC vinculada</p>
-                  <p className="text-sm font-medium font-mono">{payment.poNumber ? `ODC-${payment.poNumber}` : '—'}</p>
+                  <p className="text-sm font-medium font-mono">{payment.poNumber ?? '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">Proyecto</p>
@@ -235,7 +235,7 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
                   </p>
                   <div className="bg-muted/40 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold">ODC-{payment.poNumber}</span>
+                      <span className="text-sm font-bold font-mono">{payment.poNumber}</span>
                       <span className="text-xs text-muted-foreground">{fmtCurrency(payment.poTotalAmount, payment.currency)}</span>
                     </div>
                     <div className="space-y-1">
@@ -416,7 +416,7 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
                 </Button>
                 <Button
                   className="gap-2"
-                  onClick={handleRegisterPayment}
+                  onClick={pedirConfirmacion}
                   disabled={registering || uploading}
                   title={!hasAttachment ? 'Sube un comprobante primero' : undefined}
                 >
@@ -441,6 +441,27 @@ export function PaymentDetailDialog({ payment, open, onOpenChange, onEdit, onDel
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Register confirmation dialog */}
+      <AlertDialog open={registerConfirmOpen} onOpenChange={setRegisterConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Registrar este pago como realizado?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="block font-medium text-foreground">
+                {payment.poNumber ? `${payment.poNumber} · ` : ''}{payment.supplierName ?? '—'} · {fmtMonto(payment.amount, payment.currency)}
+              </span>
+              <span className="block mt-2">
+                Se marcará como realizado con fecha de hoy ({fmtFechaCorta(hoyLocalISO())}). Después ya no se puede regresar a «Programado».
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRegisterPayment}>Sí, registrar pago</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Cancel confirmation dialog */}
       <AlertDialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { createEndpoint, Payments, PurchaseOrders } from '../../server/compat';
+import { createEndpoint, Payments, PurchaseOrders, ZiteError } from '../../server/compat';
+import { fechaHoyMx, motivoPagoInvalido } from '../serverUtils/paymentRules';
 
 export default createEndpoint({
   authenticated: true,
@@ -28,14 +29,21 @@ export default createEndpoint({
   execute: async ({ input }) => {
     const { id, poId, ...rest } = input;
 
+    // Un pago nuevo a mano necesita al menos su ODC y un monto; sin eso quedaba un pago vacío que no cae en ningún grupo.
+    if (!id) {
+      const motivo = motivoPagoInvalido({ poId, amount: rest.amount });
+      if (motivo) throw new ZiteError({ code: 'BAD_REQUEST', message: motivo });
+    }
+
     // If poId provided, enrich from PO
     let supplierName = rest.supplierName;
     let projectCode = rest.projectCode;
     if (poId) {
       const po = await PurchaseOrders.findOne({ id: poId, fields: ['status', 'supplierName', 'projectCode', 'billingEntity'] });
-      if (!po) throw new Error('ODC no encontrada.');
+      // ZiteError (y no Error) para que el motivo llegue a la pantalla en vez de «Error interno».
+      if (!po) throw new ZiteError({ code: 'NOT_FOUND', message: 'ODC no encontrada.' });
       if (po.status !== 'Enviada a aprobación' && po.status !== 'Aprobada') {
-        throw new Error(`No se puede registrar un pago para una ODC con status "${po.status}". Solo se permiten ODCs Enviadas o Aprobadas.`);
+        throw new ZiteError({ code: 'BAD_REQUEST', message: `No se puede registrar un pago para una ODC con status "${po.status}". Solo se permiten ODCs Enviadas o Aprobadas.` });
       }
       supplierName = supplierName || po.supplierName;
       projectCode = projectCode || po.projectCode;
@@ -63,9 +71,9 @@ export default createEndpoint({
     if (projectCode !== undefined) record.projectCode = projectCode;
     if (input.attachment !== undefined) record.attachment = input.attachment;
 
-    // Auto-fill payment date when marking as Realizado
+    // Auto-fill payment date when marking as Realizado (el día de México, no el de UTC)
     if (input.status === 'Realizado' && !input.paymentDate) {
-      record.paymentDate = new Date().toISOString().split('T')[0];
+      record.paymentDate = fechaHoyMx();
     }
 
     if (id) {
@@ -73,7 +81,8 @@ export default createEndpoint({
       if (input.status) {
         const existing = await Payments.findOne({ id });
         if (existing && (existing.status === 'Realizado' || existing.status === 'Cancelado')) {
-          throw new Error(`No se puede cambiar el status de un pago "${existing.status}".`);
+          // Lo que la pantalla ve al intentar editar un pago realizado: el form reenvía su status y esto lo rechaza.
+          throw new ZiteError({ code: 'BAD_REQUEST', message: `Un pago ${existing.status === 'Realizado' ? 'realizado' : 'cancelado'} ya no se puede modificar.` });
         }
       }
       await Payments.update({ id, record });
@@ -85,8 +94,9 @@ export default createEndpoint({
     // ignoraba en silencio porque el campo es autonumber (los payment_id reales
     // migrados son enteros planos: 310, 309, 308...). Aquí igual: no se escribe.
 
-    // Force Programado status for all new payments
-    const created = await Payments.create({ record: { ...record, status: 'Programado' } });
+    // Force Programado status for all new payments. Un pago que apenas se programa no tiene fecha real de pago.
+    const { paymentDate: _sinFechaReal, ...nuevo } = record;
+    const created = await Payments.create({ record: { ...nuevo, status: 'Programado' } });
     return { success: true, id: created.id };
   },
 });
