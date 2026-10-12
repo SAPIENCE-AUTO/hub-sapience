@@ -10,12 +10,27 @@ function requireEnv(name: string): string {
   return v;
 }
 
+/**
+ * A dónde avisa AssemblyAI cuando termina de transcribir: la variable ZITE_ASSEMBLYAI_WEBHOOK_URL si está puesta; si no,
+ * la dirección pública de este mismo servicio en Render (RENDER_EXTERNAL_URL, que Render pone sola) más
+ * /api/assemblyaiWebhook. Sin ninguna de las dos (en local) no se manda aviso: AssemblyAI no alcanza a localhost.
+ *
+ * Antes solo existía la variable, que en Render se pone a mano. No se puso, y del 24 de septiembre al 12 de octubre
+ * todas las reuniones se transcribieron en AssemblyAI pero el Hub nunca guardó el texto: sin dirección de aviso,
+ * AssemblyAI transcribe igual y no le dice nada a nadie.
+ */
+export function urlDeAvisoDeAssembly(env: Record<string, string | undefined> = process.env): string | undefined {
+  const explicita = env.ZITE_ASSEMBLYAI_WEBHOOK_URL?.trim();
+  if (explicita) return explicita;
+  const host = env.RENDER_EXTERNAL_HOSTNAME?.trim();
+  const base = (env.RENDER_EXTERNAL_URL?.trim() || (host ? `https://${host}` : '')).replace(/\/+$/, '');
+  return base ? `${base}/api/assemblyaiWebhook` : undefined;
+}
+
 export async function startAssemblyTranscription(audioUrl: string): Promise<string> {
   const apiKey = requireEnv('ZITE_ASSEMBLYAI_KEY');
-  // Sin esta URL, AssemblyAI transcribe igual pero nunca avisa que terminó —
-  // src/api/assemblyaiWebhook.ts se queda esperando para siempre. Solo se
-  // puede configurar una vez que exista una URL pública real (no localhost).
-  const webhookUrl = process.env.ZITE_ASSEMBLYAI_WEBHOOK_URL;
+  // Sin dirección de aviso, AssemblyAI transcribe igual pero nunca avisa que terminó (ver urlDeAvisoDeAssembly).
+  const webhookUrl = urlDeAvisoDeAssembly();
   const res = await fetch(`${ASSEMBLYAI_API}/transcript`, {
     method: 'POST',
     headers: { authorization: apiKey, 'content-type': 'application/json' },

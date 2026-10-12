@@ -149,10 +149,13 @@ services:
       # transcribe la grabación de la junta que ya vive en Mux.
       - key: ZITE_ASSEMBLYAI_KEY
         sync: false
-      # A dónde avisa AssemblyAI cuando termina de transcribir — sin esto,
-      # transcribe igual pero /api/assemblyaiWebhook nunca se entera. Valor:
-      # https://hub-sapience-api.onrender.com/api/assemblyaiWebhook (no se
-      # puede configurar contra localhost).
+      # A dónde avisa AssemblyAI cuando termina de transcribir. OPCIONAL: si no
+      # se pone, se usa la dirección pública de este mismo servicio
+      # (RENDER_EXTERNAL_URL, que Render pone sola, + /api/assemblyaiWebhook; ver
+      # urlDeAvisoDeAssembly en src/serverUtils/assemblyAiClient.ts). Antes era
+      # obligatoria y, al no ponerse, entre el 24 de sept. y el 12 de oct. el Hub
+      # no guardó ninguna transcripción. Solo hace falta para usar otra dirección,
+      # p. ej. https://hub-sapience-api.onrender.com/api/assemblyaiWebhook.
       - key: ZITE_ASSEMBLYAI_WEBHOOK_URL
         sync: false
       # Generador de propuestas (oct 2026, solo Sergio, dentro de cada Deal) —

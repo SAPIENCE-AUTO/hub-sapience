@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { createEndpoint, MeetingRecordings, Users, Projects } from '../../server/compat';
 import { fetchCalendarMeetings } from '../serverUtils/graphMeetings';
-import { attemptTranscriptionRecovery } from '../serverUtils/transcriptionRecovery';
+import { guardarTranscripcionDeAssembly } from '../serverUtils/guardarTranscripcion';
+import { accionDeRescate, attemptTranscriptionRecovery, reservaIntento } from '../serverUtils/transcriptionRecovery';
 
 const RECORDING_FIELDS = [
   'graphEventId', 'subject', 'meetingStart', 'meetingEnd', 'status',
-  'muxPlaybackId', 'muxAssetId', 'assemblyTranscriptId', 'transcript', 'project', 'deal', 'updatedAt',
+  'muxPlaybackId', 'muxAssetId', 'assemblyTranscriptId', 'transcript', 'project', 'deal', 'updatedAt', 'recallBotId',
 ] as const;
 
 // "de inicio en esa sección puedan ver solo aquellas en las que ellos
@@ -50,16 +51,6 @@ const sessionSchema = z.object({
 const DAYS_PAST = 7;
 const DAYS_FUTURE = 14;
 
-// "necesito que sea infalible" (Sergio, tras "Ajustes LRP" quedarse con
-// video pero sin transcripción sin que nadie se enterara) — cada vez que
-// alguien abre/refresca Minutas (esta vista hace polling cada 60s mientras
-// la página está abierta), de paso revisa si alguna de sus grabaciones
-// quedó atorada y la reintenta sola, sin que haya que pedirlo a mano. El
-// cooldown evita reintentar la misma fila en cada poll mientras el intento
-// anterior sigue en curso (la recuperación puede tardar ~1 min esperando el
-// rendition de audio de Mux).
-const STUCK_RETRY_COOLDOWN_MS = 3 * 60 * 1000;
-
 // Minutas / notetaker (sep 2026): "apartado de minutas donde vengan todas
 // las sesiones (pasadas, ongoing y futuras)... si ya está vinculada... o
 // vincular ahí mismo" (Sergio) — fusiona el calendario real (Graph) con las
@@ -90,23 +81,6 @@ export default createEndpoint({
       resolveMyProjectIds(email).catch(() => [] as string[]),
     ]);
 
-    // Self-heal solo sobre las propias — si alguien más del equipo abre
-    // Minutas y ve una minuta ajena vinculada a su proyecto, no hace falta
-    // que TAMBIÉN dispare su propio intento de recuperación (el cooldown ya
-    // lo evita en parte, pero mejor ni arriesgar llamadas redundantes a
-    // AssemblyAI). Mismo mecanismo que el botón manual de
-    // retryMeetingTranscription.ts.
-    for (const r of ownRecordings) {
-      const staleEnough = r.updatedAt && Date.now() - new Date(r.updatedAt).getTime() > STUCK_RETRY_COOLDOWN_MS;
-      const stuck = r.muxPlaybackId && r.muxAssetId && !r.assemblyTranscriptId && !r.transcript &&
-        (r.status === 'transcription_error' || staleEnough);
-      if (stuck) {
-        attemptTranscriptionRecovery(r).catch(err =>
-          console.error('[getMinutasOverview] self-heal de transcripción falló', r.id, (err as Error).message),
-        );
-      }
-    }
-
     const { records: teamRecordings } = myProjectIds.length > 0
       ? await MeetingRecordings.findAll({
           filters: { project: { in: myProjectIds } as any },
@@ -117,6 +91,25 @@ export default createEndpoint({
 
     const ownIds = new Set(ownRecordings.map(r => r.id));
     const rawRecordings = [...ownRecordings, ...teamRecordings.filter(r => !ownIds.has(r.id))];
+
+    // "necesito que sea infalible" (Sergio, tras "Ajustes LRP" quedarse con video pero sin transcripción sin que nadie
+    // se enterara): cada vez que alguien abre/refresca Minutas (esta vista hace polling cada 60 s mientras la página
+    // está abierta), de paso revisa si alguna minuta quedó atorada y la rescata sola (accionDeRescate):
+    //  - video listo y la transcripción nunca arrancó → la arranca (mismo mecanismo que el botón manual de
+    //    retryMeetingTranscription.ts);
+    //  - ya se mandó a AssemblyAI pero el texto nunca llegó (el aviso de AssemblyAI se perdió o nunca se configuró;
+    //    pasó del 24 de sept. al 12 de oct.) → le pregunta directo y, si ya terminó, lo guarda.
+    // Cubre las propias y las del equipo que se ven aquí: el rescate es idempotente y reservaIntento evita que varias
+    // personas con la pantalla abierta repitan la consulta a cada rato.
+    const ahora = Date.now();
+    for (const r of rawRecordings) {
+      const accion = accionDeRescate(r, ahora);
+      if (!accion || !reservaIntento(r.id, ahora)) continue;
+      const rescate = accion === 'iniciar'
+        ? attemptTranscriptionRecovery({ id: r.id, muxPlaybackId: r.muxPlaybackId, muxAssetId: r.muxAssetId })
+        : guardarTranscripcionDeAssembly({ id: r.id, recallBotId: r.recallBotId }, r.assemblyTranscriptId!);
+      rescate.catch(err => console.error('[getMinutasOverview] rescate de transcripción falló', accion, r.id, (err as Error).message));
+    }
 
     // Payload liviano a propósito: esta vista es una lista, no el detalle —
     // el transcript completo (puede ser texto larguísimo) nunca se necesita
