@@ -11,9 +11,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ChevronUp, ChevronDown, Pencil, Users, Plus, Lock, Play, Copy, Trash2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Users, Plus, Lock, Play, Copy, Trash2, ImagePlus, Loader2 } from 'lucide-react';
 import SwipePreviewModal from './SwipePreviewModal';
 import { CardBody } from './SwipeCardStack';
+import ZonaImagenes from './ZonaImagenes';
+import { avisoDeConcepto } from '@/lib/swipe/concepto';
+import { enCola } from '@/lib/swipe/cola';
+import {
+  esCampoDeTexto, imagenesDe, prepararConcepto, subirIlustracion, traeArchivos, traeTexto,
+} from '@/lib/swipe/imagenes';
 
 interface IdeaRow { id: string; titulo: string; descripcion?: string; imagenUrl?: string; orden: number; tieneVotos: boolean }
 interface VotoRow { id: string; alias: string; valor: string }
@@ -31,6 +37,9 @@ const VALOR_OPCIONES: Array<'potencial' | 'descarte' | 'super'> = ['potencial', 
  * Reordenar es con flechas arriba/abajo (swap de `orden` con el vecino),
  * no drag-and-drop — no hay librería de DnD en el repo y para una lista
  * de este tamaño no hace falta traer una.
+ *
+ * Imágenes: se pueden arrastrar o pegar (⌘V). En el formulario de una idea ponen su ilustración tal cual; en cualquier
+ * otra parte del editor son conceptos (láminas) y la IA lee nombre, descripción e ilustración para crear una idea por imagen.
  */
 export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { capituloId: string; onIdeasChanged?: () => void }) {
   const [ideas, setIdeas] = useState<IdeaRow[]>([]);
@@ -53,19 +62,26 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
   const [deletingIdea, setDeletingIdea] = useState(false);
   const [duplicatingIdeaId, setDuplicatingIdeaId] = useState<string | null>(null);
   const shownFirstLoad = useRef(false);
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
+  const [leyendo, setLeyendo] = useState<{ hechas: number; total: number } | null>(null);
+  const leyendoRef = useRef(false);
+  const raizRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
   const selected = ideas.find((i) => i.id === selectedId) ?? null;
   const isNueva = selectedId === null;
 
-  const load = async () => {
+  const load = async (): Promise<IdeaRow[]> => {
     setLoading(true);
     try {
       const res = await getSwipeIdeas({ capituloId });
-      setIdeas(res.ideas ?? []);
-      if (!shownFirstLoad.current && (res.ideas ?? []).length > 0) {
+      const lista: IdeaRow[] = res.ideas ?? [];
+      setIdeas(lista);
+      if (!shownFirstLoad.current && lista.length > 0) {
         shownFirstLoad.current = true;
-        selectIdea(res.ideas[0]);
+        selectIdea(lista[0]);
       }
+      return lista;
     } finally {
       setLoading(false);
     }
@@ -127,6 +143,85 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
     }
     setAddingBulk(false);
   };
+
+  // Vía manual: la imagen es la ilustración de la idea que se está editando. No se guarda hasta pulsar «Guardar».
+  const ponerIlustracion = async (archivos: File[]) => {
+    if (selected?.tieneVotos) { toast.error('Esta idea ya tiene votos — no se puede editar.'); return; }
+    setSubiendoImagen(true);
+    try {
+      setImagenUrl(await subirIlustracion(archivos[0]));
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo subir la imagen.');
+    }
+    setSubiendoImagen(false);
+  };
+
+  // Vía con IA: cada imagen es un concepto (una lámina). Se leen de a 3, en el orden que se soltaron, y las ideas se crean
+  // juntas al final. Cada imagen tiene 15 s en total; si la IA no alcanza, la idea sale con la imagen y el texto lo pones tú.
+  const crearDesdeImagenes = async (archivos: File[]) => {
+    if (leyendoRef.current) { toast.info('Espera a que termine la tanda anterior.'); return; }
+    const lote = archivos.slice(0, 50);
+    if (archivos.length > lote.length) toast.warning(`Van las primeras ${lote.length}; el resto, en otra tanda.`);
+    leyendoRef.current = true;
+    setLeyendo({ hechas: 0, total: lote.length });
+    try {
+      const resultados = await Promise.all(enCola(lote.map((archivo) => async () => {
+        try {
+          return { ok: true as const, concepto: await prepararConcepto(archivo, true) };
+        } catch (err) {
+          return { ok: false as const, error: (err as Error)?.message || `No se pudo procesar «${archivo.name}».` };
+        } finally {
+          setLeyendo((previo) => (previo ? { ...previo, hechas: previo.hechas + 1 } : previo));
+        }
+      }), 3));
+
+      const buenas = resultados.flatMap((r) => (r.ok ? [r.concepto] : []));
+      const fallidas = resultados.flatMap((r) => (r.ok ? [] : [r.error]));
+      if (buenas.length > 0) {
+        const { ids } = await createSwipeIdeasBulk({
+          capituloId,
+          ideas: buenas.map((c) => ({ titulo: c.titulo, descripcion: c.descripcion || undefined, imagenUrl: c.imagenUrl })),
+        });
+        const lista = await load();
+        onIdeasChanged?.();
+        // Se abre la primera que pide revisión; si todas salieron limpias, la primera.
+        const porRevisar = buenas.map((c, i) => ({ id: ids[i] as string, titulo: c.titulo, aviso: avisoDeConcepto(c.ia) })).filter((x) => x.aviso);
+        const abrir = lista.find((i) => i.id === (porRevisar[0]?.id ?? ids[0]));
+        if (abrir) selectIdea(abrir);
+        const mensaje = `${buenas.length} idea${buenas.length !== 1 ? 's' : ''} creada${buenas.length !== 1 ? 's' : ''}${porRevisar.length ? ` · ${porRevisar.length} para revisar` : ''}`;
+        const detalle = porRevisar.slice(0, 3).map((x) => `«${x.titulo}»: ${x.aviso}`).join('\n') || undefined;
+        if (porRevisar.length) toast.warning(mensaje, { description: detalle }); else toast.success(mensaje);
+      }
+      if (fallidas.length > 0) {
+        toast.error(`No se pudo abrir ${fallidas.length} imagen${fallidas.length !== 1 ? 'es' : ''}`, { description: fallidas.slice(0, 3).join('\n') });
+      }
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudieron crear las ideas.');
+    }
+    leyendoRef.current = false;
+    setLeyendo(null);
+  };
+
+  // Pegar (⌘V): dentro del formulario es la ilustración de esa idea; en el resto del editor (o sin cursor en ningún campo),
+  // conceptos con IA. Pegar texto en un campo se deja como siempre.
+  const manejadores = useRef({ ponerIlustracion, crearDesdeImagenes });
+  manejadores.current = { ponerIlustracion, crearDesdeImagenes };
+  useEffect(() => {
+    const alPegar = (e: ClipboardEvent) => {
+      const archivos = imagenesDe(e.clipboardData);
+      if (archivos.length === 0) return;
+      const destino = e.target;
+      const dentro = destino instanceof Node && !!raizRef.current?.contains(destino);
+      const sinCampo = destino === document.body || destino === document.documentElement;
+      if (!dentro && !sinCampo) return;
+      if (esCampoDeTexto(destino) && traeTexto(e.clipboardData)) return;
+      e.preventDefault();
+      if (destino instanceof Node && formRef.current?.contains(destino)) void manejadores.current.ponerIlustracion(archivos);
+      else void manejadores.current.crearDesdeImagenes(archivos);
+    };
+    document.addEventListener('paste', alPegar);
+    return () => document.removeEventListener('paste', alPegar);
+  }, []);
 
   const handleMove = async (ideaId: string, direccion: 'arriba' | 'abajo') => {
     try {
@@ -196,8 +291,36 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
   const lineasDetectadas = quickAdd.split('\n').map((l) => l.trim()).filter(Boolean).length;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div
+      ref={raizRef}
+      className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]"
+      // Una imagen soltada fuera de una zona no debe abrirse en la pestaña: cuenta como concepto.
+      onDragOver={(e) => { if (traeArchivos(e.dataTransfer)) e.preventDefault(); }}
+      onDrop={(e) => {
+        if (!traeArchivos(e.dataTransfer)) return;
+        e.preventDefault();
+        const archivos = imagenesDe(e.dataTransfer);
+        if (archivos.length > 0) void crearDesdeImagenes(archivos);
+      }}
+    >
       <div className="min-w-0 space-y-3">
+        <ZonaImagenes multiple onImagenes={crearDesdeImagenes} disabled={!!leyendo}>
+          {leyendo ? (
+            <>
+              <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-muted-foreground" />
+              <p className="text-xs font-semibold text-foreground">Leyendo {Math.min(leyendo.hechas + 1, leyendo.total)} de {leyendo.total}…</p>
+            </>
+          ) : (
+            <>
+              <ImagePlus className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground">Arrastra o pega conceptos en imagen</p>
+                <p className="text-[11px] text-muted-foreground">La IA pone nombre y descripción y recorta la ilustración</p>
+              </div>
+            </>
+          )}
+        </ZonaImagenes>
+
         <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
           <Textarea
             placeholder={'Alta rápida: pega varias ideas, una por línea — Título | Descripción opcional'}
@@ -345,7 +468,7 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
           </div>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-border p-3">
+        <div ref={formRef} className="space-y-3 rounded-lg border border-border p-3">
           {selected?.tieneVotos && (
             <p className="flex items-center gap-1.5 rounded-md bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-secondary-foreground">
               <Lock className="h-3.5 w-3.5" /> Esta idea ya tiene votos — no se puede editar.
@@ -360,10 +483,23 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
             <Textarea value={descripcion} maxLength={180} rows={2} disabled={!!selected?.tieneVotos} onChange={(e) => setDescripcion(e.target.value)} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Imagen (URL)</label>
-            <Input value={imagenUrl} disabled={!!selected?.tieneVotos} onChange={(e) => setImagenUrl(e.target.value)} placeholder="Pega una URL" />
+            <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Imagen</label>
+            <ZonaImagenes onImagenes={ponerIlustracion} disabled={!!selected?.tieneVotos || subiendoImagen}>
+              {subiendoImagen ? (
+                <>
+                  <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">Subiendo…</p>
+                </>
+              ) : (
+                <>
+                  <ImagePlus className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">{imagenUrl ? 'Arrastra o pega otra para cambiarla' : 'Arrastra o pega la ilustración'}</p>
+                </>
+              )}
+            </ZonaImagenes>
+            <Input className="mt-1.5" value={imagenUrl} disabled={!!selected?.tieneVotos} onChange={(e) => setImagenUrl(e.target.value)} placeholder="…o pega una URL" />
           </div>
-          <Button className="w-full" onClick={handleGuardar} disabled={saving || !titulo.trim() || !!selected?.tieneVotos}>
+          <Button className="w-full" onClick={handleGuardar} disabled={saving || subiendoImagen || !titulo.trim() || !!selected?.tieneVotos}>
             {saving ? 'Guardando…' : isNueva ? 'Agregar idea' : 'Guardar cambios'}
           </Button>
         </div>

@@ -138,6 +138,7 @@ export const getMe = (input?: any): Promise<any> => call('getMe', input);
 
 export const addExpenseComment = (input?: any): Promise<any> => call('addExpenseComment', input);
 export const addNotetakerToMeeting = (input?: any): Promise<any> => call('addNotetakerToMeeting', input);
+export const analizarConceptoSwipe = (input?: any): Promise<any> => call('analizarConceptoSwipe', input);
 export const analizarPreworkEstudio = (input?: any): Promise<any> => call('analizarPreworkEstudio', input);
 export const analizarPreworkRespuesta = (input?: any): Promise<any> => call('analizarPreworkRespuesta', input);
 export const analyzeRecruitmentStatus = (input?: any): Promise<any> => call('analyzeRecruitmentStatus', input);
