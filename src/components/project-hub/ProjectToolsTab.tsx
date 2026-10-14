@@ -17,14 +17,18 @@ const SUB_TABS: { id: SubTab; label: string }[] = [
  * son la segunda y tercera. El selector interno replica el mismo patrón
  * visual de tabs que ProjectHubPage.tsx usa un nivel arriba (bg-primary
  * activo, hover en inactivo) — no un componente nuevo, solo el mismo criterio.
+ *
+ * `soloSwipe`: quien tiene acceso únicamente a Swipe no ve el selector ni las
+ * demás herramientas (ver SWIPE_ALLOWED_EMAILS en ProjectHubPage.tsx).
  */
-export function ProjectToolsTab({ projectId }: { projectId?: string }) {
+export function ProjectToolsTab({ projectId, soloSwipe = false }: { projectId?: string; soloSwipe?: boolean }) {
   const [subTab, setSubTab] = useState<SubTab>('swipe');
+  const subTabs = soloSwipe ? SUB_TABS.filter(tab => tab.id === 'swipe') : SUB_TABS;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center gap-1 border-b px-4 py-2 flex-shrink-0">
-        {SUB_TABS.map(tab => {
+      {subTabs.length > 1 && <div className="flex items-center gap-1 border-b px-4 py-2 flex-shrink-0">
+        {subTabs.map(tab => {
           const active = subTab === tab.id;
           return (
             <button
@@ -38,11 +42,11 @@ export function ProjectToolsTab({ projectId }: { projectId?: string }) {
             </button>
           );
         })}
-      </div>
+      </div>}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {subTab === 'swipe' && <SwipeDashboardPage proyectoId={projectId} />}
-        {subTab === 'ejes' && <EjesDashboardPage proyectoId={projectId} />}
-        {subTab === 'prework' && <PreworkPanel proyectoId={projectId} />}
+        {!soloSwipe && subTab === 'ejes' && <EjesDashboardPage proyectoId={projectId} />}
+        {!soloSwipe && subTab === 'prework' && <PreworkPanel proyectoId={projectId} />}
       </div>
     </div>
   );

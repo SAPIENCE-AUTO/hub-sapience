@@ -43,8 +43,13 @@ const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ classNam
 
 // Acceso limitado mientras Tools solo tiene el módulo Swipe recién lanzado —
 // "de momento" (Sergio, 2026-08-20): se espera abrir a más gente conforme se
-// sumen más herramientas.
+// sumen más herramientas. Swipe ya se abrió a cinco personas más (Sergio,
+// 2026-10-14); Ejes y Prework siguen solo para quienes tienen todo Tools.
 const TOOLS_ALLOWED_EMAILS = ['sergio@sapience.com.mx', 'luis@sapience.com.mx'];
+const SWIPE_ALLOWED_EMAILS = [
+  'cue@sapience.com.mx', 'pamela.escarela@sapience.com.mx', 'vero.garcia@sapience.com.mx',
+  'claudia@sapience.com.mx', 'pamela@sapience.com.mx',
+];
 
 // `?tab=` en la URL viene de 3 lugares con vocabularios distintos: los links
 // de este componente (usan los TabId de arriba), el correo de aprobación de
@@ -122,7 +127,9 @@ export default function ProjectHubPage() {
     ((user?.cotizacionRubros ?? []).length > 0)
   );
 
-  const canSeeTools = !!(user?.email && TOOLS_ALLOWED_EMAILS.includes(user.email));
+  const tieneTodoTools = !!(user?.email && TOOLS_ALLOWED_EMAILS.includes(user.email));
+  // Quien solo tiene Swipe también ve la pestaña Tools, pero con Swipe nada más.
+  const canSeeTools = tieneTodoTools || !!(user?.email && SWIPE_ALLOWED_EMAILS.includes(user.email));
 
   // Mismo criterio que el resto del módulo de Cobranza (getCollectionProcesses.ts
   // et al.): Owner o purchaseLevel Finanzas, no un gate por role solamente.
@@ -307,7 +314,7 @@ export default function ProjectHubPage() {
                 {project?.id && <ArchivedFilesSection projectId={project.id} />}
               </div>
             )}
-            {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} />}
+            {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} soloSwipe={!tieneTodoTools} />}
             {activeTab === 'sharpli'       && (
               <SharpliEmbedTab
                 projectName={project?.fullName ?? project?.projectCode ?? ''}
