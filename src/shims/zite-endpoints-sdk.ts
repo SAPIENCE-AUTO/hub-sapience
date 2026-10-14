@@ -457,6 +457,7 @@ export const sendPoEmail = (input?: any): Promise<any> => call('sendPoEmail', in
 export const sendTimelineToWebhook = (input?: any): Promise<any> => call('sendTimelineToWebhook', input);
 export const setEjesIdeaEstado = (input?: any): Promise<any> => call('setEjesIdeaEstado', input);
 export const setEjesTableroEstado = (input?: any): Promise<any> => call('setEjesTableroEstado', input);
+export const setSwipeCapituloAleatorio = (input?: any): Promise<any> => call('setSwipeCapituloAleatorio', input);
 export const setSwipeCapituloEstado = (input?: any): Promise<any> => call('setSwipeCapituloEstado', input);
 export const startCollectionProcess = (input?: any): Promise<any> => call('startCollectionProcess', input);
 export const startMeetingTranscription = (input?: any): Promise<any> => call('startMeetingTranscription', input);

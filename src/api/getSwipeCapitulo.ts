@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
+import { barajar } from '../lib/swipe/orden';
+import { capituloEsAleatorio } from '../serverUtils/swipe/aleatorio';
 
 const ideaSchema = z.object({
   id: z.string(),
@@ -49,17 +51,20 @@ export default createEndpoint({
       superLikesRestantes = Math.max(0, cap.max_super_likes - Number(usadosResult.rows[0].n));
     }
 
+    const ideas = ideasResult.rows.map((row) => ({
+      id: row.id as string,
+      titulo: row.titulo as string,
+      descripcion: (row.descripcion ?? undefined) as string | undefined,
+      imagenUrl: (row.imagen_url ?? undefined) as string | undefined,
+      orden: Number(row.orden),
+    }));
+
     return {
       found: true,
       nombre: cap.nombre as string,
       descripcion: (cap.descripcion ?? undefined) as string | undefined,
-      ideas: ideasResult.rows.map((row) => ({
-        id: row.id as string,
-        titulo: row.titulo as string,
-        descripcion: (row.descripcion ?? undefined) as string | undefined,
-        imagenUrl: (row.imagen_url ?? undefined) as string | undefined,
-        orden: Number(row.orden),
-      })),
+      // Con orden aleatorio cada participante recibe su propio orden (cada llamada baraja de nuevo).
+      ideas: (await capituloEsAleatorio(input.capituloId)) ? barajar(ideas) : ideas,
       superLikesRestantes,
     };
   },

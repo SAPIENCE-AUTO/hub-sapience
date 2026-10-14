@@ -90,6 +90,10 @@ async function main() {
       unique (idea_id, participante_id)
     );
     create index if not exists swipe_votos_idea_id_idx on swipe_votos (idea_id);
+
+    -- Agregada después del alta inicial: orden aleatorio por capítulo (cada participante ve las ideas en un orden
+    -- distinto). Apagada por omisión, así los capítulos que ya existen se comportan igual que antes.
+    alter table swipe_capitulos add column if not exists aleatorio boolean not null default false;
   `);
   console.log('✅ Tablas del módulo Swipe creadas (o ya existían).');
   await pool.end();

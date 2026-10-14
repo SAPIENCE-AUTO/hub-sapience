@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
+import { capituloEsAleatorio } from '../serverUtils/swipe/aleatorio';
 
 const ideaSchema = z.object({
   id: z.string(),
@@ -14,7 +15,7 @@ export default createEndpoint({
   authenticated: true,
   description: 'Ideas de un capítulo de Swipe para el dashboard del facilitador (sin filtrar por estado)',
   inputSchema: z.object({ capituloId: z.string() }),
-  outputSchema: z.object({ ideas: z.array(ideaSchema) }),
+  outputSchema: z.object({ ideas: z.array(ideaSchema), aleatorio: z.boolean() }),
   execute: async ({ input }) => {
     const result = await pool.query(
       `select i.id, i.titulo, i.descripcion, i.imagen_url, i.orden,
@@ -23,6 +24,7 @@ export default createEndpoint({
       [input.capituloId],
     );
     return {
+      aleatorio: await capituloEsAleatorio(input.capituloId),
       ideas: result.rows.map((row) => ({
         id: row.id as string,
         titulo: row.titulo as string,

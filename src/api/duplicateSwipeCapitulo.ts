@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
+import { capituloEsAleatorio } from '../serverUtils/swipe/aleatorio';
 
 /**
- * Duplica un capítulo dentro de la misma sesión: copia nombre/descripción e
- * ideas (título, descripción, imagen, orden) — nunca votos, así el nuevo
- * capítulo arranca "bloqueado" y limpio, listo para reusar como base de un
- * siguiente workshop sin tener que rearmar las ideas a mano.
+ * Duplica un capítulo dentro de la misma sesión: copia nombre/descripción,
+ * orden aleatorio e ideas (título, descripción, imagen, orden) — nunca votos,
+ * así el nuevo capítulo arranca "bloqueado" y limpio, listo para reusar como
+ * base de un siguiente workshop sin tener que rearmar las ideas a mano.
  */
 export default createEndpoint({
   authenticated: true,
@@ -31,6 +32,11 @@ export default createEndpoint({
       [cap.sesion_id, `${cap.nombre} (copia)`, cap.descripcion, orden],
     );
     const nuevoId = nuevoResult.rows[0].id as string;
+
+    // Una copia que olvida el orden aleatorio sesgaría el siguiente workshop sin avisar.
+    if (await capituloEsAleatorio(input.capituloId)) {
+      await pool.query(`update swipe_capitulos set aleatorio = true where id = $1`, [nuevoId]);
+    }
 
     await pool.query(
       `insert into swipe_ideas (capitulo_id, titulo, descripcion, imagen_url, orden)
