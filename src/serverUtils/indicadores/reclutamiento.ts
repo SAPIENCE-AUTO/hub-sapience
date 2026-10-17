@@ -11,6 +11,10 @@ const norm = (s?: string | null) => (s ?? '').toLowerCase().trim();
 const SEPARADOR = '\u0000';
 // IdentityRow trae un índice abierto y TypeScript no lo cuenta como «tener status y group»: el cast es solo de tipos.
 const participo = (r: IdentityRow) => participoEnProyecto(r as { status?: string | null; group?: string | null });
+const conSeguimiento = (r: IdentityRow) => {
+  const estatus = String(r.status ?? '').trim().toLowerCase();
+  return estatus !== '' && estatus !== 'pendiente';
+};
 
 export function calcularReclutamiento(
   datos: Pick<GlobalIdentityData, 'activeRows' | 'projectMap' | 'globalClusters' | 'rowToGlobalCluster'>,
@@ -29,7 +33,7 @@ export function calcularReclutamiento(
       const info = projectMap.get(codigo);
       p = {
         codigo, cliente: info?.client || undefined, fecha: fecha.toISOString().slice(0, 10), inferida: !!info?.startDateInferred,
-        participaron: 0, noElegibles: 0, porMismoCliente: 0, marcados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0,
+        participaron: 0, noElegibles: 0, porMismoCliente: 0, marcadosTrabajados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0,
       };
       porProyecto.set(codigo, p);
     }
@@ -76,10 +80,12 @@ export function calcularReclutamiento(
       }
       const { primaryBadge } = resolveSignals(senales);
       const noElegible = primaryBadge === 'same_client' || primaryBadge === 'recent';
-      const entro = filas.some((r) => r.projectCode === codigo && participo(r));
+      const filasDelProyecto = filas.filter((r) => r.projectCode === codigo);
+      const entro = filasDelProyecto.some((r) => participo(r));
 
       const p = proyecto(codigo, ref);
-      if (noElegible) p.marcados++;
+      // «Seguimiento»: entró, o alguna de sus filas tiene un estatus que no es «Pendiente» ni está vacío.
+      if (noElegible && (entro || filasDelProyecto.some(conSeguimiento))) p.marcadosTrabajados++;
       if (!entro) continue;
       p.participaron++;
       if (noElegible) {

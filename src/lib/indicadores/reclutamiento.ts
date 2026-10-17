@@ -14,8 +14,11 @@ export interface ProyectoReclutamiento {
   noElegibles: number;
   /** De las no elegibles que entraron, las que lo eran por haber participado con el mismo cliente. */
   porMismoCliente: number;
-  /** Personas marcadas «no elegible» en este proyecto, hayan entrado o no. */
-  marcados: number;
+  /**
+   * Personas marcadas «no elegible» en este proyecto a las que el equipo sí dio seguimiento: entraron a un grupo o tienen un estatus
+   * distinto de «Pendiente» y vacío (contactada, confirmada, descartada, no show…). Las que se quedaron en «Pendiente» o sin estatus no cuentan.
+   */
+  marcadosTrabajados: number;
   /** De las que participaron, las que llegaron con 2, 3, 4 o 5 participaciones previas o más (en otros proyectos, antes de este). */
   previas: { 2: number; 3: number; 4: number; 5: number };
   /** De las que participaron, las que aparecen en más de una fila de un mismo tablero. */
@@ -33,7 +36,7 @@ export interface DatosReclutamiento {
 export type Previas = 2 | 3 | 4 | 5;
 export const OPCIONES_PREVIAS: Previas[] = [2, 3, 4, 5];
 
-export type ClaveIndicador = 'noElegibles' | 'detectados' | 'repetidores' | 'duplicados';
+export type ClaveIndicador = 'noElegibles' | 'avisosRespetados' | 'repetidores' | 'duplicados';
 
 export interface DefinicionIndicador {
   clave: ClaveIndicador;
@@ -44,7 +47,7 @@ export interface DefinicionIndicador {
 
 export const INDICADORES: DefinicionIndicador[] = [
   { clave: 'noElegibles', etiqueta: 'No elegibles que entran', mejor: 'menos' },
-  { clave: 'detectados', etiqueta: 'Detectados a tiempo', mejor: 'mas' },
+  { clave: 'avisosRespetados', etiqueta: 'Avisos respetados', mejor: 'mas' },
   { clave: 'repetidores', etiqueta: 'Repetidores', mejor: 'menos' },
   { clave: 'duplicados', etiqueta: 'Duplicados en el tablero', mejor: 'menos' },
 ];
@@ -84,9 +87,10 @@ export interface ResumenReclutamiento {
   participaron: number;
   noElegibles: number;
   pctNoElegibles: number | null;
-  marcados: number;
-  detectados: number;
-  pctDetectados: number | null;
+  /** Personas con aviso a las que el equipo dio seguimiento, y de ellas las que se frenaron (no terminaron en un grupo). */
+  avisosTrabajados: number;
+  avisosRespetados: number;
+  pctAvisosRespetados: number | null;
   repetidores: number;
   pctRepetidores: number | null;
   duplicados: number;
@@ -97,14 +101,15 @@ export function resumir(proyectos: ProyectoReclutamiento[], previas: Previas): R
   const suma = (f: (p: ProyectoReclutamiento) => number) => proyectos.reduce((s, p) => s + f(p), 0);
   const participaron = suma((p) => p.participaron);
   const noElegibles = suma((p) => p.noElegibles);
-  const marcados = suma((p) => p.marcados);
+  const avisosTrabajados = suma((p) => p.marcadosTrabajados ?? 0);
   const repetidores = suma((p) => p.previas[previas]);
   const duplicados = suma((p) => p.duplicados);
-  const detectados = Math.max(0, marcados - noElegibles);
+  // Las no elegibles que entraron siempre tuvieron seguimiento (entrar lo es), así que son parte de las trabajadas.
+  const avisosRespetados = Math.max(0, avisosTrabajados - noElegibles);
   return {
     proyectos: proyectos.length, participaron,
     noElegibles, pctNoElegibles: porcentaje(noElegibles, participaron),
-    marcados, detectados, pctDetectados: porcentaje(detectados, marcados),
+    avisosTrabajados, avisosRespetados, pctAvisosRespetados: porcentaje(avisosRespetados, avisosTrabajados),
     repetidores, pctRepetidores: porcentaje(repetidores, participaron),
     duplicados, pctDuplicados: porcentaje(duplicados, participaron),
   };
@@ -114,25 +119,26 @@ export function resumir(proyectos: ProyectoReclutamiento[], previas: Previas): R
 export function valorDe(r: ResumenReclutamiento, clave: ClaveIndicador): { pct: number | null; parte: number; total: number; de: string } {
   switch (clave) {
     case 'noElegibles': return { pct: r.pctNoElegibles, parte: r.noElegibles, total: r.participaron, de: 'personas que entraron' };
-    case 'detectados': return { pct: r.pctDetectados, parte: r.detectados, total: r.marcados, de: 'personas marcadas «no elegible»' };
+    case 'avisosRespetados': return { pct: r.pctAvisosRespetados, parte: r.avisosRespetados, total: r.avisosTrabajados, de: 'personas con aviso y con seguimiento' };
     case 'repetidores': return { pct: r.pctRepetidores, parte: r.repetidores, total: r.participaron, de: 'personas que entraron' };
     case 'duplicados': return { pct: r.pctDuplicados, parte: r.duplicados, total: r.participaron, de: 'personas que entraron' };
   }
 }
 
-export interface PuntoTrimestre { trimestre: string; participaron: number; noElegibles: number; pct: number | null }
+export interface PuntoTrimestre { trimestre: string; parte: number; total: number; pct: number | null }
 
-/** Por trimestre de inicio del proyecto, del más viejo al más nuevo: cuántos entraron y cuántos de ellos eran no elegibles. */
-export function porTrimestre(proyectos: ProyectoReclutamiento[]): PuntoTrimestre[] {
-  const trimestres = new Map<string, { participaron: number; noElegibles: number }>();
+/** Un indicador trimestre por trimestre (por el trimestre de inicio del proyecto), del más viejo al más nuevo. */
+export function porTrimestre(proyectos: ProyectoReclutamiento[], clave: ClaveIndicador, previas: Previas): PuntoTrimestre[] {
+  const trimestres = new Map<string, ProyectoReclutamiento[]>();
   for (const p of proyectos) {
-    const clave = `${p.fecha.slice(0, 4)}-T${Math.floor((Number(p.fecha.slice(5, 7)) - 1) / 3) + 1}`;
-    const t = trimestres.get(clave) ?? { participaron: 0, noElegibles: 0 };
-    t.participaron += p.participaron;
-    t.noElegibles += p.noElegibles;
-    trimestres.set(clave, t);
+    const t = `${p.fecha.slice(0, 4)}-T${Math.floor((Number(p.fecha.slice(5, 7)) - 1) / 3) + 1}`;
+    const lista = trimestres.get(t);
+    if (lista) lista.push(p); else trimestres.set(t, [p]);
   }
-  return [...trimestres].sort(([a], [b]) => a.localeCompare(b)).map(([trimestre, t]) => ({ trimestre, ...t, pct: porcentaje(t.noElegibles, t.participaron) }));
+  return [...trimestres].sort(([a], [b]) => a.localeCompare(b)).map(([trimestre, lista]) => {
+    const { pct, parte, total } = valorDe(resumir(lista, previas), clave);
+    return { trimestre, parte, total, pct };
+  });
 }
 
 // ── Metas ────────────────────────────────────────────────────────────────────
@@ -151,4 +157,15 @@ export function leerMeta(texto: string): number | null | undefined {
   if (t === '') return null;
   const v = Number(t);
   return Number.isFinite(v) && v >= 0 && v <= 100 ? v : undefined;
+}
+
+/** La frase, en palabras llanas y con los números, que va debajo de cada porcentaje. `v` sale de valorDe. */
+export function fraseIndicador(clave: ClaveIndicador, v: { parte: number; total: number }, previas: Previas): string {
+  const n = (x: number) => x.toLocaleString('es-MX');
+  switch (clave) {
+    case 'noElegibles': return `${n(v.parte)} de ${n(v.total)} personas que entraron a un grupo ya habían participado con el mismo cliente o en los 6 meses anteriores.`;
+    case 'avisosRespetados': return `De ${n(v.total)} personas con aviso a las que el equipo dio seguimiento, ${n(v.parte)} se frenaron y ${n(v.total - v.parte)} terminaron en un grupo.`;
+    case 'repetidores': return `${n(v.parte)} de ${n(v.total)} personas que entraron ya habían participado antes en ${previas} o más proyectos.`;
+    case 'duplicados': return `${n(v.parte)} de ${n(v.total)} personas que entraron aparecen en más de una fila de su tablero.`;
+  }
 }

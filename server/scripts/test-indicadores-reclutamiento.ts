@@ -11,7 +11,7 @@ import { ZiteError } from '../compat/errors';
 import { DATE_OID, NUMERIC_OID, TIMESTAMPTZ_OID, parseDate, parseNumeric, parseTimestamptz } from '../compat/datetimeParsers';
 import { buildIdentityClusters, type IdentityRow } from '../../src/lib/duplicateIdentity';
 import {
-  claveMeta, enPeriodo, estadoMeta, leerMeta, porTrimestre, restarMeses, resumir, valorDe, type DatosReclutamiento, type ProyectoReclutamiento,
+  claveMeta, enPeriodo, estadoMeta, fraseIndicador, leerMeta, porTrimestre, restarMeses, resumir, valorDe, type DatosReclutamiento, type ProyectoReclutamiento,
 } from '../../src/lib/indicadores/reclutamiento';
 import { calcularReclutamiento } from '../../src/serverUtils/indicadores/reclutamiento';
 import getIndicadoresReclutamiento from '../../src/api/getIndicadoresReclutamiento';
@@ -32,7 +32,7 @@ async function prueba(nombre: string, fn: () => void | Promise<void>) {
 }
 
 const proyecto = (p: Partial<ProyectoReclutamiento> & { codigo: string; fecha: string }): ProyectoReclutamiento => ({
-  inferida: false, participaron: 0, noElegibles: 0, porMismoCliente: 0, marcados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0, ...p,
+  inferida: false, participaron: 0, noElegibles: 0, porMismoCliente: 0, marcadosTrabajados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0, ...p,
 });
 
 // ── periodos ─────────────────────────────────────────────────────────────────
@@ -45,11 +45,11 @@ await prueba('restarMeses: respeta el fin de mes y cruza de año', () => {
 });
 
 const lista = [
-  proyecto({ codigo: 'VIEJO', fecha: '2024-02-01', participaron: 10, noElegibles: 5, marcados: 20 }),
-  proyecto({ codigo: 'A', fecha: '2025-10-17', participaron: 20, noElegibles: 4, marcados: 40, previas: { 2: 6, 3: 3, 4: 1, 5: 0 }, duplicados: 2 }),
-  proyecto({ codigo: 'B', fecha: '2026-04-16', participaron: 30, noElegibles: 3, marcados: 10, previas: { 2: 9, 3: 4, 4: 2, 5: 1 }, duplicados: 6 }),
-  proyecto({ codigo: 'C', fecha: '2026-09-30', participaron: 50, noElegibles: 2, marcados: 50, previas: { 2: 5, 3: 1, 4: 0, 5: 0 }, duplicados: 7 }),
-  proyecto({ codigo: 'FUTURO', fecha: '2026-12-01', participaron: 99, noElegibles: 99, marcados: 99 }),
+  proyecto({ codigo: 'VIEJO', fecha: '2024-02-01', participaron: 10, noElegibles: 5, marcadosTrabajados: 8 }),
+  proyecto({ codigo: 'A', fecha: '2025-10-17', participaron: 20, noElegibles: 4, marcadosTrabajados: 10, previas: { 2: 6, 3: 3, 4: 1, 5: 0 }, duplicados: 2 }),
+  proyecto({ codigo: 'B', fecha: '2026-04-16', participaron: 30, noElegibles: 3, marcadosTrabajados: 6, previas: { 2: 9, 3: 4, 4: 2, 5: 1 }, duplicados: 6 }),
+  proyecto({ codigo: 'C', fecha: '2026-09-30', participaron: 50, noElegibles: 2, marcadosTrabajados: 2, previas: { 2: 5, 3: 1, 4: 0, 5: 0 }, duplicados: 7 }),
+  proyecto({ codigo: 'FUTURO', fecha: '2026-12-01', participaron: 99, noElegibles: 99, marcadosTrabajados: 99 }),
 ];
 const HOY = '2026-10-17';
 await prueba('enPeriodo: incluye el día de corte, deja fuera lo que aún no empieza y «todo» trae todo lo ya empezado', () => {
@@ -66,8 +66,9 @@ await prueba('resumir: suma los proyectos y saca cada porcentaje de su propio to
   assert.equal(r.proyectos, 3);
   assert.equal(r.participaron, 100);
   assert.deepEqual([r.noElegibles, r.pctNoElegibles], [9, 9]);
-  assert.deepEqual([r.marcados, r.detectados], [100, 91]);
-  assert.equal(r.pctDetectados, 91);
+  // Con aviso y seguimiento: 18 personas; 9 de ellas entraron (las no elegibles) y 9 se frenaron.
+  assert.deepEqual([r.avisosTrabajados, r.avisosRespetados], [18, 9]);
+  assert.equal(r.pctAvisosRespetados, 50);
   assert.deepEqual([r.repetidores, r.pctRepetidores], [8, 8]);
   assert.deepEqual([r.duplicados, r.pctDuplicados], [15, 15]);
   assert.equal(resumir(enPeriodo(lista, '12m', HOY), 2).repetidores, 20);
@@ -75,20 +76,33 @@ await prueba('resumir: suma los proyectos y saca cada porcentaje de su propio to
 });
 await prueba('resumir: sin proyectos no hay porcentaje (no se inventa un 0 %)', () => {
   const r = resumir([], 3);
-  assert.deepEqual([r.participaron, r.pctNoElegibles, r.pctDetectados, r.pctRepetidores, r.pctDuplicados], [0, null, null, null, null]);
+  assert.deepEqual([r.participaron, r.pctNoElegibles, r.pctAvisosRespetados, r.pctRepetidores, r.pctDuplicados], [0, null, null, null, null]);
 });
 await prueba('valorDe: dice de qué total sale cada indicador', () => {
   const r = resumir(enPeriodo(lista, '12m', HOY), 3);
   assert.deepEqual(valorDe(r, 'noElegibles'), { pct: 9, parte: 9, total: 100, de: 'personas que entraron' });
-  assert.deepEqual(valorDe(r, 'detectados'), { pct: 91, parte: 91, total: 100, de: 'personas marcadas «no elegible»' });
+  assert.deepEqual(valorDe(r, 'avisosRespetados'), { pct: 50, parte: 9, total: 18, de: 'personas con aviso y con seguimiento' });
   assert.equal(valorDe(r, 'repetidores').parte, 8);
   assert.equal(valorDe(r, 'duplicados').parte, 15);
 });
-await prueba('porTrimestre: agrupa por trimestre de inicio, en orden, con su porcentaje', () => {
-  const t = porTrimestre(lista.filter((p) => p.codigo !== 'FUTURO'));
+await prueba('porTrimestre: agrupa por trimestre de inicio, en orden, con la parte, el total y el porcentaje', () => {
+  const t = porTrimestre(lista.filter((p) => p.codigo !== 'FUTURO'), 'noElegibles', 3);
   assert.deepEqual(t.map((x) => x.trimestre), ['2024-T1', '2025-T4', '2026-T2', '2026-T3']);
-  assert.deepEqual(t.find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', participaron: 30, noElegibles: 3, pct: 10 });
-  assert.equal(porTrimestre([]).length, 0);
+  assert.deepEqual(t.find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', parte: 3, total: 30, pct: 10 });
+  assert.equal(porTrimestre([], 'noElegibles', 3).length, 0);
+});
+await prueba('porTrimestre: sirve para cualquier indicador, con su propio total', () => {
+  const sin = lista.filter((p) => p.codigo !== 'FUTURO');
+  assert.deepEqual(porTrimestre(sin, 'avisosRespetados', 3).find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', parte: 3, total: 6, pct: 50 });
+  assert.deepEqual(porTrimestre(sin, 'repetidores', 3).find((x) => x.trimestre === '2025-T4'), { trimestre: '2025-T4', parte: 3, total: 20, pct: 15 });
+  assert.deepEqual(porTrimestre(sin, 'repetidores', 5).find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', parte: 1, total: 30, pct: (100 * 1) / 30 });
+  assert.deepEqual(porTrimestre(sin, 'duplicados', 3).find((x) => x.trimestre === '2026-T3'), { trimestre: '2026-T3', parte: 7, total: 50, pct: 14 });
+});
+await prueba('fraseIndicador: cada frase dice con números qué quiere decir el porcentaje', () => {
+  assert.equal(fraseIndicador('noElegibles', { parte: 384, total: 2686 }, 3), '384 de 2,686 personas que entraron a un grupo ya habían participado con el mismo cliente o en los 6 meses anteriores.');
+  assert.equal(fraseIndicador('avisosRespetados', { parte: 104, total: 488 }, 3), 'De 488 personas con aviso a las que el equipo dio seguimiento, 104 se frenaron y 384 terminaron en un grupo.');
+  assert.equal(fraseIndicador('repetidores', { parte: 144, total: 2686 }, 3), '144 de 2,686 personas que entraron ya habían participado antes en 3 o más proyectos.');
+  assert.equal(fraseIndicador('duplicados', { parte: 282, total: 2686 }, 3), '282 de 2,686 personas que entraron aparecen en más de una fila de su tablero.');
 });
 await prueba('estadoMeta: «menos» y «más» es mejor, comparando con un decimal y sin meta no se juzga', () => {
   assert.equal(estadoMeta(4.9, 5, 'menos'), 'enMeta');
@@ -124,6 +138,8 @@ await prueba('leerMeta: acepta punto o coma, vacío quita la meta y lo demás no
 //  Elena: entró a ALFA, sin más                                                           → entrante normal
 //  Gina: entró a ALFA; en GAMA quedó «Rechazado» pero en un grupo                         → marcada no elegible en GAMA y NO entró (detectada a tiempo)
 //  Hugo: entró a SINFECHA, un proyecto sin ninguna fecha                                  → no se puede contar por proyecto
+//  Iris, Julia y Karla: entraron a ALFA y en GAMA traen aviso (participaron en ALFA hace menos de 6 meses) sin entrar a un grupo:
+//    Iris se quedó en «Pendiente» y Karla sin estatus (nadie las tocó: no cuentan como seguimiento); Julia quedó «Contactado» (sí cuenta)
 const PROYECTOS = [
   { codigo: 'ALFA', cliente: 'Cliente Uno', inicio: '2025-01-10' },
   { codigo: 'BETA', cliente: 'Cliente Uno', inicio: '2025-05-10' },
@@ -139,6 +155,9 @@ const PERSONAS: Record<string, { nombre: string; email: string; tel: string }> =
   elena: { nombre: 'Elena Prueba Cinco', email: 'elena@ejemplo.test', tel: '5500000005' },
   gina: { nombre: 'Gina Prueba Siete', email: 'gina@ejemplo.test', tel: '5500000007' },
   hugo: { nombre: 'Hugo Prueba Ocho', email: 'hugo@ejemplo.test', tel: '5500000008' },
+  iris: { nombre: 'Iris Prueba Nueve', email: 'iris@ejemplo.test', tel: '5500000009' },
+  julia: { nombre: 'Julia Prueba Diez', email: 'julia@ejemplo.test', tel: '5500000010' },
+  karla: { nombre: 'Karla Prueba Once', email: 'karla@ejemplo.test', tel: '5500000011' },
 };
 const FILAS: Array<{ persona: string; proyecto: string; tablero: string; status: string; grupo?: string }> = [
   { persona: 'ana', proyecto: 'ALFA', tablero: 'Tablero A', status: 'Asistió', grupo: 'G1' },
@@ -154,6 +173,12 @@ const FILAS: Array<{ persona: string; proyecto: string; tablero: string; status:
   { persona: 'gina', proyecto: 'GAMA', tablero: 'Tablero C', status: 'Rechazado', grupo: 'G2' },
   { persona: 'beto', proyecto: 'DELTA', tablero: 'Tablero D', status: 'Asistió' },
   { persona: 'hugo', proyecto: 'SINFECHA', tablero: 'Tablero E', status: 'Asistió' },
+  { persona: 'iris', proyecto: 'ALFA', tablero: 'Tablero A', status: 'Asistió' },
+  { persona: 'julia', proyecto: 'ALFA', tablero: 'Tablero A', status: 'Asistió' },
+  { persona: 'karla', proyecto: 'ALFA', tablero: 'Tablero A', status: 'Asistió' },
+  { persona: 'iris', proyecto: 'GAMA', tablero: 'Tablero C', status: 'Pendiente' },
+  { persona: 'julia', proyecto: 'GAMA', tablero: 'Tablero C', status: 'Contactado' },
+  { persona: 'karla', proyecto: 'GAMA', tablero: 'Tablero C', status: '' },
 ];
 
 const filasIdentidad: IdentityRow[] = FILAS.map((f, i) => ({
@@ -167,17 +192,17 @@ const projectMap = new Map(PROYECTOS.map((p) => [p.codigo, { client: p.cliente, 
 
 const ESPERADO: DatosReclutamiento = {
   proyectos: [
-    { codigo: 'ALFA', cliente: 'Cliente Uno', fecha: '2025-01-10', inferida: false, participaron: 4, noElegibles: 0, porMismoCliente: 0, marcados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0 },
-    { codigo: 'BETA', cliente: 'Cliente Uno', fecha: '2025-05-10', inferida: false, participaron: 3, noElegibles: 1, porMismoCliente: 1, marcados: 1, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 1 },
-    { codigo: 'GAMA', cliente: 'Cliente Dos', fecha: '2025-06-20', inferida: false, participaron: 1, noElegibles: 1, porMismoCliente: 0, marcados: 2, previas: { 2: 1, 3: 0, 4: 0, 5: 0 }, duplicados: 0 },
-    { codigo: 'DELTA', cliente: 'Cliente Tres', fecha: '2026-01-15', inferida: false, participaron: 1, noElegibles: 0, porMismoCliente: 0, marcados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0 },
+    { codigo: 'ALFA', cliente: 'Cliente Uno', fecha: '2025-01-10', inferida: false, participaron: 7, noElegibles: 0, porMismoCliente: 0, marcadosTrabajados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0 },
+    { codigo: 'BETA', cliente: 'Cliente Uno', fecha: '2025-05-10', inferida: false, participaron: 3, noElegibles: 1, porMismoCliente: 1, marcadosTrabajados: 1, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 1 },
+    { codigo: 'GAMA', cliente: 'Cliente Dos', fecha: '2025-06-20', inferida: false, participaron: 1, noElegibles: 1, porMismoCliente: 0, marcadosTrabajados: 3, previas: { 2: 1, 3: 0, 4: 0, 5: 0 }, duplicados: 0 },
+    { codigo: 'DELTA', cliente: 'Cliente Tres', fecha: '2026-01-15', inferida: false, participaron: 1, noElegibles: 0, porMismoCliente: 0, marcadosTrabajados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0 },
   ],
-  vida: { personas: 7, enAlMenos: { 2: 2, 3: 1, 5: 0, 10: 0 } },
+  vida: { personas: 10, enAlMenos: { 2: 2, 3: 1, 5: 0, 10: 0 } },
   sinFecha: 1,
 };
 
-await prueba('el caso inventado tiene las 7 identidades esperadas (Diego, con dos filas, es una sola)', () => {
-  assert.equal(globalClusters.size, 7);
+await prueba('el caso inventado tiene las 10 identidades esperadas (Diego, con dos filas, es una sola)', () => {
+  assert.equal(globalClusters.size, 10);
 });
 await prueba('calcularReclutamiento: cada proyecto sale con los números del caso', () => {
   const r = calcularReclutamiento({ activeRows: filasIdentidad, projectMap, globalClusters, rowToGlobalCluster });
@@ -188,10 +213,12 @@ await prueba('calcularReclutamiento: personas repetidas de por vida y proyecto s
   assert.deepEqual(r.vida, ESPERADO.vida);
   assert.equal(r.sinFecha, ESPERADO.sinFecha);
 });
-await prueba('calcularReclutamiento: la marcada que no entró cuenta como detectada a tiempo', () => {
+await prueba('calcularReclutamiento: con aviso solo cuentan las que tuvieron seguimiento (Rechazada y Contactado sí; Pendiente y sin estatus no)', () => {
   const r = calcularReclutamiento({ activeRows: filasIdentidad, projectMap, globalClusters, rowToGlobalCluster });
   const gama = r.proyectos.find((p) => p.codigo === 'GAMA')!;
-  assert.equal(gama.marcados - gama.noElegibles, 1);
+  // Ana (entró), Gina (Rechazada) y Julia (Contactado): 3 con seguimiento; Iris y Karla traen aviso pero nadie las tocó.
+  assert.equal(gama.marcadosTrabajados, 3);
+  assert.equal(gama.marcadosTrabajados - gama.noElegibles, 2); // las que se frenaron
 });
 await prueba('calcularReclutamiento: con las mismas filas dos veces da lo mismo y sin filas no truena', () => {
   const vacio = calcularReclutamiento({ activeRows: [], projectMap, globalClusters: new Map(), rowToGlobalCluster: new Map() });
@@ -232,7 +259,7 @@ const esperadoDeLaBase = (): DatosReclutamiento => ({
   ...ESPERADO,
   proyectos: [
     ...ESPERADO.proyectos,
-    { codigo: 'SINFECHA', cliente: 'Cliente Cuatro', fecha: new Date().toISOString().slice(0, 10), inferida: true, participaron: 1, noElegibles: 0, porMismoCliente: 0, marcados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0 },
+    { codigo: 'SINFECHA', cliente: 'Cliente Cuatro', fecha: new Date().toISOString().slice(0, 10), inferida: true, participaron: 1, noElegibles: 0, porMismoCliente: 0, marcadosTrabajados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0 },
   ],
   sinFecha: 0,
 });
@@ -281,6 +308,11 @@ await prueba('dos cálculos a la vez se juntan en uno solo', async () => {
   const [a, b]: any[] = await Promise.all([calcularIndicadoresReclutamiento.run({}, sergio), calcularIndicadoresReclutamiento.run({}, sergio)]);
   assert.equal(a.calculadoEn, b.calculadoEn);
 });
+await prueba('metas: la de «avisos respetados» se guarda como cualquier otra', async () => {
+  await saveIndicadorMeta.run({ area: 'reclutamiento', indicador: 'avisosRespetados', valor: 80 }, sergio);
+  assert.equal(((await getIndicadoresReclutamiento.run({}, sergio)) as any).metas.avisosRespetados, 80);
+  await saveIndicadorMeta.run({ area: 'reclutamiento', indicador: 'avisosRespetados', valor: null }, sergio);
+});
 await prueba('metas: guardar, cambiar y borrar; se ven al abrir la pantalla', async () => {
   await saveIndicadorMeta.run({ area: 'reclutamiento', indicador: 'noElegibles', valor: 5 }, sergio);
   await saveIndicadorMeta.run({ area: 'reclutamiento', indicador: 'repetidores_3', valor: 2.5 }, sergio);
@@ -295,10 +327,20 @@ await prueba('metas: un indicador que no existe, un área desconocida o un porce
   for (const mala of [
     { area: 'reclutamiento', indicador: 'inventado', valor: 5 },
     { area: 'reclutamiento', indicador: 'repetidores_9', valor: 5 },
+    { area: 'reclutamiento', indicador: 'detectados', valor: 95 }, // el indicador que se cambió por «avisos respetados»
     { area: 'comercial', indicador: 'noElegibles', valor: 5 },
     { area: 'reclutamiento', indicador: 'noElegibles', valor: 101 },
     { area: 'reclutamiento', indicador: 'noElegibles', valor: -1 },
   ]) await assert.rejects(() => saveIndicadorMeta.run(mala, sergio), rechazadoPor('BAD_REQUEST'));
+});
+
+await prueba('un cálculo guardado con la forma anterior (con «marcados», sin «marcadosTrabajados») se sigue leyendo, con 0, hasta que se actualice', async () => {
+  const viejo = { proyectos: [{ codigo: 'VIEJO', fecha: '2026-01-01', inferida: false, participaron: 5, noElegibles: 1, porMismoCliente: 0, marcados: 9, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0 }], vida: { personas: 5, enAlMenos: { 2: 0, 3: 0, 5: 0, 10: 0 } }, sinFecha: 0 };
+  await pg.query(`update indicadores_calculos set datos = $1::jsonb where area = 'reclutamiento'`, [JSON.stringify(viejo)]);
+  const r: any = await getIndicadoresReclutamiento.run({}, sergio);
+  assert.equal(r.datos.proyectos[0].marcadosTrabajados, 0);
+  assert.equal(r.datos.proyectos[0].marcados, undefined);
+  assert.equal(r.datos.proyectos[0].participaron, 5);
 });
 
 console.log(fallas ? `\n${fallas} de ${n} pruebas fallaron` : `\nlas ${n} pruebas pasaron`);

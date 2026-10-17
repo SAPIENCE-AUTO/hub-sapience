@@ -12,8 +12,8 @@ import { TendenciaTrimestral } from '@/components/indicadores/TendenciaTrimestra
 import { TablaProyectos } from '@/components/indicadores/TablaProyectos';
 import { fmtInstante, fmtNum } from '@/components/indicadores/formato';
 import {
-  INDICADORES, OPCIONES_PREVIAS, PERIODOS, claveMeta, enPeriodo, porTrimestre, resumir, valorDe,
-  type DatosReclutamiento, type Periodo, type Previas,
+  INDICADORES, OPCIONES_PREVIAS, PERIODOS, claveMeta, enPeriodo, fraseIndicador, porTrimestre, resumir, valorDe,
+  type ClaveIndicador, type DatosReclutamiento, type Periodo, type Previas,
 } from '@/lib/indicadores/reclutamiento';
 import { TEAL } from '@/lib/toolColors';
 
@@ -23,11 +23,9 @@ const PERMITIDOS = ['sergio@sapience.com.mx'];
 // Hoy por ahora hay un área; las demás (Comercial, Operación, Finanzas) se suman aquí como pestañas nuevas.
 const AREAS = [{ id: 'reclutamiento', etiqueta: 'Reclutamiento' }] as const;
 
-const AYUDA: Record<string, (previas: Previas) => string> = {
-  noElegibles: () => 'Personas que ya habían participado con el mismo cliente, o en cualquier proyecto en los 6 meses anteriores al inicio de este, y aun así quedaron en un grupo.',
-  detectados: () => 'De las personas marcadas «no elegible», cuántas no llegaron a entrar a un grupo: el filtro las detuvo.',
-  repetidores: (previas) => `Personas que entraron con ${previas} o más participaciones previas en otros proyectos.`,
-  duplicados: () => 'Personas que entraron y aparecen en más de una fila de un mismo tablero.',
+/** Nombres cortos para el selector de la gráfica. */
+const NOMBRE_CORTO: Record<ClaveIndicador, string> = {
+  noElegibles: 'No elegibles', avisosRespetados: 'Avisos respetados', repetidores: 'Repetidores', duplicados: 'Duplicados',
 };
 
 const hoyLocal = () => new Date().toLocaleDateString('en-CA'); // AAAA-MM-DD en la zona de quien mira
@@ -45,6 +43,7 @@ export default function IndicadoresPage() {
   const [calculando, setCalculando] = useState(false);
   const [periodo, setPeriodo] = useState<Periodo>('12m');
   const [previas, setPrevias] = useState<Previas>(3);
+  const [graficar, setGraficar] = useState<ClaveIndicador>('noElegibles');
 
   const aplicar = (r: { datos?: DatosReclutamiento; calculadoEn?: string; metas?: Record<string, number> }) => {
     setDatos(r.datos);
@@ -91,7 +90,8 @@ export default function IndicadoresPage() {
   const hoy = hoyLocal();
   const enElPeriodo = useMemo(() => (datos ? enPeriodo(datos.proyectos, periodo, hoy) : []), [datos, periodo, hoy]);
   const resumen = useMemo(() => resumir(enElPeriodo, previas), [enElPeriodo, previas]);
-  const trimestres = useMemo(() => porTrimestre(enElPeriodo), [enElPeriodo]);
+  const trimestres = useMemo(() => porTrimestre(enElPeriodo, graficar, previas), [enElPeriodo, graficar, previas]);
+  const definicionGrafica = INDICADORES.find((i) => i.clave === graficar)!;
 
   if (!permitido) {
     return <div className="p-6 text-sm text-muted-foreground">Esta sección no está habilitada para tu usuario.</div>;
@@ -130,7 +130,7 @@ export default function IndicadoresPage() {
 
       {cargando && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[150px] rounded-xl" />)}</div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[190px] rounded-xl" />)}</div>
           <Skeleton className="h-64 rounded-xl" />
         </div>
       )}
@@ -152,17 +152,17 @@ export default function IndicadoresPage() {
           <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2.5">
             <Segmentado<Periodo> etiqueta="Periodo" valor={periodo} onCambio={setPeriodo} opciones={PERIODOS.map((p) => ({ valor: p.valor, etiqueta: p.etiqueta }))} />
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              Repetidores: con
+              Cuenta como repetidor quien ya participó antes en
               <Segmentado<`${Previas}`>
-                etiqueta="Participaciones previas para contar a un repetidor"
+                etiqueta="Proyectos previos para contar a un repetidor"
                 valor={`${previas}`}
                 onCambio={(v) => setPrevias(Number(v) as Previas)}
                 opciones={OPCIONES_PREVIAS.map((k) => ({ valor: `${k}` as `${Previas}`, etiqueta: `${k}+` }))}
               />
-              participaciones previas
+              proyectos
             </div>
             <span className="ml-auto text-xs text-muted-foreground">
-              {fmtNum(resumen.proyectos)} proyectos · {fmtNum(resumen.participaron)} personas que entraron
+              {fmtNum(resumen.proyectos)} proyectos · {fmtNum(resumen.participaron)} personas que entraron a un grupo
             </span>
           </div>
 
@@ -173,9 +173,9 @@ export default function IndicadoresPage() {
               return (
                 <TarjetaIndicador
                   key={clave}
-                  etiqueta={ind.clave === 'repetidores' ? `Repetidores (${previas}+ previas)` : ind.etiqueta}
-                  ayuda={AYUDA[ind.clave](previas)}
-                  pct={v.pct} parte={v.parte} total={v.total} de={v.de}
+                  etiqueta={ind.clave === 'repetidores' ? `Repetidores (${previas}+ proyectos)` : ind.etiqueta}
+                  frase={fraseIndicador(ind.clave, v, previas)}
+                  pct={v.pct}
                   mejor={ind.mejor}
                   meta={metas[clave]}
                   onMeta={(valor) => guardarMeta(clave, valor)}
@@ -185,8 +185,17 @@ export default function IndicadoresPage() {
           </div>
 
           <div className="mb-5 rounded-xl border bg-card p-4">
-            <h2 className="mb-3 text-sm font-semibold">No elegibles que entran, por trimestre</h2>
-            <TendenciaTrimestral puntos={trimestres} meta={metas.noElegibles} />
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">{definicionGrafica.etiqueta}, por trimestre</h2>
+              <Segmentado<ClaveIndicador>
+                etiqueta="Indicador de la gráfica"
+                sobre="tarjeta"
+                valor={graficar}
+                onCambio={setGraficar}
+                opciones={INDICADORES.map((i) => ({ valor: i.clave, etiqueta: NOMBRE_CORTO[i.clave] }))}
+              />
+            </div>
+            <TendenciaTrimestral puntos={trimestres} meta={metas[claveMeta(graficar, previas)]} mejor={definicionGrafica.mejor} />
           </div>
 
           <div className="mb-5">
@@ -195,8 +204,8 @@ export default function IndicadoresPage() {
           </div>
 
           <div className="space-y-1 text-[11px] leading-relaxed text-muted-foreground">
-            <p><b>No elegible:</b> ya había participado con el mismo cliente, o en cualquier proyecto en los 6 meses anteriores al inicio del proyecto. <b>Entró:</b> asistió, o está en un grupo con estatus vacío, pendiente o confirmado. Cada cifra se mide contra la fecha de inicio de su proyecto.</p>
-            <p>A los repetidores se les cuentan solo las participaciones en proyectos anteriores. Los duplicados son filas repetidas dentro de un mismo tablero (la misma persona llenó el filtro más de una vez).</p>
+            <p><b>Aviso («no elegible»):</b> la persona ya había participado con el mismo cliente, o en cualquier proyecto en los 6 meses anteriores al inicio de este. <b>Entró a un grupo:</b> asistió, o está en un grupo con estatus vacío, pendiente o confirmado. <b>Seguimiento:</b> tiene un estatus distinto de «Pendiente» o vacío. Cada cifra se mide contra la fecha de inicio de su proyecto.</p>
+            <p><b>Avisos respetados:</b> de las personas con aviso a las que el equipo dio seguimiento, cuántas se frenaron en vez de terminar en un grupo. Las que se quedan en «Pendiente» sin que nadie las toque no cuentan. A los repetidores solo se les cuentan los proyectos anteriores. Las filas repetidas son la misma persona más de una vez en un mismo tablero.</p>
             {datos.proyectos.some((p) => p.inferida) && <p>* El proyecto no tiene fecha de inicio: se usó la de su última actividad.</p>}
             {datos.sinFecha > 0 && <p>{fmtNum(datos.sinFecha)} registros persona-proyecto quedaron fuera por no haber ninguna fecha del proyecto.</p>}
           </div>

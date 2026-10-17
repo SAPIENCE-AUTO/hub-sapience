@@ -1,23 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Info } from 'lucide-react';
 import { estadoMeta, leerMeta, type EstadoMeta } from '../../lib/indicadores/reclutamiento';
 import { EXITO, GRIS, PELIGRO, TEAL } from '../../lib/toolColors';
-import { fmtNum, fmtPct } from './formato';
+import { fmtPct } from './formato';
 
 export const COLOR_META: Record<EstadoMeta, string> = { enMeta: EXITO, fuera: PELIGRO, sinMeta: GRIS };
 const ETIQUETA_META: Record<EstadoMeta, string> = { enMeta: 'En meta', fuera: 'Fuera de meta', sinMeta: 'Sin meta' };
 
 /**
- * Un indicador contra su meta: el porcentaje grande (verde si va en meta, rojo si no, teal si aún no hay meta), de qué se saca y la meta
- * que Sergio escribe. La meta se guarda al salir del campo o con Enter; dejarlo vacío la quita.
+ * Un indicador contra su meta: el porcentaje grande (verde si va en meta, rojo si no, teal si aún no hay meta), una frase en palabras
+ * llanas con los números y la meta que Sergio escribe. La meta se guarda al salir del campo o con Enter; dejarlo vacío la quita.
  */
-export function TarjetaIndicador({ etiqueta, ayuda, pct, parte, total, de, mejor, meta, onMeta }: {
+export function TarjetaIndicador({ etiqueta, frase, pct, mejor, meta, onMeta }: {
   etiqueta: string;
-  ayuda: string;
+  /** Qué quiere decir el porcentaje, con los números; va siempre a la vista. */
+  frase: string;
   pct: number | null;
-  parte: number;
-  total: number;
-  de: string;
   mejor: 'menos' | 'mas';
   meta: number | undefined;
   onMeta: (valor: number | null) => void;
@@ -35,16 +32,13 @@ export function TarjetaIndicador({ etiqueta, ayuda, pct, parte, total, de, mejor
   return (
     <div className="flex flex-col rounded-xl border bg-card p-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground">{etiqueta}</p>
-        <span title={ayuda} className="shrink-0 text-muted-foreground/70"><Info className="h-3.5 w-3.5" aria-label={ayuda} /></span>
-      </div>
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <p className="text-[28px] font-bold leading-none tracking-tight" style={{ color: pct === null ? GRIS : estado === 'sinMeta' ? TEAL : COLOR_META[estado] }}>{fmtPct(pct)}</p>
-        <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: COLOR_META[estado] }}>
+        <p className="text-[13px] font-semibold leading-snug">{etiqueta}</p>
+        <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: COLOR_META[estado] }}>
           {ETIQUETA_META[estado]}
         </span>
       </div>
-      <p className="mt-1.5 text-[11px] text-muted-foreground">{pct === null ? 'Sin personas en este periodo' : `${fmtNum(parte)} de ${fmtNum(total)} ${de}`}</p>
+      <p className="mt-1.5 text-[30px] font-bold leading-none tracking-tight" style={{ color: pct === null ? GRIS : estado === 'sinMeta' ? TEAL : COLOR_META[estado] }}>{fmtPct(pct)}</p>
+      <p className="mt-2 flex-1 text-xs leading-snug text-muted-foreground">{pct === null ? 'Sin personas en este periodo.' : frase}</p>
       <label className="mt-3 flex items-center gap-2 border-t pt-3 text-[11px] text-muted-foreground">
         <span>Meta ({mejor === 'menos' ? 'máximo' : 'mínimo'})</span>
         <input

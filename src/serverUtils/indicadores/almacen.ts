@@ -12,7 +12,8 @@ export const ProyectoSchema = z.object({
   participaron: z.number(),
   noElegibles: z.number(),
   porMismoCliente: z.number(),
-  marcados: z.number(),
+  // Los cálculos guardados antes de «Avisos respetados» no traen este campo: se leen con 0 hasta que se actualice.
+  marcadosTrabajados: z.number().default(0),
   previas: z.object({ 2: z.number(), 3: z.number(), 4: z.number(), 5: z.number() }),
   duplicados: z.number(),
 });
