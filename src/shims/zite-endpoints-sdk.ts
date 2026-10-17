@@ -150,6 +150,7 @@ export const assignArchivedFolderProject = (input?: any): Promise<any> => call('
 export const backfillExchangeRates = (input?: any): Promise<any> => call('backfillExchangeRates', input);
 export const bulkDeletePayments = (input?: any): Promise<any> => call('bulkDeletePayments', input);
 export const bulkUpdatePayments = (input?: any): Promise<any> => call('bulkUpdatePayments', input);
+export const calcularIndicadoresReclutamiento = (input?: any): Promise<any> => call('calcularIndicadoresReclutamiento', input);
 export const cancelPurchaseOrder = (input?: any): Promise<any> => call('cancelPurchaseOrder', input);
 export const chatDealsAnalysis = (input?: any): Promise<any> => call('chatDealsAnalysis', input);
 export const chatWithMeetingTranscript = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('chatWithMeetingTranscript', input);
@@ -267,6 +268,7 @@ export const getExpenseComments = (input?: any): Promise<any> => call('getExpens
 export const getExpenseLineItems = (input?: any): Promise<any> => call('getExpenseLineItems', input);
 export const getExpenses = (input?: any): Promise<any> => call('getExpenses', input);
 export const getFilloutForms = (input?: any): Promise<any> => call('getFilloutForms', input);
+export const getIndicadoresReclutamiento = (input?: any): Promise<any> => call('getIndicadoresReclutamiento', input);
 export const getInternalViews = (input?: any): Promise<any> => call('getInternalViews', input);
 export const getInviteTemplate = (input?: any): Promise<any> => call('getInviteTemplate', input);
 export const getInvoiceWidgetData = (input?: any): Promise<any> => call('getInvoiceWidgetData', input);
@@ -433,6 +435,7 @@ export const saveDeal = (input?: any): Promise<any> => call('saveDeal', input);
 export const saveDealDocument = (input?: any): Promise<any> => call('saveDealDocument', input);
 export const saveDocBlock = (input?: any): Promise<any> => call('saveDocBlock', input);
 export const saveExpense = (input?: any): Promise<any> => call('saveExpense', input);
+export const saveIndicadorMeta = (input?: any): Promise<any> => call('saveIndicadorMeta', input);
 export const saveInternalView = (input?: any): Promise<any> => call('saveInternalView', input);
 export const saveInviteTemplate = (input?: any): Promise<any> => call('saveInviteTemplate', input);
 export const saveMigrationLog = (input?: any): Promise<any> => call('saveMigrationLog', input);

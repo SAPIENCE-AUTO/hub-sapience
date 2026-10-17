@@ -8,7 +8,7 @@ import {
   FolderKanban, ChevronDown, ChevronRight, Search,
   Plus, X, TrendingUp, Building2, DollarSign, LayoutGrid,
   FileText, ShoppingCart, Truck, FileSpreadsheet,
-  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles, Video,
+  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles, Video, Target,
 } from 'lucide-react';
 import { SharpliIcon } from './SharpliIcon';
 import hubMark from '../assets/hub-mark.svg';
@@ -97,6 +97,16 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ALL_ROLES,
     items: [
       { to: '/mis-pendientes', icon: ListTodo, label: 'Mis Pendientes', emails: ['sergio@sapience.com.mx'] },
+    ],
+  },
+  {
+    id: 'indicadores',
+    label: 'Indicadores',
+    icon: Target,
+    roles: ALL_ROLES,
+    items: [
+      // Solo Sergio (oct 2026): metas e indicadores de cada área; hoy solo Reclutamiento. El candado real está en el servidor.
+      { to: '/indicadores', icon: Target, label: 'Metas por área', emails: ['sergio@sapience.com.mx'] },
     ],
   },
   {

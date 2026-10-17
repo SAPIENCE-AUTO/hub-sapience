@@ -26,8 +26,9 @@ export type GlobalIdentityData = {
 
 let cache: (GlobalIdentityData & { expiresAt: number }) | null = null;
 
-export async function getGlobalIdentityData(): Promise<GlobalIdentityData> {
-  if (cache && cache.expiresAt > Date.now()) return cache;
+/** `fresco: true` se salta el cache (el cálculo de indicadores quiere los datos de ahora, no los de hace un minuto). */
+export async function getGlobalIdentityData(opts: { fresco?: boolean } = {}): Promise<GlobalIdentityData> {
+  if (!opts.fresco && cache && cache.expiresAt > Date.now()) return cache;
 
   const { records: allProjects } = await Projects.findAll({
     limit: 500,

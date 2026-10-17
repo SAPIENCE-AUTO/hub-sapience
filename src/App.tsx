@@ -10,6 +10,7 @@ import CotizacionesPage from './pages/CotizacionesPage';
 import AdminPage from './pages/AdminPage';
 import SuppliersPage from './pages/SuppliersPage';
 import PaymentsPage from './pages/PaymentsPage';
+import IndicadoresPage from './pages/IndicadoresPage';
 import UserAdminPage from './pages/UserAdminPage';
 import PurchasesPage from './pages/PurchasesPage';
 import ProjectsPage from './pages/ProjectsPage';
@@ -97,6 +98,7 @@ export default function App() {
                 <Route index element={null} />
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="mis-pendientes" element={<MisPendientesPage />} />
+                <Route path="indicadores" element={<IndicadoresPage />} />
 
                 <Route path="comercial/crm"       element={<CommercialPage />} />
                 <Route path="comercial/dashboard" element={<CommercialDashboardPage />} />
