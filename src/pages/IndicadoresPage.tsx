@@ -8,12 +8,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Segmentado } from '@/components/payments/Segmentado';
 import { CLASE_BOTON_SUAVE, ESTILO_BOTON_PRIMARIO } from '@/components/payments/estilos';
 import { TarjetaIndicador } from '@/components/indicadores/TarjetaIndicador';
+import { TarjetaVeces } from '@/components/indicadores/TarjetaVeces';
 import { TendenciaTrimestral } from '@/components/indicadores/TendenciaTrimestral';
 import { TablaProyectos } from '@/components/indicadores/TablaProyectos';
-import { fmtInstante, fmtNum, fmtPct } from '@/components/indicadores/formato';
+import { colorVeces } from '@/components/indicadores/colores';
+import { fmtInstante, fmtNum } from '@/components/indicadores/formato';
 import {
-  INDICADORES, OPCIONES_GRAFICA, PERIODOS, TRAMOS, claveMetaTramo, enPeriodo, etiquetaTramo, fraseIndicador, fraseTramo, porTrimestre, resumir,
-  valorDe, valorTramo, type ClaveGrafica, type DatosReclutamiento, type Periodo,
+  INDICADORES, OPCIONES_GRAFICA, PERIODOS, VECES, claveVeces, enPeriodo, etiquetaVeces, fraseIndicador, porTrimestre, resumir, valorDe,
+  valorPrimeraVez, valorVeces, type ClaveGrafica, type DatosReclutamiento, type Grupo, type Periodo,
 } from '@/lib/indicadores/reclutamiento';
 import { TEAL } from '@/lib/toolColors';
 
@@ -86,7 +88,25 @@ export default function IndicadoresPage() {
   const resumen = useMemo(() => resumir(enElPeriodo), [enElPeriodo]);
   const trimestres = useMemo(() => porTrimestre(enElPeriodo, graficar), [enElPeriodo, graficar]);
   const opcionGrafica = OPCIONES_GRAFICA.find((o) => o.clave === graficar)!;
-  const totalRepetidores = valorDe(resumen, 'repetidores');
+  const gruposGrafica = [...new Set(OPCIONES_GRAFICA.map((o) => o.grupo))];
+  const primeraVez = valorPrimeraVez(resumen);
+
+  const cajitas = (grupo: Grupo) => VECES.map((v) => {
+    const valor = valorVeces(resumen, grupo, v);
+    const clave = claveVeces(grupo, v);
+    return (
+      <TarjetaVeces
+        key={clave}
+        etiqueta={etiquetaVeces(v)}
+        nombreMeta={`${grupo === 'noElegibles' ? 'no elegibles' : 'elegibles'} con ${etiquetaVeces(v)}`}
+        color={colorVeces(grupo, v)}
+        pct={valor.pct}
+        detalle={valor.total > 0 ? `${fmtNum(valor.parte)} de ${fmtNum(valor.total)}` : 'Sin personas'}
+        meta={metas[clave]}
+        onMeta={(m) => guardarMeta(clave, m)}
+      />
+    );
+  });
 
   if (!permitido) {
     return <div className="p-6 text-sm text-muted-foreground">Esta sección no está habilitada para tu usuario.</div>;
@@ -152,7 +172,7 @@ export default function IndicadoresPage() {
           </div>
 
           <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {INDICADORES.filter((ind) => ind.clave !== 'repetidores').map((ind) => {
+            {INDICADORES.map((ind) => {
               const v = valorDe(resumen, ind.clave);
               return (
                 <TarjetaIndicador
@@ -168,31 +188,22 @@ export default function IndicadoresPage() {
             })}
           </div>
 
-          <div className="mb-5 rounded-xl border bg-muted/30 p-4">
-            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <div>
-                <h2 className="text-sm font-semibold">Repetidores</h2>
-                <p className="text-xs text-muted-foreground">Personas que entraron y ya habían participado antes en otros proyectos (sin contar este). Cada una cae en un solo tramo.</p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                En total: <b className="text-foreground">{fmtPct(totalRepetidores.pct)}</b> · {fmtNum(totalRepetidores.parte)} de {fmtNum(totalRepetidores.total)}
-              </p>
+          <div className="mb-4 rounded-xl border bg-muted/30 p-4">
+            <div className="mb-3">
+              <h2 className="text-sm font-semibold">No elegibles que entraron: {fmtNum(resumen.noElegibles)} personas</h2>
+              <p className="text-xs text-muted-foreground">¿Cuántas veces ya habían participado antes? Cada persona cae en un solo tramo, y los porcentajes son de estas {fmtNum(resumen.noElegibles)}.</p>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {TRAMOS.map((t) => {
-                const v = valorTramo(resumen, t);
-                return (
-                  <TarjetaIndicador
-                    key={t}
-                    etiqueta={etiquetaTramo(t)}
-                    frase={fraseTramo(t, v)}
-                    pct={v.pct}
-                    mejor="menos"
-                    meta={metas[claveMetaTramo(t)]}
-                    onMeta={(valor) => guardarMeta(claveMetaTramo(t), valor)}
-                  />
-                );
-              })}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">{cajitas('noElegibles')}</div>
+          </div>
+
+          <div className="mb-5 rounded-xl border bg-muted/30 p-4">
+            <div className="mb-3">
+              <h2 className="text-sm font-semibold">Elegibles que entraron: {fmtNum(resumen.elegibles)} personas</h2>
+              <p className="text-xs text-muted-foreground">Las que no traían aviso: ¿entraron por primera vez o ya habían participado? Los porcentajes son de estas {fmtNum(resumen.elegibles)}.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <TarjetaVeces etiqueta="Primera vez" pct={primeraVez.pct} detalle={primeraVez.total > 0 ? `${fmtNum(primeraVez.parte)} de ${fmtNum(primeraVez.total)}` : 'Sin personas'} />
+              {cajitas('elegibles')}
             </div>
           </div>
 
@@ -203,12 +214,16 @@ export default function IndicadoresPage() {
                 aria-label="Indicador de la gráfica"
                 value={graficar}
                 onChange={(e) => setGraficar(e.target.value as ClaveGrafica)}
-                className="rounded-[10px] border bg-muted px-2.5 py-1.5 text-xs font-semibold text-foreground outline-none focus:ring-2 focus:ring-[#0F3D4D]/40"
+                className="max-w-full rounded-[10px] border bg-muted px-2.5 py-1.5 text-xs font-semibold text-foreground outline-none focus:ring-2 focus:ring-[#0F3D4D]/40"
               >
-                {OPCIONES_GRAFICA.map((o) => <option key={o.clave} value={o.clave}>{o.etiqueta}</option>)}
+                {gruposGrafica.map((g) => (
+                  <optgroup key={g} label={g}>
+                    {OPCIONES_GRAFICA.filter((o) => o.grupo === g).map((o) => <option key={o.clave} value={o.clave}>{o.etiqueta}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
-            <TendenciaTrimestral puntos={trimestres} meta={opcionGrafica.meta ? metas[opcionGrafica.meta] : undefined} mejor={opcionGrafica.mejor} />
+            <TendenciaTrimestral puntos={trimestres} meta={metas[opcionGrafica.meta]} mejor={opcionGrafica.mejor} />
           </div>
 
           <div className="mb-5">
@@ -217,8 +232,8 @@ export default function IndicadoresPage() {
           </div>
 
           <div className="space-y-1 text-[11px] leading-relaxed text-muted-foreground">
-            <p><b>Aviso («no elegible»):</b> la persona ya había participado con el mismo cliente, o en cualquier proyecto en los 6 meses anteriores al inicio de este. <b>Entró a un grupo:</b> asistió, o está en un grupo con estatus vacío, pendiente o confirmado. <b>Seguimiento:</b> tiene un estatus distinto de «Pendiente» o vacío. Cada cifra se mide contra la fecha de inicio de su proyecto.</p>
-            <p><b>Avisos respetados:</b> de las personas con aviso a las que el equipo dio seguimiento, cuántas se frenaron en vez de terminar en un grupo. Las que se quedan en «Pendiente» sin que nadie las toque no cuentan. <b>Repetidores:</b> solo se cuentan los proyectos anteriores; los tramos 2, 3 y 4 son exactos y el último es «5 o más», así que suman el total. Las filas repetidas son la misma persona más de una vez en un mismo tablero.</p>
+            <p><b>Aviso («no elegible»):</b> la persona ya había participado con el mismo cliente, o en cualquier proyecto en los 6 meses anteriores al inicio de este. <b>Elegible:</b> entró sin ese aviso. <b>Entró a un grupo:</b> asistió, o está en un grupo con estatus vacío, pendiente o confirmado. <b>Seguimiento:</b> tiene un estatus distinto de «Pendiente» o vacío. Cada cifra se mide contra la fecha de inicio de su proyecto.</p>
+            <p><b>Veces que ya habían participado:</b> solo se cuentan los proyectos anteriores, sin contar el actual; los tramos 1, 2, 3 y 4 son exactos y el último es «5 o más», así que suman el grupo. <b>Avisos respetados:</b> de las personas con aviso a las que el equipo dio seguimiento, cuántas se frenaron en vez de terminar en un grupo; las que se quedan en «Pendiente» sin que nadie las toque no cuentan. Las filas repetidas son la misma persona más de una vez en un mismo tablero.</p>
             {datos.proyectos.some((p) => p.inferida) && <p>* El proyecto no tiene fecha de inicio: se usó la de su última actividad.</p>}
             {datos.sinFecha > 0 && <p>{fmtNum(datos.sinFecha)} registros persona-proyecto quedaron fuera por no haber ninguna fecha del proyecto.</p>}
           </div>

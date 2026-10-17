@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { pool } from '../../../server/compat';
 import type { DatosReclutamiento } from '../../lib/indicadores/reclutamiento';
 
+const PorVecesSchema = z.object({ 1: z.number(), 2: z.number(), 3: z.number(), 4: z.number(), 5: z.number() }).default({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+
 export const ProyectoSchema = z.object({
   codigo: z.string(),
   cliente: z.string().optional(),
@@ -14,6 +16,9 @@ export const ProyectoSchema = z.object({
   porMismoCliente: z.number(),
   // Los cálculos guardados antes de «Avisos respetados» no traen este campo: se leen con 0 hasta que se actualice.
   marcadosTrabajados: z.number().default(0),
+  // Los cálculos guardados antes de separar elegibles y no elegibles por número de veces no traen estos dos: se leen con ceros.
+  noElegiblesPorVeces: PorVecesSchema,
+  elegiblesPorVeces: PorVecesSchema,
   previas: z.object({ 2: z.number(), 3: z.number(), 4: z.number(), 5: z.number() }),
   duplicados: z.number(),
 });

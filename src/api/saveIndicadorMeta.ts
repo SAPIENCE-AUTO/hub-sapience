@@ -9,7 +9,7 @@ export default createEndpoint({
   description: 'Guarda la meta de un indicador de área — solo Sergio',
   inputSchema: z.object({
     area: z.literal('reclutamiento'),
-    indicador: z.string().regex(/^(noElegibles|avisosRespetados|duplicados|repetidores_[2-5])$/),
+    indicador: z.string().regex(/^(noElegibles|avisosRespetados|duplicados|(noElegibles|elegibles)_[1-5])$/),
     valor: z.number().min(0).max(100).nullable(),
   }),
   outputSchema: z.object({ ok: z.boolean() }),

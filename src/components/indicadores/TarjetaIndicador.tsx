@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { estadoMeta, leerMeta, type EstadoMeta } from '../../lib/indicadores/reclutamiento';
+import { estadoMeta, type EstadoMeta } from '../../lib/indicadores/reclutamiento';
 import { EXITO, GRIS, PELIGRO, TEAL } from '../../lib/toolColors';
+import { CampoMeta } from './CampoMeta';
 import { fmtPct } from './formato';
 
 export const COLOR_META: Record<EstadoMeta, string> = { enMeta: EXITO, fuera: PELIGRO, sinMeta: GRIS };
@@ -8,7 +8,7 @@ const ETIQUETA_META: Record<EstadoMeta, string> = { enMeta: 'En meta', fuera: 'F
 
 /**
  * Un indicador contra su meta: el porcentaje grande (verde si va en meta, rojo si no, teal si aún no hay meta), una frase en palabras
- * llanas con los números y la meta que Sergio escribe. La meta se guarda al salir del campo o con Enter; dejarlo vacío la quita.
+ * llanas con los números y la meta que Sergio escribe.
  */
 export function TarjetaIndicador({ etiqueta, frase, pct, mejor, meta, onMeta }: {
   etiqueta: string;
@@ -20,15 +20,6 @@ export function TarjetaIndicador({ etiqueta, frase, pct, mejor, meta, onMeta }: 
   onMeta: (valor: number | null) => void;
 }) {
   const estado = estadoMeta(pct, meta, mejor);
-  const [texto, setTexto] = useState(meta === undefined ? '' : String(meta));
-  useEffect(() => { setTexto(meta === undefined ? '' : String(meta)); }, [meta]);
-
-  const guardar = () => {
-    const v = leerMeta(texto);
-    if (v === undefined) { setTexto(meta === undefined ? '' : String(meta)); return; } // lo escrito no vale: se deja la meta como estaba
-    if ((v ?? undefined) !== meta) onMeta(v);
-  };
-
   return (
     <div className="flex flex-col rounded-xl border bg-card p-4">
       <div className="flex items-start justify-between gap-2">
@@ -39,21 +30,9 @@ export function TarjetaIndicador({ etiqueta, frase, pct, mejor, meta, onMeta }: 
       </div>
       <p className="mt-1.5 text-[30px] font-bold leading-none tracking-tight" style={{ color: pct === null ? GRIS : estado === 'sinMeta' ? TEAL : COLOR_META[estado] }}>{fmtPct(pct)}</p>
       <p className="mt-2 flex-1 text-xs leading-snug text-muted-foreground">{pct === null ? 'Sin personas en este periodo.' : frase}</p>
-      <label className="mt-3 flex items-center gap-2 border-t pt-3 text-[11px] text-muted-foreground">
-        <span>Meta ({mejor === 'menos' ? 'máximo' : 'mínimo'})</span>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={texto}
-          placeholder="—"
-          aria-label={`Meta de ${etiqueta}`}
-          onChange={(e) => setTexto(e.target.value)}
-          onBlur={guardar}
-          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setTexto(meta === undefined ? '' : String(meta)); e.currentTarget.blur(); } }}
-          className="w-14 rounded-md border bg-background px-2 py-1 text-right text-xs font-semibold text-foreground outline-none focus:ring-2 focus:ring-[#0F3D4D]/40"
-        />
-        <span>%</span>
-      </label>
+      <div className="mt-3 border-t pt-3">
+        <CampoMeta etiqueta={etiqueta} mejor={mejor} meta={meta} onMeta={onMeta} />
+      </div>
     </div>
   );
 }

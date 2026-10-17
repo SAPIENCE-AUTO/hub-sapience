@@ -5,7 +5,7 @@
 // Es una función pura sobre lo que ya carga getGlobalIdentityData (todas las filas de reclutamiento y sus identidades): no toca la base.
 import type { GlobalIdentityData } from '../../lib/globalIdentityCache';
 import { buildIdentityClusters, participoEnProyecto, resolveSignals, type IdentityRow, type Signal } from '../../lib/duplicateIdentity';
-import type { DatosReclutamiento, ProyectoReclutamiento } from '../../lib/indicadores/reclutamiento';
+import type { DatosReclutamiento, ProyectoReclutamiento, Veces } from '../../lib/indicadores/reclutamiento';
 
 const norm = (s?: string | null) => (s ?? '').toLowerCase().trim();
 const SEPARADOR = '\u0000';
@@ -33,7 +33,9 @@ export function calcularReclutamiento(
       const info = projectMap.get(codigo);
       p = {
         codigo, cliente: info?.client || undefined, fecha: fecha.toISOString().slice(0, 10), inferida: !!info?.startDateInferred,
-        participaron: 0, noElegibles: 0, porMismoCliente: 0, marcadosTrabajados: 0, previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0,
+        participaron: 0, noElegibles: 0, porMismoCliente: 0, marcadosTrabajados: 0,
+        noElegiblesPorVeces: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, elegiblesPorVeces: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        previas: { 2: 0, 3: 0, 4: 0, 5: 0 }, duplicados: 0,
       };
       porProyecto.set(codigo, p);
     }
@@ -88,11 +90,17 @@ export function calcularReclutamiento(
       if (noElegible && (entro || filasDelProyecto.some(conSeguimiento))) p.marcadosTrabajados++;
       if (!entro) continue;
       p.participaron++;
+      const previas = participaciones.filter((x) => x.codigo !== codigo && x.fecha && x.fecha <= ref).length;
+      // Cuántas veces había participado antes, en tramos sin traslape (5 = «5 o más»). Quien entra con aviso ya participó al menos una vez:
+      // si esa participación fue en un proyecto sin fecha, `previas` no la cuenta y aquí se le pone 1.
+      const veces = Math.min(previas, 5);
       if (noElegible) {
         p.noElegibles++;
         if (primaryBadge === 'same_client') p.porMismoCliente++;
+        p.noElegiblesPorVeces[Math.max(1, veces) as Veces]++;
+      } else if (veces >= 1) {
+        p.elegiblesPorVeces[veces as Veces]++; // las que entran por primera vez no se guardan: salen de restar
       }
-      const previas = participaciones.filter((x) => x.codigo !== codigo && x.fecha && x.fecha <= ref).length;
       for (const k of [2, 3, 4, 5] as const) if (previas >= k) p.previas[k]++;
     }
   }
