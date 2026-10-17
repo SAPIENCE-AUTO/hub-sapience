@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { estadoMeta, type Previas, type ProyectoReclutamiento } from '../../lib/indicadores/reclutamiento';
+import { estadoMeta, type ProyectoReclutamiento } from '../../lib/indicadores/reclutamiento';
 import { PELIGRO } from '../../lib/toolColors';
 import { fmtFecha, fmtNum, fmtPct } from './formato';
 
@@ -12,9 +12,8 @@ export const MIN_PERSONAS = 10;
 const pct = (parte: number, total: number) => (total > 0 ? (100 * parte) / total : null);
 
 /** Cuántas personas que entraron en cada proyecto no debían, venían de varios proyectos o están repetidas. Se ordena tocando el encabezado. */
-export function TablaProyectos({ proyectos, previas, metaNoElegibles }: {
+export function TablaProyectos({ proyectos, metaNoElegibles }: {
   proyectos: ProyectoReclutamiento[];
-  previas: Previas;
   metaNoElegibles: number | undefined;
 }) {
   // Primero el que más personas metió sin deber: el número, no el porcentaje.
@@ -28,8 +27,9 @@ export function TablaProyectos({ proyectos, previas, metaNoElegibles }: {
     const visibles = conGente.filter((p) => verTodos || p.participaron >= MIN_PERSONAS).map((p) => ({
       ...p,
       pctNoElegibles: pct(p.noElegibles, p.participaron),
-      repetidores: p.previas[previas],
-      pctRepetidores: pct(p.previas[previas], p.participaron),
+      // Repetidores en total (2 o más proyectos antes); el detalle por tramo está en las tarjetas.
+      repetidores: p.previas[2],
+      pctRepetidores: pct(p.previas[2], p.participaron),
       pctDuplicados: pct(p.duplicados, p.participaron),
     }));
     const valor = (f: (typeof visibles)[number]): number | string => {
@@ -47,7 +47,7 @@ export function TablaProyectos({ proyectos, previas, metaNoElegibles }: {
       const c = typeof x === 'string' ? x.localeCompare(y as string) : (x as number) - (y as number);
       return (orden.asc ? c : -c) || a.codigo.localeCompare(b.codigo);
     });
-  }, [conGente, verTodos, previas, orden]);
+  }, [conGente, verTodos, orden]);
 
   const encabezado = (col: Columna, texto: string, derecha = true) => (
     <th scope="col" className={`sticky top-0 z-10 bg-card px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground ${derecha ? 'text-right' : 'text-left'}`}>
@@ -79,7 +79,7 @@ export function TablaProyectos({ proyectos, previas, metaNoElegibles }: {
                 {encabezado('fecha', 'Inicio')}
                 {encabezado('entraron', 'Entraron a grupo')}
                 {encabezado('noElegibles', 'No debían entrar')}
-                {encabezado('repetidores', `Venían de ${previas}+ proyectos`)}
+                {encabezado('repetidores', 'Repetidores (2+ antes)')}
                 {encabezado('duplicados', 'Filas repetidas')}
               </tr>
             </thead>

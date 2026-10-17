@@ -19,7 +19,10 @@ export interface ProyectoReclutamiento {
    * distinto de «Pendiente» y vacío (contactada, confirmada, descartada, no show…). Las que se quedaron en «Pendiente» o sin estatus no cuentan.
    */
   marcadosTrabajados: number;
-  /** De las que participaron, las que llegaron con 2, 3, 4 o 5 participaciones previas o más (en otros proyectos, antes de este). */
+  /**
+   * De las que participaron, las que llegaron con 2 o más, 3 o más, 4 o más y 5 o más participaciones previas (en otros proyectos, antes
+   * de este). Es ACUMULADO: quien ya había participado 3 veces cuenta también en «2 o más». Los tramos que no se traslapan salen de restar.
+   */
   previas: { 2: number; 3: number; 4: number; 5: number };
   /** De las que participaron, las que aparecen en más de una fila de un mismo tablero. */
   duplicados: number;
@@ -33,8 +36,16 @@ export interface DatosReclutamiento {
   sinFecha: number;
 }
 
-export type Previas = 2 | 3 | 4 | 5;
-export const OPCIONES_PREVIAS: Previas[] = [2, 3, 4, 5];
+/**
+ * Los repetidores por cuántos proyectos anteriores ya habían participado, en tramos que NO se traslapan: una persona cae en uno solo.
+ * 2, 3 y 4 son «exactamente»; 5 es «5 o más». Los tramos suman el total de repetidores (2 o más).
+ */
+export type Tramo = 2 | 3 | 4 | 5;
+export const TRAMOS: Tramo[] = [2, 3, 4, 5];
+export const etiquetaTramo = (t: Tramo) => (t === 5 ? '5 o más proyectos antes' : `Exactamente ${t} proyectos antes`);
+
+/** Con qué clave se guarda la meta de cada tramo. */
+export const claveMetaTramo = (t: Tramo) => `repetidores_${t}`;
 
 export type ClaveIndicador = 'noElegibles' | 'avisosRespetados' | 'repetidores' | 'duplicados';
 
@@ -48,12 +59,16 @@ export interface DefinicionIndicador {
 export const INDICADORES: DefinicionIndicador[] = [
   { clave: 'noElegibles', etiqueta: 'No elegibles que entran', mejor: 'menos' },
   { clave: 'avisosRespetados', etiqueta: 'Avisos respetados', mejor: 'mas' },
-  { clave: 'repetidores', etiqueta: 'Repetidores', mejor: 'menos' },
+  { clave: 'repetidores', etiqueta: 'Repetidores (2 o más proyectos antes)', mejor: 'menos' },
   { clave: 'duplicados', etiqueta: 'Duplicados en el tablero', mejor: 'menos' },
 ];
 
-/** Con qué clave se guarda la meta: la de repetidores depende de cuántas participaciones previas se cuentan. */
-export const claveMeta = (clave: ClaveIndicador, previas: Previas) => (clave === 'repetidores' ? `repetidores_${previas}` : clave);
+/** Lo que se puede ver trimestre por trimestre: los cuatro indicadores y cada tramo de repetidores. */
+export type ClaveGrafica = ClaveIndicador | `tramo_${Tramo}`;
+export const OPCIONES_GRAFICA: Array<{ clave: ClaveGrafica; etiqueta: string; mejor: 'menos' | 'mas'; meta: string | null }> = [
+  ...INDICADORES.map((i) => ({ clave: i.clave as ClaveGrafica, etiqueta: i.etiqueta, mejor: i.mejor, meta: i.clave === 'repetidores' ? null : i.clave })),
+  ...TRAMOS.map((t) => ({ clave: `tramo_${t}` as ClaveGrafica, etiqueta: `Repetidores: ${t === 5 ? '5 o más' : `exactamente ${t}`} proyectos antes`, mejor: 'menos' as const, meta: claveMetaTramo(t) })),
+];
 
 // ── Periodos ─────────────────────────────────────────────────────────────────
 export type Periodo = '6m' | '12m' | 'anio' | 'todo';
@@ -91,18 +106,22 @@ export interface ResumenReclutamiento {
   avisosTrabajados: number;
   avisosRespetados: number;
   pctAvisosRespetados: number | null;
+  /** Repetidores en total (2 o más proyectos antes) y por tramo sin traslape: la suma de los tramos es el total. */
   repetidores: number;
   pctRepetidores: number | null;
+  tramos: Record<Tramo, number>;
   duplicados: number;
   pctDuplicados: number | null;
 }
 
-export function resumir(proyectos: ProyectoReclutamiento[], previas: Previas): ResumenReclutamiento {
+export function resumir(proyectos: ProyectoReclutamiento[]): ResumenReclutamiento {
   const suma = (f: (p: ProyectoReclutamiento) => number) => proyectos.reduce((s, p) => s + f(p), 0);
   const participaron = suma((p) => p.participaron);
   const noElegibles = suma((p) => p.noElegibles);
   const avisosTrabajados = suma((p) => p.marcadosTrabajados ?? 0);
-  const repetidores = suma((p) => p.previas[previas]);
+  const acumulado = (k: Tramo) => suma((p) => p.previas[k]);
+  const repetidores = acumulado(2);
+  const tramos: Record<Tramo, number> = { 2: repetidores - acumulado(3), 3: acumulado(3) - acumulado(4), 4: acumulado(4) - acumulado(5), 5: acumulado(5) };
   const duplicados = suma((p) => p.duplicados);
   // Las no elegibles que entraron siempre tuvieron seguimiento (entrar lo es), así que son parte de las trabajadas.
   const avisosRespetados = Math.max(0, avisosTrabajados - noElegibles);
@@ -110,7 +129,7 @@ export function resumir(proyectos: ProyectoReclutamiento[], previas: Previas): R
     proyectos: proyectos.length, participaron,
     noElegibles, pctNoElegibles: porcentaje(noElegibles, participaron),
     avisosTrabajados, avisosRespetados, pctAvisosRespetados: porcentaje(avisosRespetados, avisosTrabajados),
-    repetidores, pctRepetidores: porcentaje(repetidores, participaron),
+    repetidores, pctRepetidores: porcentaje(repetidores, participaron), tramos,
     duplicados, pctDuplicados: porcentaje(duplicados, participaron),
   };
 }
@@ -125,10 +144,15 @@ export function valorDe(r: ResumenReclutamiento, clave: ClaveIndicador): { pct: 
   }
 }
 
+/** Un tramo de repetidores: el porcentaje de quienes entraron que cayeron justo en ese tramo, y de qué se saca. */
+export function valorTramo(r: ResumenReclutamiento, t: Tramo): { pct: number | null; parte: number; total: number } {
+  return { pct: porcentaje(r.tramos[t], r.participaron), parte: r.tramos[t], total: r.participaron };
+}
+
 export interface PuntoTrimestre { trimestre: string; parte: number; total: number; pct: number | null }
 
 /** Un indicador trimestre por trimestre (por el trimestre de inicio del proyecto), del más viejo al más nuevo. */
-export function porTrimestre(proyectos: ProyectoReclutamiento[], clave: ClaveIndicador, previas: Previas): PuntoTrimestre[] {
+export function porTrimestre(proyectos: ProyectoReclutamiento[], clave: ClaveGrafica): PuntoTrimestre[] {
   const trimestres = new Map<string, ProyectoReclutamiento[]>();
   for (const p of proyectos) {
     const t = `${p.fecha.slice(0, 4)}-T${Math.floor((Number(p.fecha.slice(5, 7)) - 1) / 3) + 1}`;
@@ -136,7 +160,8 @@ export function porTrimestre(proyectos: ProyectoReclutamiento[], clave: ClaveInd
     if (lista) lista.push(p); else trimestres.set(t, [p]);
   }
   return [...trimestres].sort(([a], [b]) => a.localeCompare(b)).map(([trimestre, lista]) => {
-    const { pct, parte, total } = valorDe(resumir(lista, previas), clave);
+    const resumen = resumir(lista);
+    const { pct, parte, total } = clave.startsWith('tramo_') ? valorTramo(resumen, Number(clave.slice(6)) as Tramo) : valorDe(resumen, clave as ClaveIndicador);
     return { trimestre, parte, total, pct };
   });
 }
@@ -160,12 +185,18 @@ export function leerMeta(texto: string): number | null | undefined {
 }
 
 /** La frase, en palabras llanas y con los números, que va debajo de cada porcentaje. `v` sale de valorDe. */
-export function fraseIndicador(clave: ClaveIndicador, v: { parte: number; total: number }, previas: Previas): string {
+export function fraseIndicador(clave: ClaveIndicador, v: { parte: number; total: number }): string {
   const n = (x: number) => x.toLocaleString('es-MX');
   switch (clave) {
     case 'noElegibles': return `${n(v.parte)} de ${n(v.total)} personas que entraron a un grupo ya habían participado con el mismo cliente o en los 6 meses anteriores.`;
     case 'avisosRespetados': return `De ${n(v.total)} personas con aviso a las que el equipo dio seguimiento, ${n(v.parte)} se frenaron y ${n(v.total - v.parte)} terminaron en un grupo.`;
-    case 'repetidores': return `${n(v.parte)} de ${n(v.total)} personas que entraron ya habían participado antes en ${previas} o más proyectos.`;
+    case 'repetidores': return `${n(v.parte)} de ${n(v.total)} personas que entraron ya habían participado antes en 2 o más proyectos.`;
     case 'duplicados': return `${n(v.parte)} de ${n(v.total)} personas que entraron aparecen en más de una fila de su tablero.`;
   }
+}
+
+/** La frase de un tramo de repetidores (sin traslape con los demás). */
+export function fraseTramo(t: Tramo, v: { parte: number; total: number }): string {
+  const n = (x: number) => x.toLocaleString('es-MX');
+  return `${n(v.parte)} de ${n(v.total)} personas que entraron ya habían participado antes en ${t === 5 ? '5 o más proyectos' : `exactamente ${t} proyectos`}.`;
 }

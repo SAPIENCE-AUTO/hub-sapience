@@ -10,10 +10,10 @@ import { CLASE_BOTON_SUAVE, ESTILO_BOTON_PRIMARIO } from '@/components/payments/
 import { TarjetaIndicador } from '@/components/indicadores/TarjetaIndicador';
 import { TendenciaTrimestral } from '@/components/indicadores/TendenciaTrimestral';
 import { TablaProyectos } from '@/components/indicadores/TablaProyectos';
-import { fmtInstante, fmtNum } from '@/components/indicadores/formato';
+import { fmtInstante, fmtNum, fmtPct } from '@/components/indicadores/formato';
 import {
-  INDICADORES, OPCIONES_PREVIAS, PERIODOS, claveMeta, enPeriodo, fraseIndicador, porTrimestre, resumir, valorDe,
-  type ClaveIndicador, type DatosReclutamiento, type Periodo, type Previas,
+  INDICADORES, OPCIONES_GRAFICA, PERIODOS, TRAMOS, claveMetaTramo, enPeriodo, etiquetaTramo, fraseIndicador, fraseTramo, porTrimestre, resumir,
+  valorDe, valorTramo, type ClaveGrafica, type DatosReclutamiento, type Periodo,
 } from '@/lib/indicadores/reclutamiento';
 import { TEAL } from '@/lib/toolColors';
 
@@ -22,11 +22,6 @@ const PERMITIDOS = ['sergio@sapience.com.mx'];
 
 // Hoy por ahora hay un área; las demás (Comercial, Operación, Finanzas) se suman aquí como pestañas nuevas.
 const AREAS = [{ id: 'reclutamiento', etiqueta: 'Reclutamiento' }] as const;
-
-/** Nombres cortos para el selector de la gráfica. */
-const NOMBRE_CORTO: Record<ClaveIndicador, string> = {
-  noElegibles: 'No elegibles', avisosRespetados: 'Avisos respetados', repetidores: 'Repetidores', duplicados: 'Duplicados',
-};
 
 const hoyLocal = () => new Date().toLocaleDateString('en-CA'); // AAAA-MM-DD en la zona de quien mira
 
@@ -42,8 +37,7 @@ export default function IndicadoresPage() {
   const [cargando, setCargando] = useState(true);
   const [calculando, setCalculando] = useState(false);
   const [periodo, setPeriodo] = useState<Periodo>('12m');
-  const [previas, setPrevias] = useState<Previas>(3);
-  const [graficar, setGraficar] = useState<ClaveIndicador>('noElegibles');
+  const [graficar, setGraficar] = useState<ClaveGrafica>('noElegibles');
 
   const aplicar = (r: { datos?: DatosReclutamiento; calculadoEn?: string; metas?: Record<string, number> }) => {
     setDatos(r.datos);
@@ -89,9 +83,10 @@ export default function IndicadoresPage() {
 
   const hoy = hoyLocal();
   const enElPeriodo = useMemo(() => (datos ? enPeriodo(datos.proyectos, periodo, hoy) : []), [datos, periodo, hoy]);
-  const resumen = useMemo(() => resumir(enElPeriodo, previas), [enElPeriodo, previas]);
-  const trimestres = useMemo(() => porTrimestre(enElPeriodo, graficar, previas), [enElPeriodo, graficar, previas]);
-  const definicionGrafica = INDICADORES.find((i) => i.clave === graficar)!;
+  const resumen = useMemo(() => resumir(enElPeriodo), [enElPeriodo]);
+  const trimestres = useMemo(() => porTrimestre(enElPeriodo, graficar), [enElPeriodo, graficar]);
+  const opcionGrafica = OPCIONES_GRAFICA.find((o) => o.clave === graficar)!;
+  const totalRepetidores = valorDe(resumen, 'repetidores');
 
   if (!permitido) {
     return <div className="p-6 text-sm text-muted-foreground">Esta sección no está habilitada para tu usuario.</div>;
@@ -130,7 +125,7 @@ export default function IndicadoresPage() {
 
       {cargando && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[190px] rounded-xl" />)}</div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-[190px] rounded-xl" />)}</div>
           <Skeleton className="h-64 rounded-xl" />
         </div>
       )}
@@ -151,61 +146,79 @@ export default function IndicadoresPage() {
         <>
           <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2.5">
             <Segmentado<Periodo> etiqueta="Periodo" valor={periodo} onCambio={setPeriodo} opciones={PERIODOS.map((p) => ({ valor: p.valor, etiqueta: p.etiqueta }))} />
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              Cuenta como repetidor quien ya participó antes en
-              <Segmentado<`${Previas}`>
-                etiqueta="Proyectos previos para contar a un repetidor"
-                valor={`${previas}`}
-                onCambio={(v) => setPrevias(Number(v) as Previas)}
-                opciones={OPCIONES_PREVIAS.map((k) => ({ valor: `${k}` as `${Previas}`, etiqueta: `${k}+` }))}
-              />
-              proyectos
-            </div>
             <span className="ml-auto text-xs text-muted-foreground">
               {fmtNum(resumen.proyectos)} proyectos · {fmtNum(resumen.participaron)} personas que entraron a un grupo
             </span>
           </div>
 
-          <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {INDICADORES.map((ind) => {
+          <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {INDICADORES.filter((ind) => ind.clave !== 'repetidores').map((ind) => {
               const v = valorDe(resumen, ind.clave);
-              const clave = claveMeta(ind.clave, previas);
               return (
                 <TarjetaIndicador
-                  key={clave}
-                  etiqueta={ind.clave === 'repetidores' ? `Repetidores (${previas}+ proyectos)` : ind.etiqueta}
-                  frase={fraseIndicador(ind.clave, v, previas)}
+                  key={ind.clave}
+                  etiqueta={ind.etiqueta}
+                  frase={fraseIndicador(ind.clave, v)}
                   pct={v.pct}
                   mejor={ind.mejor}
-                  meta={metas[clave]}
-                  onMeta={(valor) => guardarMeta(clave, valor)}
+                  meta={metas[ind.clave]}
+                  onMeta={(valor) => guardarMeta(ind.clave, valor)}
                 />
               );
             })}
           </div>
 
+          <div className="mb-5 rounded-xl border bg-muted/30 p-4">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <div>
+                <h2 className="text-sm font-semibold">Repetidores</h2>
+                <p className="text-xs text-muted-foreground">Personas que entraron y ya habían participado antes en otros proyectos (sin contar este). Cada una cae en un solo tramo.</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                En total: <b className="text-foreground">{fmtPct(totalRepetidores.pct)}</b> · {fmtNum(totalRepetidores.parte)} de {fmtNum(totalRepetidores.total)}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {TRAMOS.map((t) => {
+                const v = valorTramo(resumen, t);
+                return (
+                  <TarjetaIndicador
+                    key={t}
+                    etiqueta={etiquetaTramo(t)}
+                    frase={fraseTramo(t, v)}
+                    pct={v.pct}
+                    mejor="menos"
+                    meta={metas[claveMetaTramo(t)]}
+                    onMeta={(valor) => guardarMeta(claveMetaTramo(t), valor)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
           <div className="mb-5 rounded-xl border bg-card p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold">{definicionGrafica.etiqueta}, por trimestre</h2>
-              <Segmentado<ClaveIndicador>
-                etiqueta="Indicador de la gráfica"
-                sobre="tarjeta"
-                valor={graficar}
-                onCambio={setGraficar}
-                opciones={INDICADORES.map((i) => ({ valor: i.clave, etiqueta: NOMBRE_CORTO[i.clave] }))}
-              />
+              <h2 className="text-sm font-semibold">{opcionGrafica.etiqueta}, por trimestre</h2>
+              <select
+                aria-label="Indicador de la gráfica"
+                value={graficar}
+                onChange={(e) => setGraficar(e.target.value as ClaveGrafica)}
+                className="rounded-[10px] border bg-muted px-2.5 py-1.5 text-xs font-semibold text-foreground outline-none focus:ring-2 focus:ring-[#0F3D4D]/40"
+              >
+                {OPCIONES_GRAFICA.map((o) => <option key={o.clave} value={o.clave}>{o.etiqueta}</option>)}
+              </select>
             </div>
-            <TendenciaTrimestral puntos={trimestres} meta={metas[claveMeta(graficar, previas)]} mejor={definicionGrafica.mejor} />
+            <TendenciaTrimestral puntos={trimestres} meta={opcionGrafica.meta ? metas[opcionGrafica.meta] : undefined} mejor={opcionGrafica.mejor} />
           </div>
 
           <div className="mb-5">
             <h2 className="mb-2 text-sm font-semibold">Por proyecto</h2>
-            <TablaProyectos proyectos={enElPeriodo} previas={previas} metaNoElegibles={metas.noElegibles} />
+            <TablaProyectos proyectos={enElPeriodo} metaNoElegibles={metas.noElegibles} />
           </div>
 
           <div className="space-y-1 text-[11px] leading-relaxed text-muted-foreground">
             <p><b>Aviso («no elegible»):</b> la persona ya había participado con el mismo cliente, o en cualquier proyecto en los 6 meses anteriores al inicio de este. <b>Entró a un grupo:</b> asistió, o está en un grupo con estatus vacío, pendiente o confirmado. <b>Seguimiento:</b> tiene un estatus distinto de «Pendiente» o vacío. Cada cifra se mide contra la fecha de inicio de su proyecto.</p>
-            <p><b>Avisos respetados:</b> de las personas con aviso a las que el equipo dio seguimiento, cuántas se frenaron en vez de terminar en un grupo. Las que se quedan en «Pendiente» sin que nadie las toque no cuentan. A los repetidores solo se les cuentan los proyectos anteriores. Las filas repetidas son la misma persona más de una vez en un mismo tablero.</p>
+            <p><b>Avisos respetados:</b> de las personas con aviso a las que el equipo dio seguimiento, cuántas se frenaron en vez de terminar en un grupo. Las que se quedan en «Pendiente» sin que nadie las toque no cuentan. <b>Repetidores:</b> solo se cuentan los proyectos anteriores; los tramos 2, 3 y 4 son exactos y el último es «5 o más», así que suman el total. Las filas repetidas son la misma persona más de una vez en un mismo tablero.</p>
             {datos.proyectos.some((p) => p.inferida) && <p>* El proyecto no tiene fecha de inicio: se usó la de su última actividad.</p>}
             {datos.sinFecha > 0 && <p>{fmtNum(datos.sinFecha)} registros persona-proyecto quedaron fuera por no haber ninguna fecha del proyecto.</p>}
           </div>

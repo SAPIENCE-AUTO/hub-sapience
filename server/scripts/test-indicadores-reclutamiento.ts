@@ -11,7 +11,8 @@ import { ZiteError } from '../compat/errors';
 import { DATE_OID, NUMERIC_OID, TIMESTAMPTZ_OID, parseDate, parseNumeric, parseTimestamptz } from '../compat/datetimeParsers';
 import { buildIdentityClusters, type IdentityRow } from '../../src/lib/duplicateIdentity';
 import {
-  claveMeta, enPeriodo, estadoMeta, fraseIndicador, leerMeta, porTrimestre, restarMeses, resumir, valorDe, type DatosReclutamiento, type ProyectoReclutamiento,
+  claveMetaTramo, enPeriodo, estadoMeta, fraseIndicador, fraseTramo, leerMeta, porTrimestre, restarMeses, resumir, valorDe, valorTramo,
+  type DatosReclutamiento, type ProyectoReclutamiento,
 } from '../../src/lib/indicadores/reclutamiento';
 import { calcularReclutamiento } from '../../src/serverUtils/indicadores/reclutamiento';
 import getIndicadoresReclutamiento from '../../src/api/getIndicadoresReclutamiento';
@@ -62,47 +63,67 @@ await prueba('enPeriodo: incluye el día de corte, deja fuera lo que aún no emp
 
 // ── resumen y metas ──────────────────────────────────────────────────────────
 await prueba('resumir: suma los proyectos y saca cada porcentaje de su propio total', () => {
-  const r = resumir(enPeriodo(lista, '12m', HOY), 3);
+  const r = resumir(enPeriodo(lista, '12m', HOY));
   assert.equal(r.proyectos, 3);
   assert.equal(r.participaron, 100);
   assert.deepEqual([r.noElegibles, r.pctNoElegibles], [9, 9]);
   // Con aviso y seguimiento: 18 personas; 9 de ellas entraron (las no elegibles) y 9 se frenaron.
   assert.deepEqual([r.avisosTrabajados, r.avisosRespetados], [18, 9]);
   assert.equal(r.pctAvisosRespetados, 50);
-  assert.deepEqual([r.repetidores, r.pctRepetidores], [8, 8]);
+  // Repetidores en total = 2 o más proyectos antes: 6 + 9 + 5.
+  assert.deepEqual([r.repetidores, r.pctRepetidores], [20, 20]);
   assert.deepEqual([r.duplicados, r.pctDuplicados], [15, 15]);
-  assert.equal(resumir(enPeriodo(lista, '12m', HOY), 2).repetidores, 20);
-  assert.equal(resumir(enPeriodo(lista, '12m', HOY), 5).repetidores, 1);
+});
+await prueba('resumir: los tramos de repetidores no se traslapan y suman el total', () => {
+  const r = resumir(enPeriodo(lista, '12m', HOY));
+  // Acumulado de 2, 3, 4 y 5 o más: 20, 8, 3, 1  →  exactamente 2: 12, exactamente 3: 5, exactamente 4: 2, 5 o más: 1.
+  assert.deepEqual(r.tramos, { 2: 12, 3: 5, 4: 2, 5: 1 });
+  assert.equal(r.tramos[2] + r.tramos[3] + r.tramos[4] + r.tramos[5], r.repetidores);
+  // Quien llegó con 5 o más proyectos antes está en un solo tramo, no en los cuatro.
+  const solo5 = resumir([proyecto({ codigo: 'X', fecha: '2026-01-01', participaron: 10, previas: { 2: 10, 3: 10, 4: 10, 5: 10 } })]);
+  assert.deepEqual(solo5.tramos, { 2: 0, 3: 0, 4: 0, 5: 10 });
+  assert.equal(solo5.repetidores, 10);
 });
 await prueba('resumir: sin proyectos no hay porcentaje (no se inventa un 0 %)', () => {
-  const r = resumir([], 3);
+  const r = resumir([]);
   assert.deepEqual([r.participaron, r.pctNoElegibles, r.pctAvisosRespetados, r.pctRepetidores, r.pctDuplicados], [0, null, null, null, null]);
+  assert.deepEqual(valorTramo(r, 3), { pct: null, parte: 0, total: 0 });
 });
 await prueba('valorDe: dice de qué total sale cada indicador', () => {
-  const r = resumir(enPeriodo(lista, '12m', HOY), 3);
+  const r = resumir(enPeriodo(lista, '12m', HOY));
   assert.deepEqual(valorDe(r, 'noElegibles'), { pct: 9, parte: 9, total: 100, de: 'personas que entraron' });
   assert.deepEqual(valorDe(r, 'avisosRespetados'), { pct: 50, parte: 9, total: 18, de: 'personas con aviso y con seguimiento' });
-  assert.equal(valorDe(r, 'repetidores').parte, 8);
+  assert.equal(valorDe(r, 'repetidores').parte, 20);
   assert.equal(valorDe(r, 'duplicados').parte, 15);
+  assert.deepEqual(valorTramo(r, 3), { pct: 5, parte: 5, total: 100 });
+  assert.deepEqual(valorTramo(r, 5), { pct: 1, parte: 1, total: 100 });
 });
 await prueba('porTrimestre: agrupa por trimestre de inicio, en orden, con la parte, el total y el porcentaje', () => {
-  const t = porTrimestre(lista.filter((p) => p.codigo !== 'FUTURO'), 'noElegibles', 3);
+  const t = porTrimestre(lista.filter((p) => p.codigo !== 'FUTURO'), 'noElegibles');
   assert.deepEqual(t.map((x) => x.trimestre), ['2024-T1', '2025-T4', '2026-T2', '2026-T3']);
   assert.deepEqual(t.find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', parte: 3, total: 30, pct: 10 });
-  assert.equal(porTrimestre([], 'noElegibles', 3).length, 0);
+  assert.equal(porTrimestre([], 'noElegibles').length, 0);
 });
 await prueba('porTrimestre: sirve para cualquier indicador, con su propio total', () => {
   const sin = lista.filter((p) => p.codigo !== 'FUTURO');
-  assert.deepEqual(porTrimestre(sin, 'avisosRespetados', 3).find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', parte: 3, total: 6, pct: 50 });
-  assert.deepEqual(porTrimestre(sin, 'repetidores', 3).find((x) => x.trimestre === '2025-T4'), { trimestre: '2025-T4', parte: 3, total: 20, pct: 15 });
-  assert.deepEqual(porTrimestre(sin, 'repetidores', 5).find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', parte: 1, total: 30, pct: (100 * 1) / 30 });
-  assert.deepEqual(porTrimestre(sin, 'duplicados', 3).find((x) => x.trimestre === '2026-T3'), { trimestre: '2026-T3', parte: 7, total: 50, pct: 14 });
+  assert.deepEqual(porTrimestre(sin, 'avisosRespetados').find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', parte: 3, total: 6, pct: 50 });
+  assert.deepEqual(porTrimestre(sin, 'repetidores').find((x) => x.trimestre === '2025-T4'), { trimestre: '2025-T4', parte: 6, total: 20, pct: 30 });
+  assert.deepEqual(porTrimestre(sin, 'duplicados').find((x) => x.trimestre === '2026-T3'), { trimestre: '2026-T3', parte: 7, total: 50, pct: 14 });
+});
+await prueba('porTrimestre: también un tramo de repetidores (sin traslape)', () => {
+  const sin = lista.filter((p) => p.codigo !== 'FUTURO');
+  // A (2025-T4) acumulado {2: 6, 3: 3}: exactamente 2 = 3 de 20. B (2026-T2) {3: 4, 4: 2, 5: 1}: exactamente 3 = 2 de 30 y 5 o más = 1 de 30.
+  assert.deepEqual(porTrimestre(sin, 'tramo_2').find((x) => x.trimestre === '2025-T4'), { trimestre: '2025-T4', parte: 3, total: 20, pct: 15 });
+  assert.deepEqual(porTrimestre(sin, 'tramo_3').find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', parte: 2, total: 30, pct: (100 * 2) / 30 });
+  assert.deepEqual(porTrimestre(sin, 'tramo_5').find((x) => x.trimestre === '2026-T2'), { trimestre: '2026-T2', parte: 1, total: 30, pct: (100 * 1) / 30 });
 });
 await prueba('fraseIndicador: cada frase dice con números qué quiere decir el porcentaje', () => {
-  assert.equal(fraseIndicador('noElegibles', { parte: 384, total: 2686 }, 3), '384 de 2,686 personas que entraron a un grupo ya habían participado con el mismo cliente o en los 6 meses anteriores.');
-  assert.equal(fraseIndicador('avisosRespetados', { parte: 104, total: 488 }, 3), 'De 488 personas con aviso a las que el equipo dio seguimiento, 104 se frenaron y 384 terminaron en un grupo.');
-  assert.equal(fraseIndicador('repetidores', { parte: 144, total: 2686 }, 3), '144 de 2,686 personas que entraron ya habían participado antes en 3 o más proyectos.');
-  assert.equal(fraseIndicador('duplicados', { parte: 282, total: 2686 }, 3), '282 de 2,686 personas que entraron aparecen en más de una fila de su tablero.');
+  assert.equal(fraseIndicador('noElegibles', { parte: 384, total: 2686 }), '384 de 2,686 personas que entraron a un grupo ya habían participado con el mismo cliente o en los 6 meses anteriores.');
+  assert.equal(fraseIndicador('avisosRespetados', { parte: 104, total: 488 }), 'De 488 personas con aviso a las que el equipo dio seguimiento, 104 se frenaron y 384 terminaron en un grupo.');
+  assert.equal(fraseIndicador('repetidores', { parte: 283, total: 2686 }), '283 de 2,686 personas que entraron ya habían participado antes en 2 o más proyectos.');
+  assert.equal(fraseTramo(3, { parte: 67, total: 2686 }), '67 de 2,686 personas que entraron ya habían participado antes en exactamente 3 proyectos.');
+  assert.equal(fraseTramo(5, { parte: 29, total: 2686 }), '29 de 2,686 personas que entraron ya habían participado antes en 5 o más proyectos.');
+  assert.equal(fraseIndicador('duplicados', { parte: 282, total: 2686 }), '282 de 2,686 personas que entraron aparecen en más de una fila de su tablero.');
 });
 await prueba('estadoMeta: «menos» y «más» es mejor, comparando con un decimal y sin meta no se juzga', () => {
   assert.equal(estadoMeta(4.9, 5, 'menos'), 'enMeta');
@@ -114,9 +135,8 @@ await prueba('estadoMeta: «menos» y «más» es mejor, comparando con un decim
   assert.equal(estadoMeta(null, 5, 'menos'), 'sinMeta');
   assert.equal(estadoMeta(0, 0, 'menos'), 'enMeta');
 });
-await prueba('claveMeta: la de repetidores depende de cuántas participaciones previas se cuentan', () => {
-  assert.equal(claveMeta('repetidores', 3), 'repetidores_3');
-  assert.equal(claveMeta('noElegibles', 3), 'noElegibles');
+await prueba('claveMetaTramo: cada tramo de repetidores guarda su propia meta', () => {
+  assert.deepEqual([2, 3, 4, 5].map((t) => claveMetaTramo(t as 2 | 3 | 4 | 5)), ['repetidores_2', 'repetidores_3', 'repetidores_4', 'repetidores_5']);
 });
 
 await prueba('leerMeta: acepta punto o coma, vacío quita la meta y lo demás no vale', () => {
