@@ -9,12 +9,12 @@ import { pool } from '../compat';
 import { ZiteError } from '../compat/errors';
 import { DATE_OID, NUMERIC_OID, TIMESTAMPTZ_OID, parseDate, parseNumeric, parseTimestamptz } from '../compat/datetimeParsers';
 import {
-  MAX_PERSONAS, MAX_PORCENTAJE, RUBROS, acumuladoPorPersona, costoDealDe, enPeriodo, esEditado, esPorOmision, estadoReparto, etiquetaRubros, leerMonto, leerPorcentaje, montoDe,
-  montoDeRubro, montosDe, normalizarNombre, partesIguales, porcentajeDeMonto, presupuestoDe, repartirMonto, rubrosPorOmision, sumaPorcentajes, textoNumero,
-  totalesPorMoneda, validarReparto, validarRubros, type PersonaReparto, type ProyectoManagement, type RubrosDeal,
+  MAX_PERSONAS, MAX_PORCENTAJE, RUBROS, acumuladoPorPersona, costoDealDe, enPeriodo, esEditado, esPorOmision, estadoDeDeal, estadoReparto, etiquetaRubros, leerMonto, leerPorcentaje,
+  managementDe, montoDe, montoDeRubro, montosDe, normalizarNombre, partesIguales, porcentajeDeMonto, presupuestoDe, repartirMonto, resumenDeDeal, rubrosPorOmision, sumaPorcentajes,
+  textoNumero, totalesDeDeals, totalesPorMoneda, validarReparto, validarRubros, type DealManagement, type PersonaReparto, type ProyectoDisponible, type ProyectoManagement, type RubrosDeal,
 } from '../../src/lib/pagosManagement/reparto';
 import {
-  agregarRubro, conBase, conMonto, conPartesIguales, conPorcentaje, conTextoDeRubro, filaVacia, filasDe, personasDe, quitarRubro, recalcular, rubroEditado,
+  agregarRubro, conBase, conMonto, conPartesIguales, conPorcentaje, conTextoDeRubro, dealAGuardar, filaVacia, filasDe, personasDe, quitarRubro, recalcular, rubroEditado,
   rubrosAGuardar, rubrosDe, rubrosFaltantes, totalDe, type FilaReparto, type FilaRubro,
 } from '../../src/lib/pagosManagement/filas';
 import getPagosManagement from '../../src/api/getPagosManagement';
@@ -396,6 +396,67 @@ await prueba('filas: personasDe ignora los renglones vacíos, deja pasar un porc
   assert.equal(validarReparto([{ ...p[3], porcentaje: 1500 }]), 'Un porcentaje no puede pasar de 1000.');
 });
 
+// ── deals que se fragmentan en proyectos: cuánto de lo cotizado ya está repartido ──
+const proyectoDe = (codigo: string, extra: Partial<ProyectoManagement>): ProyectoManagement => ({
+  repartoId: 'r-' + codigo, projectId: 'p-' + codigo, codigo, rubrosDeal: {}, monedaDeal: 'MXN', rubros: rubrosPorOmision(), moneda: 'MXN', personas: [], eliminado: false, ...extra,
+});
+const disponibleDe = (codigo: string, extra: Partial<ProyectoDisponible>): ProyectoDisponible => ({ projectId: 'p-' + codigo, codigo, monedaDeal: 'MXN', rubrosDeal: {}, ...extra });
+const DEAL_X: DealManagement = { dealId: 'deal-1', nombre: 'Deal X', moneda: 'MXN', cotizado: 100000, unidades: [{ precio: 2000, cantidad: 10 }, { precio: 12000, cantidad: 5 }] };
+await prueba('managementDe: de un proyecto solo cuenta su rubro Management, puesto a mano o el del deal (los demás rubros no restan de lo cotizado)', () => {
+  assert.equal(managementDe({ rubrosDeal: DEAL, rubros: rubrosPorOmision() }), 25000);
+  assert.equal(managementDe({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: 15000 }, { rubro: 'Moderación', monto: 5000 }] }), 15000);
+  assert.equal(managementDe({ rubrosDeal: DEAL, rubros: [{ rubro: 'Moderación', monto: null }] }), 0);
+  assert.equal(managementDe({ rubrosDeal: {}, rubros: rubrosPorOmision() }), 0);
+  assert.equal(managementDe({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: 0 }] }), 0);
+});
+await prueba('resumenDeDeal: suma lo que se llevan sus proyectos (con y sin reparto, sin los de otro deal ni los eliminados) y dice cuánto queda y qué porcentaje es', () => {
+  const proyectos: ProyectoManagement[] = [
+    proyectoDe('A', { dealId: 'deal-1', rubros: [{ rubro: 'Management', monto: 15000 }, { rubro: 'Moderación', monto: 5000 }], inicio: '2026-04-28', personas: [interna('u1', 'Ana', 100)] }),
+    proyectoDe('B', { dealId: 'deal-1', rubrosDeal: mgmt(25000), inicio: '2026-06-09' }), // sigue a su deal (el vinculado): vale lo del deal, sin escribir nada
+    proyectoDe('C', { dealId: 'deal-2', rubros: [{ rubro: 'Management', monto: 99999 }], inicio: '2026-07-01' }),
+    proyectoDe('D', { dealId: 'deal-1', rubros: [{ rubro: 'Management', monto: 8000 }], eliminado: true, projectId: null }),
+    proyectoDe('E', { dealId: null, rubros: [{ rubro: 'Management', monto: 7000 }] }),
+    proyectoDe('F', { dealId: 'deal-1', rubros: [{ rubro: 'Management', monto: 5000 }] }), // sin fecha: va al final
+  ];
+  const sinMonto = [disponibleDe('G', { dealId: 'deal-1', inicio: '2026-09-01' })]; // del deal, pero todavía sin monto
+  const r = resumenDeDeal(DEAL_X, proyectos, sinMonto);
+  assert.deepEqual(r.proyectos.map((p) => [p.codigo, p.monto]), [['G', 0], ['B', 25000], ['A', 15000], ['F', 5000]]);
+  assert.deepEqual([r.asignado, r.disponible, r.porcentaje], [45000, 55000, 45]);
+  assert.deepEqual([r.proyectos[0].estadoReparto, r.proyectos[2].estadoReparto, r.proyectos[2].repartoId], ['sinRepartir', 'completo', 'r-A']);
+  // Sin proyectos queda todo lo cotizado; y si se llevan más de lo cotizado queda negativo (se avisa, pero se deja).
+  const vacio = resumenDeDeal(DEAL_X, [], []);
+  assert.deepEqual([vacio.asignado, vacio.disponible, vacio.porcentaje, vacio.proyectos.length], [0, 100000, 0, 0]);
+  const pasado = resumenDeDeal(DEAL_X, [proyectoDe('X', { dealId: 'deal-1', rubros: [{ rubro: 'Management', monto: 130000 }] })], []);
+  assert.deepEqual([pasado.asignado, pasado.disponible, pasado.porcentaje], [130000, -30000, 130]);
+  // Los centavos no se pierden; y sin cotizado no hay porcentaje que calcular.
+  assert.equal(resumenDeDeal({ ...DEAL_X, cotizado: 100 }, [proyectoDe('Y', { dealId: 'deal-1', rubros: [{ rubro: 'Management', monto: 33.33 }] }), proyectoDe('Z', { dealId: 'deal-1', rubros: [{ rubro: 'Management', monto: 33.33 }] })], []).disponible, 33.34);
+  assert.equal(resumenDeDeal({ ...DEAL_X, cotizado: 0 }, [], []).porcentaje, 0);
+});
+await prueba('estadoDeDeal: sin asignar, por asignar, completo (unos centavos no cuentan) y se pasa', () => {
+  const e = (asignado: number, cotizado = 100) => estadoDeDeal({ asignado, disponible: cotizado - asignado });
+  assert.deepEqual([e(0), e(40), e(100), e(99.996), e(100.004), e(100.5)], ['sinAsignar', 'parcial', 'completo', 'completo', 'completo', 'excedido']);
+  assert.equal(estadoDeDeal({ asignado: 0, disponible: 0 }), 'sinAsignar'); // un deal sin Management cotizado y sin proyectos
+});
+await prueba('totalesDeDeals: cotizado, asignado, lo que falta y lo que se pasó, por moneda (un deal que se pasa no le resta a otro)', () => {
+  const dolares: DealManagement = { ...DEAL_X, dealId: 'deal-usd', moneda: 'USD', cotizado: 1000 };
+  const rs = [
+    resumenDeDeal(DEAL_X, [proyectoDe('A', { dealId: 'deal-1', rubros: [{ rubro: 'Management', monto: 40000 }] })], []), // 40,000 de 100,000
+    resumenDeDeal({ ...DEAL_X, dealId: 'deal-2', cotizado: 50000 }, [proyectoDe('B', { dealId: 'deal-2', rubros: [{ rubro: 'Management', monto: 60000 }] })], []), // se pasa 10,000
+    resumenDeDeal(dolares, [], []),
+  ];
+  const t = totalesDeDeals(rs);
+  assert.deepEqual([t.cotizado.MXN, t.asignado.MXN, t.porAsignar.MXN, t.excedido.MXN, t.dealsExcedidos], [150000, 100000, 60000, 10000, 1]);
+  assert.deepEqual([t.cotizado.USD, t.asignado.USD, t.porAsignar.USD, t.excedido.USD], [1000, 0, 1000, 0]);
+});
+await prueba('dealAGuardar: el deal vinculado (o ninguno) no se guarda como asignado, porque el proyecto lo sigue; cualquier otro sí', () => {
+  assert.equal(dealAGuardar('deal-1', 'deal-1'), null);
+  assert.equal(dealAGuardar('', null), null);
+  assert.equal(dealAGuardar('', undefined), null);
+  assert.equal(dealAGuardar('deal-2', 'deal-1'), 'deal-2');
+  assert.equal(dealAGuardar('deal-2', null), 'deal-2');
+  assert.equal(dealAGuardar('', 'deal-1'), null); // sin elegir nada: sigue al vinculado
+});
+
 // ── endpoints, de punta a punta contra PGlite ────────────────────────────────
 const pg = await PGlite.create({ parsers: { [DATE_OID]: parseDate, [TIMESTAMPTZ_OID]: parseTimestamptz, [NUMERIC_OID]: parseNumeric } });
 const q = async (sql: string, params?: unknown[]) => {
@@ -707,6 +768,161 @@ await prueba('si falta la tabla de rubros (el código nuevo antes que el script)
   await assert.rejects(() => guardar({ projectId: alfa, personas: ana100 }), (e: unknown) => e instanceof ZiteError && /add-pagos-management-tables/.test(e.message));
   await pg.exec(ddl!);
   assert.equal((await leer()).sinTablas, false);
+});
+
+// ── deals que se fragmentan en proyectos, de punta a punta ───────────────────
+// «Deal Fragmentado»: 40 sesiones a $2,000 y 6 a $12,000 (152,000 de Management); una línea excluida y otra de Moderación no cuentan. «Deal Chico» es chico
+// (2 × 3 × $1,000 = 6,000) para probar que se puede pasar. «Deal Prospecto» no está ganado ni tiene proyectos: no se ofrece. «Deal Gemelo» tiene dos
+// proyectos vinculados (se fragmenta sin que nadie asigne nada).
+const dealGanado = async (nombre: string, fase: string) => {
+  const d = await deal(nombre, 'MXN 🇲🇽');
+  await pg.query(`update deals set phase = $2, approval_date = $3 where id = $1`, [d, fase, nombre === 'Deal Fragmentado' ? '2026-01-01' : null]);
+  return d;
+};
+const dealUno = await dealGanado('Deal Fragmentado', 'Ganado');
+const cUno = await cotizacion(dealUno, true);
+await linea(cUno, 'Management', 'Management por sesión A', 40, 1, 2000, 120000);
+await linea(cUno, 'Management', 'Management por sesión B', 6, 1, 12000, 108000);
+await linea(cUno, 'Management', 'Excluida', 1, 1, 99999, 99999, false);
+await linea(cUno, 'Moderación', 'Moderación', 1, 1, 8000, 12000);
+const dealDos = await dealGanado('Deal Chico', 'Ganado');
+await linea(await cotizacion(dealDos, true), 'Management', 'Con componentes', 2, 3, 1000, 1500);
+const dealProspecto = await dealGanado('Deal Prospecto', 'Prospecto');
+await linea(await cotizacion(dealProspecto, true), 'Management', 'Management', 1, 1, 5000, 7500);
+const dealLineal = await dealGanado('Deal Lineal', 'Ganado');
+await linea(await cotizacion(dealLineal, true), 'Management', 'Management', 1, 1, 25000, 37500);
+const dealGemelo = await dealGanado('Deal Gemelo', 'Ganado');
+await linea(await cotizacion(dealGemelo, true), 'Management', 'Management', 1, 1, 40000, 60000);
+
+const prog1 = await proyectoBD('PROG-1', 'Cliente Uno', '2026-04-28', null);
+const prog2 = await proyectoBD('PROG-2', 'Cliente Uno', '2026-05-29', null);
+const lineal = await proyectoBD('LINEAL', 'Cliente Uno', '2026-06-09', dealLineal);
+const madre = await proyectoBD('MADRE', 'Cliente Uno', '2026-01-12', dealUno); // el proyecto del propio deal fragmentado, sin reparto
+const gemeloA = await proyectoBD('GEMELO-A', 'Cliente Uno', '2026-02-01', dealGemelo);
+const gemeloB = await proyectoBD('GEMELO-B', 'Cliente Uno', '2026-02-02', dealGemelo);
+const unaPersona = [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 100 }];
+const resumen = async (dealId: string) => {
+  const r = await leer();
+  const d = r.deals.find((x: any) => x.dealId === dealId);
+  assert.ok(d, 'el deal no salió en la lista');
+  return resumenDeDeal(d, r.proyectos, r.disponibles);
+};
+const en = async (codigo: string) => { const r = await leer(); return r.proyectos.find((p: any) => p.codigo === codigo) ?? r.disponibles.find((p: any) => p.codigo === codigo); };
+
+await prueba('deals: salen los ganados con Management cotizado y los que ya tienen proyecto, con lo cotizado, cómo se cotizó y cuándo se aprobó; no los que no tienen nada de eso', async () => {
+  const r = await leer();
+  const nombres = r.deals.map((x: any) => x.nombre);
+  for (const esperado of ['Deal Fragmentado', 'Deal Chico', 'Deal Lineal', 'Deal Gemelo', 'Deal Alfa']) assert.ok(nombres.includes(esperado), `${esperado} no salió: ${nombres.join(', ')}`); // Deal Alfa no está ganado, pero es el de un proyecto
+  for (const ausente of ['Deal Prospecto', 'Deal Gama']) assert.ok(!nombres.includes(ausente), `${ausente} no debía salir`); // sin ganar y sin proyectos / sin Management
+  const uno = r.deals.find((x: any) => x.nombre === 'Deal Fragmentado');
+  assert.deepEqual([uno.dealId, uno.cliente, uno.moneda, uno.cotizado, uno.inicio], [dealUno, 'Cliente Uno', 'MXN', 152000, '2026-01-01']);
+  assert.deepEqual(uno.unidades, [{ precio: 2000, cantidad: 40 }, { precio: 12000, cantidad: 6 }]);
+  const dos = r.deals.find((x: any) => x.nombre === 'Deal Chico');
+  assert.deepEqual([dos.cotizado, dos.unidades, dos.inicio], [6000, [{ precio: 1000, cantidad: 6 }], undefined]); // cantidad × componentes; sin fecha de aprobación
+});
+await prueba('todos los proyectos salen (con o sin deal) y cada uno trae su deal: el vinculado, y de ahí el monto por omisión', async () => {
+  const l = await en('LINEAL');
+  assert.deepEqual([l.dealId, l.dealVinculadoId, l.dealAsignadoId, l.dealNombre, l.dealFragmentado], [dealLineal, dealLineal, null, 'Deal Lineal', undefined]);
+  assert.equal(managementDe(l), 25000); // sin escribir nada: lo que cotizó su deal
+  const sin = await en('PROG-1');
+  assert.deepEqual([sin.dealId, sin.dealVinculadoId, sin.dealAsignadoId, sin.dealNombre], [null, null, null, undefined]); // sin deal: un proyecto más para asignar
+  const r = await leer();
+  assert.ok(r.disponibles.some((p: any) => p.codigo === 'PROG-1') && r.proyectos.some((p: any) => p.codigo === 'LINEAL'));
+  // El deal de un solo proyecto (lineal) está repartido al 100 %.
+  const resumenLineal = await resumen(dealLineal);
+  assert.deepEqual([resumenLineal.asignado, resumenLineal.disponible, resumenLineal.porcentaje, estadoDeDeal(resumenLineal), resumenLineal.proyectos.map((x) => x.codigo)], [25000, 0, 100, 'completo', ['LINEAL']]);
+  // Antes de que otro proyecto salga de su deal, el proyecto del deal fragmentado tiene toda la cotización como suya.
+  assert.equal(managementDe(await en('MADRE')), 152000);
+  assert.equal((await en('MADRE')).dealFragmentado, undefined);
+});
+await prueba('a un proyecto sin deal se le asigna uno y se escribe cuánto se lleva: el deal lo suma y le queda lo demás', async () => {
+  assert.deepEqual(await guardar({ projectId: prog1, dealId: dealUno, rubros: [{ rubro: 'Management', monto: 15000 }], moneda: 'MXN', personas: unaPersona }), { ok: true, eliminado: false });
+  const p = await en('PROG-1');
+  assert.deepEqual([p.dealId, p.dealAsignadoId, p.dealVinculadoId, p.dealNombre, p.rubros, p.moneda, presupuestoDe(p)], [dealUno, dealUno, null, 'Deal Fragmentado', [{ rubro: 'Management', monto: 15000 }], 'MXN', 15000]);
+  assert.equal((await pg.query<{ d: string | null }>(`select deal_asignado_id as d from projects where id = $1`, [prog1])).rows[0].d, dealUno);
+  const r = await resumen(dealUno);
+  assert.deepEqual([r.asignado, r.disponible, r.porcentaje.toFixed(2), estadoDeDeal(r)], [15000, 137000, '9.87', 'parcial']);
+  assert.deepEqual(r.proyectos.map((x) => [x.codigo, x.monto]), [['PROG-1', 15000], ['MADRE', 0]]); // MADRE, sin monto todavía
+});
+await prueba('un deal con varios proyectos se fragmenta: ya no le ofrece su Management completo a quien no tiene reparto, pero respeta el reparto que ya estaba guardado', async () => {
+  // MADRE (vinculado, sin reparto): ahora el deal tiene dos proyectos, así que la cotización completa deja de ser suya.
+  const m = await en('MADRE');
+  assert.deepEqual([m.dealFragmentado, m.rubrosDeal.Management, m.dealId], [true, undefined, dealUno]);
+  assert.ok((await leer()).disponibles.some((x: any) => x.codigo === 'MADRE')); // sin monto: vuelve a «por asignar»
+  assert.equal((await en('PROG-1')).dealFragmentado, true);
+  // Deal Gemelo: dos proyectos vinculados sin que nadie asigne nada. El que ya tenía reparto guardado sigue con el monto del deal; el otro no.
+  await guardar({ projectId: gemeloA, personas: unaPersona });
+  const a = await en('GEMELO-A');
+  const b = await en('GEMELO-B');
+  assert.deepEqual([a.dealFragmentado, managementDe(a), b.dealFragmentado, b.rubrosDeal.Management], [true, 40000, true, undefined]);
+  assert.deepEqual((await leer()).disponibles.some((x: any) => x.codigo === 'GEMELO-B'), true); // B no tiene reparto ni monto: queda «por asignar»
+  const g = await resumen(dealGemelo);
+  assert.deepEqual([g.asignado, g.disponible, g.proyectos.map((x) => x.codigo)], [40000, 0, ['GEMELO-B', 'GEMELO-A']]);
+  // Cuando B escribe lo que se lleva (se asigna el mismo deal), el deal se pasa y se ve.
+  await guardar({ projectId: gemeloB, rubros: [{ rubro: 'Management', monto: 10000 }], moneda: 'MXN', personas: unaPersona });
+  const pasado = await resumen(dealGemelo);
+  assert.deepEqual([pasado.asignado, pasado.disponible, estadoDeDeal(pasado)], [50000, -10000, 'excedido']);
+  assert.equal((await en('GEMELO-B')).dealAsignadoId, null); // sigue a su deal vinculado: no hace falta asignarle nada
+});
+await prueba('varios proyectos suman en el deal, del más reciente al más viejo, y cada uno puede abrirse como un proyecto más', async () => {
+  await guardar({ projectId: prog2, dealId: dealUno, rubros: [{ rubro: 'Management', monto: 9000 }], moneda: 'MXN', personas: unaPersona });
+  const r = await resumen(dealUno);
+  assert.deepEqual(r.proyectos.map((x) => [x.codigo, x.monto]), [['PROG-2', 9000], ['PROG-1', 15000], ['MADRE', 0]]);
+  assert.deepEqual([r.asignado, r.disponible], [24000, 128000]);
+});
+await prueba('los demás rubros de un proyecto no restan de lo cotizado de Management del deal', async () => {
+  await guardar({ projectId: prog1, dealId: dealUno, rubros: [{ rubro: 'Management', monto: 15000 }, { rubro: 'Moderación', monto: 5000 }], moneda: 'MXN', personas: unaPersona });
+  const p = await en('PROG-1');
+  assert.deepEqual([presupuestoDe(p), managementDe(p)], [20000, 15000]);
+  assert.equal((await resumen(dealUno)).asignado, 24000);
+  await guardar({ projectId: prog1, dealId: dealUno, rubros: [{ rubro: 'Management', monto: 15000 }], moneda: 'MXN', personas: unaPersona });
+});
+await prueba('asignar el deal vinculado (o ninguno) no se guarda como asignado: el proyecto sigue a su vínculo; sin mandar el deal no se toca; null lo quita', async () => {
+  await guardar({ projectId: lineal, dealId: dealLineal, personas: unaPersona }); // es el suyo: nada que guardar
+  assert.equal((await en('LINEAL')).dealAsignadoId, null);
+  await guardar({ projectId: lineal, dealId: dealDos, rubros: [{ rubro: 'Management', monto: 3000 }], moneda: 'MXN', personas: unaPersona }); // otro deal: se guarda
+  let l = await en('LINEAL');
+  assert.deepEqual([l.dealId, l.dealAsignadoId, l.dealVinculadoId, l.dealNombre, managementDe(l)], [dealDos, dealDos, dealLineal, 'Deal Chico', 3000]);
+  assert.equal((await resumen(dealLineal)).proyectos.length, 0); // ya no es de su deal vinculado
+  await guardar({ projectId: lineal, rubros: [{ rubro: 'Management', monto: 3500 }], moneda: 'MXN', personas: unaPersona }); // sin deal: no se toca
+  assert.equal((await en('LINEAL')).dealAsignadoId, dealDos);
+  await guardar({ projectId: lineal, dealId: dealLineal, rubros: rubrosPorOmision(), moneda: null, personas: unaPersona }); // vuelve al vinculado
+  l = await en('LINEAL');
+  assert.deepEqual([l.dealId, l.dealAsignadoId, managementDe(l)], [dealLineal, null, 25000]);
+  assert.equal((await pg.query<{ d: string | null }>(`select deal_asignado_id as d from projects where id = $1`, [lineal])).rows[0].d, null);
+  await guardar({ projectId: lineal, dealId: null, personas: [] }); // quitarlo todo
+});
+await prueba('se puede pasar de lo cotizado: se guarda y lo que queda sale negativo', async () => {
+  await guardar({ projectId: prog2, dealId: dealDos, rubros: [{ rubro: 'Management', monto: 8000 }], moneda: 'MXN', personas: unaPersona });
+  const r = await resumen(dealDos);
+  assert.deepEqual([r.deal.cotizado, r.asignado, r.disponible, estadoDeDeal(r)], [6000, 8000, -2000, 'excedido']);
+});
+await prueba('validaciones del deal asignado: sin monto, en otra moneda, sin Management, deal que no existe, sin Management cotizado o mal formado', async () => {
+  const sinMonto = { projectId: prog2, dealId: dealUno, rubros: rubrosPorOmision(), moneda: null, personas: unaPersona }; // otro deal: no hay «el del deal» (sería toda la cotización)
+  await assert.rejects(() => guardar(sinMonto), (e: unknown) => rechazadoPor('BAD_REQUEST')(e) && /cuánto Management/.test((e as Error).message));
+  await assert.rejects(() => guardar({ ...sinMonto, rubros: [{ rubro: 'Management', monto: 0 }], moneda: 'MXN' }), rechazadoPor('BAD_REQUEST'));
+  await assert.rejects(() => guardar({ ...sinMonto, rubros: [{ rubro: 'Management', monto: 5000 }], moneda: 'USD' }), (e: unknown) => rechazadoPor('BAD_REQUEST')(e) && /está en MXN/.test((e as Error).message));
+  await assert.rejects(() => guardar({ ...sinMonto, rubros: [{ rubro: 'Moderación', monto: 5000 }], moneda: 'MXN' }), (e: unknown) => rechazadoPor('BAD_REQUEST')(e) && /rubro Management/.test((e as Error).message));
+  await assert.rejects(() => guardar({ ...sinMonto, dealId: '00000000-0000-4000-8000-000000000000', rubros: [{ rubro: 'Management', monto: 5000 }], moneda: 'MXN' }), (e: unknown) => rechazadoPor('BAD_REQUEST')(e) && /ya no existe/.test((e as Error).message));
+  await assert.rejects(() => guardar({ ...sinMonto, dealId: dealGama, rubros: [{ rubro: 'Management', monto: 5000 }], moneda: 'MXN' }), (e: unknown) => rechazadoPor('BAD_REQUEST')(e) && /no tiene Management cotizado/.test((e as Error).message));
+  await assert.rejects(() => guardar({ ...sinMonto, dealId: 'no-es-un-id', rubros: [{ rubro: 'Management', monto: 5000 }], moneda: 'MXN' }), rechazadoPor('BAD_REQUEST'));
+  // Nada de eso cambió el deal de nadie.
+  assert.equal((await en('PROG-2')).dealAsignadoId, dealDos);
+  assert.equal((await resumen(dealUno)).asignado, 15000 + 0); // PROG-1; PROG-2 se movió a Deal Chico
+});
+await prueba('si se borra el deal asignado, el proyecto vuelve a seguir a su deal vinculado (o a quedar sin deal) y conserva su reparto', async () => {
+  await pg.query(`delete from deals where id = $1`, [dealDos]);
+  const p = await en('PROG-2');
+  assert.deepEqual([p.dealId, p.dealAsignadoId, p.dealNombre, p.rubros, p.personas.length], [null, null, undefined, [{ rubro: 'Management', monto: 8000 }], 1]);
+  assert.ok(!(await leer()).deals.some((x: any) => x.dealId === dealDos));
+});
+await prueba('«quitar reparto» con el deal en null deja al proyecto como si nunca se le hubiera asignado uno', async () => {
+  assert.deepEqual(await guardar({ projectId: prog1, dealId: null, personas: [] }), { ok: true, eliminado: true });
+  const r = await leer();
+  assert.equal(r.proyectos.find((x: any) => x.codigo === 'PROG-1'), undefined); // sin reparto y sin monto: otra vez un proyecto más por asignar
+  const p = r.disponibles.find((x: any) => x.codigo === 'PROG-1');
+  assert.deepEqual([p.dealId, p.dealAsignadoId, p.dealNombre], [null, null, undefined]);
+  assert.deepEqual((await resumen(dealUno)).proyectos.map((x) => x.codigo), ['MADRE']);
 });
 
 console.log(fallas ? `\n${fallas} de ${n} pruebas fallaron` : `\nlas ${n} pruebas pasaron`);

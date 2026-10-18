@@ -6,7 +6,8 @@ import { guardarReparto } from '../serverUtils/pagosManagement/servicio';
 
 /**
  * Guarda el reparto de un proyecto: los rubros que forman el presupuesto (cada uno con su monto, o null = el que dice el deal) y las personas con
- * su porcentaje. Reemplaza lo anterior. Con solo el Management del deal sin tocar y sin personas, quita el reparto del proyecto.
+ * su porcentaje. Reemplaza lo anterior. Con solo el Management del deal sin tocar y sin personas, quita el reparto del proyecto. Si el Management del
+ * proyecto sale de otro deal que el vinculado (un deal que se fragmenta en varios proyectos), también se guarda de cuál; entonces el monto se escribe.
  */
 export default createEndpoint({
   authenticated: true,
@@ -21,6 +22,8 @@ export default createEndpoint({
       externo: z.boolean(),
       porcentaje: z.number().gt(0).max(MAX_PORCENTAJE),
     })).max(MAX_PERSONAS),
+    /** El deal del que sale el Management del proyecto: sin mandarlo no se toca lo que ya tenía; null (o su deal vinculado) es que lo sigue. */
+    dealId: z.string().uuid().nullable().optional(),
   }),
   outputSchema: z.object({ ok: z.boolean(), eliminado: z.boolean() }),
   execute: async ({ input, context }) => {

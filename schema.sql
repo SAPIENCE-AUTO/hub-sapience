@@ -759,6 +759,7 @@ create table projects (
   created_at                    timestamptz,
   visible_budget_rubros         text,
   client_id                     uuid references clients(id) on delete set null,
+  deal_asignado_id              uuid references deals(id) on delete set null,
   updated_at                    timestamptz not null default now(),
   constraint projects_status_chk check ("status" is null or "status" in ('Prospecto', 'En curso', 'Finalizado', 'Cancelado', 'Activo', 'Stand by')),
   constraint projects_timeline_status_chk check ("timeline_status" is null or "timeline_status" in ('Pendiente', 'Listo', 'Error')),

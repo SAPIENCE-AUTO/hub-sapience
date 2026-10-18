@@ -103,8 +103,19 @@ EXTRA_COLUMNS = {
     # TABLE, no se ejecuta sola).
     # `clientId` (sep 2026): ver comentario grande junto a 'Deals' más arriba
     # en este mismo dict — tabla Clients nueva, homologada con Sharpli.
+    # `dealAsignado` (oct 2026): el deal del que sale el Management de este
+    # proyecto en Pagos de management, cuando no es el vinculado: un deal se
+    # fragmenta en varios proyectos y cada uno se lleva una parte de lo
+    # cotizado. Nulo = el proyecto sigue a `dealVinculado`. Es distinto de
+    # `dealVinculado` a propósito: ese vínculo (uno a uno) alimenta
+    # presupuesto, costos y cobranza del proyecto, y colgar varios proyectos
+    # del mismo deal haría que cada uno heredara el presupuesto y el precio
+    # completos. La migración sobre la tabla ya existente vive en
+    # server/scripts/add-projects-deal-asignado.ts (ALTER TABLE, no se
+    # ejecuta sola).
     'Projects': [('visibleBudgetRubros', 'visible_budget_rubros', 'text', 'text'),
-                 ('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
+                 ('clientId', 'client_id', 'uuid', 'link', dict(target='clients')),
+                 ('dealAsignado', 'deal_asignado_id', 'uuid', 'link', dict(target='deals'))],
 }
 
 # Índice único agregado directamente en Supabase después de la carga inicial

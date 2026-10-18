@@ -55,11 +55,39 @@ export interface PersonaReparto {
 /** Una persona del equipo a la que se le puede repartir. */
 export interface UsuarioReparto { id: string; nombre: string; departamento?: string }
 
+/** Una parte de lo cotizado de Management: `cantidad` unidades a `precio` cada una. */
+export interface UnidadCotizada { precio: number; cantidad: number }
+
+/**
+ * Un deal con Management cotizado. Un deal puede fragmentarse en varios proyectos: cada uno se lleva una parte de lo cotizado y entre todos
+ * suman qué porcentaje ya está repartido.
+ */
+export interface DealManagement {
+  dealId: string;
+  nombre: string;
+  cliente?: string;
+  moneda: Moneda;
+  /** Lo que cotizó de Management (costo, sin markup): lo que hay para repartir entre sus proyectos. */
+  cotizado: number;
+  /** Cómo se cotizó, por precio unitario: «40 × $2,000». De referencia y para sumar rápido el monto de un proyecto. */
+  unidades: UnidadCotizada[];
+  /** Cuándo se aprobó (AAAA-MM-DD; si no, cuándo se propuso), para el periodo. */
+  inicio?: string;
+}
+
 /** Un proyecto sin monto de management en su deal ni reparto: se puede agregar a mano, poniéndole un presupuesto. */
 export interface ProyectoDisponible {
   projectId: string; codigo: string; nombre?: string; cliente?: string; estado?: string; inicio?: string; dealNombre?: string; monedaDeal: Moneda;
   /** Lo que su deal trae de los demás rubros (nunca Management: si lo trajera no estaría aquí). */
   rubrosDeal: RubrosDeal;
+  /** El deal del que sale su Management: el que se le asignó en este módulo o, si no, el vinculado. */
+  dealId?: string | null;
+  /** El deal vinculado al proyecto (el que usan presupuesto, costos y cobranza) y el que se le asignó aquí, si es otro. */
+  dealVinculadoId?: string | null;
+  dealVinculadoNombre?: string;
+  dealAsignadoId?: string | null;
+  /** El deal está repartido entre varios proyectos: su Management no se le ofrece a este como suyo, se escribe lo que se lleva. */
+  dealFragmentado?: boolean;
 }
 
 export interface ProyectoManagement {
@@ -83,6 +111,14 @@ export interface ProyectoManagement {
   moneda: Moneda;
   personas: PersonaReparto[];
   eliminado: boolean;
+  /** El deal del que sale su Management: el que se le asignó en este módulo o, si no, el vinculado (`dealNombre` es el suyo). */
+  dealId?: string | null;
+  /** El deal vinculado al proyecto (el que usan presupuesto, costos y cobranza) y el que se le asignó aquí, si es otro. */
+  dealVinculadoId?: string | null;
+  dealVinculadoNombre?: string;
+  dealAsignadoId?: string | null;
+  /** El deal está repartido entre varios proyectos: sin reparto propio, su Management no se le ofrece a este como suyo (se escribe lo que se lleva). */
+  dealFragmentado?: boolean;
 }
 
 export interface PagosManagement {
@@ -90,6 +126,8 @@ export interface PagosManagement {
   proyectos: ProyectoManagement[];
   /** Todos los demás proyectos: se pueden agregar a mano, poniéndoles un presupuesto. */
   disponibles: ProyectoDisponible[];
+  /** Los deals con Management cotizado (los ganados y los que ya tienen algún proyecto), a los que se les asignan proyectos. */
+  deals: DealManagement[];
   usuarios: UsuarioReparto[];
   /** Personas externas que ya se han usado en algún reparto, para no escribir dos veces el mismo nombre. */
   externos: string[];
@@ -299,6 +337,91 @@ export function totalesPorMoneda(proyectos: ProyectoManagement[]): TotalesManage
     if (estado === 'excedido') proyectosExcedidos++;
   }
   return { presupuestado, repartido, porRepartir, excedido, proyectosExcedidos };
+}
+
+// ── Deals: cuánto de lo cotizado ya está repartido en proyectos ──────────────
+/**
+ * Lo que un proyecto se lleva del Management de su deal: el monto de su rubro Management (el puesto a mano o, si no, el de su deal). Los demás
+ * rubros no cuentan: lo que se reparte entre los proyectos de un deal es solo su Management.
+ */
+export const managementDe = (p: Pick<ProyectoManagement, 'rubros' | 'rubrosDeal'>): number =>
+  redondear(p.rubros.filter((r) => r.rubro === 'Management').reduce((s, r) => s + montoDeRubro(p.rubrosDeal, r), 0));
+
+export interface ProyectoDeDeal {
+  projectId: string;
+  codigo: string;
+  cliente?: string;
+  estado?: string;
+  inicio?: string;
+  /** Lo que se lleva del Management del deal; 0 si todavía no tiene monto. */
+  monto: number;
+  repartoId: string | null;
+  estadoReparto: EstadoReparto;
+}
+
+export interface ResumenDeal {
+  deal: DealManagement;
+  /** Los proyectos que se llevan Management de este deal, del más reciente al más viejo (sin fecha al final). */
+  proyectos: ProyectoDeDeal[];
+  /** Lo que ya se llevaron los proyectos. */
+  asignado: number;
+  /** Lo que queda de lo cotizado; negativo si los proyectos se llevaron más (se avisa, pero se deja). */
+  disponible: number;
+  /** Qué parte de lo cotizado ya está repartida entre proyectos, en %: más de 100 es que se pasa. */
+  porcentaje: number;
+}
+
+export type EstadoDeal = 'sinAsignar' | 'parcial' | 'completo' | 'excedido';
+
+/** Cuánto de lo cotizado de un deal ya se repartió entre proyectos, con los proyectos que lo forman. No depende del periodo. */
+export function resumenDeDeal(deal: DealManagement, proyectos: ProyectoManagement[], disponibles: ProyectoDisponible[]): ResumenDeal {
+  const lista: ProyectoDeDeal[] = [];
+  for (const p of proyectos) {
+    if (p.eliminado || !p.projectId || p.dealId !== deal.dealId) continue;
+    lista.push({ projectId: p.projectId, codigo: p.codigo, cliente: p.cliente, estado: p.estado, inicio: p.inicio, monto: managementDe(p), repartoId: p.repartoId, estadoReparto: estadoReparto(p.personas) });
+  }
+  for (const p of disponibles) {
+    if (p.dealId !== deal.dealId) continue;
+    lista.push({ projectId: p.projectId, codigo: p.codigo, cliente: p.cliente, estado: p.estado, inicio: p.inicio, monto: 0, repartoId: null, estadoReparto: 'sinRepartir' });
+  }
+  lista.sort((a, b) => (b.inicio ?? '').localeCompare(a.inicio ?? '') || a.codigo.localeCompare(b.codigo));
+  const asignado = redondear(lista.reduce((s, p) => s + p.monto, 0));
+  const porcentaje = deal.cotizado > 0 ? (asignado / deal.cotizado) * 100 : 0;
+  return { deal, proyectos: lista, asignado, disponible: redondear(deal.cotizado - asignado), porcentaje };
+}
+
+/** Nada asignado, falta, justo lo cotizado (unos centavos de diferencia no cuentan) o se pasa. */
+export function estadoDeDeal(r: Pick<ResumenDeal, 'asignado' | 'disponible'>): EstadoDeal {
+  if (r.disponible < -0.005) return 'excedido';
+  if (r.disponible <= 0.005) return r.asignado > 0 ? 'completo' : 'sinAsignar';
+  return r.asignado > 0 ? 'parcial' : 'sinAsignar';
+}
+
+export interface TotalesDeals {
+  cotizado: Record<Moneda, number>;
+  asignado: Record<Moneda, number>;
+  /** Lo que falta por asignar: la suma de lo que le falta a cada deal (uno que se pasó no le resta a otro). */
+  porAsignar: Record<Moneda, number>;
+  /** Lo que se asignó de más sobre lo cotizado de cada deal que se pasó, y cuántos son. */
+  excedido: Record<Moneda, number>;
+  dealsExcedidos: number;
+}
+
+/** Los totales de un conjunto de deals, por moneda. */
+export function totalesDeDeals(resumenes: ResumenDeal[]): TotalesDeals {
+  const cotizado = sinMonedas();
+  const asignado = sinMonedas();
+  const porAsignar = sinMonedas();
+  const excedido = sinMonedas();
+  let dealsExcedidos = 0;
+  for (const r of resumenes) {
+    const m = r.deal.moneda;
+    cotizado[m] = redondear(cotizado[m] + r.deal.cotizado);
+    asignado[m] = redondear(asignado[m] + r.asignado);
+    if (r.disponible > 0) porAsignar[m] = redondear(porAsignar[m] + r.disponible);
+    if (r.disponible < -0.005) { excedido[m] = redondear(excedido[m] - r.disponible); dealsExcedidos++; }
+  }
+  return { cotizado, asignado, porAsignar, excedido, dealsExcedidos };
 }
 
 // ── Periodo ──────────────────────────────────────────────────────────────────

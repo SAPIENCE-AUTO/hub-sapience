@@ -58,6 +58,7 @@ export function TablaRepartos({ proyectos, onAbrir }: { proyectos: ProyectoManag
                   )}
                   {p.cliente && <span className="ml-2 text-xs text-muted-foreground">{p.cliente}</span>}
                   {p.eliminado && <span className="ml-2 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Proyecto eliminado</span>}
+                  {!p.eliminado && <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">{p.dealNombre ? `Deal: ${p.dealNombre}` : 'Sin deal'}</p>}
                 </td>
                 <td className="px-3 py-2.5 tabular-nums text-muted-foreground">{p.inicio ? fmtFecha(p.inicio) : '—'}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">

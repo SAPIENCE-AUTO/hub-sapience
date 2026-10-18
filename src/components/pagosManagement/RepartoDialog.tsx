@@ -12,14 +12,14 @@ import { Label } from '@/components/ui/label';
 import { CLASE_BOTON_SUAVE, ESTILO_BOTON_PRIMARIO, FONDO_ALERTA, TEXTO_ALERTA } from '@/components/payments/estilos';
 import { motivoDelError } from '@/lib/payments/errores';
 import {
-  MONEDAS, costoDealDe, esPorOmision, estadoReparto, montoDe, normalizarNombre, rubrosPorOmision, sumaPorcentajes, textoNumero, validarReparto,
-  type Moneda, type ProyectoManagement, type Rubro, type UsuarioReparto,
+  MONEDAS, costoDealDe, esPorOmision, estadoReparto, leerMonto, managementDe, montoDe, normalizarNombre, redondear, rubrosPorOmision, sumaPorcentajes, textoNumero, validarReparto,
+  type DealManagement, type Moneda, type ProyectoManagement, type Rubro, type RubrosDeal, type UsuarioReparto,
 } from '@/lib/pagosManagement/reparto';
 import {
-  agregarRubro, conBase, conMonto, conPartesIguales, conPorcentaje, conTextoDeRubro, filaVacia, filasDe, personasDe, quitarRubro, recalcular, rubroEditado,
+  agregarRubro, conBase, conMonto, conPartesIguales, conPorcentaje, conTextoDeRubro, dealAGuardar, filaVacia, filasDe, personasDe, quitarRubro, recalcular, rubroEditado,
   rubrosAGuardar, rubrosDe, rubrosFaltantes, totalDe, type FilaReparto, type FilaRubro,
 } from '@/lib/pagosManagement/filas';
-import { COLOR_ESTADO_REPARTO, fmtMonto, fmtPct } from './formato';
+import { COLOR_ESTADO_REPARTO, fmtMonto, fmtPct, fmtUnidades } from './formato';
 
 const CLASE_SELECT = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
@@ -27,13 +27,20 @@ const valorDeSelect = (f: FilaReparto): string =>
   f.tipo === 'interno' && f.userId ? `u:${f.userId}` : f.tipo === 'externo' ? (f.nuevoExterno ? '__nueva__' : `e:${f.nombre}`) : '';
 
 /**
- * El reparto de un proyecto: el presupuesto (por omisión el Management del deal, al que se le pueden sumar otros rubros de la cotización; todos
- * los montos se pueden cambiar) y las personas con su porcentaje. Porcentaje y monto están ligados: al escribir uno se calcula el otro. Se pueden
- * repartir menos de 100 % y completarlo después.
+ * El reparto de un proyecto: de qué deal sale su Management, el presupuesto (por omisión el Management de su deal, al que se le pueden sumar otros
+ * rubros de la cotización; todos los montos se pueden cambiar) y las personas con su porcentaje. Porcentaje y monto están ligados: al escribir uno se
+ * calcula el otro. Se pueden repartir menos de 100 % y completarlo después. Si el deal se fragmenta en varios proyectos, cada uno escribe lo que se
+ * lleva y aquí se ve cuánto queda de lo cotizado.
  */
-export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuardado }: {
+export function RepartoDialog({ proyecto, deals, asignados, dealInicial, usuarios, externos, onCerrar, onGuardado }: {
   /** null: cerrado. */
   proyecto: ProyectoManagement | null;
+  /** Los deals con Management cotizado a los que se le puede asignar el proyecto. */
+  deals: DealManagement[];
+  /** Lo que ya se llevan los proyectos de cada deal (la suma de su Management), por deal. */
+  asignados: Record<string, number>;
+  /** El deal con el que abre un proyecto que todavía no sale de él (al agregarlo desde la pestaña de Deals). */
+  dealInicial?: string | null;
   usuarios: UsuarioReparto[];
   externos: string[];
   onCerrar: () => void;
@@ -45,18 +52,24 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [confirmarQuitar, setConfirmarQuitar] = useState(false);
+  /** El deal elegido; '' = ninguno. */
+  const [dealId, setDealId] = useState('');
 
   useEffect(() => {
     if (!proyecto) return;
-    setRubroFilas(rubrosDe(proyecto));
-    setMoneda(proyecto.moneda);
+    const inicial = dealInicial ?? proyecto.dealId ?? '';
+    const otroDeal = inicial !== (proyecto.dealId ?? '');
+    // Con otro deal que el de siempre no hay nada «del deal» por omisión: el Management se escribe, y la moneda es la de ese deal.
+    const filasRubro = rubrosDe(proyecto);
+    setRubroFilas(otroDeal ? conTextoDeRubro(filasRubro, 'Management', '') : filasRubro);
+    setMoneda(otroDeal ? deals.find((g) => g.dealId === inicial)?.moneda ?? proyecto.moneda : proyecto.moneda);
+    setDealId(inicial);
     setFilas(filasDe(proyecto));
     setError(null);
     setConfirmarQuitar(false);
-  }, [proyecto]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deals` solo se lee al abrir: si cambia a media captura no debe borrar lo escrito.
+  }, [proyecto, dealInicial]);
 
-  const rubrosDeal = proyecto?.rubrosDeal ?? {};
-  const base = totalDe(rubroFilas, rubrosDeal);
   const personas = useMemo(() => personasDe(filas), [filas]);
   const conPorcentajeValido = personas.filter((p) => Number.isFinite(p.porcentaje));
   const suma = sumaPorcentajes(conPorcentajeValido);
@@ -65,7 +78,50 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
   const externasUsadas = new Set(filas.filter((f) => f.tipo === 'externo' && f.nombre.trim()).map((f) => normalizarNombre(f.nombre)));
 
   if (!proyecto) return null;
-  const monedaDistinta = moneda !== proyecto.monedaDeal;
+
+  // El deal elegido. Si no es el de siempre (el asignado o, si no, el vinculado), nada se toma «del deal» por omisión: cada monto se escribe.
+  const dealGuardado = proyecto.dealId ?? '';
+  const cambiaDeDeal = dealId !== dealGuardado;
+  const deal = deals.find((g) => g.dealId === dealId);
+  const rubrosDeal: RubrosDeal = cambiaDeDeal ? {} : proyecto.rubrosDeal;
+  const monedaDeal: Moneda = cambiaDeDeal ? deal?.moneda ?? proyecto.monedaDeal : proyecto.monedaDeal;
+  const base = totalDe(rubroFilas, rubrosDeal);
+  const monedaDistinta = moneda !== monedaDeal;
+
+  // Lo que se lleva este proyecto del Management del deal (lo escrito o, si se dejó vacío, lo de su deal) y cuánto quedaría de lo cotizado.
+  const filaManagement = rubroFilas.find((f) => f.rubro === 'Management');
+  const montoEscrito = filaManagement ? leerMonto(filaManagement.texto) : undefined;
+  const montoManagement = typeof montoEscrito === 'number' ? montoEscrito : montoEscrito === null ? costoDealDe(rubrosDeal, 'Management') : 0;
+  const yaLlevaba = deal && proyecto.dealId === deal.dealId ? managementDe(proyecto) : 0;
+  const delResto = deal ? (asignados[deal.dealId] ?? 0) - yaLlevaba : 0; // lo que se llevan los demás proyectos del deal
+  const quedaria = deal ? redondear(deal.cotizado - delResto - montoManagement) : 0;
+  const mostrarSaldo = !!deal && (cambiaDeDeal || !!proyecto.dealFragmentado);
+
+  const vinculado = proyecto.dealVinculadoId ?? '';
+  // El deal vinculado puede no estar en la lista (si no tiene Management cotizado): se deja para poder volver a él.
+  const opcionesDeal = [
+    ...(vinculado && !deals.some((g) => g.dealId === vinculado) ? [{ id: vinculado, etiqueta: `${proyecto.dealVinculadoNombre ?? 'Deal vinculado'} (vinculado)` }] : []),
+    ...deals.map((g) => ({ id: g.dealId, etiqueta: `${g.nombre}${g.cliente ? ` · ${g.cliente}` : ''}${g.dealId === vinculado ? ' (vinculado)' : ''}` })),
+  ];
+
+  const elegirDeal = (id: string) => {
+    setDealId(id);
+    const elegido = deals.find((g) => g.dealId === id);
+    const otro = id !== dealGuardado;
+    // Con otro deal el Management se escribe; al volver al de siempre vuelve lo que traía. Y la moneda es la del deal elegido.
+    const nuevas = otro ? conTextoDeRubro(rubroFilas, 'Management', '') : conTextoDeRubro(rubroFilas, 'Management', rubrosDe(proyecto).find((f) => f.rubro === 'Management')?.texto ?? '');
+    setRubroFilas(nuevas);
+    setFilas((fs) => conBase(fs, totalDe(nuevas, otro ? {} : proyecto.rubrosDeal)));
+    if (elegido && elegido.moneda !== moneda) setMoneda(elegido.moneda);
+  };
+  /** Suma el precio de una unidad cotizada al monto de Management (un vacío cuenta como cero, no como lo del deal). */
+  const sumarUnidad = (precio: number) => {
+    cambiarRubros(conTextoDeRubro(rubroFilas, 'Management', String(redondear((typeof montoEscrito === 'number' ? montoEscrito : 0) + precio))));
+  };
+  /** Lo que queda de lo cotizado, sin lo que se llevan los demás proyectos: para el último proyecto que cierra el deal. */
+  const usarLoQueQueda = () => {
+    if (deal) cambiarRubros(conTextoDeRubro(rubroFilas, 'Management', String(redondear(deal.cotizado - delResto))));
+  };
 
   /** Cambió algo de los rubros: los porcentajes de las personas se quedan y sus montos se vuelven a calcular con el presupuesto nuevo. */
   const cambiarRubros = (nuevos: FilaRubro[]) => {
@@ -94,10 +150,12 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
 
   const guardar = async () => {
     setError(null);
-    const presupuesto = rubrosAGuardar(rubroFilas, moneda, proyecto);
+    const presupuesto = rubrosAGuardar(rubroFilas, moneda, { rubrosDeal, monedaDeal });
     if ('error' in presupuesto) { setError(presupuesto.error); return; }
     const problema = validarReparto(personas);
     if (problema) { setError(problema); return; }
+    const dealAsignado = dealAGuardar(dealId, proyecto.dealVinculadoId);
+    if (dealAsignado && !(montoManagement > 0)) { setError('Escribe cuánto management se lleva este proyecto del deal.'); return; }
     setGuardando(true);
     try {
       await savePagosManagementReparto({
@@ -105,8 +163,9 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
         rubros: presupuesto.rubros,
         moneda: presupuesto.moneda,
         personas: personas.map((p) => ({ userId: p.userId, nombre: p.nombre, externo: p.externo, porcentaje: p.porcentaje })),
+        dealId: dealAsignado,
       });
-      toast.success(personas.length === 0 && esPorOmision(presupuesto.rubros) ? 'Reparto quitado' : 'Reparto guardado');
+      toast.success(personas.length === 0 && esPorOmision(presupuesto.rubros) && !dealAsignado ? 'Reparto quitado' : 'Reparto guardado');
       onGuardado();
     } catch (e) {
       toast.error(motivoDelError(e, 'No se pudo guardar el reparto'));
@@ -118,7 +177,7 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
     setConfirmarQuitar(false);
     setGuardando(true);
     try {
-      await savePagosManagementReparto({ projectId: proyecto.projectId, rubros: rubrosPorOmision(), moneda: null, personas: [] });
+      await savePagosManagementReparto({ projectId: proyecto.projectId, rubros: rubrosPorOmision(), moneda: null, personas: [], dealId: null });
       toast.success('Reparto quitado');
       onGuardado();
     } catch (e) {
@@ -145,16 +204,38 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
               {proyecto.codigo}
               {proyecto.cliente && <span className="ml-2 text-sm font-normal text-muted-foreground">{proyecto.cliente}</span>}
             </DialogTitle>
-            <DialogDescription>{proyecto.dealNombre ? `Deal: ${proyecto.dealNombre}` : 'Reparto del presupuesto entre quienes participan.'}</DialogDescription>
+            <DialogDescription>Reparto del presupuesto entre quienes participan.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-1">
+            <section className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="deal-proyecto" className="text-sm font-semibold">Deal</Label>
+                <select id="deal-proyecto" value={dealId} onChange={(e) => elegirDeal(e.target.value)} className={`${CLASE_SELECT} !h-8 max-w-[19rem]`}>
+                  {!vinculado && <option value="">Sin deal</option>}
+                  {opcionesDeal.map((o) => <option key={o.id} value={o.id}>{o.etiqueta}</option>)}
+                </select>
+              </div>
+              {cambiaDeDeal && deal && vinculado && <p className="text-xs text-muted-foreground">No cambia el deal vinculado del proyecto (presupuesto, costos y cobranza).</p>}
+              {mostrarSaldo && deal && (quedaria < -0.004 ? (
+                <p role="status" className="flex items-start gap-2 rounded-lg px-3 py-2 text-xs font-semibold" style={{ backgroundColor: FONDO_ALERTA, color: TEXTO_ALERTA }}>
+                  <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+                  <span>Se pasa {fmtMonto(-quedaria, deal.moneda)} de lo cotizado ({fmtMonto(deal.cotizado, deal.moneda)})</span>
+                </p>
+              ) : (
+                <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs">
+                  <span className="font-semibold">Quedan {fmtMonto(quedaria, deal.moneda)} de {fmtMonto(deal.cotizado, deal.moneda)}</span>
+                  {deal.unidades.length > 0 && <span className="ml-2 tabular-nums text-muted-foreground">{fmtUnidades(deal.unidades, deal.moneda)}</span>}
+                </p>
+              ))}
+            </section>
+
             <section className="space-y-3">
               <div className="flex items-end justify-between gap-2">
                 <p className="text-sm font-semibold">Presupuesto</p>
                 <div className="flex items-center gap-2">
                   <Label htmlFor="moneda-presupuesto" className="text-xs text-muted-foreground">Moneda</Label>
-                  <select id="moneda-presupuesto" value={moneda} onChange={(e) => setMoneda(e.target.value as Moneda)} className={`${CLASE_SELECT} !h-8 !w-24`}>
+                  <select id="moneda-presupuesto" value={moneda} disabled={cambiaDeDeal && !!deal} title={cambiaDeDeal && deal ? 'La del deal' : undefined} onChange={(e) => setMoneda(e.target.value as Moneda)} className={`${CLASE_SELECT} !h-8 !w-24 disabled:cursor-not-allowed disabled:opacity-60`}>
                     {MONEDAS.map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
@@ -162,7 +243,7 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
 
               {rubroFilas.map((f, i) => {
                 const costo = costoDealDe(rubrosDeal, f.rubro);
-                const editado = rubroEditado(f, rubrosDeal, moneda, proyecto.monedaDeal);
+                const editado = rubroEditado(f, rubrosDeal, moneda, monedaDeal);
                 return (
                   <div key={f.clave} className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -183,8 +264,9 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
                     </div>
                     <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                       {costo > 0
-                        ? <span>Del deal: {fmtMonto(costo, proyecto.monedaDeal)} (con markup {fmtMonto(rubrosDeal[f.rubro]?.conMarkup ?? 0, proyecto.monedaDeal)})</span>
-                        : <span>{proyecto.dealNombre ? `El deal no tiene monto de ${f.rubro}: escríbelo.` : 'El proyecto no tiene deal vinculado: escribe el monto.'}</span>}
+                        ? <span>Del deal: {fmtMonto(costo, monedaDeal)} (con markup {fmtMonto(rubrosDeal[f.rubro]?.conMarkup ?? 0, monedaDeal)})</span>
+                        : <span>{f.rubro === 'Management' && mostrarSaldo ? 'Escribe cuánto se lleva de este deal.'
+                          : dealId ? `El deal no tiene monto de ${f.rubro}: escríbelo.` : 'El proyecto no tiene deal: escribe el monto.'}</span>}
                       {editado && (
                         <>
                           <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Editado</span>
@@ -192,14 +274,23 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
                         </>
                       )}
                     </p>
+                    {f.rubro === 'Management' && mostrarSaldo && deal && costo <= 0 && (deal.unidades.length > 0 || deal.cotizado - delResto > 0) && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="text-xs text-muted-foreground">Sumar</span>
+                        {deal.unidades.map((u) => (
+                          <button key={u.precio} type="button" className={CLASE_BOTON_SUAVE} onClick={() => sumarUnidad(u.precio)}>+ {fmtMonto(u.precio, deal.moneda)}</button>
+                        ))}
+                        {deal.cotizado - delResto > 0 && <button type="button" className={CLASE_BOTON_SUAVE} onClick={usarLoQueQueda}>Lo que queda ({fmtMonto(deal.cotizado - delResto, deal.moneda)})</button>}
+                      </div>
+                    )}
                   </div>
                 );
               })}
 
               {monedaDistinta && (
                 <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                  <span>El deal está en {proyecto.monedaDeal}: escribe los montos en {moneda}.</span>
-                  <button type="button" onClick={() => setMoneda(proyecto.monedaDeal)} className="font-semibold text-foreground underline-offset-2 hover:underline">Volver a {proyecto.monedaDeal}</button>
+                  <span>El deal está en {monedaDeal}: escribe los montos en {moneda}.</span>
+                  <button type="button" onClick={() => setMoneda(monedaDeal)} className="font-semibold text-foreground underline-offset-2 hover:underline">Volver a {monedaDeal}</button>
                 </p>
               )}
 
@@ -214,7 +305,7 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
                     <option value="">+ Agregar rubro</option>
                     {faltantes.map((r) => {
                       const costo = costoDealDe(rubrosDeal, r);
-                      return <option key={r} value={r}>{r}{costo > 0 ? ` (deal ${fmtMonto(costo, proyecto.monedaDeal)})` : ''}</option>;
+                      return <option key={r} value={r}>{r}{costo > 0 ? ` (deal ${fmtMonto(costo, monedaDeal)})` : ''}</option>;
                     })}
                   </select>
                 ) : <span />}
@@ -309,7 +400,7 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
           <AlertDialogHeader>
             <AlertDialogTitle>¿Quitar el reparto de {proyecto.codigo}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se borran el reparto entre {proyecto.personas.length} {proyecto.personas.length === 1 ? 'persona' : 'personas'} y los cambios al presupuesto. No se puede deshacer.
+              Se borran el reparto entre {proyecto.personas.length} {proyecto.personas.length === 1 ? 'persona' : 'personas'} y los cambios al presupuesto{proyecto.dealAsignadoId ? '; el proyecto vuelve a seguir a su deal vinculado' : ''}. No se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

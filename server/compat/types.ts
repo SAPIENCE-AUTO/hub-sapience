@@ -55,6 +55,7 @@ export interface ProjectsRecordType {
   createdAt?: string;
   visibleBudgetRubros?: string;
   clientId?: string[];
+  dealAsignado?: string[];
   updatedAt?: string;
   analistas?: string[];
   moderadores?: string[];

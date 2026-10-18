@@ -81,6 +81,13 @@ export function rubrosAGuardar(
   return { rubros, moneda: rubros.some((r) => r.monto !== null) ? moneda : null };
 }
 
+// ── Deal del proyecto ────────────────────────────────────────────────────────
+/**
+ * El deal que se guarda como asignado al proyecto: ninguno (null) si lo elegido es su deal vinculado (el proyecto lo sigue) o si no se eligió
+ * ninguno; cualquier otro se guarda tal cual. `elegido` '' = ninguno.
+ */
+export const dealAGuardar = (elegido: string, vinculado: string | null | undefined): string | null => (elegido && elegido !== (vinculado ?? '') ? elegido : null);
+
 // ── Personas del reparto ─────────────────────────────────────────────────────
 export interface FilaReparto {
   /** Solo para que la pantalla distinga los renglones; no se guarda. */
