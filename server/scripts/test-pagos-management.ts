@@ -1,6 +1,6 @@
 // Pruebas del módulo «Pagos de análisis / management»: las reglas del reparto (src/lib/pagosManagement), y los endpoints de punta a punta contra una
-// base en memoria (PGlite) con el esquema real: de dónde sale el monto de management de un deal, guardar y leer repartos, validaciones, acceso solo
-// para Sergio y qué pasa si todavía no existen las tablas. Todos los datos son inventados.
+// base en memoria (PGlite) con el esquema real: de dónde salen los montos de un deal por rubro, guardar y leer repartos (el presupuesto es la suma
+// de rubros), validaciones, acceso solo para Sergio y qué pasa si todavía no existen las tablas. Todos los datos son inventados.
 // uso: node server/node_modules/.bin/tsx server/scripts/test-pagos-management.ts
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,11 +9,13 @@ import { pool } from '../compat';
 import { ZiteError } from '../compat/errors';
 import { DATE_OID, NUMERIC_OID, TIMESTAMPTZ_OID, parseDate, parseNumeric, parseTimestamptz } from '../compat/datetimeParsers';
 import {
-  MAX_PERSONAS, acumuladoPorPersona, enPeriodo, estadoReparto, leerMonto, leerPorcentaje, montoDe, montosDe, normalizarNombre, partesIguales, porcentajeDeMonto,
-  presupuestoDe, repartirMonto, sumaPorcentajes, textoNumero, totalesPorMoneda, validarReparto, type PersonaReparto, type ProyectoManagement,
+  MAX_PERSONAS, MAX_PORCENTAJE, RUBROS, acumuladoPorPersona, costoDealDe, enPeriodo, esEditado, esPorOmision, estadoReparto, etiquetaRubros, leerMonto, leerPorcentaje, montoDe,
+  montoDeRubro, montosDe, normalizarNombre, partesIguales, porcentajeDeMonto, presupuestoDe, repartirMonto, rubrosPorOmision, sumaPorcentajes, textoNumero,
+  totalesPorMoneda, validarReparto, validarRubros, type PersonaReparto, type ProyectoManagement, type RubrosDeal,
 } from '../../src/lib/pagosManagement/reparto';
 import {
-  baseDe, conBase, conMonto, conPartesIguales, conPorcentaje, filaVacia, filasDe, personasDe, presupuestoAGuardar, recalcular, type FilaReparto,
+  agregarRubro, conBase, conMonto, conPartesIguales, conPorcentaje, conTextoDeRubro, filaVacia, filasDe, personasDe, quitarRubro, recalcular, rubroEditado,
+  rubrosAGuardar, rubrosDe, rubrosFaltantes, totalDe, type FilaReparto, type FilaRubro,
 } from '../../src/lib/pagosManagement/filas';
 import getPagosManagement from '../../src/api/getPagosManagement';
 import savePagosManagementReparto from '../../src/api/savePagosManagementReparto';
@@ -70,10 +72,49 @@ await prueba('montoDe y porcentajeDeMonto: se convierten uno en otro con centavo
   for (const monto of [5000, 12345, 1, 4999.99, 37500]) assert.equal(montoDe(37500, porcentajeDeMonto(37500, monto)), monto, String(monto));
   for (const monto of [10000, 333.33, 100000.01]) assert.equal(montoDe(300000, porcentajeDeMonto(300000, monto)), monto, String(monto));
 });
-await prueba('presupuestoDe: vale el que se puso a mano y, si no, el del deal (un 0 puesto a mano también cuenta)', () => {
-  assert.equal(presupuestoDe({ presupuesto: null, montoDeal: 25000 }), 25000);
-  assert.equal(presupuestoDe({ presupuesto: 40000, montoDeal: 25000 }), 40000);
-  assert.equal(presupuestoDe({ presupuesto: 0, montoDeal: 25000 }), 0);
+// Lo que el deal dice de cada rubro (costo sin markup y, de referencia, con markup).
+const mgmt = (costo: number, conMarkup = costo * 1.5): RubrosDeal => ({ Management: { costo, conMarkup } });
+const DEAL: RubrosDeal = { Management: { costo: 25000, conMarkup: 37500 }, 'Moderación': { costo: 8000, conMarkup: 12000 } };
+await prueba('presupuestoDe: la suma de sus rubros, cada uno con su monto puesto a mano o, si no, el del deal (un 0 puesto a mano también cuenta)', () => {
+  assert.equal(presupuestoDe({ rubrosDeal: DEAL, rubros: rubrosPorOmision() }), 25000);
+  assert.equal(presupuestoDe({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: 40000 }] }), 40000);
+  assert.equal(presupuestoDe({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: 0 }] }), 0);
+  // Se le suma otro rubro, con el monto del deal o con uno puesto a mano.
+  assert.equal(presupuestoDe({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: null }] }), 33000);
+  assert.equal(presupuestoDe({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: 5000 }] }), 30000);
+  // Un rubro que el deal no trae vale 0 mientras no se le ponga monto.
+  assert.equal(presupuestoDe({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Back office', monto: null }] }), 25000);
+  assert.equal(presupuestoDe({ rubrosDeal: {}, rubros: rubrosPorOmision() }), 0);
+  // Sin Management: solo lo que se agregó.
+  assert.equal(presupuestoDe({ rubrosDeal: DEAL, rubros: [{ rubro: 'Moderación', monto: null }] }), 8000);
+});
+await prueba('rubros: los de la cotización con Management primero; por omisión solo Management del deal; costo y monto de cada uno', () => {
+  assert.equal(RUBROS.length, 5);
+  assert.equal(RUBROS[0], 'Management');
+  assert.deepEqual(rubrosPorOmision(), [{ rubro: 'Management', monto: null }]);
+  assert.equal(esPorOmision(rubrosPorOmision()), true);
+  assert.equal(esPorOmision([{ rubro: 'Management', monto: 0 }]), false);
+  assert.equal(esPorOmision([{ rubro: 'Moderación', monto: null }]), false);
+  assert.equal(esPorOmision([{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: null }]), false);
+  assert.deepEqual([costoDealDe(DEAL, 'Management'), costoDealDe(DEAL, 'Moderación'), costoDealDe(DEAL, 'Back office')], [25000, 8000, 0]);
+  assert.deepEqual([montoDeRubro(DEAL, { rubro: 'Moderación', monto: null }), montoDeRubro(DEAL, { rubro: 'Moderación', monto: 100 }), montoDeRubro(DEAL, { rubro: 'Back office', monto: null })], [8000, 100, 0]);
+});
+await prueba('esEditado y etiquetaRubros: «editado» solo si cambió un monto que el deal trae; la etiqueta junta los nombres cortos', () => {
+  assert.equal(esEditado({ rubrosDeal: DEAL, rubros: rubrosPorOmision() }), false);
+  assert.equal(esEditado({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: 40000 }] }), true);
+  assert.equal(esEditado({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: 5000 }] }), true);
+  assert.equal(esEditado({ rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Back office', monto: 3000 }] }), false); // el deal no trae Back office
+  assert.equal(esEditado({ rubrosDeal: {}, rubros: [{ rubro: 'Management', monto: 3000 }] }), false);
+  assert.equal(etiquetaRubros([{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: null }, { rubro: 'Logística y operación', monto: null }]), 'Management + Moderación + Logística');
+  assert.equal(etiquetaRubros([{ rubro: 'Reclutamiento e incentivos', monto: null }]), 'Reclutamiento');
+});
+await prueba('validarRubros: al menos uno, sin repetir y con montos válidos', () => {
+  assert.equal(validarRubros(rubrosPorOmision()), null);
+  assert.equal(validarRubros([{ rubro: 'Management', monto: 0 }, { rubro: 'Back office', monto: 10 }]), null);
+  assert.equal(validarRubros([]), 'El presupuesto necesita al menos un rubro.');
+  assert.match(validarRubros([{ rubro: 'Moderación', monto: null }, { rubro: 'Moderación', monto: 5 }])!, /«Moderación» está dos veces en el presupuesto/);
+  assert.match(validarRubros([{ rubro: 'Management', monto: -1 }])!, /El monto de Management no es válido/);
+  assert.match(validarRubros([{ rubro: 'Management', monto: Number.NaN }])!, /no es válido/);
 });
 
 // ── lo que se escribe en los campos ──────────────────────────────────────────
@@ -91,7 +132,7 @@ await prueba('leerMonto: acepta $, comas de miles y coma decimal; vacío es «si
   assert.equal(leerMonto('   '), null);
   for (const malo of ['abc', '-5', '1e3', '12,34,56', '1,5000', '5%', 'NaN', 'Infinity', '1000000001']) assert.equal(leerMonto(malo), undefined, malo);
 });
-await prueba('leerPorcentaje: acepta punto, coma y %; vacío es «sin porcentaje»; fuera de 0–100 no vale', () => {
+await prueba('leerPorcentaje: acepta punto, coma y %; vacío es «sin porcentaje»; más de 100 vale hasta el tope; negativo o no numérico no', () => {
   assert.equal(leerPorcentaje('33.33'), 33.33);
   assert.equal(leerPorcentaje('33,33'), 33.33);
   assert.equal(leerPorcentaje('33%'), 33);
@@ -101,7 +142,12 @@ await prueba('leerPorcentaje: acepta punto, coma y %; vacío es «sin porcentaje
   assert.equal(leerPorcentaje('100'), 100);
   assert.equal(leerPorcentaje('0'), 0);
   assert.equal(leerPorcentaje(''), null);
-  for (const malo of ['101', '-1', 'abc', '1e2', '5.5.5', 'NaN']) assert.equal(leerPorcentaje(malo), undefined, malo);
+  // Se puede pasar de 100 (a veces se paga de más), hasta un tope contra errores de dedo.
+  assert.equal(MAX_PORCENTAJE, 1000);
+  assert.equal(leerPorcentaje('120'), 120);
+  assert.equal(leerPorcentaje('150,5'), 150.5);
+  assert.equal(leerPorcentaje('1000'), 1000);
+  for (const malo of ['1000.01', '1001', '-1', 'abc', '1e2', '5.5.5', 'NaN']) assert.equal(leerPorcentaje(malo), undefined, malo);
 });
 await prueba('textoNumero: sin ceros de sobra', () => {
   assert.equal(textoNumero(33.3333), '33.3333');
@@ -116,11 +162,14 @@ await prueba('normalizarNombre: mayúsculas, acentos y espacios de sobra no hace
   assert.equal(normalizarNombre('  Luis   PÉREZ '), 'luis perez');
   assert.equal(normalizarNombre('luis perez'), normalizarNombre('Luis Pérez'));
 });
-await prueba('validarReparto: un reparto bien armado, incompleto o vacío vale', () => {
+await prueba('validarReparto: un reparto bien armado, incompleto, vacío o que se pasa de 100 % vale (pasarse es un aviso, no un error)', () => {
   assert.equal(validarReparto([interna('u1', 'Ana', 60), externa('Luis', 40)]), null);
   assert.equal(validarReparto([interna('u1', 'Ana', 50)]), null); // se completa después
   assert.equal(validarReparto([]), null); // solo el presupuesto
   assert.equal(validarReparto(partesIguales(3).map((p, i) => interna(`u${i}`, `P${i}`, p))), null);
+  assert.equal(validarReparto([interna('u1', 'Ana', 70), externa('Luis', 50)]), null); // suman 120 %
+  assert.equal(validarReparto([interna('u1', 'Ana', 150)]), null); // una sola persona con más del presupuesto
+  assert.equal(estadoReparto([{ porcentaje: 70 }, { porcentaje: 50 }]), 'excedido'); // lo que sí se sabe es que se pasó
 });
 await prueba('validarReparto: dice qué está mal en palabras llanas', () => {
   assert.equal(validarReparto([{ userId: null, nombre: 'Ana', externo: false, porcentaje: 50 }]), 'Elige a la persona de cada renglón.');
@@ -129,20 +178,19 @@ await prueba('validarReparto: dice qué está mal en palabras llanas', () => {
   assert.match(validarReparto([externa('Luis  Pérez', 30), externa('luis perez', 30)])!, /dos veces en el reparto/);
   assert.match(validarReparto([interna('u1', 'Ana', 0)])!, /porcentaje mayor a cero para Ana/);
   assert.match(validarReparto([interna('u1', 'Ana', Number.NaN)])!, /mayor a cero/);
-  assert.equal(validarReparto([interna('u1', 'Ana', 100.5)]), 'Un porcentaje no puede pasar de 100.');
-  assert.equal(validarReparto([interna('u1', 'Ana', 70), externa('Luis', 30.5)]), 'Los porcentajes suman 100.5 % y no pueden pasar de 100 %.');
+  assert.equal(validarReparto([interna('u1', 'Ana', 1000.5)]), 'Un porcentaje no puede pasar de 1000.');
   assert.match(validarReparto(Array.from({ length: MAX_PERSONAS + 1 }, (_, i) => interna(`u${i}`, `P${i}`, 1)))!, /más de 30 personas/);
 });
 
 // ── acumulado, totales y periodo ─────────────────────────────────────────────
 const proyecto = (p: Partial<ProyectoManagement> & { codigo: string }): ProyectoManagement => ({
-  repartoId: 'r', projectId: 'p', montoDeal: 0, montoDealConMarkup: 0, monedaDeal: 'MXN', presupuesto: null, moneda: 'MXN', personas: [], eliminado: false, ...p,
+  repartoId: 'r', projectId: 'p', rubrosDeal: {}, monedaDeal: 'MXN', rubros: rubrosPorOmision(), moneda: 'MXN', personas: [], eliminado: false, ...p,
 });
 const PROYECTOS = [
-  proyecto({ codigo: 'ALFA', cliente: 'Cliente Uno', inicio: '2026-03-01', montoDeal: 35000, personas: [interna('u1', 'Ana Prueba', 50), interna('u2', 'Beto Prueba', 30), externa('Luis Externo', 20)] }),
-  proyecto({ codigo: 'BETA', inicio: '2026-08-10', montoDeal: 25000, presupuesto: 10000, personas: [interna('u1', 'Ana Prueba', 100)] }),
-  proyecto({ codigo: 'GAMA', inicio: '2025-01-15', montoDeal: 700, monedaDeal: 'USD', moneda: 'USD', personas: [interna('u1', 'Ana Prueba', 50), externa('luis  externo', 50)] }),
-  proyecto({ codigo: 'DELTA', montoDeal: 5000 }),
+  proyecto({ codigo: 'ALFA', cliente: 'Cliente Uno', inicio: '2026-03-01', rubrosDeal: mgmt(35000), personas: [interna('u1', 'Ana Prueba', 50), interna('u2', 'Beto Prueba', 30), externa('Luis Externo', 20)] }),
+  proyecto({ codigo: 'BETA', inicio: '2026-08-10', rubrosDeal: mgmt(25000), rubros: [{ rubro: 'Management', monto: 10000 }], personas: [interna('u1', 'Ana Prueba', 100)] }),
+  proyecto({ codigo: 'GAMA', inicio: '2025-01-15', rubrosDeal: mgmt(700), monedaDeal: 'USD', moneda: 'USD', personas: [interna('u1', 'Ana Prueba', 50), externa('luis  externo', 50)] }),
+  proyecto({ codigo: 'DELTA', rubrosDeal: mgmt(5000) }),
 ];
 await prueba('acumuladoPorPersona: suma cada persona en todos sus proyectos, por moneda, y junta al externo escrito de dos formas', () => {
   const a = acumuladoPorPersona(PROYECTOS);
@@ -160,10 +208,36 @@ await prueba('acumuladoPorPersona: un presupuesto cambiado a mano manda sobre el
   const a = acumuladoPorPersona([PROYECTOS[1]]);
   assert.equal(a[0].porMoneda.MXN, 10000); // no 25,000
 });
-await prueba('totalesPorMoneda: lo presupuestado y lo repartido, cada moneda por su lado', () => {
+await prueba('acumuladoPorPersona y totalesPorMoneda: con otro rubro sumado el reparto es sobre el presupuesto total', () => {
+  const dos = proyecto({
+    codigo: 'DOS', rubrosDeal: DEAL, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: null }],
+    personas: [interna('u1', 'Ana Prueba', 50), interna('u2', 'Beto Prueba', 50)],
+  });
+  assert.deepEqual(acumuladoPorPersona([dos]).map((x) => [x.nombre, x.porMoneda.MXN]), [['Ana Prueba', 16500], ['Beto Prueba', 16500]]);
+  assert.deepEqual(totalesPorMoneda([dos]), {
+    presupuestado: { MXN: 33000, USD: 0, EUR: 0 }, repartido: { MXN: 33000, USD: 0, EUR: 0 }, porRepartir: { MXN: 0, USD: 0, EUR: 0 }, excedido: { MXN: 0, USD: 0, EUR: 0 }, proyectosExcedidos: 0,
+  });
+});
+await prueba('totalesPorMoneda: lo presupuestado, lo repartido y lo que falta, cada moneda por su lado', () => {
   const t = totalesPorMoneda(PROYECTOS);
   assert.deepEqual(t.presupuestado, { MXN: 35000 + 10000 + 5000, USD: 700, EUR: 0 });
   assert.deepEqual(t.repartido, { MXN: 45000, USD: 700, EUR: 0 });
+  assert.deepEqual(t.porRepartir, { MXN: 5000, USD: 0, EUR: 0 }); // DELTA, sin repartir
+  assert.deepEqual([t.excedido, t.proyectosExcedidos], [{ MXN: 0, USD: 0, EUR: 0 }, 0]);
+});
+await prueba('totalesPorMoneda: un proyecto que se pasa de 100 % se cuenta aparte y no le resta a lo que falta en otro', () => {
+  const pasado = proyecto({ codigo: 'PASADO', rubrosDeal: mgmt(25000), personas: [interna('u1', 'Ana Prueba', 60), interna('u2', 'Beto Prueba', 50)] }); // 110 %: 27,500
+  const falta = proyecto({ codigo: 'FALTA', rubrosDeal: mgmt(10000), personas: [interna('u1', 'Ana Prueba', 50)] }); // falta la mitad: 5,000
+  const t = totalesPorMoneda([pasado, falta]);
+  assert.deepEqual(t.presupuestado, { MXN: 35000, USD: 0, EUR: 0 });
+  assert.deepEqual(t.repartido, { MXN: 32500, USD: 0, EUR: 0 });
+  assert.deepEqual(t.porRepartir, { MXN: 5000, USD: 0, EUR: 0 }); // no 2,500
+  assert.deepEqual([t.excedido, t.proyectosExcedidos], [{ MXN: 2500, USD: 0, EUR: 0 }, 1]);
+  // Los montos de cada persona salen del porcentaje que se le puso, aunque se pase.
+  assert.deepEqual(acumuladoPorPersona([pasado]).map((x) => [x.nombre, x.porMoneda.MXN]), [['Ana Prueba', 15000], ['Beto Prueba', 12500]]);
+  // Un reparto completo (con unos centavos de tolerancia) no deja resto.
+  const completo = proyecto({ codigo: 'COMPLETO', rubrosDeal: mgmt(20000), personas: partesIguales(3).map((pc, i) => interna(`u${i}`, `P${i}`, pc)) });
+  assert.deepEqual([totalesPorMoneda([completo]).porRepartir.MXN, totalesPorMoneda([completo]).excedido.MXN], [0, 0]);
 });
 await prueba('enPeriodo: por inicio del proyecto; los que aún no empiezan sí cuentan y sin fecha solo en «todo»', () => {
   const hoy = '2026-10-17';
@@ -206,7 +280,7 @@ await prueba('repartirMonto: en 500 repartos completos al azar la suma es el pre
   }
 });
 await prueba('un reparto en tres partes suma exacto el presupuesto en el acumulado y en los totales, sin el centavo de más', () => {
-  const tres = proyecto({ codigo: 'TRES', inicio: '2026-05-01', montoDeal: 20000, personas: [interna('u1', 'Ana Prueba', 33.333334), interna('u2', 'Beto Prueba', 33.333333), externa('Luis Externo', 33.333333)] });
+  const tres = proyecto({ codigo: 'TRES', inicio: '2026-05-01', rubrosDeal: mgmt(20000), personas: [interna('u1', 'Ana Prueba', 33.333334), interna('u2', 'Beto Prueba', 33.333333), externa('Luis Externo', 33.333333)] });
   assert.deepEqual(acumuladoPorPersona([tres]).map((x) => [x.nombre, x.porMoneda.MXN]), [['Ana Prueba', 6666.67], ['Beto Prueba', 6666.67], ['Luis Externo', 6666.66]]);
   assert.equal(totalesPorMoneda([tres]).repartido.MXN, 20000);
 });
@@ -245,19 +319,68 @@ await prueba('filas: un porcentaje a medio escribir deja el monto, vacío lo bor
 await prueba('filas: filasDe abre con las personas del reparto (con su monto) o con un renglón vacío', () => {
   assert.equal(filasDe(proyecto({ codigo: 'X' })).length, 1);
   assert.equal(filasDe(proyecto({ codigo: 'X' }))[0].tipo, 'sin');
-  const tres = proyecto({ codigo: 'TRES', montoDeal: 20000, personas: [interna('u1', 'Ana', 33.333334), interna('u2', 'Beto', 33.333333), externa('Luis', 33.333333)] });
+  const tres = proyecto({ codigo: 'TRES', rubrosDeal: mgmt(20000), personas: [interna('u1', 'Ana', 33.333334), interna('u2', 'Beto', 33.333333), externa('Luis', 33.333333)] });
   const filas = filasDe(tres);
   assert.deepEqual(campos(filas), [['33.333334', '6666.67'], ['33.333333', '6666.67'], ['33.333333', '6666.66']]);
   assert.deepEqual(filas.map((f) => [f.tipo, f.userId, f.nombre]), [['interno', 'u1', 'Ana'], ['interno', 'u2', 'Beto'], ['externo', null, 'Luis']]);
-  // Con un presupuesto puesto a mano, los montos salen de ese.
-  assert.deepEqual(campos(filasDe({ ...tres, presupuesto: 30000 })).map((c) => c[1]), ['10000', '10000', '10000']);
+  // Con un presupuesto puesto a mano, o con otro rubro sumado, los montos salen del presupuesto de hoy.
+  assert.deepEqual(campos(filasDe({ ...tres, rubros: [{ rubro: 'Management', monto: 30000 }] })).map((c) => c[1]), ['10000', '10000', '10000']);
+  assert.deepEqual(campos(filasDe({ ...tres, rubrosDeal: { ...tres.rubrosDeal, 'Moderación': { costo: 10000, conMarkup: 15000 } }, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: null }] })).map((c) => c[1]), ['10000', '10000', '10000']);
 });
-await prueba('filas: baseDe usa lo escrito o, vacío, el del deal; lo que no es un monto no vale', () => {
-  assert.equal(baseDe('', 25000), 25000);
-  assert.equal(baseDe('30,000', 25000), 30000);
-  assert.equal(baseDe('abc', 25000), undefined);
+const dealMgmt = { rubrosDeal: DEAL, monedaDeal: 'MXN' as const };
+const textos = (filas: FilaRubro[]) => filas.map((f) => [f.rubro, f.texto]);
+await prueba('rubros en pantalla: abren con lo que valen hoy (el monto puesto a mano o el del deal; vacío si no hay)', () => {
+  assert.deepEqual(textos(rubrosDe({ ...dealMgmt, rubros: rubrosPorOmision() })), [['Management', '25000']]);
+  assert.deepEqual(textos(rubrosDe({ ...dealMgmt, rubros: [{ rubro: 'Management', monto: 40000 }] })), [['Management', '40000']]);
+  assert.deepEqual(textos(rubrosDe({ ...dealMgmt, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: null }, { rubro: 'Back office', monto: null }] })), [['Management', '25000'], ['Moderación', '8000'], ['Back office', '']]);
+  assert.deepEqual(textos(rubrosDe({ rubrosDeal: {}, rubros: rubrosPorOmision() })), [['Management', '']]);
 });
-await prueba('filas: personasDe ignora los renglones vacíos, deja pasar un porcentaje de más y marca como NaN lo que no es un número', () => {
+await prueba('rubros en pantalla: se agregan con el monto del deal, una sola vez, y siempre queda al menos uno', () => {
+  let filas = rubrosDe({ ...dealMgmt, rubros: rubrosPorOmision() });
+  filas = agregarRubro(filas, 'Moderación', DEAL);
+  assert.deepEqual(textos(filas), [['Management', '25000'], ['Moderación', '8000']]);
+  assert.equal(agregarRubro(filas, 'Moderación', DEAL).length, 2); // ya estaba
+  filas = agregarRubro(filas, 'Back office', DEAL);
+  assert.deepEqual(textos(filas).at(-1), ['Back office', '']); // el deal no lo trae
+  assert.deepEqual(rubrosFaltantes(filas), ['Reclutamiento e incentivos', 'Logística y operación']);
+  filas = quitarRubro(quitarRubro(filas, 'Management'), 'Back office');
+  assert.deepEqual(textos(filas), [['Moderación', '8000']]);
+  assert.deepEqual(textos(quitarRubro(filas, 'Moderación')), [['Moderación', '8000']]); // el último no se quita
+  assert.deepEqual(textos(conTextoDeRubro(filas, 'Moderación', '5000')), [['Moderación', '5000']]);
+});
+await prueba('rubros en pantalla: el total suma los rubros (vacío = el del deal) y no vale si algo escrito no es un monto', () => {
+  const filas = rubrosDe({ ...dealMgmt, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: null }] });
+  assert.equal(totalDe(filas, DEAL), 33000);
+  assert.equal(totalDe(conTextoDeRubro(filas, 'Management', ''), DEAL), 33000); // vacío = el del deal
+  assert.equal(totalDe(conTextoDeRubro(filas, 'Management', '30,000'), DEAL), 38000);
+  assert.equal(totalDe(conTextoDeRubro(filas, 'Moderación', 'abc'), DEAL), undefined);
+  assert.equal(totalDe(rubrosDe({ rubrosDeal: {}, rubros: rubrosPorOmision() }), {}), 0);
+});
+await prueba('rubros en pantalla: «editado» solo donde el deal trae un monto y se cambió (o se cambió la moneda)', () => {
+  const f = (rubro: FilaRubro['rubro'], texto: string): FilaRubro => ({ clave: 'x', rubro, texto });
+  assert.equal(rubroEditado(f('Management', '25000'), DEAL, 'MXN', 'MXN'), false);
+  assert.equal(rubroEditado(f('Management', '30000'), DEAL, 'MXN', 'MXN'), true);
+  assert.equal(rubroEditado(f('Management', ''), DEAL, 'MXN', 'MXN'), false);
+  assert.equal(rubroEditado(f('Back office', '3000'), DEAL, 'MXN', 'MXN'), false); // el deal no lo trae
+  assert.equal(rubroEditado(f('Management', '25000'), DEAL, 'USD', 'MXN'), true); // otra moneda: ya no es lo del deal
+  assert.equal(rubroEditado(f('Management', 'abc'), DEAL, 'MXN', 'MXN'), false);
+});
+await prueba('rubros en pantalla: se guarda null si vale el del deal (vacío o igual, en su moneda) y el monto escrito si no; la moneda solo si algo va a mano', () => {
+  const guardado = (...pares: Array<[FilaRubro['rubro'], string]>) => pares.map(([rubro, texto]): FilaRubro => ({ clave: 'x', rubro, texto }));
+  assert.deepEqual(rubrosAGuardar(guardado(['Management', '25000']), 'MXN', dealMgmt), { rubros: [{ rubro: 'Management', monto: null }], moneda: null });
+  assert.deepEqual(rubrosAGuardar(guardado(['Management', '25,000']), 'MXN', dealMgmt), { rubros: [{ rubro: 'Management', monto: null }], moneda: null });
+  assert.deepEqual(rubrosAGuardar(guardado(['Management', '']), 'MXN', dealMgmt), { rubros: [{ rubro: 'Management', monto: null }], moneda: null });
+  assert.deepEqual(rubrosAGuardar(guardado(['Management', '40000']), 'MXN', dealMgmt), { rubros: [{ rubro: 'Management', monto: 40000 }], moneda: 'MXN' });
+  assert.deepEqual(rubrosAGuardar(guardado(['Management', '25000'], ['Moderación', '5000']), 'MXN', dealMgmt), { rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: 5000 }], moneda: 'MXN' });
+  assert.deepEqual(rubrosAGuardar(guardado(['Management', '25000'], ['Back office', '']), 'MXN', dealMgmt), { rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Back office', monto: null }], moneda: null });
+  assert.deepEqual(rubrosAGuardar(guardado(['Management', '0']), 'MXN', { rubrosDeal: {}, monedaDeal: 'MXN' }), { rubros: [{ rubro: 'Management', monto: null }], moneda: null });
+  assert.deepEqual(rubrosAGuardar(guardado(['Management', '0']), 'MXN', dealMgmt), { rubros: [{ rubro: 'Management', monto: 0 }], moneda: 'MXN' });
+  // Con una moneda distinta a la del deal todos los montos van a mano (vacío = 0).
+  assert.deepEqual(rubrosAGuardar(guardado(['Management', '25000'], ['Moderación', '']), 'USD', dealMgmt), { rubros: [{ rubro: 'Management', monto: 25000 }, { rubro: 'Moderación', monto: 0 }], moneda: 'USD' });
+  const malo = rubrosAGuardar(guardado(['Management', '25000'], ['Moderación', 'abc']), 'MXN', dealMgmt);
+  assert.ok('error' in malo && /Moderación/.test(malo.error));
+});
+await prueba('filas: personasDe ignora los renglones vacíos, deja pasar un porcentaje de más (el tope lo pone validarReparto) y marca como NaN lo que no es un número', () => {
   const filas = [
     interno('u1', 'Ana', '50'),
     filaVacia(),
@@ -269,18 +392,8 @@ await prueba('filas: personasDe ignora los renglones vacíos, deja pasar un porc
   const p = personasDe(filas);
   assert.deepEqual(p.map((x) => [x.userId, x.nombre, x.externo]), [['u1', 'Ana', false], [null, 'Luis', true], [null, '', false], ['u2', 'Beto', false], ['u3', 'Carla', false]]);
   assert.deepEqual(p.map((x) => x.porcentaje).map((x) => (Number.isNaN(x) ? 'NaN' : x)), [50, 50, 'NaN', 150, 12.5]);
-  assert.equal(validarReparto([p[3]]), 'Un porcentaje no puede pasar de 100.');
-});
-await prueba('filas: presupuestoAGuardar es null si vale el del deal (vacío o igual, en la misma moneda) y el monto escrito si no', () => {
-  const deal = { montoDeal: 25000, monedaDeal: 'MXN' as const };
-  assert.deepEqual(presupuestoAGuardar('', 'MXN', deal), { presupuesto: null, moneda: null });
-  assert.deepEqual(presupuestoAGuardar('25000', 'MXN', deal), { presupuesto: null, moneda: null });
-  assert.deepEqual(presupuestoAGuardar('25,000', 'MXN', deal), { presupuesto: null, moneda: null });
-  assert.deepEqual(presupuestoAGuardar('25000', 'USD', deal), { presupuesto: 25000, moneda: 'USD' });
-  assert.deepEqual(presupuestoAGuardar('30,000', 'MXN', deal), { presupuesto: 30000, moneda: 'MXN' });
-  assert.deepEqual(presupuestoAGuardar('0', 'MXN', { montoDeal: 0, monedaDeal: 'MXN' }), { presupuesto: null, moneda: null });
-  assert.deepEqual(presupuestoAGuardar('0', 'MXN', deal), { presupuesto: 0, moneda: 'MXN' });
-  assert.ok('error' in presupuestoAGuardar('abc', 'MXN', deal));
+  assert.equal(validarReparto([p[3]]), null); // 150 % para una persona vale; solo se avisa
+  assert.equal(validarReparto([{ ...p[3], porcentaje: 1500 }]), 'Un porcentaje no puede pasar de 1000.');
 });
 
 // ── endpoints, de punta a punta contra PGlite ────────────────────────────────
@@ -320,15 +433,15 @@ const linea = (cotizacionId: string, rubro: string, subRubro: string, cantidad: 
 const proyectoBD = (codigo: string, cliente: string, inicio: string | null, dealId: string | null) =>
   id(`insert into projects (project_code, full_name, client, status, start_date, deal_vinculado_id) values ($1, $2, $3, 'En curso', $4, $5)`, [codigo, `${codigo} completo`, cliente, inicio, dealId]);
 
-// Deal de ALFA (MXN): dos líneas de Management que cuentan (25,000 + 2×5,000), y cuatro que no: otro rubro, excluida del presupuesto, con costo 0,
-// y toda una cotización no incluida (o sin marcar).
+// Deal de ALFA (MXN): dos líneas de Management que cuentan (25,000 + 2×5,000), una de Moderación (8,000), una de Back office con costo 0 que no cuenta, y
+// otras que no cuentan: una excluida del presupuesto y toda una cotización no incluida (o sin marcar).
 const dealAlfa = await deal('Deal Alfa', 'MXN 🇲🇽');
 const cAlfa = await cotizacion(dealAlfa, true);
 await linea(cAlfa, 'Management', 'Management Cuali', 1, 1, 25000, 37500);
 await linea(cAlfa, 'Management', 'Management Fase 2', 2, 1, 5000, 15000, true);
 await linea(cAlfa, 'Moderación', 'Moderación', 1, 1, 8000, 12000);
 await linea(cAlfa, 'Management', 'Excluida', 1, 1, 99999, 99999, false);
-await linea(cAlfa, 'Management', 'Sin costo', 1, 1, 0, 0);
+await linea(cAlfa, 'Back office', 'Sin costo', 1, 1, 0, 0);
 await linea(await cotizacion(dealAlfa, false), 'Management', 'Otra cotización', 1, 1, 77777, 77777);
 await linea(await cotizacion(dealAlfa, null), 'Management', 'Cotización sin marcar', 1, 1, 66666, 66666);
 // Deal de BETA (USD).
@@ -351,14 +464,17 @@ const otra = { user: { id: 'u2', email: 'alguien@ejemplo.test' } };
 const sinSesion = { user: null };
 const rechazadoPor = (codigo: string) => (e: unknown) => e instanceof ZiteError && e.code === codigo;
 const leer = async (): Promise<any> => getPagosManagement.run({}, sergio);
-const guardar = (entrada: Record<string, unknown>) => savePagosManagementReparto.run({ presupuesto: null, moneda: null, personas: [], ...entrada } as any, sergio);
+const guardar = (entrada: Record<string, unknown>) => savePagosManagementReparto.run({ rubros: rubrosPorOmision(), moneda: null, personas: [], ...entrada } as any, sergio);
 const proyecto_ = async (codigo: string) => (await leer()).proyectos.find((p: any) => p.codigo === codigo);
+const ana100 = [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 100 }];
+const filasEnBD = async (tabla: string) => Number((await pg.query<{ n: number }>(`select count(*)::int as n from ${tabla}`)).rows[0].n);
 
-await prueba('sin las tablas: se pueden ver los proyectos con su monto del deal, y guardar dice qué falta', async () => {
+await prueba('sin las tablas: se pueden ver los proyectos con lo que dice su deal, y guardar dice qué falta', async () => {
   const r = await leer();
   assert.equal(r.sinTablas, true);
   assert.deepEqual(r.proyectos.map((p: any) => p.codigo), ['BETA', 'ALFA', 'EPSILON']);
   assert.deepEqual(r.proyectos.map((p: any) => p.repartoId), [null, null, null]);
+  assert.deepEqual(r.proyectos[0].rubros, [{ rubro: 'Management', monto: null }]);
   await assert.rejects(() => guardar({ projectId: alfa, personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 50 }] }), (e: unknown) => e instanceof ZiteError && /add-pagos-management-tables/.test(e.message));
   await assert.rejects(() => guardar({ projectId: alfa }), (e: unknown) => e instanceof ZiteError && /add-pagos-management-tables/.test(e.message));
 });
@@ -369,23 +485,26 @@ await prueba('solo Sergio: otra persona y quien no ha entrado reciben «no autor
   for (const contexto of [otra, sinSesion]) {
     const codigo = contexto.user ? 'FORBIDDEN' : 'UNAUTHORIZED';
     await assert.rejects(() => getPagosManagement.run({}, contexto), rechazadoPor(codigo));
-    await assert.rejects(() => savePagosManagementReparto.run({ projectId: alfa, presupuesto: null, moneda: null, personas: [] }, contexto), rechazadoPor(codigo));
+    await assert.rejects(() => savePagosManagementReparto.run({ projectId: alfa, rubros: rubrosPorOmision(), moneda: null, personas: [] }, contexto), rechazadoPor(codigo));
   }
 });
-await prueba('el monto de management del deal es el de la pestaña Presupuesto: solo líneas del rubro, de cotizaciones incluidas, con costo y no excluidas', async () => {
+await prueba('lo que dice el deal de cada rubro es lo de la pestaña Presupuesto: líneas de cotizaciones incluidas, con costo y no excluidas', async () => {
   const r = await leer();
   assert.equal(r.sinTablas, false);
   const alfa_ = r.proyectos.find((p: any) => p.codigo === 'ALFA');
-  assert.deepEqual([alfa_.montoDeal, alfa_.montoDealConMarkup, alfa_.monedaDeal, alfa_.moneda, alfa_.presupuesto], [35000, 52500, 'MXN', 'MXN', null]);
+  // Management: 25,000 + 2×5,000 (35,000; con markup 37,500 + 15,000); Moderación: 8,000. Sin Back office (costo 0), sin lo excluido ni lo de cotizaciones no incluidas.
+  assert.deepEqual(alfa_.rubrosDeal, { Management: { costo: 35000, conMarkup: 52500 }, 'Moderación': { costo: 8000, conMarkup: 12000 } });
+  assert.deepEqual([alfa_.monedaDeal, alfa_.moneda, alfa_.rubros], ['MXN', 'MXN', [{ rubro: 'Management', monto: null }]]);
   const beta_ = r.proyectos.find((p: any) => p.codigo === 'BETA');
-  assert.deepEqual([beta_.montoDeal, beta_.monedaDeal, beta_.moneda], [700, 'USD', 'USD']);
+  assert.deepEqual([beta_.rubrosDeal, beta_.monedaDeal, beta_.moneda], [{ Management: { costo: 700, conMarkup: 1050 } }, 'USD', 'USD']);
   assert.deepEqual([alfa_.nombre, alfa_.cliente, alfa_.estado, alfa_.inicio, alfa_.dealNombre], ['ALFA completo', 'Cliente Uno', 'En curso', '2026-03-01', 'Deal Alfa']);
 });
-await prueba('los proyectos con management van del más reciente al más viejo, y el resto queda disponible para agregarlo a mano', async () => {
+await prueba('los proyectos con management van del más reciente al más viejo, y el resto queda disponible para agregarlo a mano (con lo que su deal trae)', async () => {
   const r = await leer();
   assert.deepEqual(r.proyectos.map((p: any) => p.codigo), ['BETA', 'ALFA', 'EPSILON']);
   // GAMA (su deal solo tiene Moderación) y DELTA (sin deal ni fecha, al final).
   assert.deepEqual(r.disponibles.map((p: any) => p.codigo), ['GAMA', 'DELTA']);
+  assert.deepEqual(r.disponibles.map((p: any) => p.rubrosDeal), [{ 'Moderación': { costo: 8000, conMarkup: 12000 } }, {}]);
   assert.equal(r.disponibles[1].inicio, undefined);
   assert.deepEqual(r.usuarios.map((u: any) => u.nombre), ['Ana Prueba', 'Beto Prueba', 'Carla Prueba']);
   assert.equal(r.usuarios[0].departamento, 'Análisis');
@@ -403,64 +522,119 @@ await prueba('guardar: el reparto de un proyecto con personas internas y externa
   });
   assert.deepEqual(r, { ok: true, eliminado: false });
   const p = await proyecto_('ALFA');
-  assert.equal(p.presupuesto, null);
+  assert.deepEqual([p.rubros, p.moneda], [[{ rubro: 'Management', monto: null }], 'MXN']);
   assert.deepEqual(p.personas.map((x: any) => [x.userId, x.nombre, x.externo, x.porcentaje]), [[ana, 'Ana Prueba', false, 50], [beto, 'Beto Prueba', false, 30], [null, 'Luis Externo', true, 20]]);
   assert.ok(p.repartoId);
   assert.deepEqual((await leer()).externos, ['Luis Externo']);
 });
-await prueba('guardar de nuevo reemplaza el reparto (una sola fila por proyecto) y un presupuesto a mano manda sobre el del deal', async () => {
-  await guardar({ projectId: alfa, presupuesto: 40000, moneda: 'MXN', personas: [{ userId: carla, nombre: 'Carla', externo: false, porcentaje: 100 }] });
+await prueba('guardar de nuevo reemplaza el reparto (una sola fila por proyecto) y un monto puesto a mano manda sobre el del deal', async () => {
+  await guardar({ projectId: alfa, rubros: [{ rubro: 'Management', monto: 40000 }], moneda: 'MXN', personas: [{ userId: carla, nombre: 'Carla', externo: false, porcentaje: 100 }] });
   const p = await proyecto_('ALFA');
-  assert.deepEqual([p.presupuesto, p.moneda, p.montoDeal], [40000, 'MXN', 35000]);
+  assert.deepEqual([p.rubros, p.moneda, p.rubrosDeal.Management.costo], [[{ rubro: 'Management', monto: 40000 }], 'MXN', 35000]);
+  assert.equal(presupuestoDe(p), 40000);
   assert.deepEqual(p.personas.map((x: any) => [x.nombre, x.porcentaje]), [['Carla Prueba', 100]]);
-  assert.equal(Number((await pg.query<{ n: number }>(`select count(*)::int as n from pagos_management_proyectos where project_id = $1`, [alfa])).rows[0].n), 1);
-  assert.equal(Number((await pg.query<{ n: number }>(`select count(*)::int as n from pagos_management_personas`)).rows[0].n), 1);
+  assert.equal(await filasEnBD('pagos_management_proyectos'), 1);
+  assert.equal(await filasEnBD('pagos_management_personas'), 1);
+  assert.equal(await filasEnBD('pagos_management_rubros'), 1);
 });
-await prueba('la moneda solo vale con un presupuesto a mano: sin él se usa la del deal', async () => {
-  await guardar({ projectId: beta, presupuesto: null, moneda: 'EUR', personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 60 }] });
+await prueba('se le suma otro rubro de la cotización: el presupuesto es la suma, cada rubro con el monto del deal o con uno puesto a mano, y se conserva el orden', async () => {
+  await guardar({ projectId: alfa, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: null }], moneda: null, personas: ana100 });
+  let p = await proyecto_('ALFA');
+  assert.deepEqual([p.rubros, p.moneda, presupuestoDe(p), esEditado(p)], [[{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: null }], 'MXN', 43000, false]);
+  await guardar({ projectId: alfa, rubros: [{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: 5000 }], moneda: 'MXN', personas: ana100 });
+  p = await proyecto_('ALFA');
+  assert.deepEqual([p.rubros, p.moneda, presupuestoDe(p), esEditado(p)], [[{ rubro: 'Management', monto: null }, { rubro: 'Moderación', monto: 5000 }], 'MXN', 40000, true]);
+  // Un rubro que el deal no trae, con el monto que se le ponga; y en otro orden.
+  await guardar({ projectId: alfa, rubros: [{ rubro: 'Back office', monto: 3000 }, { rubro: 'Management', monto: null }], moneda: 'MXN', personas: ana100 });
+  p = await proyecto_('ALFA');
+  assert.deepEqual([p.rubros.map((r: any) => r.rubro), presupuestoDe(p)], [['Back office', 'Management'], 38000]);
+  assert.equal(await filasEnBD('pagos_management_rubros'), 2); // reemplaza, no acumula filas
+  // Sin Management: solo lo que se agregó.
+  await guardar({ projectId: alfa, rubros: [{ rubro: 'Moderación', monto: null }], personas: ana100 });
+  assert.equal(presupuestoDe(await proyecto_('ALFA')), 8000);
+});
+await prueba('la moneda solo se guarda si algún monto va a mano; con otra moneda que la del deal todos van a mano', async () => {
+  // BETA es de un deal en USD.
+  await guardar({ projectId: beta, rubros: rubrosPorOmision(), moneda: 'USD', personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 60 }] });
+  let p = await proyecto_('BETA');
+  assert.deepEqual([p.rubros, p.moneda, p.monedaDeal], [[{ rubro: 'Management', monto: null }], 'USD', 'USD']);
+  assert.equal((await pg.query<{ moneda: string | null }>(`select moneda from pagos_management_proyectos where project_id = $1`, [beta])).rows[0].moneda, null); // vale la del deal: no se guarda
+  // Con montos del deal no se puede pedir otra moneda: los montos del deal están en USD.
+  await assert.rejects(() => guardar({ projectId: beta, rubros: rubrosPorOmision(), moneda: 'EUR', personas: ana100 }), rechazadoPor('BAD_REQUEST'));
+  await assert.rejects(() => guardar({ projectId: beta, rubros: [{ rubro: 'Management', monto: 15000 }, { rubro: 'Moderación', monto: null }], moneda: 'MXN', personas: ana100 }), rechazadoPor('BAD_REQUEST'));
+  // En pesos, con todos los montos escritos.
+  await guardar({ projectId: beta, rubros: [{ rubro: 'Management', monto: 15000 }], moneda: 'MXN', personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 60 }] });
+  p = await proyecto_('BETA');
+  assert.deepEqual([p.rubros, p.moneda, presupuestoDe(p)], [[{ rubro: 'Management', monto: 15000 }], 'MXN', 15000]);
+  // Un monto a mano sin decir moneda vale en la del deal.
+  await guardar({ projectId: beta, rubros: [{ rubro: 'Management', monto: 800 }], moneda: null, personas: [] });
+  assert.equal((await proyecto_('BETA')).moneda, 'USD');
+});
+await prueba('un monto en cero puesto a mano se conserva (no se confunde con «el del deal»)', async () => {
+  await guardar({ projectId: beta, rubros: [{ rubro: 'Management', monto: 0 }], moneda: 'USD', personas: ana100 });
   const p = await proyecto_('BETA');
-  assert.deepEqual([p.presupuesto, p.moneda, p.monedaDeal], [null, 'USD', 'USD']);
-  await guardar({ projectId: beta, presupuesto: 15000, moneda: 'MXN', personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 60 }] });
-  assert.deepEqual([(await proyecto_('BETA')).presupuesto, (await proyecto_('BETA')).moneda], [15000, 'MXN']);
-  await guardar({ projectId: beta, presupuesto: 15000, moneda: null, personas: [] });
-  assert.equal((await proyecto_('BETA')).moneda, 'MXN');
+  assert.deepEqual([p.rubros, p.moneda, presupuestoDe(p)], [[{ rubro: 'Management', monto: 0 }], 'USD', 0]);
+  await guardar({ projectId: beta, rubros: rubrosPorOmision(), moneda: null, personas: [] });
 });
-await prueba('un presupuesto en cero puesto a mano se conserva (no se confunde con «el del deal»)', async () => {
-  await guardar({ projectId: beta, presupuesto: 0, moneda: 'USD', personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 100 }] });
-  const p = await proyecto_('BETA');
-  assert.deepEqual([p.presupuesto, p.moneda], [0, 'USD']);
-  await guardar({ projectId: beta, presupuesto: null, moneda: null, personas: [] });
-});
-await prueba('quitar todo (sin presupuesto a mano y sin personas) borra el reparto y el proyecto vuelve a «sin repartir»', async () => {
+await prueba('quitar todo (solo el Management del deal sin tocar y sin personas) borra el reparto y el proyecto vuelve a «sin repartir»', async () => {
   assert.deepEqual(await guardar({ projectId: alfa, personas: [] }), { ok: true, eliminado: true });
   const p = await proyecto_('ALFA');
-  assert.deepEqual([p.repartoId, p.presupuesto, p.personas], [null, null, []]);
-  assert.equal(Number((await pg.query<{ n: number }>(`select count(*)::int as n from pagos_management_personas where reparto_id is not null`)).rows[0].n), 0);
+  assert.deepEqual([p.repartoId, p.rubros, p.personas], [null, [{ rubro: 'Management', monto: null }], []]);
+  // Con el reparto se van sus personas y sus rubros (y no queda ningún otro: BETA ya se había quitado).
+  assert.deepEqual([await filasEnBD('pagos_management_proyectos'), await filasEnBD('pagos_management_personas'), await filasEnBD('pagos_management_rubros')], [0, 0, 0]);
   assert.deepEqual(await guardar({ projectId: alfa, personas: [] }), { ok: true, eliminado: true }); // otra vez, sin nada que borrar
 });
-await prueba('un proyecto sin management en su deal se agrega a mano con un presupuesto: sale de «disponibles» y entra a la lista', async () => {
-  await guardar({ projectId: gama, presupuesto: 5000, moneda: 'MXN', personas: [] });
-  const r = await leer();
+await prueba('un proyecto sin management en su deal se agrega a mano con un presupuesto, o con otro rubro del deal: sale de «disponibles» y entra a la lista', async () => {
+  await guardar({ projectId: gama, rubros: [{ rubro: 'Management', monto: 5000 }], moneda: 'MXN', personas: [] });
+  let r = await leer();
   assert.deepEqual(r.disponibles.map((p: any) => p.codigo), ['DELTA']);
-  const p = r.proyectos.find((x: any) => x.codigo === 'GAMA');
-  assert.deepEqual([p.montoDeal, p.presupuesto, p.personas], [0, 5000, []]);
+  let p = r.proyectos.find((x: any) => x.codigo === 'GAMA');
+  assert.deepEqual([p.rubros, p.personas, presupuestoDe(p)], [[{ rubro: 'Management', monto: 5000 }], [], 5000]);
+  assert.ok(p.repartoId);
+  // Con el rubro que su deal sí trae (Moderación) y sin Management, aunque no tenga personas se conserva: ya no es «el de siempre».
+  await guardar({ projectId: gama, rubros: [{ rubro: 'Moderación', monto: null }], personas: [] });
+  p = await proyecto_('GAMA');
+  assert.deepEqual([p.rubros, presupuestoDe(p)], [[{ rubro: 'Moderación', monto: null }], 8000]);
   assert.ok(p.repartoId);
   await guardar({ projectId: gama, personas: [] }); // quitarlo
-  assert.deepEqual((await leer()).disponibles.map((p: any) => p.codigo), ['GAMA', 'DELTA']);
+  r = await leer();
+  assert.deepEqual(r.disponibles.map((x: any) => x.codigo), ['GAMA', 'DELTA']);
 });
-await prueba('validaciones del servidor: porcentajes que pasan de 100, personas repetidas, usuario que no existe, nombre vacío y datos mal formados', async () => {
+await prueba('se puede pasar de 100 %: el servidor lo guarda, los montos salen del porcentaje de cada quien y la restricción de la base lo permite hasta el tope', async () => {
+  await guardar({
+    projectId: alfa,
+    personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 60 }, { userId: beto, nombre: 'Beto', externo: false, porcentaje: 50 }], // 110 %
+  });
+  let p = await proyecto_('ALFA');
+  assert.deepEqual(p.personas.map((x: any) => [x.nombre, x.porcentaje]), [['Ana Prueba', 60], ['Beto Prueba', 50]]);
+  assert.equal(estadoReparto(p.personas), 'excedido');
+  assert.deepEqual(acumuladoPorPersona([p]).map((x) => [x.nombre, x.porMoneda.MXN]), [['Ana Prueba', 21000], ['Beto Prueba', 17500]]); // sobre los 35,000 del deal
+  assert.deepEqual([totalesPorMoneda([p]).repartido.MXN, totalesPorMoneda([p]).excedido.MXN, totalesPorMoneda([p]).proyectosExcedidos], [38500, 3500, 1]);
+  // Una sola persona con más del presupuesto.
+  await guardar({ projectId: alfa, personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 150 }] });
+  p = await proyecto_('ALFA');
+  assert.deepEqual(p.personas.map((x: any) => x.porcentaje), [150]);
+  // En la base: hasta 1000 % cabe y más no.
+  await pg.query(`update pagos_management_personas set porcentaje = 1000 where reparto_id = $1`, [p.repartoId]);
+  await assert.rejects(() => pg.query(`update pagos_management_personas set porcentaje = 1000.01 where reparto_id = $1`, [p.repartoId]), /porcentaje_chk/);
+  await guardar({ projectId: alfa, personas: [] });
+});
+await prueba('validaciones del servidor: porcentajes absurdos, personas repetidas, usuario que no existe, nombre vacío, rubros mal puestos y datos mal formados', async () => {
   const ana_ = (porcentaje: number) => ({ userId: ana, nombre: 'Ana', externo: false, porcentaje });
   const casos: Array<[string, Record<string, unknown>]> = [
-    ['suma 100.5', { personas: [ana_(60), { userId: beto, nombre: 'Beto', externo: false, porcentaje: 40.5 }] }],
     ['repetida', { personas: [ana_(30), ana_(30)] }],
     ['externa repetida', { personas: [{ userId: null, nombre: 'Luis', externo: true, porcentaje: 30 }, { userId: null, nombre: 'LUIS ', externo: true, porcentaje: 30 }] }],
     ['usuario inexistente', { personas: [{ userId: '00000000-0000-4000-8000-000000000000', nombre: 'Nadie', externo: false, porcentaje: 50 }] }],
     ['externa sin nombre', { personas: [{ userId: null, nombre: '  ', externo: true, porcentaje: 50 }] }],
     ['interna sin usuario', { personas: [{ userId: null, nombre: 'Ana', externo: false, porcentaje: 50 }] }],
     ['porcentaje 0', { personas: [ana_(0)] }],
-    ['porcentaje 101', { personas: [ana_(101)] }],
-    ['presupuesto negativo', { presupuesto: -1, personas: [] }],
-    ['moneda inventada', { presupuesto: 100, moneda: 'JPY', personas: [] }],
+    ['porcentaje 1001', { personas: [ana_(1001)] }],
+    ['monto negativo', { rubros: [{ rubro: 'Management', monto: -1 }], personas: [] }],
+    ['rubro inventado', { rubros: [{ rubro: 'Inventado', monto: 5 }], personas: [] }],
+    ['sin rubros', { rubros: [], personas: [] }],
+    ['rubro repetido', { rubros: [{ rubro: 'Moderación', monto: null }, { rubro: 'Moderación', monto: 5 }], personas: [] }],
+    ['moneda inventada', { rubros: [{ rubro: 'Management', monto: 100 }], moneda: 'JPY', personas: [] }],
+    ['moneda distinta con montos del deal', { rubros: [{ rubro: 'Management', monto: null }], moneda: 'USD', personas: ana100 }],
     ['proyecto mal formado', { projectId: 'no-es-un-id', personas: [ana_(50)] }],
   ];
   for (const [nombre, extra] of casos) await assert.rejects(() => guardar({ projectId: alfa, ...extra }), rechazadoPor('BAD_REQUEST'), nombre);
@@ -468,7 +642,7 @@ await prueba('validaciones del servidor: porcentajes que pasan de 100, personas 
   // Nada de eso dejó basura.
   assert.equal(Number((await pg.query<{ n: number }>(`select count(*)::int as n from pagos_management_proyectos where project_id = $1`, [alfa])).rows[0].n), 0);
 });
-await prueba('si algo falla a medias no queda un reparto a medias (la transacción se deshace)', async () => {
+await prueba('si algo falla a medias no queda un reparto a medias (la transacción se deshace, rubros incluidos)', async () => {
   await guardar({ projectId: alfa, personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 70 }] });
   const antes = await proyecto_('ALFA');
   const enviado: string[] = [];
@@ -480,18 +654,19 @@ await prueba('si algo falla a medias no queda un reparto a medias (la transacci�
     },
     release: () => {},
   });
-  await assert.rejects(() => guardar({ projectId: alfa, presupuesto: 99999, moneda: 'MXN', personas: [{ userId: beto, nombre: 'Beto', externo: false, porcentaje: 10 }] }), /falla simulada/);
+  await assert.rejects(() => guardar({ projectId: alfa, rubros: [{ rubro: 'Management', monto: 99999 }, { rubro: 'Moderación', monto: null }], moneda: 'MXN', personas: [{ userId: beto, nombre: 'Beto', externo: false, porcentaje: 10 }] }), /falla simulada/);
   (pool as any).connect = async () => ({ query: q, release: () => {} });
   assert.deepEqual(enviado.filter((s) => s === 'begin' || s === 'rollback' || s === 'commit'), ['begin', 'rollback']);
   assert.deepEqual(await proyecto_('ALFA'), antes);
   await guardar({ projectId: alfa, personas: [] });
 });
-await prueba('si se elimina un proyecto con reparto, el reparto se conserva con el código que tenía', async () => {
-  await guardar({ projectId: epsilon, presupuesto: 9000, moneda: 'MXN', personas: [{ userId: ana, nombre: 'Ana', externo: false, porcentaje: 100 }] });
+await prueba('si se elimina un proyecto con reparto, el reparto se conserva con el código y los rubros que tenía', async () => {
+  await guardar({ projectId: epsilon, rubros: [{ rubro: 'Management', monto: 9000 }], moneda: 'MXN', personas: ana100 });
   await pg.query(`delete from projects where id = $1`, [epsilon]);
   const r = await leer();
   const huerfano = r.proyectos.find((p: any) => p.codigo === 'EPSILON');
-  assert.deepEqual([huerfano.eliminado, huerfano.projectId, huerfano.presupuesto, huerfano.personas.map((x: any) => x.nombre)], [true, null, 9000, ['Ana Prueba']]);
+  assert.deepEqual([huerfano.eliminado, huerfano.projectId, huerfano.rubros, huerfano.rubrosDeal, huerfano.personas.map((x: any) => x.nombre)], [true, null, [{ rubro: 'Management', monto: 9000 }], {}, ['Ana Prueba']]);
+  assert.equal(presupuestoDe(huerfano), 9000);
   assert.deepEqual(r.proyectos.filter((p: any) => !p.eliminado).map((p: any) => p.codigo), ['BETA', 'ALFA']);
 });
 await prueba('si se borra un usuario, su reparto sigue con el nombre que tenía al repartir', async () => {
@@ -500,6 +675,38 @@ await prueba('si se borra un usuario, su reparto sigue con el nombre que tenía 
   const p = await proyecto_('ALFA');
   assert.deepEqual(p.personas.map((x: any) => [x.userId, x.nombre, x.externo]), [[null, 'Carla Prueba', false]]);
   assert.deepEqual((await leer()).usuarios.map((u: any) => u.nombre), ['Ana Prueba', 'Beto Prueba']);
+});
+await prueba('un reparto de la primera versión (un solo presupuesto, sin rubros) se pasa a rubros al correr el script otra vez, sin duplicarse', async () => {
+  await guardar({ projectId: alfa, personas: [] }); // se quita el de ALFA para poder escribir el de la primera versión
+  await pg.query(`insert into pagos_management_proyectos (project_id, project_codigo, presupuesto, moneda) values ($1, 'ALFA', 12345, 'MXN')`, [alfa]);
+  // Con la restricción de la primera versión (hasta 100 %) un reparto que se pasa no cabe; el script la cambia por la nueva (hasta 1000 %).
+  await pg.exec(`alter table pagos_management_personas drop constraint pagos_management_personas_porcentaje_chk;
+                 alter table pagos_management_personas add constraint pagos_management_personas_porcentaje_chk check (porcentaje > 0 and porcentaje <= 100)`);
+  const repartoViejo = (await pg.query<{ id: string }>(`select id from pagos_management_proyectos where project_id = $1`, [alfa])).rows[0].id;
+  await assert.rejects(() => pg.query(`insert into pagos_management_personas (reparto_id, nombre, porcentaje) values ($1, 'Alguien', 120)`, [repartoViejo]), /porcentaje_chk/);
+  // Antes de pasarlo no tiene rubros guardados: vale lo de siempre, el Management del deal.
+  let p = await proyecto_('ALFA');
+  assert.deepEqual([p.rubros, presupuestoDe(p)], [[{ rubro: 'Management', monto: null }], 35000]);
+  await pg.exec(ddl!);
+  await pg.query(`insert into pagos_management_personas (reparto_id, nombre, porcentaje) values ($1, 'Alguien', 120)`, [repartoViejo]); // ya cabe
+  await pg.query(`delete from pagos_management_personas where reparto_id = $1`, [repartoViejo]);
+  p = await proyecto_('ALFA');
+  assert.deepEqual([p.rubros, p.moneda, presupuestoDe(p)], [[{ rubro: 'Management', monto: 12345 }], 'MXN', 12345]);
+  await pg.exec(ddl!); // el script se puede correr las veces que haga falta
+  assert.equal(Number((await pg.query<{ n: number }>(`select count(*)::int as n from pagos_management_rubros r join pagos_management_proyectos x on x.id = r.reparto_id where x.project_id = $1`, [alfa])).rows[0].n), 1);
+  // Guardar lo limpia: el monto de la primera versión ya no se usa.
+  await guardar({ projectId: alfa, rubros: [{ rubro: 'Management', monto: 20000 }], moneda: 'MXN', personas: ana100 });
+  assert.equal((await pg.query<{ presupuesto: number | null }>(`select presupuesto from pagos_management_proyectos where project_id = $1`, [alfa])).rows[0].presupuesto, null);
+  await guardar({ projectId: alfa, personas: [] });
+});
+await prueba('si falta la tabla de rubros (el código nuevo antes que el script) la pantalla se ve, avisa y no guarda; con el script todo vuelve', async () => {
+  await pg.exec(`drop table pagos_management_rubros`);
+  const r = await leer();
+  assert.equal(r.sinTablas, true);
+  assert.deepEqual(r.proyectos.map((p: any) => p.repartoId), r.proyectos.map(() => null));
+  await assert.rejects(() => guardar({ projectId: alfa, personas: ana100 }), (e: unknown) => e instanceof ZiteError && /add-pagos-management-tables/.test(e.message));
+  await pg.exec(ddl!);
+  assert.equal((await leer()).sinTablas, false);
 });
 
 console.log(fallas ? `\n${fallas} de ${n} pruebas fallaron` : `\nlas ${n} pruebas pasaron`);

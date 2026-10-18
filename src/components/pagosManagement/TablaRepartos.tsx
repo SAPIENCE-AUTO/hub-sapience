@@ -1,5 +1,5 @@
-import { ChevronRight } from 'lucide-react';
-import { estadoReparto, montosDe, presupuestoDe, sumaPorcentajes, type ProyectoManagement } from '../../lib/pagosManagement/reparto';
+import { AlertTriangle, ChevronRight } from 'lucide-react';
+import { costoDealDe, esEditado, estadoReparto, etiquetaRubros, montosDe, presupuestoDe, sumaPorcentajes, type ProyectoManagement } from '../../lib/pagosManagement/reparto';
 import { COLOR_ESTADO_REPARTO, ETIQUETA_ESTADO, fmtFecha, fmtMonto, fmtPct } from './formato';
 
 const PERSONAS_VISIBLES = 3;
@@ -16,12 +16,15 @@ function BarraReparto({ proyecto }: { proyecto: ProyectoManagement }) {
       <div className="h-2 w-24 shrink-0 overflow-hidden rounded-full bg-muted">
         <div className="h-full rounded-full" style={{ width: `${Math.min(suma, 100)}%`, backgroundColor: color }} />
       </div>
-      <span className="text-xs font-semibold tabular-nums" style={{ color }}>{fmtPct(suma)}</span>
+      <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold tabular-nums" style={{ color }}>
+        {estado === 'excedido' && <AlertTriangle className="h-3 w-3" aria-label="Se pasa de 100 %" />}
+        {fmtPct(suma)}
+      </span>
     </div>
   );
 }
 
-/** Los proyectos con su presupuesto de management, cuánto va repartido y entre quién. Tocar un renglón abre el reparto. */
+/** Los proyectos con su presupuesto, cuánto va repartido y entre quién. Tocar un renglón abre el reparto. */
 export function TablaRepartos({ proyectos, onAbrir }: { proyectos: ProyectoManagement[]; onAbrir: (p: ProyectoManagement) => void }) {
   return (
     <div className="max-h-[620px] overflow-auto rounded-lg border">
@@ -38,7 +41,9 @@ export function TablaRepartos({ proyectos, onAbrir }: { proyectos: ProyectoManag
           {proyectos.map((p) => {
             const base = presupuestoDe(p);
             const montos = montosDe(base, p.personas);
-            const editado = p.presupuesto !== null && p.montoDeal > 0; // «editado» respecto al monto del deal, si lo hay
+            const editado = esEditado(p); // cambiado respecto a lo que dice el deal, donde el deal dice algo
+            const delDeal = p.rubros.reduce((suma, r) => suma + costoDealDe(p.rubrosDeal, r.rubro), 0);
+            const soloManagement = p.rubros.length === 1 && p.rubros[0].rubro === 'Management';
             return (
               <tr
                 key={p.repartoId ?? p.projectId ?? p.codigo}
@@ -57,11 +62,12 @@ export function TablaRepartos({ proyectos, onAbrir }: { proyectos: ProyectoManag
                 <td className="px-3 py-2.5 tabular-nums text-muted-foreground">{p.inicio ? fmtFecha(p.inicio) : '—'}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
                   {base > 0 ? (
-                    <span className="font-semibold" title={editado ? `El deal dice ${fmtMonto(p.montoDeal, p.monedaDeal)}` : undefined}>{fmtMonto(base, p.moneda)}</span>
+                    <span className="font-semibold" title={editado ? `El deal dice ${fmtMonto(delDeal, p.monedaDeal)}` : undefined}>{fmtMonto(base, p.moneda)}</span>
                   ) : (
                     <span className="text-muted-foreground">Sin monto</span>
                   )}
                   {editado && <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Editado</span>}
+                  {!soloManagement && <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">{etiquetaRubros(p.rubros)}</p>}
                 </td>
                 <td className="px-3 py-2.5"><BarraReparto proyecto={p} /></td>
                 <td className="px-3 py-2.5">

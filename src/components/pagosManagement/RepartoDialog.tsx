@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { savePagosManagementReparto } from 'zite-endpoints-sdk';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, Loader2, Plus, Trash2, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -9,13 +9,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CLASE_BOTON_SUAVE, ESTILO_BOTON_PRIMARIO } from '@/components/payments/estilos';
+import { CLASE_BOTON_SUAVE, ESTILO_BOTON_PRIMARIO, FONDO_ALERTA, TEXTO_ALERTA } from '@/components/payments/estilos';
 import { motivoDelError } from '@/lib/payments/errores';
 import {
-  MONEDAS, estadoReparto, montoDe, normalizarNombre, sumaPorcentajes, textoNumero, validarReparto, type Moneda, type ProyectoManagement, type UsuarioReparto,
+  MONEDAS, costoDealDe, esPorOmision, estadoReparto, montoDe, normalizarNombre, rubrosPorOmision, sumaPorcentajes, textoNumero, validarReparto,
+  type Moneda, type ProyectoManagement, type Rubro, type UsuarioReparto,
 } from '@/lib/pagosManagement/reparto';
 import {
-  baseDe, conBase, conMonto, conPartesIguales, conPorcentaje, filaVacia, filasDe, personasDe, presupuestoAGuardar, recalcular, type FilaReparto,
+  agregarRubro, conBase, conMonto, conPartesIguales, conPorcentaje, conTextoDeRubro, filaVacia, filasDe, personasDe, quitarRubro, recalcular, rubroEditado,
+  rubrosAGuardar, rubrosDe, rubrosFaltantes, totalDe, type FilaReparto, type FilaRubro,
 } from '@/lib/pagosManagement/filas';
 import { COLOR_ESTADO_REPARTO, fmtMonto, fmtPct } from './formato';
 
@@ -25,8 +27,9 @@ const valorDeSelect = (f: FilaReparto): string =>
   f.tipo === 'interno' && f.userId ? `u:${f.userId}` : f.tipo === 'externo' ? (f.nuevoExterno ? '__nueva__' : `e:${f.nombre}`) : '';
 
 /**
- * El reparto del management de un proyecto: el presupuesto (el del deal, que se puede cambiar) y las personas con su porcentaje. Porcentaje y monto
- * están ligados: al escribir uno se calcula el otro. Se pueden repartir menos de 100 % y completarlo después.
+ * El reparto de un proyecto: el presupuesto (por omisión el Management del deal, al que se le pueden sumar otros rubros de la cotización; todos
+ * los montos se pueden cambiar) y las personas con su porcentaje. Porcentaje y monto están ligados: al escribir uno se calcula el otro. Se pueden
+ * repartir menos de 100 % y completarlo después.
  */
 export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuardado }: {
   /** null: cerrado. */
@@ -36,7 +39,7 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
   onCerrar: () => void;
   onGuardado: () => void;
 }) {
-  const [presupuestoTexto, setPresupuestoTexto] = useState('');
+  const [rubroFilas, setRubroFilas] = useState<FilaRubro[]>([]);
   const [moneda, setMoneda] = useState<Moneda>('MXN');
   const [filas, setFilas] = useState<FilaReparto[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -45,15 +48,15 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
 
   useEffect(() => {
     if (!proyecto) return;
-    setPresupuestoTexto(proyecto.presupuesto !== null ? String(proyecto.presupuesto) : proyecto.montoDeal > 0 ? String(proyecto.montoDeal) : '');
+    setRubroFilas(rubrosDe(proyecto));
     setMoneda(proyecto.moneda);
     setFilas(filasDe(proyecto));
     setError(null);
     setConfirmarQuitar(false);
   }, [proyecto]);
 
-  const montoDeal = proyecto?.montoDeal ?? 0;
-  const base = baseDe(presupuestoTexto, montoDeal);
+  const rubrosDeal = proyecto?.rubrosDeal ?? {};
+  const base = totalDe(rubroFilas, rubrosDeal);
   const personas = useMemo(() => personasDe(filas), [filas]);
   const conPorcentajeValido = personas.filter((p) => Number.isFinite(p.porcentaje));
   const suma = sumaPorcentajes(conPorcentajeValido);
@@ -62,17 +65,16 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
   const externasUsadas = new Set(filas.filter((f) => f.tipo === 'externo' && f.nombre.trim()).map((f) => normalizarNombre(f.nombre)));
 
   if (!proyecto) return null;
-  const editado = presupuestoAGuardar(presupuestoTexto, moneda, proyecto);
-  // «Editado» solo tiene sentido si el deal trae un monto con el cual comparar.
-  const esEditado = montoDeal > 0 && !('error' in editado) && editado.presupuesto !== null;
+  const monedaDistinta = moneda !== proyecto.monedaDeal;
 
-  const cambiarPresupuesto = (texto: string) => {
-    setPresupuestoTexto(texto);
-    setFilas((fs) => conBase(fs, baseDe(texto, montoDeal)));
+  /** Cambió algo de los rubros: los porcentajes de las personas se quedan y sus montos se vuelven a calcular con el presupuesto nuevo. */
+  const cambiarRubros = (nuevos: FilaRubro[]) => {
+    setRubroFilas(nuevos);
+    setFilas((fs) => conBase(fs, totalDe(nuevos, rubrosDeal)));
   };
-  const usarDelDeal = () => {
-    setMoneda(proyecto.monedaDeal);
-    cambiarPresupuesto(proyecto.montoDeal > 0 ? String(proyecto.montoDeal) : '');
+  const usarDelDeal = (rubro: Rubro) => {
+    const costo = costoDealDe(rubrosDeal, rubro);
+    cambiarRubros(conTextoDeRubro(rubroFilas, rubro, costo > 0 ? String(costo) : ''));
   };
   const cambiarFila = (i: number, cambio: Partial<FilaReparto>) => setFilas((fs) => fs.map((f, j) => (j === i ? { ...f, ...cambio } : f)));
   const elegirPersona = (i: number, valor: string) => {
@@ -92,7 +94,7 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
 
   const guardar = async () => {
     setError(null);
-    const presupuesto = presupuestoAGuardar(presupuestoTexto, moneda, proyecto);
+    const presupuesto = rubrosAGuardar(rubroFilas, moneda, proyecto);
     if ('error' in presupuesto) { setError(presupuesto.error); return; }
     const problema = validarReparto(personas);
     if (problema) { setError(problema); return; }
@@ -100,11 +102,11 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
     try {
       await savePagosManagementReparto({
         projectId: proyecto.projectId,
-        presupuesto: presupuesto.presupuesto,
+        rubros: presupuesto.rubros,
         moneda: presupuesto.moneda,
         personas: personas.map((p) => ({ userId: p.userId, nombre: p.nombre, externo: p.externo, porcentaje: p.porcentaje })),
       });
-      toast.success(personas.length === 0 && presupuesto.presupuesto === null ? 'Reparto quitado' : 'Reparto guardado');
+      toast.success(personas.length === 0 && esPorOmision(presupuesto.rubros) ? 'Reparto quitado' : 'Reparto guardado');
       onGuardado();
     } catch (e) {
       toast.error(motivoDelError(e, 'No se pudo guardar el reparto'));
@@ -116,7 +118,7 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
     setConfirmarQuitar(false);
     setGuardando(true);
     try {
-      await savePagosManagementReparto({ projectId: proyecto.projectId, presupuesto: null, moneda: null, personas: [] });
+      await savePagosManagementReparto({ projectId: proyecto.projectId, rubros: rubrosPorOmision(), moneda: null, personas: [] });
       toast.success('Reparto quitado');
       onGuardado();
     } catch (e) {
@@ -126,11 +128,13 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
   };
 
   const montoRepartido = base !== undefined && base > 0 ? montoDe(base, suma) : 0;
+  // Pasarse de 100 % es un aviso, no un error: se muestra pero Guardar sigue funcionando.
+  const seTePasa = estado === 'excedido';
   const resumen =
     estado === 'sinRepartir' ? 'Todavía no hay nada repartido.'
-      : estado === 'excedido' ? `Pasa de 100 %: suma ${fmtPct(suma)}.`
-        : estado === 'completo' ? `Repartido 100 %${base ? ` · ${fmtMonto(base, moneda)}` : ''}`
-          : `Repartido ${fmtPct(suma)}${base ? ` · ${fmtMonto(montoRepartido, moneda)} de ${fmtMonto(base, moneda)}` : ''} — falta ${fmtPct(100 - suma)}${base ? ` (${fmtMonto(montoDe(base, 100 - suma), moneda)})` : ''}`;
+      : estado === 'completo' ? `Repartido 100 %${base ? ` · ${fmtMonto(base, moneda)}` : ''}`
+        : `Repartido ${fmtPct(suma)}${base ? ` · ${fmtMonto(montoRepartido, moneda)} de ${fmtMonto(base, moneda)}` : ''} — ${seTePasa ? 'se pasa' : 'falta'} ${fmtPct(Math.abs(100 - suma))}${base ? ` (${fmtMonto(montoDe(base, Math.abs(100 - suma)), moneda)})` : ''}`;
+  const faltantes = rubrosFaltantes(rubroFilas);
 
   return (
     <>
@@ -141,42 +145,84 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
               {proyecto.codigo}
               {proyecto.cliente && <span className="ml-2 text-sm font-normal text-muted-foreground">{proyecto.cliente}</span>}
             </DialogTitle>
-            <DialogDescription>{proyecto.dealNombre ? `Deal: ${proyecto.dealNombre}` : 'Reparto del management entre quienes participan.'}</DialogDescription>
+            <DialogDescription>{proyecto.dealNombre ? `Deal: ${proyecto.dealNombre}` : 'Reparto del presupuesto entre quienes participan.'}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-1">
-            <section className="space-y-1.5">
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-1.5">
-                  <Label htmlFor="presupuesto-management">Presupuesto de management</Label>
-                  <Input
-                    id="presupuesto-management"
-                    inputMode="decimal"
-                    value={presupuestoTexto}
-                    placeholder={montoDeal > 0 ? String(montoDeal) : 'Monto'}
-                    className="text-right tabular-nums"
-                    onChange={(e) => cambiarPresupuesto(e.target.value)}
-                  />
-                </div>
-                <div className="w-24 space-y-1.5">
-                  <Label htmlFor="moneda-management">Moneda</Label>
-                  <select id="moneda-management" value={moneda} onChange={(e) => setMoneda(e.target.value as Moneda)} className={CLASE_SELECT}>
+            <section className="space-y-3">
+              <div className="flex items-end justify-between gap-2">
+                <p className="text-sm font-semibold">Presupuesto</p>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="moneda-presupuesto" className="text-xs text-muted-foreground">Moneda</Label>
+                  <select id="moneda-presupuesto" value={moneda} onChange={(e) => setMoneda(e.target.value as Moneda)} className={`${CLASE_SELECT} !h-8 !w-24`}>
                     {MONEDAS.map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
               </div>
-              <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                {montoDeal > 0
-                  ? <span>Del deal: {fmtMonto(montoDeal, proyecto.monedaDeal)} (con markup {fmtMonto(proyecto.montoDealConMarkup, proyecto.monedaDeal)})</span>
-                  : <span>{proyecto.dealNombre ? 'El deal no tiene monto de management: escribe el presupuesto.' : 'El proyecto no tiene deal vinculado: escribe el presupuesto.'}</span>}
-                {esEditado && (
-                  <>
-                    <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Editado</span>
-                    <button type="button" onClick={usarDelDeal} className="font-semibold text-foreground underline-offset-2 hover:underline">Usar el del deal</button>
-                  </>
+
+              {rubroFilas.map((f, i) => {
+                const costo = costoDealDe(rubrosDeal, f.rubro);
+                const editado = rubroEditado(f, rubrosDeal, moneda, proyecto.monedaDeal);
+                return (
+                  <div key={f.clave} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor={`rubro-${i}`} className="flex-1 text-sm font-medium">{f.rubro}</Label>
+                      <Input
+                        id={`rubro-${i}`}
+                        inputMode="decimal"
+                        value={f.texto}
+                        placeholder={costo > 0 ? String(costo) : 'Monto'}
+                        className="w-40 text-right tabular-nums"
+                        onChange={(e) => cambiarRubros(conTextoDeRubro(rubroFilas, f.rubro, e.target.value))}
+                      />
+                      {rubroFilas.length > 1 && (
+                        <button type="button" aria-label={`Quitar ${f.rubro}`} onClick={() => cambiarRubros(quitarRubro(rubroFilas, f.rubro))} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-destructive">
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                      {costo > 0
+                        ? <span>Del deal: {fmtMonto(costo, proyecto.monedaDeal)} (con markup {fmtMonto(rubrosDeal[f.rubro]?.conMarkup ?? 0, proyecto.monedaDeal)})</span>
+                        : <span>{proyecto.dealNombre ? `El deal no tiene monto de ${f.rubro}: escríbelo.` : 'El proyecto no tiene deal vinculado: escribe el monto.'}</span>}
+                      {editado && (
+                        <>
+                          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Editado</span>
+                          {!monedaDistinta && <button type="button" onClick={() => usarDelDeal(f.rubro)} className="font-semibold text-foreground underline-offset-2 hover:underline">Usar el del deal</button>}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
+
+              {monedaDistinta && (
+                <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                  <span>El deal está en {proyecto.monedaDeal}: escribe los montos en {moneda}.</span>
+                  <button type="button" onClick={() => setMoneda(proyecto.monedaDeal)} className="font-semibold text-foreground underline-offset-2 hover:underline">Volver a {proyecto.monedaDeal}</button>
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {faltantes.length > 0 ? (
+                  <select
+                    aria-label="Agregar rubro"
+                    value=""
+                    onChange={(e) => { if (e.target.value) cambiarRubros(agregarRubro(rubroFilas, e.target.value as Rubro, rubrosDeal)); }}
+                    className="h-8 rounded-[10px] border bg-card px-2.5 text-xs font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="">+ Agregar rubro</option>
+                    {faltantes.map((r) => {
+                      const costo = costoDealDe(rubrosDeal, r);
+                      return <option key={r} value={r}>{r}{costo > 0 ? ` (deal ${fmtMonto(costo, proyecto.monedaDeal)})` : ''}</option>;
+                    })}
+                  </select>
+                ) : <span />}
+                {rubroFilas.length > 1 && base !== undefined && (
+                  <p className="text-sm">Presupuesto total <span className="ml-1 font-bold tabular-nums">{fmtMonto(base, moneda)}</span></p>
                 )}
-              </p>
-              {base === undefined && <p className="text-xs text-destructive">Escribe el presupuesto como un monto, por ejemplo 25000.</p>}
+              </div>
+              {base === undefined && <p className="text-xs text-destructive">Escribe cada monto como un número, por ejemplo 25000.</p>}
             </section>
 
             <section className="space-y-2">
@@ -227,8 +273,14 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
                 ))}
               </div>
 
-              <p className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs font-semibold" style={{ color: COLOR_ESTADO_REPARTO[estado] }}>
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: COLOR_ESTADO_REPARTO[estado] }} />
+              <p
+                role={seTePasa ? 'status' : undefined}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${seTePasa ? '' : 'bg-muted/50'}`}
+                style={seTePasa ? { backgroundColor: FONDO_ALERTA, color: TEXTO_ALERTA } : { color: COLOR_ESTADO_REPARTO[estado] }}
+              >
+                {seTePasa
+                  ? <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  : <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: COLOR_ESTADO_REPARTO[estado] }} />}
                 {resumen}
               </p>
               {error && <p role="alert" className="text-xs font-medium text-destructive">{error}</p>}
@@ -257,7 +309,7 @@ export function RepartoDialog({ proyecto, usuarios, externos, onCerrar, onGuarda
           <AlertDialogHeader>
             <AlertDialogTitle>¿Quitar el reparto de {proyecto.codigo}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se borran el presupuesto puesto a mano y el reparto entre {proyecto.personas.length} {proyecto.personas.length === 1 ? 'persona' : 'personas'}. No se puede deshacer.
+              Se borran el reparto entre {proyecto.personas.length} {proyecto.personas.length === 1 ? 'persona' : 'personas'} y los cambios al presupuesto. No se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

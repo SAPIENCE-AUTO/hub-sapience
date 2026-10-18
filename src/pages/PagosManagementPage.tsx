@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from 'zite-auth-sdk';
 import { getPagosManagement } from 'zite-endpoints-sdk';
 import { toast } from 'sonner';
-import { HandCoins, Plus, Search } from 'lucide-react';
+import { AlertTriangle, HandCoins, Plus, Search } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Segmentado } from '@/components/payments/Segmentado';
-import { CLASE_BOTON_SUAVE } from '@/components/payments/estilos';
+import { CLASE_BOTON_SUAVE, TEXTO_ALERTA } from '@/components/payments/estilos';
 import { AgregarProyectoDialog } from '@/components/pagosManagement/AgregarProyectoDialog';
 import { RepartoDialog } from '@/components/pagosManagement/RepartoDialog';
 import { TablaPersonas } from '@/components/pagosManagement/TablaPersonas';
@@ -14,7 +14,7 @@ import { ETIQUETA_ESTADO, fmtMontos } from '@/components/pagosManagement/formato
 import { PERIODOS, type Periodo } from '@/lib/indicadores/reclutamiento';
 import { motivoDelError } from '@/lib/payments/errores';
 import {
-  MONEDAS, acumuladoPorPersona, enPeriodo, estadoReparto, normalizarNombre, totalesPorMoneda, type EstadoReparto, type Moneda, type PagosManagement,
+  MONEDAS, acumuladoPorPersona, enPeriodo, estadoReparto, normalizarNombre, rubrosPorOmision, totalesPorMoneda, type EstadoReparto, type Moneda, type PagosManagement,
   type ProyectoDisponible, type ProyectoManagement,
 } from '@/lib/pagosManagement/reparto';
 import { TEAL } from '@/lib/toolColors';
@@ -25,17 +25,22 @@ const PERMITIDOS = ['sergio@sapience.com.mx'];
 type Vista = 'proyectos' | 'personas';
 const hoyLocal = () => new Date().toLocaleDateString('en-CA'); // AAAA-MM-DD en la zona de quien mira
 
-/** Un proyecto vacío de reparto, para agregarlo a mano: sin monto del deal, a la espera de un presupuesto. */
+/** Un proyecto vacío de reparto, para agregarlo a mano: con el Management por omisión, que el deal no trae, a la espera de un presupuesto. */
 const proyectoNuevo = (p: ProyectoDisponible): ProyectoManagement => ({
   repartoId: null, projectId: p.projectId, codigo: p.codigo, nombre: p.nombre, cliente: p.cliente, estado: p.estado, inicio: p.inicio, dealNombre: p.dealNombre,
-  montoDeal: 0, montoDealConMarkup: 0, monedaDeal: p.monedaDeal, presupuesto: null, moneda: p.monedaDeal, personas: [], eliminado: false,
+  rubrosDeal: p.rubrosDeal, monedaDeal: p.monedaDeal, rubros: rubrosPorOmision(), moneda: p.monedaDeal, personas: [], eliminado: false,
 });
 
-function Cifra({ etiqueta, porMoneda }: { etiqueta: string; porMoneda: Record<Moneda, number> }) {
+function Cifra({ etiqueta, porMoneda, aviso }: { etiqueta: string; porMoneda: Record<Moneda, number>; aviso?: string }) {
   return (
     <div className="rounded-xl border bg-card px-4 py-3">
       <p className="text-xs font-semibold text-muted-foreground">{etiqueta}</p>
       <p className="mt-1 text-xl font-bold leading-tight tracking-tight tabular-nums">{fmtMontos(porMoneda)}</p>
+      {aviso && (
+        <p className="mt-1 flex items-center gap-1 text-xs font-semibold" style={{ color: TEXTO_ALERTA }}>
+          <AlertTriangle className="h-3 w-3 shrink-0" />{aviso}
+        </p>
+      )}
     </div>
   );
 }
@@ -66,7 +71,9 @@ export default function PagosManagementPage() {
   const hoy = hoyLocal();
   const enElPeriodo = useMemo(() => (datos ? enPeriodo(datos.proyectos, periodo, hoy) : []), [datos, periodo, hoy]);
   const totales = useMemo(() => totalesPorMoneda(enElPeriodo), [enElPeriodo]);
-  const porRepartir = useMemo(() => Object.fromEntries(MONEDAS.map((m) => [m, totales.presupuestado[m] - totales.repartido[m]])) as Record<Moneda, number>, [totales]);
+  // Un proyecto que se pasó no le resta a lo que falta en otro: se avisa aparte.
+  const avisoExcedido = totales.proyectosExcedidos === 0 ? undefined
+    : `${totales.proyectosExcedidos} ${totales.proyectosExcedidos === 1 ? 'proyecto se pasa' : 'proyectos se pasan'} de 100 %${MONEDAS.some((m) => totales.excedido[m] > 0.004) ? ` · ${fmtMontos(totales.excedido)} de más` : ''}`;
   const acumulados = useMemo(() => acumuladoPorPersona(enElPeriodo), [enElPeriodo]);
 
   const textoBusqueda = normalizarNombre(busqueda);
@@ -125,7 +132,7 @@ export default function PagosManagementPage() {
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Cifra etiqueta="Presupuestado" porMoneda={totales.presupuestado} />
             <Cifra etiqueta="Repartido" porMoneda={totales.repartido} />
-            <Cifra etiqueta="Por repartir" porMoneda={porRepartir} />
+            <Cifra etiqueta="Por repartir" porMoneda={totales.porRepartir} aviso={avisoExcedido} />
           </div>
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -170,7 +177,7 @@ export default function PagosManagementPage() {
           )}
 
           <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-            El presupuesto es el monto de Management que sale en la pestaña Presupuesto del proyecto (costo, sin markup); se puede cambiar proyecto por proyecto. Cada persona lleva un porcentaje de ese presupuesto y su monto se calcula con el presupuesto de hoy. El periodo cuenta por la fecha de inicio del proyecto.
+            El presupuesto empieza con el Management que sale en la pestaña Presupuesto del proyecto (costo, sin markup); se le pueden sumar otros rubros de la cotización y todos los montos se pueden cambiar proyecto por proyecto. Cada persona lleva un porcentaje de ese presupuesto y su monto se calcula con el presupuesto de hoy. El periodo cuenta por la fecha de inicio del proyecto.
           </p>
         </>
       )}

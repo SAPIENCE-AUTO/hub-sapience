@@ -1,6 +1,7 @@
-// Pagos de análisis / management: cómo se reparte el monto de Management de cada proyecto entre quienes participan (de 1 a 5 personas, internas
-// o externas, cada una con un porcentaje) y cuánto lleva acumulado cada persona. Lo comparten el servidor (que valida y guarda) y la pantalla
-// (que suma por periodo), así que las reglas viven en un solo lugar.
+// Pagos de análisis / management: cómo se reparte el presupuesto de cada proyecto (el Management del deal y, si se quiere, otros rubros de la
+// cotización) entre quienes participan (de 1 a 5 personas, internas o externas, cada una con un porcentaje) y cuánto lleva acumulado cada persona.
+// Lo comparten el servidor (que valida y guarda) y la pantalla (que suma por periodo), así que las reglas viven en un solo lugar. Repartir menos de
+// 100 % o pasarse de 100 % está permitido: la pantalla avisa en los dos casos, pero deja guardar.
 import { restarMeses, type Periodo } from '../indicadores/reclutamiento';
 
 export const MONEDAS = ['MXN', 'USD', 'EUR'] as const;
@@ -8,6 +9,12 @@ export type Moneda = (typeof MONEDAS)[number];
 
 /** Cuántas personas caben en un reparto: «generalmente de 1 a 5», con holgura. */
 export const MAX_PERSONAS = 30;
+
+/**
+ * El porcentaje más alto que se acepta para una persona: más que eso es casi seguro un error de dedo. Pasarse de 100 % en total sí vale (a veces se
+ * paga de más): se avisa, pero se deja guardar.
+ */
+export const MAX_PORCENTAJE = 1000;
 
 /**
  * Los porcentajes se guardan con 6 decimales. Con menos, un monto escrito a mano no volvería igual (5,000 de 37,500 es 13.333333 %: con 4 decimales
@@ -18,13 +25,30 @@ const CIEN = 100 * UNIDADES_POR_PUNTO;
 /** Cuánto se tolera de más o de menos para decir que un reparto está completo: unos centavos de diferencia al escribir montos no lo vuelven «incompleto». */
 const TOLERANCIA = 0.0001 * UNIDADES_POR_PUNTO;
 
+// ── Rubros del presupuesto ───────────────────────────────────────────────────
+/** Los rubros de una cotización, con Management primero: es el que trae por omisión. */
+export const RUBROS = ['Management', 'Reclutamiento e incentivos', 'Moderación', 'Logística y operación', 'Back office'] as const;
+export type Rubro = (typeof RUBROS)[number];
+export const RUBRO_PREDETERMINADO: Rubro = 'Management';
+/** Nombres cortos, para donde falta lugar (la tabla). */
+export const RUBRO_CORTO: Record<Rubro, string> = {
+  Management: 'Management', 'Reclutamiento e incentivos': 'Reclutamiento', 'Moderación': 'Moderación', 'Logística y operación': 'Logística', 'Back office': 'Back office',
+};
+
+/** Lo que dice el deal de un rubro: el costo (cantidad × componentes × costo unitario) de sus líneas en las cotizaciones incluidas, y lo mismo con markup. */
+export interface MontoRubro { costo: number; conMarkup: number }
+/** Los rubros del deal que traen monto. */
+export type RubrosDeal = Partial<Record<Rubro, MontoRubro>>;
+/** Un rubro que forma parte del presupuesto de un proyecto; `monto` null = vale el que dice el deal. */
+export interface RubroPresupuesto { rubro: Rubro; monto: number | null }
+
 export interface PersonaReparto {
   id?: string;
   /** Usuario interno; null para una persona externa. */
   userId: string | null;
   nombre: string;
   externo: boolean;
-  /** De 0 a 100, hasta 6 decimales. */
+  /** Mayor a 0 y hasta MAX_PORCENTAJE, con hasta 6 decimales. Lo normal es que todos sumen 100, pero se pueden pasar. */
   porcentaje: number;
 }
 
@@ -32,7 +56,11 @@ export interface PersonaReparto {
 export interface UsuarioReparto { id: string; nombre: string; departamento?: string }
 
 /** Un proyecto sin monto de management en su deal ni reparto: se puede agregar a mano, poniéndole un presupuesto. */
-export interface ProyectoDisponible { projectId: string; codigo: string; nombre?: string; cliente?: string; estado?: string; inicio?: string; dealNombre?: string; monedaDeal: Moneda }
+export interface ProyectoDisponible {
+  projectId: string; codigo: string; nombre?: string; cliente?: string; estado?: string; inicio?: string; dealNombre?: string; monedaDeal: Moneda;
+  /** Lo que su deal trae de los demás rubros (nunca Management: si lo trajera no estaría aquí). */
+  rubrosDeal: RubrosDeal;
+}
 
 export interface ProyectoManagement {
   /** La fila del reparto si ya se registró algo de este proyecto. */
@@ -46,14 +74,12 @@ export interface ProyectoManagement {
   /** Inicio del proyecto (AAAA-MM-DD). */
   inicio?: string;
   dealNombre?: string;
-  /** Lo que dice el deal: el costo del rubro Management en las cotizaciones incluidas (el de la pestaña Presupuesto), sin markup. */
-  montoDeal: number;
-  /** Lo mismo con markup, solo de referencia. */
-  montoDealConMarkup: number;
+  /** Lo que dice el deal, rubro por rubro: el costo sin markup (el de la pestaña Presupuesto del proyecto) y, de referencia, con markup. */
+  rubrosDeal: RubrosDeal;
   monedaDeal: Moneda;
-  /** Lo que se puso a mano cuando no sirve el del deal; null = vale el del deal. */
-  presupuesto: number | null;
-  /** La moneda que vale: la elegida a mano si se cambió el monto, si no la del deal. */
+  /** Los rubros que forman el presupuesto, en su orden. Por omisión solo Management; cada uno vale lo del deal salvo que se haya puesto un monto a mano. */
+  rubros: RubroPresupuesto[];
+  /** La moneda que vale: la elegida a mano si se puso algún monto, si no la del deal. */
   moneda: Moneda;
   personas: PersonaReparto[];
   eliminado: boolean;
@@ -76,8 +102,36 @@ export const redondear = (n: number): number => Math.round((n + Number.EPSILON) 
 const redondearPorcentaje = (n: number): number => Math.round((n + Number.EPSILON) * UNIDADES_POR_PUNTO) / UNIDADES_POR_PUNTO;
 const unidades = (porcentaje: number): number => Math.round(porcentaje * UNIDADES_POR_PUNTO);
 
-/** El monto que vale hoy: el que se puso a mano o, si no, el del deal. */
-export const presupuestoDe = (p: Pick<ProyectoManagement, 'presupuesto' | 'montoDeal'>): number => p.presupuesto ?? p.montoDeal;
+/** Los rubros con los que arranca un proyecto: solo Management, con lo que diga el deal. */
+export const rubrosPorOmision = (): RubroPresupuesto[] => [{ rubro: RUBRO_PREDETERMINADO, monto: null }];
+export const esPorOmision = (rubros: RubroPresupuesto[]): boolean => rubros.length === 1 && rubros[0].rubro === RUBRO_PREDETERMINADO && rubros[0].monto === null;
+
+/** Lo que dice el deal de un rubro (sin markup); 0 si no trae. */
+export const costoDealDe = (rubrosDeal: RubrosDeal, rubro: Rubro): number => rubrosDeal[rubro]?.costo ?? 0;
+
+/** Lo que vale un rubro del presupuesto: el monto puesto a mano o, si no, el del deal. */
+export const montoDeRubro = (rubrosDeal: RubrosDeal, r: RubroPresupuesto): number => r.monto ?? costoDealDe(rubrosDeal, r.rubro);
+
+/** El presupuesto de hoy: la suma de sus rubros. */
+export const presupuestoDe = (p: Pick<ProyectoManagement, 'rubros' | 'rubrosDeal'>): number => redondear(p.rubros.reduce((s, r) => s + montoDeRubro(p.rubrosDeal, r), 0));
+
+/** ¿Se cambió algún monto respecto al deal? Solo cuenta donde el deal trae un monto con el cual comparar. */
+export const esEditado = (p: Pick<ProyectoManagement, 'rubros' | 'rubrosDeal'>): boolean => p.rubros.some((r) => r.monto !== null && costoDealDe(p.rubrosDeal, r.rubro) > 0);
+
+/** Los rubros del presupuesto en una línea: «Management + Moderación». */
+export const etiquetaRubros = (rubros: RubroPresupuesto[]): string => rubros.map((r) => RUBRO_CORTO[r.rubro]).join(' + ');
+
+/** El primer problema de los rubros del presupuesto, en palabras llanas, o null si están bien. */
+export function validarRubros(rubros: RubroPresupuesto[]): string | null {
+  if (rubros.length === 0) return 'El presupuesto necesita al menos un rubro.';
+  const vistos = new Set<Rubro>();
+  for (const r of rubros) {
+    if (vistos.has(r.rubro)) return `«${r.rubro}» está dos veces en el presupuesto.`;
+    vistos.add(r.rubro);
+    if (r.monto !== null && (!Number.isFinite(r.monto) || r.monto < 0)) return `El monto de ${r.rubro} no es válido.`;
+  }
+  return null;
+}
 
 export const montoDe = (presupuesto: number, porcentaje: number): number => redondear((presupuesto * porcentaje) / 100);
 
@@ -138,22 +192,22 @@ export function leerMonto(texto: string): number | null | undefined {
   return Number.isFinite(v) && v <= 1_000_000_000 ? redondear(v) : undefined;
 }
 
-/** Un porcentaje escrito a mano: «33.33», «33,33» o «33%» → ese número; vacío → null; fuera de 0–100 o no numérico → undefined. */
+/** Un porcentaje escrito a mano: «33.33», «33,33» o «33%» → ese número; vacío → null; mayor a MAX_PORCENTAJE o no numérico → undefined. */
 export function leerPorcentaje(texto: string): number | null | undefined {
   const t = texto.trim().replace(/%$/, '').trim().replace(',', '.');
   if (t === '') return null;
   if (!/^\d+(\.\d+)?$/.test(t)) return undefined;
   const v = Number(t);
-  return v >= 0 && v <= 100 ? redondearPorcentaje(v) : undefined;
+  return v >= 0 && v <= MAX_PORCENTAJE ? redondearPorcentaje(v) : undefined;
 }
 
 /** Para mostrar un número en un campo de texto sin ceros de sobra: 33.333334 → «33.333334», 50 → «50», 12.5 → «12.5». */
 export const textoNumero = (n: number): string => String(redondearPorcentaje(n));
 
 // ── Validación (la misma en la pantalla y en el servidor) ────────────────────
-export const normalizarNombre = (s: string): string => s.trim().replace(/\s+/g, ' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+export const normalizarNombre = (s: string): string => s.trim().replace(/\s+/g, ' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-/** El primer problema del reparto, en palabras llanas, o null si está bien. Repartir menos de 100 % sí vale (se completa después). */
+/** El primer problema del reparto, en palabras llanas, o null si está bien. Repartir menos de 100 % (se completa después) o pasarse de 100 % no son problemas. */
 export function validarReparto(personas: PersonaReparto[]): string | null {
   if (personas.length > MAX_PERSONAS) return `Un reparto no puede tener más de ${MAX_PERSONAS} personas.`;
   const internos = new Set<string>();
@@ -172,9 +226,8 @@ export function validarReparto(personas: PersonaReparto[]): string | null {
       internos.add(p.userId);
     }
     if (!Number.isFinite(p.porcentaje) || p.porcentaje <= 0) return `Pon un porcentaje mayor a cero para ${nombre || 'cada persona'}.`;
-    if (p.porcentaje > 100) return 'Un porcentaje no puede pasar de 100.';
+    if (p.porcentaje > MAX_PORCENTAJE) return `Un porcentaje no puede pasar de ${MAX_PORCENTAJE}.`;
   }
-  if (estadoReparto(personas) === 'excedido') return `Los porcentajes suman ${textoNumero(sumaPorcentajes(personas))} % y no pueden pasar de 100 %.`;
   return null;
 }
 
@@ -215,16 +268,37 @@ export function acumuladoPorPersona(proyectos: ProyectoManagement[]): AcumuladoP
   return lista.sort((a, b) => b.porMoneda.MXN - a.porMoneda.MXN || b.porMoneda.USD - a.porMoneda.USD || b.porMoneda.EUR - a.porMoneda.EUR || a.nombre.localeCompare(b.nombre));
 }
 
-/** Los totales de un conjunto de proyectos, por moneda: lo presupuestado y lo ya repartido. */
-export function totalesPorMoneda(proyectos: ProyectoManagement[]): { presupuestado: Record<Moneda, number>; repartido: Record<Moneda, number> } {
+export interface TotalesManagement {
+  presupuestado: Record<Moneda, number>;
+  repartido: Record<Moneda, number>;
+  /** Lo que todavía falta repartir: la suma de lo que le falta a cada proyecto (un proyecto que se pasó no le resta a otro). */
+  porRepartir: Record<Moneda, number>;
+  /** Lo que se repartió de más sobre el presupuesto de cada proyecto que se pasó, y cuántos proyectos son. */
+  excedido: Record<Moneda, number>;
+  proyectosExcedidos: number;
+}
+
+/** Los totales de un conjunto de proyectos, por moneda: lo presupuestado, lo ya repartido, lo que falta y lo que se pasó. */
+export function totalesPorMoneda(proyectos: ProyectoManagement[]): TotalesManagement {
   const presupuestado = sinMonedas();
   const repartido = sinMonedas();
+  const porRepartir = sinMonedas();
+  const excedido = sinMonedas();
+  let proyectosExcedidos = 0;
   for (const p of proyectos) {
     const base = presupuestoDe(p);
+    let repartidoDelProyecto = 0;
+    for (const monto of montosDe(base, p.personas)) repartidoDelProyecto = redondear(repartidoDelProyecto + monto);
     presupuestado[p.moneda] = redondear(presupuestado[p.moneda] + base);
-    for (const monto of montosDe(base, p.personas)) repartido[p.moneda] = redondear(repartido[p.moneda] + monto);
+    repartido[p.moneda] = redondear(repartido[p.moneda] + repartidoDelProyecto);
+    const estado = estadoReparto(p.personas);
+    // Un reparto completo no deja resto aunque sobren o falten unos centavos al escribir montos.
+    const resto = estado === 'completo' ? 0 : redondear(base - repartidoDelProyecto);
+    if (resto > 0) porRepartir[p.moneda] = redondear(porRepartir[p.moneda] + resto);
+    if (resto < 0) excedido[p.moneda] = redondear(excedido[p.moneda] - resto);
+    if (estado === 'excedido') proyectosExcedidos++;
   }
-  return { presupuestado, repartido };
+  return { presupuestado, repartido, porRepartir, excedido, proyectosExcedidos };
 }
 
 // ── Periodo ──────────────────────────────────────────────────────────────────
