@@ -8,7 +8,7 @@ import {
   FolderKanban, ChevronDown, ChevronRight, Search,
   Plus, X, TrendingUp, Building2, DollarSign, LayoutGrid,
   FileText, ShoppingCart, Truck, FileSpreadsheet,
-  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles, Video, Target,
+  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles, Video, Target, HandCoins,
 } from 'lucide-react';
 import { SharpliIcon } from './SharpliIcon';
 import hubMark from '../assets/hub-mark.svg';
@@ -141,6 +141,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/admin/ordenes',     icon: ShoppingCart, label: 'Órdenes de compra' },
       { to: '/admin/proveedores', icon: Truck,        label: 'Proveedores' },
       { to: '/admin/pagos',       icon: CreditCard,   label: 'Pagos a proveedores' },
+      { to: '/admin/pagos-management', icon: HandCoins, label: 'Pagos de management', emails: ['sergio@sapience.com.mx'] },
       { to: '/admin/facturas-proveedores', icon: ReceiptText, label: 'Facturas de proveedores' },
       { to: '/admin/cobranza',    icon: FileText,     label: 'Cobranza', roles: ['Owner'], purchaseLevels: ['Finanzas'] },
       { to: '/admin/gastos',      icon: ReceiptText,  label: 'Comprobación de gastos' },

@@ -289,6 +289,7 @@ export const getObservationChatToken = (input?: any): Promise<any> => call('getO
 export const getObservationRoomPublic = (input?: any): Promise<any> => call('getObservationRoomPublic', input);
 export const getObservationSessionDetail = (input?: any): Promise<any> => call('getObservationSessionDetail', input);
 export const getParticipants = (input?: any): Promise<any> => call('getParticipants', input);
+export const getPagosManagement = (input?: any): Promise<any> => call('getPagosManagement', input);
 export const getPayments = (input?: any): Promise<any> => call('getPayments', input);
 export const getPendienteCorreoBody = (input?: any): Promise<any> => call('getPendienteCorreoBody', input);
 export const getPettyCashFunds = (input?: any): Promise<any> => call('getPettyCashFunds', input);
@@ -441,6 +442,7 @@ export const saveInviteTemplate = (input?: any): Promise<any> => call('saveInvit
 export const saveMigrationLog = (input?: any): Promise<any> => call('saveMigrationLog', input);
 export const saveMisPendiente = (input?: any): Promise<any> => call('saveMisPendiente', input);
 export const saveParticipant = (input?: any): Promise<any> => call('saveParticipant', input);
+export const savePagosManagementReparto = (input?: any): Promise<any> => call('savePagosManagementReparto', input);
 export const savePayment = (input?: any): Promise<any> => call('savePayment', input);
 export const savePettyCashFund = (input?: any): Promise<any> => call('savePettyCashFund', input);
 export const savePoAttachment = (input?: any): Promise<any> => call('savePoAttachment', input);

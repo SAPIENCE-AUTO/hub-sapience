@@ -11,6 +11,7 @@ import AdminPage from './pages/AdminPage';
 import SuppliersPage from './pages/SuppliersPage';
 import PaymentsPage from './pages/PaymentsPage';
 import IndicadoresPage from './pages/IndicadoresPage';
+import PagosManagementPage from './pages/PagosManagementPage';
 import UserAdminPage from './pages/UserAdminPage';
 import PurchasesPage from './pages/PurchasesPage';
 import ProjectsPage from './pages/ProjectsPage';
@@ -116,6 +117,7 @@ export default function App() {
                 <Route path="admin/ordenes"     element={<PurchasesPage />} />
                 <Route path="admin/proveedores" element={<SuppliersPage />} />
                 <Route path="admin/pagos"       element={<PaymentsPage />} />
+                <Route path="admin/pagos-management" element={<PagosManagementPage />} />
                 <Route path="admin/facturas-proveedores" element={<SupplierInvoicesPage />} />
                 <Route path="admin/cobranza"    element={<CobranzaPage />} />
                 <Route path="finanzas/cotizaciones" element={<Navigate to="/comercial/cotizaciones" replace />} />
