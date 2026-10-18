@@ -397,12 +397,14 @@ for (const [i, f] of FILAS.entries()) {
 }
 
 // Desde la base, un proyecto sin fecha de inicio toma la de su última actividad real (projectStartFallback) y queda marcado como inferido:
-// por eso SINFECHA ya sí se cuenta, con la fecha de hoy (las filas se acaban de insertar), y deja de estar en «sinFecha».
+// por eso SINFECHA ya sí se cuenta, con la fecha de hoy (las filas se acaban de insertar), y deja de estar en «sinFecha». Ese «hoy» se lee de la
+// misma base: `new Date().toISOString()` es la fecha en UTC, que a ciertas horas de la noche ya es otro día.
+const hoyEnLaBase = (await pg.query<{ d: string }>(`select current_date::text as d`)).rows[0].d;
 const esperadoDeLaBase = (): DatosReclutamiento => ({
   ...ESPERADO,
   proyectos: [
     ...ESPERADO.proyectos,
-    proyecto({ codigo: 'SINFECHA', cliente: 'Cliente Cuatro', fecha: new Date().toISOString().slice(0, 10), inferida: true, participaron: 1 }),
+    proyecto({ codigo: 'SINFECHA', cliente: 'Cliente Cuatro', fecha: hoyEnLaBase, inferida: true, participaron: 1 }),
   ],
   sinFecha: 0,
 });
