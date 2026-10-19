@@ -89,7 +89,7 @@ export default function ActivityTab() {
         <div>
           <p className="text-sm font-semibold">Actividad de uso del Hub</p>
           <p className="text-xs text-muted-foreground">
-            {onlineCount} en línea ahora · solo cuenta tiempo con la pestaña visible y actividad en los últimos 2 min
+            {onlineCount} en línea (con actividad en los últimos 3 min) · el tiempo solo cuenta con la pestaña visible y movimiento en los últimos 2 min
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -135,10 +135,10 @@ export default function ActivityTab() {
                   <td className="px-3 py-2.5">
                     <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: u.online ? EXITO : GRIS }}>
                       <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
-                      {u.online ? 'En línea' : 'Desconectado'}
+                      {u.online ? 'En línea' : 'Inactivo'}
                     </span>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {u.online && u.currentSection ? u.currentSection : fmtAgo(u.lastActiveAt)}
+                      {u.online && u.currentSection ? u.currentSection : u.lastActiveAt ? `Visto ${fmtAgo(u.lastActiveAt)}` : 'Sin actividad registrada'}
                     </p>
                   </td>
                   <td className="px-3 py-2.5 font-semibold tabular-nums">{fmtDuration(u.totalSeconds)}</td>

@@ -7,6 +7,8 @@ import { pool } from '../../server/compat/db';
 // por rol ni por nivel, solo por correo, y se valida aquí (el gate de la UI
 // es solo cosmético).
 const ALLOWED_EMAILS = ['sergio@sapience.com.mx'];
+// «En línea» = hubo un latido de uso en los últimos 3 min. Es el mismo reloj para «en línea», «visto hace…» y la sección actual (antes el «visto hace»
+// salía de users.last_active_at, que también mueven el chat y las páginas de proyecto, y los dos relojes se contradecían).
 const ONLINE_WINDOW_MS = 3 * 60 * 1000;
 
 export default createEndpoint({
@@ -34,14 +36,16 @@ export default createEndpoint({
     }
     const nDays = input.days ?? 7;
 
-    const [usersRes, actRes] = await Promise.all([
-      pool.query(`select id, first_name, last_name, email, role, last_active_at from users order by first_name`),
+    const [usersRes, actRes, lastRes] = await Promise.all([
+      pool.query(`select id, first_name, last_name, email, role from users order by first_name`),
       pool.query(
         `select user_id, to_char(day, 'YYYY-MM-DD') as day, section, seconds::float8 as seconds, updated_at
          from user_activity
          where day > (now() at time zone 'America/Mexico_City')::date - $1::int`,
         [nDays],
       ),
+      // El último latido de cada persona, de cualquier fecha (no solo del rango que se mira), y la sección donde estaba.
+      pool.query(`select distinct on (user_id) user_id, section, updated_at from user_activity order by user_id, updated_at desc`),
     ]);
 
     const days: string[] = [];
@@ -58,27 +62,31 @@ export default createEndpoint({
       byUser.get(r.user_id)!.push(r);
     }
 
+    const lastByUser = new Map<string, { section: string; at: number }>();
+    for (const r of lastRes.rows as Array<{ user_id: string; section: string; updated_at: Date | string }>) {
+      lastByUser.set(r.user_id, { section: r.section, at: new Date(r.updated_at).getTime() });
+    }
+
     const now = Date.now();
     const users = usersRes.rows.map((u: any) => {
       const rows = byUser.get(u.id) ?? [];
       const secondsByDay: Record<string, number> = {};
       const secBySection = new Map<string, number>();
-      let latest: Row | undefined;
       for (const r of rows) {
+        if (!(r.seconds > 0)) continue; // un aviso de 0 s («estoy aquí») marca «en línea», pero no es tiempo de uso
         secondsByDay[r.day] = (secondsByDay[r.day] ?? 0) + r.seconds;
         secBySection.set(r.section, (secBySection.get(r.section) ?? 0) + r.seconds);
-        if (!latest || r.updated_at > latest.updated_at) latest = r;
       }
-      const lastActive = u.last_active_at ? new Date(u.last_active_at) : undefined;
-      const online = !!latest && now - new Date(latest.updated_at).getTime() < ONLINE_WINDOW_MS;
+      const last = lastByUser.get(u.id);
+      const online = !!last && now - last.at < ONLINE_WINDOW_MS;
       return {
         id: u.id,
         name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email,
         email: u.email,
         role: u.role ?? undefined,
-        lastActiveAt: lastActive?.toISOString(),
+        lastActiveAt: last ? new Date(last.at).toISOString() : undefined,
         online,
-        currentSection: online ? latest?.section : undefined,
+        currentSection: online ? last?.section : undefined,
         totalSeconds: Object.values(secondsByDay).reduce((a, b) => a + b, 0),
         secondsByDay,
         sections: [...secBySection.entries()].map(([section, seconds]) => ({ section, seconds })).sort((a, b) => b.seconds - a.seconds),

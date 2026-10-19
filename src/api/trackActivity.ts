@@ -6,7 +6,9 @@ import { pool } from '../../server/compat/db';
 // tiempo" (Sergio). El front lo manda cada ~60s mientras la pestaña está
 // visible y la persona estuvo interactuando (ver useActivityTracker.ts), con
 // la sección en la que está. Se acumulan segundos en una sola fila por
-// (usuario, día, sección) en vez de una fila por latido.
+// (usuario, día, sección) en vez de una fila por latido. Con 0 segundos es un
+// simple aviso («estoy aquí»: al abrir el Hub, al volver a su pestaña…): no suma
+// tiempo, pero sí marca a la persona «en línea» al instante.
 const MAX_SECONDS_PER_BEAT = 120;
 
 export default createEndpoint({
@@ -18,7 +20,7 @@ export default createEndpoint({
   }),
   outputSchema: z.object({ success: z.boolean() }),
   execute: async ({ input, context }) => {
-    const seconds = Math.max(1, Math.min(MAX_SECONDS_PER_BEAT, Math.round(input.seconds)));
+    const seconds = Number.isFinite(input.seconds) ? Math.max(0, Math.min(MAX_SECONDS_PER_BEAT, Math.round(input.seconds))) : 0;
     const userId = context.user!.id;
     // El día se corta en hora de CDMX, no en UTC: a las 7pm CDMX ya es el día
     // siguiente en UTC y partiría la jornada de la persona en dos.

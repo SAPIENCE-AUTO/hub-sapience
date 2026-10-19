@@ -1,9 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { trackActivity } from 'zite-endpoints-sdk';
+import { BEAT_MS, crearRastreadorDeUso } from '../lib/activityBeat';
 
-const BEAT_MS = 60_000;
-const IDLE_MS = 120_000;
+// El último latido se comparte entre las ventanas de este navegador para que dos ventanas abiertas no cuenten el mismo tiempo dos veces.
+const CLAVE_RELOJ = 'hub-activity-last-beat';
+const leerReloj = (): number | null => {
+  try { const v = Number(localStorage.getItem(CLAVE_RELOJ)); return Number.isFinite(v) && v > 0 ? v : null; } catch { return null; }
+};
+const guardarReloj = (t: number) => {
+  try { localStorage.setItem(CLAVE_RELOJ, String(t)); } catch { /* sin localStorage cada ventana cuenta por su cuenta */ }
+};
 
 // Etiqueta legible de la sección según la ruta — coarse a propósito (una fila
 // por sección, no por URL) para que el panel de Actividad de Configuración
@@ -25,30 +32,37 @@ export function sectionFromPath(path: string): string {
   return 'Otros';
 }
 
-// Latido de uso (oct 2026): cada ~60s, solo si la pestaña está visible y la
-// persona hizo algo (mouse/teclado/scroll) en los últimos 2 min — una pestaña
-// abierta y olvidada no cuenta como tiempo de uso. Va en Layout para cubrir
-// TODO el Hub, no solo Chat/proyectos como el latido de presencia anterior.
+// Latido de uso (oct 2026): mientras la pestaña está visible y la persona hizo algo (mouse/teclado/scroll) en los últimos 2 min, cada ~60s se suman
+// los segundos corridos a la sección donde está; una pestaña abierta y olvidada no cuenta como tiempo de uso. Además se avisa de inmediato (0 s, sin
+// sumar tiempo) al abrir el Hub, al volver a su pestaña y al volver a tocar algo tras un rato, para que «En línea» salga al instante; y al salir de la
+// pestaña se cobra el pedazo de minuto que llevaba. Las reglas viven en lib/activityBeat.ts (con pruebas); aquí solo se conectan a la pantalla.
+// Va en Layout para cubrir TODO el Hub, no solo Chat/proyectos como el latido de presencia anterior.
 export function useActivityTracker(enabled: boolean) {
   const location = useLocation();
   const sectionRef = useRef(sectionFromPath(location.pathname));
-  const lastInteraction = useRef(Date.now());
 
   useEffect(() => { sectionRef.current = sectionFromPath(location.pathname); }, [location.pathname]);
 
   useEffect(() => {
     if (!enabled) return;
-    const mark = () => { lastInteraction.current = Date.now(); };
+    const rastreador = crearRastreadorDeUso({
+      ahora: () => Date.now(),
+      visible: () => document.visibilityState === 'visible',
+      leerReloj,
+      guardarReloj,
+      enviar: (segundos) => { trackActivity({ section: sectionRef.current, seconds: segundos }).catch(() => {}); },
+    });
+    const mark = () => rastreador.interaccion();
+    const onVisibility = () => rastreador.visibilidad(document.visibilityState === 'visible');
     const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'] as const;
     events.forEach(e => window.addEventListener(e, mark, { passive: true }));
-    const id = setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      if (Date.now() - lastInteraction.current > IDLE_MS) return;
-      trackActivity({ section: sectionRef.current, seconds: BEAT_MS / 1000 }).catch(() => {});
-    }, BEAT_MS);
+    document.addEventListener('visibilitychange', onVisibility);
+    rastreador.abrir();
+    const id = setInterval(() => rastreador.latido(), BEAT_MS);
     return () => {
       clearInterval(id);
       events.forEach(e => window.removeEventListener(e, mark));
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [enabled]);
 }
