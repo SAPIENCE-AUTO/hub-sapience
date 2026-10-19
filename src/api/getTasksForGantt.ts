@@ -21,7 +21,10 @@ const taskSchema = z.object({
 });
 
 // ── Pagination helper ─────────────────────────────────────────────────────────
-const PAGE_SIZE = 2000;
+// Paginar con limit/offset SIN orden hace que Postgres entregue las páginas en un orden distinto cada vez: al juntar páginas se repiten filas y se pierden
+// otras (se midió: de 2,100 celdas llegaban ~2,000 distintas). Por eso cada página cabe en una sola consulta (el máximo del compat) y, donde pasa de
+// ahí, se pide ordenada por id.
+const PAGE_SIZE = 10_000;
 const MAX_PAGES = 50;
 
 async function fetchAll<T>(
@@ -61,19 +64,17 @@ export default createEndpoint({
   }),
   execute: async () => {
     try {
-      // ── Phase 1: Load everything except CellValues ──────────────────────────
-      const [tasks, boards, projects, cols] = await Promise.all([
-        fetchAll('Tasks',        (p) => Tasks.findAll(p)),
-        fetchAll('Boards',       (p) => Boards.findAll(p)),
-        fetchAll('Projects',     (p) => Projects.findAll(p), { fields: ['projectCode', 'status'] }),
-        fetchAll('BoardColumns', (p) => BoardColumns.findAll(p)),
+      // ── Phase 1: tasks, boards and projects (small tables) ──────────────────
+      const [tasks, boards, projects] = await Promise.all([
+        fetchAll('Tasks',        (p) => Tasks.findAll(p), { sorts: [{ field: 'id' }] }),
+        fetchAll('Boards',       (p) => Boards.findAll(p), { sorts: [{ field: 'id' }] }),
+        fetchAll('Projects',     (p) => Projects.findAll(p), { fields: ['projectCode', 'status'], sorts: [{ field: 'id' }] }),
       ]);
 
       console.log('[getTasksForGantt] phase1 counts', {
         tasks: tasks.length,
         boards: boards.length,
         projects: projects.length,
-        boardColumns: cols.length,
       });
 
       // ── Project status map ──────────────────────────────────────────────────
@@ -130,23 +131,40 @@ export default createEndpoint({
 
       console.log('[getTasksForGantt] relevantBoardIds', relevantBoardIds.size);
 
-      // ── Phase 2: Fetch CellValues filtered to relevant boards only ──────────
+      // ── Phase 2: columns of the relevant boards only ────────────────────────
+      // (Traer las de todos los tableros eran ~29,000 columnas, casi todas de reclutamiento, para quedarse con ~160.)
       const relevantBoardIdArray = [...relevantBoardIds];
-      const cells = relevantBoardIdArray.length > 0
+      const cols = relevantBoardIdArray.length > 0
+        ? await fetchAll('BoardColumns', (p) => BoardColumns.findAll(p), { filters: { boardId: { in: relevantBoardIdArray } }, sorts: [{ field: 'id' }] })
+        : [];
+
+      console.log('[getTasksForGantt] boardColumns fetched', cols.length);
+
+      const activeCols = cols
+        .filter(c => !c.deletedAt && c.boardId && relevantBoardIds.has(c.boardId))
+        .sort((a, b) => (a.columnOrder ?? 9999) - (b.columnOrder ?? 9999));
+
+      // ── Phase 3: only the cells the timeline actually reads ─────────────────
+      // Del grid solo se leen dos cosas: el color de cada tarea (la columna Color de su tablero) y su grupo (las celdas de los tableros `::groups`).
+      // Pedir TODAS las celdas de esos tableros hacía que Postgres leyera la tabla completa de celdas (millones de filas, ~20 s): creía que esos
+      // tableros tenían la cuarta parte de la tabla cuando tienen ~2,000 celdas. Filtrando también por columna usa el índice (~0.1 s).
+      const neededColumnIds = activeCols
+        .filter(c => c.boardId?.endsWith('::groups') || c.columnType === 'Color')
+        .map(c => c.id);
+      const cells = neededColumnIds.length > 0
         ? await fetchAll('CellValues', (p) => CellValues.findAll(p), {
-            filters: { boardId: { in: relevantBoardIdArray } },
+            filters: { boardId: { in: relevantBoardIdArray }, columnId: { in: neededColumnIds } },
+            fields: ['boardId', 'rowId', 'columnId', 'textValue', 'deletedAt', 'createdAt', 'updatedAt'],
           })
         : [];
 
       console.log('[getTasksForGantt] cellValues fetched', cells.length);
 
-      // ── Filter columns and cells to only relevant pm boards ─────────────────
-      const activeCols = cols
-        .filter(c => !c.deletedAt && c.boardId && relevantBoardIds.has(c.boardId))
-        .sort((a, b) => (a.columnOrder ?? 9999) - (b.columnOrder ?? 9999));
-
+      // Una tarea puede tener más de un color guardado en su columna (hay 19 así): gana el más reciente, no el que llegue al final por azar.
+      const cellTime = (c: { updatedAt?: string | null; createdAt?: string | null }) => String(c.updatedAt ?? c.createdAt ?? '');
       const activeCells = cells
-        .filter(c => !c.deletedAt && c.boardId && relevantBoardIds.has(c.boardId));
+        .filter(c => !c.deletedAt && c.boardId && relevantBoardIds.has(c.boardId))
+        .sort((a, b) => cellTime(a).localeCompare(cellTime(b)));
 
       // ── Resolve date + color columns per boardId ────────────────────────────
       const START_NAMES = new Set(['inicio', 'start', 'fecha inicio', 'start date', 'fecha_inicio']);
