@@ -47,7 +47,7 @@ export default function SharpliEmbedTab({ projectName, brandName }: Props) {
         ref={iframeRef}
         src={src}
         title="Sharpli"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
         className="flex-1 w-full border-0"
       />
     </div>

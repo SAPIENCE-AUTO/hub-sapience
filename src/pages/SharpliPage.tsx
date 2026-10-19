@@ -39,7 +39,7 @@ export default function SharpliPage() {
         ref={iframeRef}
         src={`${SHARPLI_ORIGIN}/embed/app`}
         title="Sharpli"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
         className="flex-1 w-full border-0"
       />
     </div>
