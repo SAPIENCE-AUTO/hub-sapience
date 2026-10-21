@@ -12,8 +12,9 @@ import type { Definicion } from '../../lib/formularios/tipos';
  * Las columnas se ubican por su clave estable (lib/formularios/tabla.ts) y el
  * mapa clave → columna se guarda en `formularios.vinculo`, así la misma
  * pregunta cae siempre en la misma columna aunque alguien la renombre en el
- * tablero. Cada respuesta se pasa una sola vez: su fila lleva
- * `source_form = «Formulario Hub · título|id de la respuesta»`.
+ * tablero. Cada respuesta se pasa una sola vez a cada tablero: su fila lleva
+ * `source_form = «Formulario Hub · título|id de la respuesta»`. Si se cambia
+ * de tablero, el nuevo recibe también a quienes ya estaban en el anterior.
  */
 
 export interface Vinculo {
@@ -26,17 +27,31 @@ export interface Vinculo {
 const PREFIJO_ORIGEN = 'Formulario Hub · ';
 export const origenRespuesta = (titulo: string, respuestaId: string) => `${PREFIJO_ORIGEN}${titulo}|${respuestaId}`;
 
-/** Ids de respuestas que ya tienen su fila (viva) en algún tablero. */
-export async function respuestasYaPasadas(ids: string[]): Promise<Set<string>> {
+/** Ids de respuestas que ya tienen su fila (viva) en este tablero. */
+export async function respuestasYaPasadas(ids: string[], boardId: string): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
   const { rows } = await pool.query(
     `select split_part(source_form, '|', 2) as id
      from recruitment_rows
      where source_form like $1 and split_part(source_form, '|', 2) = any($2::text[])
-       and (deleted_at is null or deleted_at = '')`,
-    [`${PREFIJO_ORIGEN}%`, ids],
+       and board_id = $3 and (deleted_at is null or deleted_at = '')`,
+    [`${PREFIJO_ORIGEN}%`, ids, boardId],
   );
   return new Set(rows.map((r) => r.id as string));
+}
+
+/**
+ * El vínculo guarda el nombre del tablero, pero el equipo lo puede renombrar o
+ * borrar desde Reclutamiento: se relee del tablero antes de usarlo. `null` si
+ * ya no existe.
+ */
+export async function vinculoVigente(vinculo: Vinculo | null): Promise<Vinculo | null> {
+  if (!vinculo) return null;
+  const { rows: [b] } = await pool.query(
+    `select board_name, project_code from boards where id = $1 and board_type = 'recruitment' and deleted_at is null`,
+    [vinculo.boardId],
+  );
+  return b ? { ...vinculo, boardName: b.board_name ?? vinculo.boardName, projectCode: b.project_code ?? vinculo.projectCode } : null;
 }
 
 // Las de resultado llevan «Filtro ·» para no confundirse con columnas del equipo; las de un bloque
@@ -52,7 +67,7 @@ export async function pasarAlReclutamiento(
   senderEmail?: string,
 ): Promise<{ pasadas: number; yaEstaban: number; columnasCreadas: number }> {
   const { vinculo } = formulario;
-  const ya = await respuestasYaPasadas(filas.map((f) => f.id));
+  const ya = await respuestasYaPasadas(filas.map((f) => f.id), vinculo.boardId);
   const nuevas = filas.filter((f) => !ya.has(f.id));
   if (nuevas.length === 0) return { pasadas: 0, yaEstaban: ya.size, columnasCreadas: 0 };
 

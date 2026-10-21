@@ -3,7 +3,7 @@ import { createEndpoint, pool } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { etiqueta, explicarResultado } from '../lib/formularios/motor';
 import type { Definicion, Respuestas, Resultado } from '../lib/formularios/tipos';
-import { respuestasYaPasadas, type Vinculo } from '../serverUtils/formularios/reclutamiento';
+import { respuestasYaPasadas, vinculoVigente, type Vinculo } from '../serverUtils/formularios/reclutamiento';
 
 /**
  * Detalle para el panel: la definición completa (es interna, aquí sí va todo)
@@ -52,8 +52,10 @@ export default createEndpoint({
        from formulario_respuestas where formulario_id = $1 order by created_at desc`,
       [f.id],
     );
-    const pasadas = await respuestasYaPasadas(rows.map((r) => r.id));
-    const vinculo = f.vinculo as Vinculo | null;
+    // Si borraron el tablero vinculado, el panel vuelve a pedir uno.
+    const vinculo = await vinculoVigente(f.vinculo as Vinculo | null);
+    // «En reclutamiento» = está en el tablero vinculado ahora (si se cambió de tablero, el nuevo empieza vacío).
+    const pasadas = vinculo ? await respuestasYaPasadas(rows.map((r) => r.id), vinculo.boardId) : new Set<string>();
     const porTelefono = new Map<string, number>();
     for (const r of rows) {
       const tel = String(r.telefono ?? '').replace(/\D/g, '');

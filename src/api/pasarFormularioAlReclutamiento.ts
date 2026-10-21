@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
-import { pasarAlReclutamiento, type Vinculo } from '../serverUtils/formularios/reclutamiento';
+import { pasarAlReclutamiento, vinculoVigente, type Vinculo } from '../serverUtils/formularios/reclutamiento';
 import type { Definicion } from '../lib/formularios/tipos';
 
 /**
@@ -18,8 +18,9 @@ export default createEndpoint({
     exigirAccesoFormularios(context);
     const { rows: [f] } = await pool.query(`select id, titulo, definicion, vinculo from formularios where id = $1`, [input.formularioId]);
     if (!f) throw new ZiteError({ code: 'NOT_FOUND', message: 'No se encontró el formulario.' });
-    const vinculo = f.vinculo as Vinculo | null;
-    if (!vinculo) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Primero elige el tablero de reclutamiento.' });
+    if (!f.vinculo) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Primero elige el tablero de reclutamiento.' });
+    const vinculo = await vinculoVigente(f.vinculo as Vinculo);
+    if (!vinculo) throw new ZiteError({ code: 'BAD_REQUEST', message: 'El tablero vinculado ya no existe: elige o crea otro.' });
 
     const { rows } = input.respuestaIds?.length
       ? await pool.query(

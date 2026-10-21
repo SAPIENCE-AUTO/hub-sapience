@@ -166,6 +166,7 @@ export const createEjesIdeasBulk = (input?: any): Promise<any> => call('createEj
 export const createEjesSesion = (input?: any): Promise<any> => call('createEjesSesion', input);
 export const createEjesTablero = (input?: any): Promise<any> => call('createEjesTablero', input);
 export const createFormulario = (input?: any): Promise<any> => call('createFormulario', input);
+export const crearTableroParaFormulario = (input?: any): Promise<any> => call('crearTableroParaFormulario', input);
 export const createMuxUploadUrl = (input?: any): Promise<any> => call('createMuxUploadUrl', input);
 export const createObservationStream = (input?: any): Promise<any> => call('createObservationStream', input);
 export const createPreworkEstudio = (input?: any): Promise<any> => call('createPreworkEstudio', input);

@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import {
   getFormularios, createFormulario, getFormularioDetail, getFormularioRespuesta,
   setFormularioEstado, deleteFormularioRespuestas, deleteFormulario, exportFormularioRespuestas,
-  getTablerosReclutamiento, vincularFormularioTablero, pasarFormularioAlReclutamiento,
+  getTablerosReclutamiento, vincularFormularioTablero, pasarFormularioAlReclutamiento, crearTableroParaFormulario,
 } from 'zite-endpoints-sdk';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -357,6 +357,8 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
   const [tableros, setTableros] = useState<{ id: string; nombre: string }[] | null>(null);
   const [elegido, setElegido] = useState('');
   const [cambiando, setCambiando] = useState(false);
+  const [creando, setCreando] = useState(false);
+  const [nombreNuevo, setNombreNuevo] = useState(detalle.titulo);
   const [trabajando, setTrabajando] = useState(false);
   const pendientes = detalle.respuestas.filter((r) => r.califica && !r.enReclutamiento).length;
   const mostrarSelector = !detalle.tablero || cambiando;
@@ -375,6 +377,23 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
     try {
       await vincularFormularioTablero({ formularioId: detalle.id, boardId: elegido });
       setCambiando(false);
+      onCambio();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+    setTrabajando(false);
+  };
+
+  // Mismo efecto que «+ Tablero» en la pestaña Reclutamiento, pero ya queda vinculado.
+  const crear = async () => {
+    if (!nombreNuevo.trim()) return;
+    setTrabajando(true);
+    try {
+      const r = await crearTableroParaFormulario({ formularioId: detalle.id, nombre: nombreNuevo.trim() });
+      toast.success(`Tablero «${r.nombre}» creado y vinculado`);
+      setCreando(false);
+      setCambiando(false);
+      setTableros(null);
       onCambio();
     } catch (err) {
       toast.error((err as Error).message);
@@ -403,17 +422,26 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
           <Users className="h-4 w-4" style={{ color: TEAL }} />
           <span className="text-sm font-semibold" style={{ color: TEAL }}>Reclutamiento</span>
         </div>
-        {mostrarSelector ? (
+        {mostrarSelector && (creando || tableros?.length === 0) ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Nombre del tablero nuevo</span>
+            <Input className="h-8 w-64" value={nombreNuevo} onChange={(e) => setNombreNuevo(e.target.value)} />
+            <Button size="sm" onClick={crear} disabled={trabajando || !nombreNuevo.trim()}>
+              {trabajando && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}Crear y vincular
+            </Button>
+            {(creando || cambiando) && <Button size="sm" variant="ghost" onClick={() => { setCreando(false); if (tableros?.length === 0) setCambiando(false); }}>Cancelar</Button>}
+          </div>
+        ) : mostrarSelector ? (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">Tablero al que pasan las respuestas</span>
             {tableros === null && <Loader2 className="h-4 w-4 animate-spin" />}
-            {tableros?.length === 0 && <span className="text-xs text-muted-foreground">Este proyecto no tiene tableros de reclutamiento: crea uno en la pestaña Reclutamiento.</span>}
             {!!tableros?.length && (
               <>
                 <select className="rounded-md border px-2 py-1.5 text-sm" value={elegido} onChange={(e) => setElegido(e.target.value)}>
                   {tableros.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                 </select>
                 <Button size="sm" onClick={vincular} disabled={trabajando || !elegido}>Vincular</Button>
+                <Button size="sm" variant="outline" onClick={() => setCreando(true)}><Plus className="mr-1 h-3.5 w-3.5" />Crear tablero nuevo</Button>
                 {cambiando && <Button size="sm" variant="ghost" onClick={() => setCambiando(false)}>Cancelar</Button>}
               </>
             )}
@@ -425,11 +453,11 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
               {trabajando ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="mr-1 h-3.5 w-3.5" />}
               Pasar las que califican ({pendientes})
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setCambiando(true)}>Cambiar tablero</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setTableros(null); setCambiando(true); }}>Cambiar tablero</Button>
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          Cada persona queda como una fila «Pendiente» y cada pregunta como una columna, igual que con un formulario de Fillout vinculado. Pasar dos veces no duplica.
+          Cada persona queda como una fila «Pendiente» y cada pregunta como una columna, igual que con un formulario de Fillout vinculado. Pasar dos veces al mismo tablero no duplica; si cambias de tablero, el nuevo recibe a todas.
         </p>
       </CardContent>
     </Card>
