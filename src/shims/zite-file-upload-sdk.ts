@@ -10,11 +10,12 @@ import { supabase } from '@/lib/supabaseClient';
 export interface UploadResult { fileUrl: string; name: string; size: number; mimeType?: string }
 
 export async function uploadFile(
-  { data, filename, folder, token, password, preworkToken }: {
-    data: File; filename: string; folder?: string; token?: string; password?: string; preworkToken?: string;
+  { data, filename, folder, token, password, preworkToken, formularioCodigo }: {
+    data: File; filename: string; folder?: string; token?: string; password?: string; preworkToken?: string; formularioCodigo?: string;
   },
 ): Promise<UploadResult> {
-  if (import.meta.env.VITE_MOCK_USER === 'true') {
+  // La foto de un participante de formulario no depende de la sesión simulada: sube de verdad para poder probarla.
+  if (import.meta.env.VITE_MOCK_USER === 'true' && !formularioCodigo) {
     return { fileUrl: URL.createObjectURL(data), name: filename, size: data.size, mimeType: data.type };
   }
 
@@ -23,7 +24,10 @@ export async function uploadFile(
   if (folder) form.append('folder', folder);
 
   const headers: Record<string, string> = {};
-  if (preworkToken) {
+  if (formularioCodigo) {
+    // Participante de un formulario (/f/:codigo): público por el código; la foto va a un bucket privado.
+    form.append('formularioCodigo', formularioCodigo);
+  } else if (preworkToken) {
     // Portal de participante de Prework: público por token de sesión propio.
     form.append('preworkToken', preworkToken);
   } else if (token) {

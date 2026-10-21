@@ -2,13 +2,15 @@ import { useState } from 'react';
 import SwipeDashboardPage from '../../pages/SwipeDashboardPage';
 import EjesDashboardPage from '../../pages/EjesDashboardPage';
 import { PreworkPanel } from './PreworkPanel';
+import { FormulariosPanel } from '../formularios/FormulariosPanel';
 
-type SubTab = 'swipe' | 'ejes' | 'prework';
+type SubTab = 'swipe' | 'ejes' | 'prework' | 'formularios';
 
 const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'swipe', label: 'Swipe' },
   { id: 'ejes', label: 'Ejes' },
   { id: 'prework', label: 'Prework' },
+  { id: 'formularios', label: 'Formularios' },
 ];
 
 /**
@@ -20,10 +22,13 @@ const SUB_TABS: { id: SubTab; label: string }[] = [
  *
  * `soloSwipe`: quien tiene acceso únicamente a Swipe no ve el selector ni las
  * demás herramientas (ver SWIPE_ALLOWED_EMAILS en ProjectHubPage.tsx).
+ * `verFormularios`: Formularios va aparte, por ahora solo para Sergio
+ * (lib/formularios/acceso.ts) — ni quien tiene todo Tools lo ve todavía.
  */
-export function ProjectToolsTab({ projectId, soloSwipe = false }: { projectId?: string; soloSwipe?: boolean }) {
+export function ProjectToolsTab({ projectId, soloSwipe = false, verFormularios = false }: { projectId?: string; soloSwipe?: boolean; verFormularios?: boolean }) {
   const [subTab, setSubTab] = useState<SubTab>('swipe');
-  const subTabs = soloSwipe ? SUB_TABS.filter(tab => tab.id === 'swipe') : SUB_TABS;
+  const subTabs = SUB_TABS.filter(tab =>
+    tab.id === 'formularios' ? verFormularios && !soloSwipe : !soloSwipe || tab.id === 'swipe');
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -47,6 +52,7 @@ export function ProjectToolsTab({ projectId, soloSwipe = false }: { projectId?: 
         {subTab === 'swipe' && <SwipeDashboardPage proyectoId={projectId} />}
         {!soloSwipe && subTab === 'ejes' && <EjesDashboardPage proyectoId={projectId} />}
         {!soloSwipe && subTab === 'prework' && <PreworkPanel proyectoId={projectId} />}
+        {verFormularios && !soloSwipe && subTab === 'formularios' && <FormulariosPanel proyectoId={projectId} />}
       </div>
     </div>
   );

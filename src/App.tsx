@@ -37,6 +37,7 @@ import SharedRecordingPage from './pages/SharedRecordingPage';
 import ObservationRoomPage from './pages/ObservationRoomPage';
 import SwipePage from './pages/SwipePage';
 import EjesPage from './pages/EjesPage';
+import FormularioPublicoPage from './pages/FormularioPublicoPage';
 import PreworkLoginPage from './pages/PreworkLoginPage';
 import PreworkHomePage from './pages/PreworkHomePage';
 import PreworkMisionPage from './pages/PreworkMisionPage';
@@ -90,6 +91,7 @@ export default function App() {
               <Route path="/s/:slug" element={<ObservationRoomPage />} />
               <Route path="/grabacion/:token" element={<SharedRecordingPage />} />
               <Route path="/swipe/:codigo" element={<SwipePage />} />
+              <Route path="/f/:codigo" element={<FormularioPublicoPage />} />
               <Route path="/ejes/:codigo" element={<EjesPage />} />
               <Route path="/prework/login" element={<PreworkLoginPage />} />
               <Route path="/prework/mision/:id" element={<PreworkMisionPage />} />

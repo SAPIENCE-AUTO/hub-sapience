@@ -165,6 +165,7 @@ export const createEjesIdea = (input?: any): Promise<any> => call('createEjesIde
 export const createEjesIdeasBulk = (input?: any): Promise<any> => call('createEjesIdeasBulk', input);
 export const createEjesSesion = (input?: any): Promise<any> => call('createEjesSesion', input);
 export const createEjesTablero = (input?: any): Promise<any> => call('createEjesTablero', input);
+export const createFormulario = (input?: any): Promise<any> => call('createFormulario', input);
 export const createMuxUploadUrl = (input?: any): Promise<any> => call('createMuxUploadUrl', input);
 export const createObservationStream = (input?: any): Promise<any> => call('createObservationStream', input);
 export const createPreworkEstudio = (input?: any): Promise<any> => call('createPreworkEstudio', input);
@@ -189,6 +190,8 @@ export const deleteDealDocument = (input?: any): Promise<any> => call('deleteDea
 export const deleteDocBlock = (input?: any): Promise<any> => call('deleteDocBlock', input);
 export const deleteEjesSesion = (input?: any): Promise<any> => call('deleteEjesSesion', input);
 export const deleteExpense = (input?: any): Promise<any> => call('deleteExpense', input);
+export const deleteFormulario = (input?: any): Promise<any> => call('deleteFormulario', input);
+export const deleteFormularioRespuestas = (input?: any): Promise<any> => call('deleteFormularioRespuestas', input);
 export const deleteInternalView = (input?: any): Promise<any> => call('deleteInternalView', input);
 export const deleteMeetingRecording = (input?: any): Promise<any> => call('deleteMeetingRecording', input);
 export const deleteObservationChatMessage = (input?: any): Promise<any> => call('deleteObservationChatMessage', input);
@@ -211,6 +214,7 @@ export const duplicateCotizacion = (input?: any): Promise<any> => call('duplicat
 export const duplicateGroup = (input?: any): Promise<any> => call('duplicateGroup', input);
 export const duplicateSwipeCapitulo = (input?: any): Promise<any> => call('duplicateSwipeCapitulo', input);
 export const duplicateSwipeIdea = (input?: any): Promise<any> => call('duplicateSwipeIdea', input);
+export const exportFormularioRespuestas = (input?: any): Promise<any> => call('exportFormularioRespuestas', input);
 export const duplicateRows = (input?: any): Promise<any> => call('duplicateRows', input);
 export const ensurePendienteNotasBlock = (input?: any): Promise<any> => call('ensurePendienteNotasBlock', input);
 export const executeButtonAction = (input?: any): Promise<any> => call('executeButtonAction', input);
@@ -268,6 +272,10 @@ export const getExpenseComments = (input?: any): Promise<any> => call('getExpens
 export const getExpenseLineItems = (input?: any): Promise<any> => call('getExpenseLineItems', input);
 export const getExpenses = (input?: any): Promise<any> => call('getExpenses', input);
 export const getFilloutForms = (input?: any): Promise<any> => call('getFilloutForms', input);
+export const getFormularioDetail = (input?: any): Promise<any> => call('getFormularioDetail', input);
+export const getFormularioPublico = (input?: any): Promise<any> => call('getFormularioPublico', input);
+export const getFormularioRespuesta = (input?: any): Promise<any> => call('getFormularioRespuesta', input);
+export const getFormularios = (input?: any): Promise<any> => call('getFormularios', input);
 export const getIndicadoresReclutamiento = (input?: any): Promise<any> => call('getIndicadoresReclutamiento', input);
 export const getInternalViews = (input?: any): Promise<any> => call('getInternalViews', input);
 export const getInviteTemplate = (input?: any): Promise<any> => call('getInviteTemplate', input);
@@ -462,6 +470,7 @@ export const sendPoEmail = (input?: any): Promise<any> => call('sendPoEmail', in
 export const sendTimelineToWebhook = (input?: any): Promise<any> => call('sendTimelineToWebhook', input);
 export const setEjesIdeaEstado = (input?: any): Promise<any> => call('setEjesIdeaEstado', input);
 export const setEjesTableroEstado = (input?: any): Promise<any> => call('setEjesTableroEstado', input);
+export const setFormularioEstado = (input?: any): Promise<any> => call('setFormularioEstado', input);
 export const setSwipeCapituloAleatorio = (input?: any): Promise<any> => call('setSwipeCapituloAleatorio', input);
 export const setSwipeCapituloEstado = (input?: any): Promise<any> => call('setSwipeCapituloEstado', input);
 export const startCollectionProcess = (input?: any): Promise<any> => call('startCollectionProcess', input);
@@ -469,6 +478,7 @@ export const startMeetingTranscription = (input?: any): Promise<any> => call('st
 export const submitExpense = (input?: any): Promise<any> => call('submitExpense', input);
 export const submitPurchaseOrder = (input?: any): Promise<any> => call('submitPurchaseOrder', input);
 export const submitEjesEvaluacion = (input?: any): Promise<any> => call('submitEjesEvaluacion', input);
+export const submitFormularioRespuesta = (input?: any): Promise<any> => call('submitFormularioRespuesta', input);
 export const submitSwipeVotos = (input?: any): Promise<any> => call('submitSwipeVotos', input);
 export const syncCalendarCellValues = (input?: any): Promise<any> => call('syncCalendarCellValues', input);
 export const syncExternalView = (input?: any): Promise<any> => call('syncExternalView', input);

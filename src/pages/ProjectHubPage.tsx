@@ -11,6 +11,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { SharpliIcon } from '../components/SharpliIcon';
 import { ProjectHubLanding } from '../components/project-hub/ProjectHubLanding';
 import { ProjectToolsTab } from '../components/project-hub/ProjectToolsTab';
+import { puedeVerFormularios } from '../lib/formularios/acceso';
 import SharpliEmbedTab from '../components/project-hub/SharpliEmbedTab';
 import RecruitmentPage from './RecruitmentPage';
 import PMPage from './PMPage';
@@ -314,7 +315,7 @@ export default function ProjectHubPage() {
                 {project?.id && <ArchivedFilesSection projectId={project.id} />}
               </div>
             )}
-            {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} soloSwipe={!tieneTodoTools} />}
+            {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} soloSwipe={!tieneTodoTools} verFormularios={puedeVerFormularios(user?.email)} />}
             {activeTab === 'sharpli'       && (
               <SharpliEmbedTab
                 projectName={project?.fullName ?? project?.projectCode ?? ''}

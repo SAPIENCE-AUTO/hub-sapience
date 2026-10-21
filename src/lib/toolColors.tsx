@@ -20,9 +20,10 @@ export const GRIS = '#8b93a1';
 // listos para ver, no está "muerta" — bloqueado/borrador sí es el estado
 // sin nada que hacer.
 export const ESTADO_COLOR: Record<string, string> = {
-  activa: EXITO, abierto: EXITO,
+  activa: EXITO, abierto: EXITO, en_vivo: EXITO,
   cerrada: INFO, cerrado: INFO,
   borrador: GRIS, bloqueado: GRIS,
+  prueba: ALERTA,
 };
 
 export function EstadoPill({ estado }: { estado: string }) {

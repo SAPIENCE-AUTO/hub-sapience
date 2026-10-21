@@ -2,8 +2,9 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getSupabaseAdmin } from './supabaseAdmin';
 import { resolveAuth } from './auth';
-import { Suppliers } from './compat';
+import { Suppliers, pool } from './compat';
 import { verifySessionToken } from './preworkAuth';
+import { subirFoto } from '../src/serverUtils/formularios/storage';
 
 /**
  * POST /api/upload — ruta dedicada, NO pasa por el dispatcher genérico de
@@ -20,6 +21,8 @@ import { verifySessionToken } from './preworkAuth';
 // (ver server/scripts/migrate-zite-uploads.mjs y migrate-monday-po-pdfs.mjs,
 // ambos creados con fileSizeLimit: '50MB') — no se inventa un número nuevo.
 const MAX_SIZE = 50 * 1024 * 1024;
+// Fotos de celular de participantes de un formulario: con 20MB sobra y el enlace es público.
+const MAX_FOTO_FORMULARIO = 20 * 1024 * 1024;
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif',
@@ -80,6 +83,32 @@ uploadApp.post(
       return c.json({ message: 'Falta el archivo' }, 400);
     }
     const folder = typeof body.folder === 'string' ? body.folder : undefined;
+
+    // ── Participante de Tools → Formularios: público por el código del
+    // formulario. Solo fotos, a un bucket PRIVADO dentro de la carpeta del
+    // formulario (submitFormularioRespuesta solo acepta rutas de esa carpeta).
+    const formularioCodigo = typeof body.formularioCodigo === 'string' ? body.formularioCodigo : undefined;
+    if (formularioCodigo) {
+      const { rows: [form] } = await pool.query(
+        `select id from formularios where codigo = $1 and estado in ('prueba', 'en_vivo')`,
+        [formularioCodigo],
+      );
+      if (!form) return c.json({ message: 'Este formulario ya no recibe respuestas' }, 400);
+      if (!file.type.startsWith('image/') || !ALLOWED_MIME_TYPES.has(file.type)) {
+        return c.json({ message: 'Solo se aceptan fotos' }, 400);
+      }
+      if (file.size > MAX_FOTO_FORMULARIO) {
+        return c.json({ message: `La foto supera el límite de ${MAX_FOTO_FORMULARIO / (1024 * 1024)}MB` }, 413);
+      }
+      const ruta = `${form.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${sanitizeFilename(file.name)}`;
+      try {
+        await subirFoto(ruta, Buffer.from(await file.arrayBuffer()), file.type);
+      } catch (err) {
+        console.error('[upload] Falló la foto de un formulario', { ruta, error: (err as Error).message });
+        return c.json({ message: 'No se pudo subir la foto' }, 500);
+      }
+      return c.json({ fileUrl: ruta, name: file.name, size: file.size, mimeType: file.type });
+    }
 
     // ── Auth: sesión normal, portal de proveedores (token+password), o
     // portal de participante de Prework (preworkToken) — tres orígenes
