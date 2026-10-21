@@ -3,6 +3,7 @@ import { createEndpoint, pool } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { etiqueta, explicarResultado } from '../lib/formularios/motor';
 import type { Definicion, Respuestas, Resultado } from '../lib/formularios/tipos';
+import { respuestasYaPasadas, type Vinculo } from '../serverUtils/formularios/reclutamiento';
 
 /**
  * Detalle para el panel: la definición completa (es interna, aquí sí va todo)
@@ -20,6 +21,7 @@ export default createEndpoint({
     titulo: z.string().optional(),
     estado: z.string().optional(),
     definicion: z.any().optional(),
+    tablero: z.object({ id: z.string(), nombre: z.string() }).optional(),
     respuestas: z.array(z.object({
       id: z.string(),
       createdAt: z.string(),
@@ -35,12 +37,13 @@ export default createEndpoint({
       alertas: z.array(z.string()),
       incompleto: z.boolean(),
       duplicado: z.boolean(),
+      enReclutamiento: z.boolean(),
       duracionSeg: z.number().optional(),
     })).optional(),
   }),
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
-    const { rows: [f] } = await pool.query(`select id, codigo, titulo, estado, definicion from formularios where id = $1`, [input.formularioId]);
+    const { rows: [f] } = await pool.query(`select id, codigo, titulo, estado, definicion, vinculo from formularios where id = $1`, [input.formularioId]);
     if (!f) return { found: false };
     const def = f.definicion as Definicion;
 
@@ -49,6 +52,8 @@ export default createEndpoint({
        from formulario_respuestas where formulario_id = $1 order by created_at desc`,
       [f.id],
     );
+    const pasadas = await respuestasYaPasadas(rows.map((r) => r.id));
+    const vinculo = f.vinculo as Vinculo | null;
     const porTelefono = new Map<string, number>();
     for (const r of rows) {
       const tel = String(r.telefono ?? '').replace(/\D/g, '');
@@ -57,6 +62,7 @@ export default createEndpoint({
 
     return {
       found: true, id: f.id, codigo: f.codigo, titulo: f.titulo, estado: f.estado, definicion: def,
+      tablero: vinculo ? { id: vinculo.boardId, nombre: vinculo.boardName } : undefined,
       respuestas: rows.map((r) => {
         const resp = r.respuestas as Respuestas;
         const res = r.resultado as Resultado;
@@ -76,6 +82,7 @@ export default createEndpoint({
           incompleto: res.incompleto,
           duplicado: (porTelefono.get(String(r.telefono ?? '').replace(/\D/g, '')) ?? 0) > 1,
           duracionSeg: r.duracion_seg ?? undefined,
+          enReclutamiento: pasadas.has(r.id),
         };
       }),
     };

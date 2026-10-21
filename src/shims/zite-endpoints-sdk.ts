@@ -276,6 +276,7 @@ export const getFormularioDetail = (input?: any): Promise<any> => call('getFormu
 export const getFormularioPublico = (input?: any): Promise<any> => call('getFormularioPublico', input);
 export const getFormularioRespuesta = (input?: any): Promise<any> => call('getFormularioRespuesta', input);
 export const getFormularios = (input?: any): Promise<any> => call('getFormularios', input);
+export const getTablerosReclutamiento = (input?: any): Promise<any> => call('getTablerosReclutamiento', input);
 export const getIndicadoresReclutamiento = (input?: any): Promise<any> => call('getIndicadoresReclutamiento', input);
 export const getInternalViews = (input?: any): Promise<any> => call('getInternalViews', input);
 export const getInviteTemplate = (input?: any): Promise<any> => call('getInviteTemplate', input);
@@ -395,6 +396,7 @@ export const moveSwipeIdea = (input?: any): Promise<any> => call('moveSwipeIdea'
 export const normalizeSupplierNames = (input?: any): Promise<any> => call('normalizeSupplierNames', input);
 export const parseExcelFile = (input?: any): Promise<any> => call('parseExcelFile', input);
 export const parseOdcCsv = (input?: any): Promise<any> => call('parseOdcCsv', input);
+export const pasarFormularioAlReclutamiento = (input?: any): Promise<any> => call('pasarFormularioAlReclutamiento', input);
 export const permanentlyDelete = (input?: any): Promise<any> => call('permanentlyDelete', input);
 export const postObserverChatMessage = (input?: any): Promise<any> => call('postObserverChatMessage', input);
 export const postObserverHeartbeat = (input?: any): Promise<any> => call('postObserverHeartbeat', input);
@@ -507,6 +509,7 @@ export const updateUser = (input?: any): Promise<any> => call('updateUser', inpu
 export const uploadProfilePhoto = (input?: any): Promise<any> => call('uploadProfilePhoto', input);
 export const uploadSupplierInvoice = (input?: any): Promise<any> => call('uploadSupplierInvoice', input);
 export const votePoll = (input?: any): Promise<any> => call('votePoll', input);
+export const vincularFormularioTablero = (input?: any): Promise<any> => call('vincularFormularioTablero', input);
 
 // ── Tipos de salida ─────────────────────────────────────────────
 // Placeholder tipado laxo; sustituir por los tipos reales cuando el servidor exista.

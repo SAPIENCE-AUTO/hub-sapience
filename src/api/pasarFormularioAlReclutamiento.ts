@@ -1,0 +1,46 @@
+import { z } from 'zod';
+import { createEndpoint, pool, ZiteError } from '../../server/compat';
+import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
+import { pasarAlReclutamiento, type Vinculo } from '../serverUtils/formularios/reclutamiento';
+import type { Definicion } from '../lib/formularios/tipos';
+
+/**
+ * Pasa respuestas al tablero vinculado. Sin `respuestaIds`: todas las que
+ * califican y no se han pasado. Con ids: esas, califiquen o no (para pasar a
+ * mano a alguien que el equipo quiere revisar).
+ */
+export default createEndpoint({
+  authenticated: true,
+  description: 'Pasa respuestas de un formulario a su tablero de reclutamiento',
+  inputSchema: z.object({ formularioId: z.string(), respuestaIds: z.array(z.string()).optional() }),
+  outputSchema: z.object({ pasadas: z.number(), yaEstaban: z.number(), columnasCreadas: z.number(), tablero: z.string() }),
+  execute: async ({ input, context }) => {
+    exigirAccesoFormularios(context);
+    const { rows: [f] } = await pool.query(`select id, titulo, definicion, vinculo from formularios where id = $1`, [input.formularioId]);
+    if (!f) throw new ZiteError({ code: 'NOT_FOUND', message: 'No se encontró el formulario.' });
+    const vinculo = f.vinculo as Vinculo | null;
+    if (!vinculo) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Primero elige el tablero de reclutamiento.' });
+
+    const { rows } = input.respuestaIds?.length
+      ? await pool.query(
+        `select id, created_at, es_prueba, respuestas, resultado, duracion_seg from formulario_respuestas
+         where formulario_id = $1 and id = any($2::uuid[]) order by created_at`,
+        [f.id, input.respuestaIds],
+      )
+      : await pool.query(
+        `select id, created_at, es_prueba, respuestas, resultado, duracion_seg from formulario_respuestas
+         where formulario_id = $1 and califica order by created_at`,
+        [f.id],
+      );
+
+    const res = await pasarAlReclutamiento(
+      { id: f.id, titulo: f.titulo, definicion: f.definicion as Definicion, vinculo },
+      rows.map((r) => ({
+        id: r.id, createdAt: new Date(r.created_at).toISOString(), esPrueba: r.es_prueba,
+        respuestas: r.respuestas, resultado: r.resultado, duracionSeg: r.duracion_seg ?? undefined,
+      })),
+      context.user?.email,
+    );
+    return { ...res, tablero: vinculo.boardName };
+  },
+});

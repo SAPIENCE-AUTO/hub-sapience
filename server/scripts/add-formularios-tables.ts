@@ -44,6 +44,10 @@ async function main() {
       created_at     timestamptz not null default now()
     );
     create index if not exists formulario_respuestas_formulario_id_idx on formulario_respuestas (formulario_id, created_at desc);
+
+    -- Agregada después del alta inicial: tablero de Reclutamiento al que se pasan las respuestas
+    -- { boardId, boardName, projectCode, columnas: { claveDeColumna: board_columns.id } }.
+    alter table formularios add column if not exists vinculo jsonb;
   `);
   console.log('✅ Tablas de formularios creadas (o ya existían).');
 

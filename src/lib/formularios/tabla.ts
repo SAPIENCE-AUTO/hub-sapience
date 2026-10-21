@@ -20,7 +20,11 @@ export interface FilaRespuesta {
 export type Celda = string | number | undefined;
 
 export interface Columna {
+  /** Estable entre descargas: con ella se ubica la columna del tablero de Reclutamiento. */
+  clave: string;
   titulo: string;
+  /** Tipo de columna del tablero de Reclutamiento. */
+  tipo: 'Texto' | 'Número';
   /** Encabezado de grupo encima de la columna (la sección del screener). */
   seccion: string;
   valor: (f: FilaRespuesta) => Celda;
@@ -64,20 +68,20 @@ function celda(def: Definicion, p: Pregunta, clave: string, resp: Respuestas): C
 export function columnas(def: Definicion, filas: FilaRespuesta[]): Columna[] {
   const nombreFrente = (id: string) => def.frentes?.find((f) => f.id === id)?.nombre ?? id;
   const fijas: Columna[] = [
-    { seccion: 'Persona', titulo: 'Nombre', valor: (f) => (def.claves?.nombre ? celda(def, buscar(def, def.claves.nombre)!, def.claves.nombre, f.respuestas) : undefined) },
-    { seccion: 'Persona', titulo: 'Celular', valor: (f) => (def.claves?.telefono ? celda(def, buscar(def, def.claves.telefono)!, def.claves.telefono, f.respuestas) : undefined) },
+    { clave: 'nombre', tipo: 'Texto', seccion: 'Persona', titulo: 'Nombre', valor: (f) => (def.claves?.nombre ? celda(def, buscar(def, def.claves.nombre)!, def.claves.nombre, f.respuestas) : undefined) },
+    { clave: 'celular', tipo: 'Texto', seccion: 'Persona', titulo: 'Celular', valor: (f) => (def.claves?.telefono ? celda(def, buscar(def, def.claves.telefono)!, def.claves.telefono, f.respuestas) : undefined) },
     {
-      seccion: 'Resultado', titulo: 'Resultado',
+      clave: 'resultado', tipo: 'Texto', seccion: 'Resultado', titulo: 'Resultado',
       valor: (f) => (f.resultado.califica ? 'Califica' : f.resultado.incompleto ? 'Incompleta' : 'No califica'),
     },
-    { seccion: 'Resultado', titulo: 'Frente', valor: (f) => f.resultado.frentes.map(nombreFrente).join(', ') || undefined },
-    { seccion: 'Resultado', titulo: 'Por qué no califica', valor: (f) => explicarResultado(f.resultado) },
-    { seccion: 'Resultado', titulo: 'NSE', valor: (f) => f.resultado.nse?.nivel },
-    { seccion: 'Resultado', titulo: 'Puntos NSE', valor: (f) => f.resultado.nse?.puntos },
-    { seccion: 'Resultado', titulo: 'Alertas', valor: (f) => f.resultado.alertas.join(' · ') || undefined },
-    { seccion: 'Resultado', titulo: 'Fecha', valor: (f) => new Date(f.createdAt).toLocaleString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'short', timeStyle: 'short' }) },
-    { seccion: 'Resultado', titulo: 'Minutos', valor: (f) => (f.duracionSeg !== undefined ? Math.round(f.duracionSeg / 60) : undefined) },
-    { seccion: 'Resultado', titulo: 'Tipo', valor: (f) => (f.esPrueba ? 'Prueba' : 'Real') },
+    { clave: 'frente', tipo: 'Texto', seccion: 'Resultado', titulo: 'Frente', valor: (f) => f.resultado.frentes.map(nombreFrente).join(', ') || undefined },
+    { clave: 'motivo', tipo: 'Texto', seccion: 'Resultado', titulo: 'Por qué no califica', valor: (f) => explicarResultado(f.resultado) },
+    { clave: 'nse', tipo: 'Texto', seccion: 'Resultado', titulo: 'NSE', valor: (f) => f.resultado.nse?.nivel },
+    { clave: 'nse_puntos', tipo: 'Número', seccion: 'Resultado', titulo: 'Puntos NSE', valor: (f) => f.resultado.nse?.puntos },
+    { clave: 'alertas', tipo: 'Texto', seccion: 'Resultado', titulo: 'Alertas', valor: (f) => f.resultado.alertas.join(' · ') || undefined },
+    { clave: 'fecha', tipo: 'Texto', seccion: 'Resultado', titulo: 'Fecha', valor: (f) => new Date(f.createdAt).toLocaleString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'short', timeStyle: 'short' }) },
+    { clave: 'minutos', tipo: 'Número', seccion: 'Resultado', titulo: 'Minutos', valor: (f) => (f.duracionSeg !== undefined ? Math.round(f.duracionSeg / 60) : undefined) },
+    { clave: 'tipo', tipo: 'Texto', seccion: 'Resultado', titulo: 'Tipo', valor: (f) => (f.esPrueba ? 'Prueba' : 'Real') },
   ];
   const yaFijas = new Set([def.claves?.nombre, def.claves?.telefono].filter(Boolean));
 
@@ -99,7 +103,7 @@ export function columnas(def: Definicion, filas: FilaRespuesta[]): Columna[] {
         if (p.tipo === 'matriz') {
           for (const fila of p.filas ?? []) {
             deSecciones.push({
-              seccion, titulo: `${titulo} · ${fila.label}`,
+              clave: `${clave}.${fila.id}`, tipo: 'Texto', seccion, titulo: `${titulo} · ${fila.label}`,
               valor: (f) => {
                 const elegida = (f.respuestas[clave] as Record<string, string> | undefined)?.[fila.id];
                 return p.opciones?.find((o) => o.id === elegida)?.label;
@@ -107,7 +111,7 @@ export function columnas(def: Definicion, filas: FilaRespuesta[]): Columna[] {
             });
           }
         } else {
-          deSecciones.push({ seccion, titulo, valor: (f) => celda(def, p, clave, f.respuestas) });
+          deSecciones.push({ clave, tipo: p.tipo === 'numero' ? 'Número' : 'Texto', seccion, titulo, valor: (f) => celda(def, p, clave, f.respuestas) });
         }
       }
     }

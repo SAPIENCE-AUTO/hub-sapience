@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import {
   getFormularios, createFormulario, getFormularioDetail, getFormularioRespuesta,
   setFormularioEstado, deleteFormularioRespuestas, deleteFormulario, exportFormularioRespuestas,
+  getTablerosReclutamiento, vincularFormularioTablero, pasarFormularioAlReclutamiento,
 } from 'zite-endpoints-sdk';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,8 +13,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Copy, Download, ExternalLink, Loader2, Plus, RefreshCw, Trash2, TriangleAlert } from 'lucide-react';
-import { TEAL, EXITO, PELIGRO, ALERTA, GRIS, EstadoPill } from '@/lib/toolColors';
+import { ArrowRightLeft, Copy, Download, ExternalLink, Loader2, Plus, RefreshCw, Trash2, TriangleAlert, Users } from 'lucide-react';
+import { TEAL, EXITO, PELIGRO, ALERTA, GRIS, INFO, EstadoPill } from '@/lib/toolColors';
 import { describir } from '@/lib/formularios/motor';
 import { PLANTILLAS } from '@/lib/formularios/plantillas';
 import { descargarExcel } from '@/lib/formularios/excel';
@@ -23,17 +24,18 @@ interface FormularioRow { id: string; codigo: string; titulo: string; estado: st
 interface RespuestaRow {
   id: string; createdAt: string; esPrueba: boolean; nombre?: string; telefono?: string; edad?: string; genero?: string; nse?: string;
   califica: boolean; frentes: string[]; motivo?: string; alertas: string[]; incompleto: boolean; duplicado: boolean; duracionSeg?: number;
+  enReclutamiento: boolean;
 }
-interface Detalle { id: string; codigo: string; titulo: string; estado: string; definicion: Definicion; respuestas: RespuestaRow[] }
+interface Detalle { id: string; codigo: string; titulo: string; estado: string; definicion: Definicion; tablero?: { id: string; nombre: string }; respuestas: RespuestaRow[] }
 
 const enlace = (codigo: string) => `${window.location.origin}/f/${codigo}`;
 const fecha = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 /**
  * Tools → Formularios: screeners que contestan los consumidores en /f/:codigo.
- * Por ahora solo para Sergio y solo en modo prueba (ver acceso.ts): las
- * respuestas se califican y se revisan aquí, todavía no pasan al tablero de
- * reclutamiento.
+ * Por ahora solo para Sergio y solo en modo prueba (ver acceso.ts). Las
+ * respuestas se califican y se revisan aquí; pasan al tablero de
+ * Reclutamiento vinculado solo cuando se pide (serverUtils/formularios/reclutamiento.ts).
  */
 export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
   const [lista, setLista] = useState<FormularioRow[]>([]);
@@ -143,6 +145,7 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
         {detalle && (
           <DetalleFormulario
             detalle={detalle}
+            proyectoId={proyectoId}
             onEstado={cambiarEstado}
             onRecargar={() => Promise.all([cargarDetalle(detalle.id), cargarLista()])}
             onVer={setVerRespuesta}
@@ -175,7 +178,16 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
         </DialogContent>
       </Dialog>
 
-      {detalle && verRespuesta && <RespuestaDialog definicion={detalle.definicion} fila={verRespuesta} onClose={() => setVerRespuesta(null)} />}
+      {detalle && verRespuesta && (
+        <RespuestaDialog
+          formularioId={detalle.id}
+          definicion={detalle.definicion}
+          tablero={detalle.tablero}
+          fila={verRespuesta}
+          onClose={() => setVerRespuesta(null)}
+          onPasada={() => { setVerRespuesta(null); cargarDetalle(detalle.id); }}
+        />
+      )}
 
       <AlertDialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>
         <AlertDialogContent>
@@ -197,8 +209,9 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
   );
 }
 
-function DetalleFormulario({ detalle, onEstado, onRecargar, onVer, onBorrarPruebas, onBorrarFormulario }: {
+function DetalleFormulario({ detalle, proyectoId, onEstado, onRecargar, onVer, onBorrarPruebas, onBorrarFormulario }: {
   detalle: Detalle;
+  proyectoId?: string;
   onEstado: (e: 'borrador' | 'prueba' | 'cerrado') => void;
   onRecargar: () => void;
   onVer: (r: RespuestaRow) => void;
@@ -258,9 +271,11 @@ function DetalleFormulario({ detalle, onEstado, onRecargar, onVer, onBorrarPrueb
             <ExternalLink className="mr-1 h-3.5 w-3.5" />Abrir
           </Button>
           {detalle.estado === 'borrador' && <span className="text-xs text-muted-foreground">En borrador nadie puede contestarlo.</span>}
-          {detalle.estado === 'prueba' && <span className="text-xs" style={{ color: ALERTA }}>Modo prueba: todo lo que entre queda marcado como prueba y no pasa al reclutamiento.</span>}
+          {detalle.estado === 'prueba' && <span className="text-xs" style={{ color: ALERTA }}>Modo prueba: todo lo que entre queda marcado como prueba. Solo pasa al reclutamiento si tú lo pasas.</span>}
         </CardContent>
       </Card>
+
+      <TarjetaReclutamiento detalle={detalle} proyectoId={proyectoId} onCambio={onRecargar} />
 
       {frentes.length > 0 && (
         <div>
@@ -324,6 +339,7 @@ function DetalleFormulario({ detalle, onEstado, onRecargar, onVer, onBorrarPrueb
                           {r.califica ? 'Califica' : r.incompleto ? 'Incompleta' : 'No califica'}
                         </span>
                         {r.alertas.length > 0 && <TriangleAlert className="ml-1.5 inline h-3.5 w-3.5" style={{ color: ALERTA }} />}
+                        {r.enReclutamiento && <span className="ml-1.5 whitespace-nowrap text-[10px] font-semibold" style={{ color: INFO }}>En reclutamiento</span>}
                       </td>
                       <td className="px-3 py-2 text-xs">{r.califica ? r.frentes.map(nombreFrente).join(', ') : r.motivo}</td>
                     </tr>
@@ -337,8 +353,112 @@ function DetalleFormulario({ detalle, onEstado, onRecargar, onVer, onBorrarPrueb
   );
 }
 
-function RespuestaDialog({ definicion, fila, onClose }: { definicion: Definicion; fila: RespuestaRow; onClose: () => void }) {
+function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Detalle; proyectoId?: string; onCambio: () => void }) {
+  const [tableros, setTableros] = useState<{ id: string; nombre: string }[] | null>(null);
+  const [elegido, setElegido] = useState('');
+  const [cambiando, setCambiando] = useState(false);
+  const [trabajando, setTrabajando] = useState(false);
+  const pendientes = detalle.respuestas.filter((r) => r.califica && !r.enReclutamiento).length;
+  const mostrarSelector = !detalle.tablero || cambiando;
+
+  useEffect(() => {
+    if (!proyectoId || !mostrarSelector || tableros) return;
+    getTablerosReclutamiento({ proyectoId }).then((r) => {
+      setTableros(r.tableros ?? []);
+      setElegido(detalle.tablero?.id ?? r.tableros?.[0]?.id ?? '');
+    });
+  }, [proyectoId, mostrarSelector, tableros, detalle.tablero?.id]);
+
+  const vincular = async () => {
+    if (!elegido) return;
+    setTrabajando(true);
+    try {
+      await vincularFormularioTablero({ formularioId: detalle.id, boardId: elegido });
+      setCambiando(false);
+      onCambio();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+    setTrabajando(false);
+  };
+
+  const pasar = async () => {
+    setTrabajando(true);
+    try {
+      const r = await pasarFormularioAlReclutamiento({ formularioId: detalle.id });
+      toast.success(r.pasadas
+        ? `${r.pasadas === 1 ? '1 persona pasó' : `${r.pasadas} personas pasaron`} al tablero «${r.tablero}»`
+        : 'No había respuestas nuevas que califiquen');
+      onCambio();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+    setTrabajando(false);
+  };
+
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4" style={{ color: TEAL }} />
+          <span className="text-sm font-semibold" style={{ color: TEAL }}>Reclutamiento</span>
+        </div>
+        {mostrarSelector ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Tablero al que pasan las respuestas</span>
+            {tableros === null && <Loader2 className="h-4 w-4 animate-spin" />}
+            {tableros?.length === 0 && <span className="text-xs text-muted-foreground">Este proyecto no tiene tableros de reclutamiento: crea uno en la pestaña Reclutamiento.</span>}
+            {!!tableros?.length && (
+              <>
+                <select className="rounded-md border px-2 py-1.5 text-sm" value={elegido} onChange={(e) => setElegido(e.target.value)}>
+                  {tableros.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                </select>
+                <Button size="sm" onClick={vincular} disabled={trabajando || !elegido}>Vincular</Button>
+                {cambiando && <Button size="sm" variant="ghost" onClick={() => setCambiando(false)}>Cancelar</Button>}
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm">Vinculado al tablero <strong>«{detalle.tablero!.nombre}»</strong></span>
+            <Button size="sm" onClick={pasar} disabled={trabajando || pendientes === 0}>
+              {trabajando ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="mr-1 h-3.5 w-3.5" />}
+              Pasar las que califican ({pendientes})
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setCambiando(true)}>Cambiar tablero</Button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Cada persona queda como una fila «Pendiente» y cada pregunta como una columna, igual que con un formulario de Fillout vinculado. Pasar dos veces no duplica.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RespuestaDialog({ formularioId, definicion, tablero, fila, onClose, onPasada }: {
+  formularioId: string;
+  definicion: Definicion;
+  tablero?: { id: string; nombre: string };
+  fila: RespuestaRow;
+  onClose: () => void;
+  onPasada: () => void;
+}) {
   const [datos, setDatos] = useState<{ respuestas: Respuestas; resultado: Resultado; fotos: Record<string, string> } | null>(null);
+  const [pasando, setPasando] = useState(false);
+
+  // A mano se puede pasar a cualquiera, califique o no: el equipo decide si lo revisa.
+  const pasar = async () => {
+    setPasando(true);
+    try {
+      await pasarFormularioAlReclutamiento({ formularioId, respuestaIds: [fila.id] });
+      toast.success(`${fila.nombre ?? 'La respuesta'} pasó al tablero «${tablero?.nombre}»`);
+      onPasada();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+    setPasando(false);
+  };
 
   useEffect(() => {
     getFormularioRespuesta({ respuestaId: fila.id }).then((r) => r.found && setDatos(r));
@@ -350,6 +470,16 @@ function RespuestaDialog({ definicion, fila, onClose }: { definicion: Definicion
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader><DialogTitle>{fila.nombre ?? 'Respuesta'}{fila.esPrueba ? ' · prueba' : ''}</DialogTitle></DialogHeader>
+        {tablero && (
+          fila.enReclutamiento
+            ? <p className="text-xs" style={{ color: INFO }}>Ya está en el tablero «{tablero.nombre}» de Reclutamiento.</p>
+            : (
+              <Button size="sm" variant="outline" className="self-start" onClick={pasar} disabled={pasando}>
+                {pasando ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="mr-1 h-3.5 w-3.5" />}
+                Pasar al tablero «{tablero.nombre}»
+              </Button>
+            )
+        )}
         {!datos && <Loader2 className="mx-auto h-5 w-5 animate-spin" />}
         {datos && (
           <div className="space-y-5 text-sm">
