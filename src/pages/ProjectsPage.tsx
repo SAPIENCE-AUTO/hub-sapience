@@ -638,14 +638,16 @@ export default function ProjectsPage() {
   };
 
   const save = async () => {
-    if (!form.projectCode.trim()) return toast.error('El nombre del proyecto es obligatorio');
+    const projectCode = form.projectCode.trim();
+    if (!projectCode) return toast.error('El nombre del proyecto es obligatorio');
     setSaving(true);
     try {
-      const oldProjectCode = editing?.projectCode && editing.projectCode !== form.projectCode
+      const oldProjectCode = editing?.projectCode && editing.projectCode !== projectCode
         ? editing.projectCode
         : undefined;
       await saveProject({
         ...form,
+        projectCode,
         id: editing?.id,
         oldProjectCode,
         lider: form.lider[0] ?? '',

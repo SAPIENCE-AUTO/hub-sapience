@@ -51,7 +51,7 @@ export default createEndpoint({
 
     if (shouldCreateProject) {
       // ── 3. Create project ────────────────────────────────────────────────────
-      projectCode = deal.dealName ?? 'Proyecto ' + Date.now().toString().slice(-4);
+      projectCode = deal.dealName?.trim() || 'Proyecto ' + Date.now().toString().slice(-4);
       await assertProjectCodeAvailable(pool, projectCode);
       const newProject = await Projects.create({
         record: {

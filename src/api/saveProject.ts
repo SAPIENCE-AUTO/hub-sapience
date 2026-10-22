@@ -120,7 +120,11 @@ export default createEndpoint({
   }),
   outputSchema: z.object({ success: z.boolean(), id: z.string(), cascaded: z.boolean().optional() }),
   execute: async ({ input, context }) => {
-    const { id, oldProjectCode, projectCode, additionalOldCodes, fullName, status, client, tematica, startDate, endDate, description, lider, analistas, moderadores, asistentes, muestra, muestraImagen, instruccionesDeAnalisis, dealVinculado } = input;
+    const { id, oldProjectCode, additionalOldCodes, fullName, status, client, tematica, startDate, endDate, description, lider, analistas, moderadores, asistentes, muestra, muestraImagen, instruccionesDeAnalisis, dealVinculado } = input;
+    // El código se guarda sin espacios al inicio ni al final (oct 2026, un proyecto quedó con un espacio al final): el navegador se los quita a la dirección del proyecto, así que el Hub
+    // ya no lo encontraba y sus tableros y tareas quedaban partidos entre las dos escrituras. Solo se limpia el código NUEVO: oldProjectCode se queda tal
+    // cual, para poder renombrar desde un código que ya quedó sucio.
+    const projectCode = input.projectCode.trim();
     const now = new Date().toISOString();
     // Cada campo se agrega SOLO si vino en el input — un update parcial (p.ej.
     // ProjectsPage.tsx editando una sola celda inline) no debe borrar los
@@ -147,12 +151,18 @@ export default createEndpoint({
 
     if (id) {
       await assertProjectCodeAvailable(pool, projectCode, id);
+      // Un proyecto que ya quedó guardado con espacios (de antes de limpiar el código al crear) se corrige solo al guardarlo, aunque sea un campo suelto: sus
+      // tableros, tareas y demás datos se pasan al código limpio igual que en un renombrado. Sin esto, el proyecto quedaría con el código limpio y sus datos con el sucio.
+      const guardado = (await Projects.findOne({ id, fields: ['projectCode'] }))?.projectCode;
       await Projects.update({ id, record: updateFields });
 
       // Collect all codes that need cascading
       const codesToCascade: string[] = [];
       if (oldProjectCode && oldProjectCode !== projectCode) {
         codesToCascade.push(oldProjectCode);
+      }
+      if (guardado && guardado !== projectCode && guardado.trim() === projectCode && !codesToCascade.includes(guardado)) {
+        codesToCascade.push(guardado);
       }
       if (additionalOldCodes) {
         for (const c of additionalOldCodes) {
@@ -191,7 +201,7 @@ export default createEndpoint({
     const calendarBoard = await Boards.create({
       record: {
         boardName: 'Calendario',
-        projectCode: input.projectCode,
+        projectCode,
         boardOrder: 0,
         boardType: 'calendar',
       } as any,
@@ -202,7 +212,7 @@ export default createEndpoint({
     const timelineBoard = await Boards.create({
       record: {
         boardName: 'Timeline',
-        projectCode: input.projectCode,
+        projectCode,
         boardOrder: 0,
         boardType: 'pm',
       } as any,
@@ -223,7 +233,7 @@ export default createEndpoint({
     await Tasks.bulkCreate({
       records: DEFAULT_TASKS.map((taskName, order) => ({
         taskName,
-        projectCode: input.projectCode,
+        projectCode,
         boardName: 'Timeline',
         boardId: timelineBoardId,
         status: 'Pendiente',
