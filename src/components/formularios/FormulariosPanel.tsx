@@ -375,7 +375,8 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
     if (!elegido) return;
     setTrabajando(true);
     try {
-      await vincularFormularioTablero({ formularioId: detalle.id, boardId: elegido });
+      const r = await vincularFormularioTablero({ formularioId: detalle.id, boardId: elegido });
+      if (r.columnasCreadas) toast.success(`Se agregaron ${r.columnasCreadas} columnas al tablero`);
       setCambiando(false);
       onCambio();
     } catch (err) {
@@ -390,7 +391,7 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
     setTrabajando(true);
     try {
       const r = await crearTableroParaFormulario({ formularioId: detalle.id, nombre: nombreNuevo.trim() });
-      toast.success(`Tablero «${r.nombre}» creado y vinculado`);
+      toast.success(`Tablero «${r.nombre}» creado y vinculado, con ${r.columnasCreadas} columnas`);
       setCreando(false);
       setCambiando(false);
       setTableros(null);
@@ -457,7 +458,7 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          Cada persona queda como una fila «Pendiente» y cada pregunta como una columna, igual que con un formulario de Fillout vinculado. Pasar dos veces al mismo tablero no duplica; si cambias de tablero, el nuevo recibe a todas.
+          El tablero recibe todas las preguntas como columnas desde que se vincula, y cada persona que pasa queda como una fila «Pendiente», igual que con un formulario de Fillout. Pasar dos veces al mismo tablero no duplica; si cambias de tablero, el nuevo recibe a todas.
         </p>
       </CardContent>
     </Card>

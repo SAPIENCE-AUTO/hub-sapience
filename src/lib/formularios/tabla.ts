@@ -1,5 +1,5 @@
 import { explicarResultado, seleccion } from './motor';
-import type { Definicion, FotoSubida, Opcion, Pregunta, Respuestas, Resultado } from './tipos';
+import type { Condicion, Definicion, FotoSubida, Opcion, Pregunta, Respuestas, Resultado } from './tipos';
 
 /**
  * Convierte las respuestas de un formulario en una tabla: una fila por
@@ -7,6 +7,10 @@ import type { Definicion, FotoSubida, Opcion, Pregunta, Respuestas, Resultado } 
  * así cada formulario tiene las suyas sin configurar nada. Un bloque repetido
  * (un formato, un tipo de limpiador) da una columna por pregunta y por opción,
  * solo para las opciones que alguien contestó. Lo usa el Excel del panel.
+ *
+ * Con `completas` salen todas las columnas que el screener puede llegar a
+ * tener, aunque nadie haya contestado: así se arma un tablero de Reclutamiento
+ * desde que se vincula, igual que un formulario de Fillout.
  */
 
 export interface FilaRespuesta {
@@ -41,6 +45,15 @@ function opcionesDe(def: Definicion, p: Pregunta): Opcion[] {
   return [...(origen ? opcionesDe(def, origen) : []), ...(p.opcionesExtra ?? [])];
 }
 
+/** ¿La pregunta puede aparecer en esta repetición? Solo descarta lo que depende de la opción («solo especializado»). */
+function puedeAparecer(c: Condicion | undefined, instancia?: string): boolean {
+  if (!c) return true;
+  if ('instanciaEs' in c) return !!instancia && c.instanciaEs.includes(instancia);
+  if ('todas' in c) return c.todas.every((x) => puedeAparecer(x, instancia));
+  if ('alguna' in c) return c.alguna.some((x) => puedeAparecer(x, instancia));
+  return true;
+}
+
 const conOpcion = (texto: string, o?: Opcion) => (o ? texto.split('{opcion}').join(o.corto ?? o.label) : texto);
 
 function celda(def: Definicion, p: Pregunta, clave: string, resp: Respuestas): Celda {
@@ -65,7 +78,7 @@ function celda(def: Definicion, p: Pregunta, clave: string, resp: Respuestas): C
   return String(v);
 }
 
-export function columnas(def: Definicion, filas: FilaRespuesta[]): Columna[] {
+export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = false }: { completas?: boolean } = {}): Columna[] {
   const nombreFrente = (id: string) => def.frentes?.find((f) => f.id === id)?.nombre ?? id;
   const fijas: Columna[] = [
     { clave: 'nombre', tipo: 'Texto', seccion: 'Persona', titulo: 'Nombre', valor: (f) => (def.claves?.nombre ? celda(def, buscar(def, def.claves.nombre)!, def.claves.nombre, f.respuestas) : undefined) },
@@ -92,12 +105,12 @@ export function columnas(def: Definicion, filas: FilaRespuesta[]): Columna[] {
       const origen = buscar(def, s.repetirPor);
       const contestadas = new Set(filas.flatMap((f) => seleccion(f.respuestas[s.repetirPor!])));
       instancias.splice(0, 1, ...(origen ? opcionesDe(def, origen) : [])
-        .filter((o) => !o.exclusiva && contestadas.has(o.id) && (!s.repetirSolo || s.repetirSolo.includes(o.id))));
+        .filter((o) => !o.exclusiva && (completas || contestadas.has(o.id)) && (!s.repetirSolo || s.repetirSolo.includes(o.id))));
     }
     for (const inst of instancias) {
       const seccion = conOpcion(s.titulo ?? s.id, inst);
       for (const p of s.preguntas) {
-        if (yaFijas.has(p.id)) continue;
+        if (yaFijas.has(p.id) || !puedeAparecer(p.mostrarSi, inst?.id)) continue;
         const clave = inst ? `${p.id}@${inst.id}` : p.id;
         const titulo = conOpcion(p.texto, inst);
         if (p.tipo === 'matriz') {
@@ -117,6 +130,6 @@ export function columnas(def: Definicion, filas: FilaRespuesta[]): Columna[] {
     }
   }
 
-  // Fuera las columnas que nadie contestó (preguntas que solo aparecen para un formato que no salió).
-  return [...fijas, ...deSecciones.filter((c) => filas.some((f) => c.valor(f) !== undefined))];
+  // Sin `completas`, fuera las columnas que nadie contestó (preguntas de un formato que no salió).
+  return [...fijas, ...(completas ? deSecciones : deSecciones.filter((c) => filas.some((f) => c.valor(f) !== undefined)))];
 }

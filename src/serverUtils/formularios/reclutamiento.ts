@@ -61,22 +61,19 @@ function nombreColumna(c: Columna): string {
   return c.clave.includes('@') ? `${c.seccion} · ${c.titulo}` : c.titulo;
 }
 
-export async function pasarAlReclutamiento(
-  formulario: { id: string; titulo: string; definicion: Definicion; vinculo: Vinculo },
-  filas: (FilaRespuesta & { id: string })[],
-  senderEmail?: string,
-): Promise<{ pasadas: number; yaEstaban: number; columnasCreadas: number }> {
-  const { vinculo } = formulario;
-  const ya = await respuestasYaPasadas(filas.map((f) => f.id), vinculo.boardId);
-  const nuevas = filas.filter((f) => !ya.has(f.id));
-  if (nuevas.length === 0) return { pasadas: 0, yaEstaban: ya.size, columnasCreadas: 0 };
+/** Todas las columnas que el screener puede tener en un tablero (nombre y celular van en las columnas base). */
+export function columnasParaTablero(def: Definicion): Columna[] {
+  return columnas(def, [], { completas: true }).filter((c) => c.clave !== 'nombre' && c.clave !== 'celular');
+}
 
-  const todas = columnas(formulario.definicion, nuevas);
-  const colNombre = todas.find((c) => c.clave === 'nombre');
-  const colCelular = todas.find((c) => c.clave === 'celular');
-  const cols = todas.filter((c) => c !== colNombre && c !== colCelular);
-
-  // ── columnas del tablero: reusar las del vínculo, crear las que falten ──
+/**
+ * Crea en el tablero las columnas que falten, en el orden del screener, y
+ * guarda el mapa clave → columna en el vínculo. Las que ya existen (aunque las
+ * hayan renombrado) se reusan.
+ */
+export async function asegurarColumnas(
+  formularioId: string, vinculo: Vinculo, cols: Columna[],
+): Promise<{ mapa: Record<string, string>; creadas: number }> {
   const { records: existentes } = await BoardColumns.findAll({
     filters: { boardId: vinculo.boardId }, limit: 1000, fields: ['id', 'columnName', 'columnType', 'deletedAt'],
   });
@@ -97,7 +94,25 @@ export async function pasarAlReclutamiento(
     const { records } = await BoardColumns.bulkCreate({ records: registros.slice(i, i + 100) });
     records.forEach((r, j) => { mapa[porCrear[i + j].clave] = r.id; });
   }
-  await pool.query(`update formularios set vinculo = $2, updated_at = now() where id = $1`, [formulario.id, JSON.stringify({ ...vinculo, columnas: mapa })]);
+  await pool.query(`update formularios set vinculo = $2, updated_at = now() where id = $1`, [formularioId, JSON.stringify({ ...vinculo, columnas: mapa })]);
+  return { mapa, creadas: registros.length };
+}
+
+export async function pasarAlReclutamiento(
+  formulario: { id: string; titulo: string; definicion: Definicion; vinculo: Vinculo },
+  filas: (FilaRespuesta & { id: string })[],
+  senderEmail?: string,
+): Promise<{ pasadas: number; yaEstaban: number; columnasCreadas: number }> {
+  const { vinculo } = formulario;
+  const ya = await respuestasYaPasadas(filas.map((f) => f.id), vinculo.boardId);
+  const nuevas = filas.filter((f) => !ya.has(f.id));
+  if (nuevas.length === 0) return { pasadas: 0, yaEstaban: ya.size, columnasCreadas: 0 };
+
+  const todas = columnas(formulario.definicion, nuevas);
+  const colNombre = todas.find((c) => c.clave === 'nombre');
+  const colCelular = todas.find((c) => c.clave === 'celular');
+  const cols = todas.filter((c) => c !== colNombre && c !== colCelular);
+  const { mapa, creadas } = await asegurarColumnas(formulario.id, vinculo, cols);
 
   // ── una fila por persona ──
   for (const f of nuevas) {
@@ -137,5 +152,5 @@ export async function pasarAlReclutamiento(
     entityType: 'recruitment', groupId: '', senderEmail: senderEmail ?? '', timestamp: new Date().toISOString(),
   }).catch(() => {});
 
-  return { pasadas: nuevas.length, yaEstaban: ya.size, columnasCreadas: registros.length };
+  return { pasadas: nuevas.length, yaEstaban: ya.size, columnasCreadas: creadas };
 }
