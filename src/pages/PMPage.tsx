@@ -1530,6 +1530,7 @@ export default function PMPage({ initialSection = 'timelines', onSectionChange }
                           e.id === evId ? { ...e, [field]: value || undefined } : e
                         ));
                       }}
+                      onEventsChange={setEvents}
                       onInviteStatusChanged={(evId) => {
                         setEvents(prev => prev.map(e => e.id === evId ? { ...e, inviteStatus: 'Por actualizar' } : e));
                       }}

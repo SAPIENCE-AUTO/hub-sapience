@@ -116,6 +116,15 @@ EXTRA_COLUMNS = {
     'Projects': [('visibleBudgetRubros', 'visible_budget_rubros', 'text', 'text'),
                  ('clientId', 'client_id', 'uuid', 'link', dict(target='clients')),
                  ('dealAsignado', 'deal_asignado_id', 'uuid', 'link', dict(target='deals'))],
+    # `rowOrder` (oct 2026): el lugar de cada evento dentro de su grupo en la
+    # lista de eventos del proyecto, para poder reordenarlos arrastrando (igual
+    # que Tasks.order y RecruitmentRows.rowOrder). CalendarEvents nunca tuvo un
+    # orden propio: salían por createdAt. Nulo = sin acomodar a mano: va al
+    # final de su grupo, en orden de creación (src/lib/ordenFilas.ts). La
+    # migración sobre la tabla ya existente vive en
+    # server/scripts/add-calendar-events-row-order.ts (ALTER TABLE, no se
+    # ejecuta sola).
+    'CalendarEvents': [('rowOrder', 'row_order', 'numeric', 'number')],
 }
 
 # Índice único agregado directamente en Supabase después de la carga inicial

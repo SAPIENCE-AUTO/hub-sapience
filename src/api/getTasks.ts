@@ -9,7 +9,7 @@ const dedup = <T extends { id: string }>(a: T[], b: T[]): T[] => {
 };
 
 const TASK_FIELDS = ['taskName', 'projectCode', 'boardName', 'status', 'assignedTo', 'startDate', 'endDate', 'parentTaskId', 'order', 'notes', 'boardId', 'deletedAt'] as const;
-const EVENT_FIELDS = ['eventName', 'projectCode', 'calendarName', 'eventDate', 'durationHours', 'location', 'attendees', 'inviteSent', 'notes', 'parentEventId', 'inviteStatus', 'outlookEventId', 'outlookEventLink', 'inviteBodyHtml', 'inviteEmails', 'boardId', 'restringirReenvio'] as const;
+const EVENT_FIELDS = ['eventName', 'projectCode', 'calendarName', 'eventDate', 'durationHours', 'location', 'attendees', 'inviteSent', 'notes', 'parentEventId', 'inviteStatus', 'outlookEventId', 'outlookEventLink', 'inviteBodyHtml', 'inviteEmails', 'boardId', 'restringirReenvio', 'rowOrder'] as const;
 
 const taskSchema = z.object({
   id: z.string(),
@@ -45,6 +45,7 @@ const eventSchema = z.object({
   inviteBodyHtml: z.string().optional(),
   inviteEmails: z.string().optional(),
   restringirReenvio: z.boolean().optional(),
+  rowOrder: z.number().optional(),
   hasZoom: z.boolean().optional(),
   zoomNeedsUpdate: z.boolean().optional(),
 });
@@ -159,6 +160,7 @@ export default createEndpoint({
           inviteBodyHtml: ev.inviteBodyHtml,
           inviteEmails: ev.inviteEmails,
           restringirReenvio: ev.restringirReenvio ?? false,
+          rowOrder: ev.rowOrder ?? undefined,
           hasZoom: zoomByEventId.get(ev.id)?.hasZoom ?? false,
           zoomNeedsUpdate: zoomByEventId.get(ev.id)?.zoomNeedsUpdate ?? false,
         })),
@@ -252,6 +254,7 @@ export default createEndpoint({
         inviteBodyHtml: ev.inviteBodyHtml,
         inviteEmails: ev.inviteEmails,
         restringirReenvio: ev.restringirReenvio ?? false,
+        rowOrder: ev.rowOrder ?? undefined,
         hasZoom: zoomByEventId.get(ev.id)?.hasZoom ?? false,
         zoomNeedsUpdate: zoomByEventId.get(ev.id)?.zoomNeedsUpdate ?? false,
       })),

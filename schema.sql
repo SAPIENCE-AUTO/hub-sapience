@@ -234,6 +234,7 @@ create table calendar_events (
   invite_emails                 text,
   board_id                      text,
   restringir_reenvio            boolean,
+  row_order                     numeric,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now(),
   constraint calendar_events_invite_status_chk check ("invite_status" is null or "invite_status" in ('Por crear', 'Por actualizar', 'Por cancelar', 'Enviado', 'Cancelado'))

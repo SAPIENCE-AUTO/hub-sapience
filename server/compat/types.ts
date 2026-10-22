@@ -220,6 +220,7 @@ export interface CalendarEventsRecordType {
   inviteEmails?: string;
   boardId?: string;
   restringirReenvio?: boolean;
+  rowOrder?: number;
   createdAt?: string;
   updatedAt?: string;
 }

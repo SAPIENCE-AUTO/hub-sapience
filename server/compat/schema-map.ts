@@ -247,6 +247,7 @@ export const SCHEMA: Record<string, TableDef> = {
       inviteEmails: { col: 'invite_emails', kind: 'text' },
       boardId: { col: 'board_id', kind: 'text' },
       restringirReenvio: { col: 'restringir_reenvio', kind: 'boolean' },
+      rowOrder: { col: 'row_order', kind: 'number' },
       createdAt: { col: 'created_at', kind: 'datetime' },
       updatedAt: { col: 'updated_at', kind: 'datetime' }
     },

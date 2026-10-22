@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { saveCalendarEvent, duplicateRows, syncOutlookInvite, syncZoomMeeting } from 'zite-endpoints-sdk';
+import { saveCalendarEvent, duplicateRows, syncOutlookInvite, syncZoomMeeting, reorderCalendarEvents } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, CornerDownRight, FolderPlus, X, ClipboardCopy, Loader2, RefreshCw, Check, ChevronsDownUp, ChevronsUpDown, Lock } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, CornerDownRight, FolderPlus, X, ClipboardCopy, Loader2, RefreshCw, Check, ChevronsDownUp, ChevronsUpDown, Lock, GripVertical } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { DynamicColumnHeaders, DynamicColumnCells, type DynCols } from '../DynamicColumns';
@@ -16,6 +16,7 @@ import { ChildSubTable } from '../table/ChildSubTable';
 import { getLocationColor } from '../WeeklyCalendar';
 import { ColumnFilterPopover } from '../ColumnFilterPopover';
 import type { CalEvent } from './pmTypes';
+import { ordenarFilas, ordenTrasSoltar, quedaDondeEstaba, type DondeSoltar } from '@/lib/ordenFilas';
 
 // Emails "asistentes" llegan pegados de Outlook/Excel con formatos mixtos:
 // "correo@x.com", "Nombre Apellido <correo@x.com>", separados por coma, punto
@@ -216,7 +217,7 @@ function EmailsCell({ ev, onRefresh, onInviteStatusChanged }: { ev: CalEvent; on
   );
 }
 
-export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDelete, onSaveEventName, onQuickCreate, onCreateGroup, dynCols, childDynCols, groupDynCols, boardId, childLabel, onChildLabelChange, columnFilters, setColFilter, colUniqueValues, onRefresh, onEventsUpdate, onInviteStatusChanged, onGroupStructureChanged }: {
+export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDelete, onSaveEventName, onQuickCreate, onCreateGroup, dynCols, childDynCols, groupDynCols, boardId, childLabel, onChildLabelChange, columnFilters, setColFilter, colUniqueValues, onRefresh, onEventsUpdate, onEventsChange, onInviteStatusChanged, onGroupStructureChanged }: {
   events: CalEvent[]; onEdit: (e: CalEvent) => void; onOpenInvite: (e: CalEvent) => void; onDelete: (id: string) => void; onBulkDelete: (ids: string[]) => void;
   onSaveEventName: (id: string, name: string) => void;
   onQuickCreate: (name: string, parentId?: string, groupId?: string) => void;
@@ -229,6 +230,8 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
   colUniqueValues?: (col: string) => string[];
   onRefresh?: () => void;
   onEventsUpdate?: (evId: string, field: 'location' | 'attendees', value: string) => void;
+  /** Cambia la lista de eventos del padre (para acomodar el orden al instante al arrastrar una fila). */
+  onEventsChange: (updater: (prev: CalEvent[]) => CalEvent[]) => void;
   onInviteStatusChanged?: (evId: string) => void;
   onGroupStructureChanged?: () => void;
 }) {
@@ -252,6 +255,15 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
   };
   const [dragGroupId,    setDragGroupId]    = useState<string | null>(null);
   const [dropTargetId,   setDropTargetId]   = useState<string | null>(null);
+  const [dragRowId,      setDragRowId]      = useState<string | null>(null);
+  const [dropRowGroupId, setDropRowGroupId] = useState<string | null>(null);
+  const dropRowGroupRef = useRef<string | null>(null);
+  const dropTargetRef   = useRef<{ rowId: string; position: 'before' | 'after' } | null>(null);
+  const dropLineRef     = useRef<HTMLDivElement>(null);
+  const dragRowIdRef    = useRef<string | null>(null);
+  const dragClientYRef  = useRef<number>(0);
+  const rafIdRef        = useRef<number | null>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   const [localFields,    setLocalFields]    = useState<Map<string, { location?: string; attendees?: string }>>(new Map());
   const [localReenvio,   setLocalReenvio]   = useState<Map<string, boolean>>(new Map());
   const [bulkSyncing,    setBulkSyncing]    = useState(false);
@@ -377,17 +389,109 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
     if (gid && grouped[gid]) grouped[gid].push(ev);
     else grouped.__none__.push(ev);
   }
+  for (const gid of Object.keys(grouped)) grouped[gid] = ordenarFilas(grouped[gid]);
 
   const toggleGroup = (id: string) => setExpandedGroups(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleEvent = (id: string) => setExpandedEvents(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  const hideDropLine = () => { if (dropLineRef.current) dropLineRef.current.style.opacity = '0'; };
+  const cancelRaf = () => { if (rafIdRef.current !== null) { cancelAnimationFrame(rafIdRef.current); rafIdRef.current = null; } };
+  const endRowDrag = () => { setDragRowId(null); setDropRowGroupId(null); dropRowGroupRef.current = null; dragRowIdRef.current = null; };
+
+  /** Suelta una fila de evento en un grupo: antes/después de otra fila, o al final (sobre el encabezado). Acomoda al instante y guarda; si falla, lo regresa. */
+  const soltarFila = async (draggedId: string, targetGroupId: string, donde: DondeSoltar) => {
+    const arrastrado = topLevel.find(e => e.id === draggedId);
+    if (!arrastrado) return;
+    const origenId  = getEvtGroupId(draggedId) ?? '__none__';
+    const grupoDestino = grouped[targetGroupId] ?? [];
+    if (origenId === targetGroupId && quedaDondeEstaba(grupoDestino, arrastrado, donde)) return;
+
+    const updates  = ordenTrasSoltar(grupoDestino, arrastrado, donde);
+    const nuevos   = new Map(updates.map(u => [u.id, u.rowOrder]));
+    const previos  = new Map(events.filter(e => nuevos.has(e.id)).map(e => [e.id, e.rowOrder]));
+    onEventsChange(prev => prev.map(e => nuevos.has(e.id) ? { ...e, rowOrder: nuevos.get(e.id) } : e));
+    try {
+      if (origenId !== targetGroupId) {
+        // Se le quitan TODOS sus grupos (no solo el que se detecta) para no dejar asignaciones fantasma, igual que en la lista de tareas.
+        await Promise.all(groups.filter(g => groupDynCols.getCellVal(draggedId, g.id)?.textValue === '1').map(g => groupDynCols.setCellVal(draggedId, g.id, { textValue: undefined })));
+        if (targetGroupId !== '__none__') await groupDynCols.setCellVal(draggedId, targetGroupId, { textValue: '1' });
+        toast.success('Evento movido al grupo');
+      }
+      await reorderCalendarEvents({ updates });
+    } catch {
+      onEventsChange(prev => prev.map(e => previos.has(e.id) ? { ...e, rowOrder: previos.get(e.id) } : e));
+      toast.error('No se pudo guardar el orden');
+    }
+  };
+
   const handleGroupDrop = async (e: React.DragEvent, targetGroupId: string) => {
     e.preventDefault();
+    if (e.dataTransfer.types.includes('rowid')) {
+      dropTargetRef.current = null; cancelRaf(); hideDropLine();
+      const rowId = e.dataTransfer.getData('rowId');
+      endRowDrag();
+      if (rowId) await soltarFila(rowId, targetGroupId, 'final');
+      return;
+    }
     if (!dragGroupId || dragGroupId === targetGroupId || targetGroupId === '__none__') return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const side = e.clientY < rect.top + rect.height / 2 ? 'left' : 'right';
     await groupDynCols.reorderColumns(dragGroupId, targetGroupId, side);
     setDragGroupId(null); setDropTargetId(null);
+  };
+
+  // Arrastrando una fila por la tabla: una línea marca dónde caería (antes o después de la fila que está debajo del cursor). Se dibuja a mano, sin
+  // re-render, porque el cursor se mueve muy rápido.
+  const containerDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('rowid')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    dragClientYRef.current = e.clientY;
+    if (rafIdRef.current !== null) return;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const container = tableContainerRef.current;
+      const dropLine  = dropLineRef.current;
+      const draggedId = dragRowIdRef.current;
+      if (!container || !dropLine || !draggedId) return;
+      const clientY = dragClientYRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const candidates = Array.from(container.querySelectorAll<HTMLTableRowElement>('tr[data-row-id]'))
+        .filter(tr => tr.getAttribute('data-row-id') !== draggedId);
+      if (candidates.length === 0) { hideDropLine(); return; }
+      if (dropRowGroupRef.current) { dropRowGroupRef.current = null; setDropRowGroupId(null); }
+      let targetId = candidates[candidates.length - 1].getAttribute('data-row-id')!;
+      let position: 'before' | 'after' = 'after';
+      let lineY = candidates[candidates.length - 1].getBoundingClientRect().bottom;
+      for (const tr of candidates) {
+        const rect = tr.getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) { targetId = tr.getAttribute('data-row-id')!; position = 'before'; lineY = rect.top; break; }
+      }
+      dropTargetRef.current = { rowId: targetId, position };
+      const localY = lineY - containerRect.top + container.scrollTop;
+      dropLine.style.transform = `translateY(${localY - 1.5}px)`;
+      dropLine.style.opacity   = '1';
+    });
+  };
+
+  const containerDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('rowid')) return;
+    e.preventDefault();
+    const srcRowId = e.dataTransfer.getData('rowId');
+    const cur = dropTargetRef.current;
+    dropTargetRef.current = null; cancelRaf(); hideDropLine();
+    endRowDrag();
+    if (!srcRowId || !cur || srcRowId === cur.rowId) return;
+    const targetEv = topLevel.find(ev => ev.id === cur.rowId);
+    if (!targetEv) return;
+    soltarFila(srcRowId, getEvtGroupId(targetEv.id) ?? '__none__', { filaId: targetEv.id, posicion: cur.position });
+  };
+
+  const containerDragLeave = (e: React.DragEvent) => {
+    const container = tableContainerRef.current;
+    if (container && !container.contains(e.relatedTarget as Node)) {
+      dropTargetRef.current = null; cancelRaf(); hideDropLine();
+    }
   };
 
   const renderEventRow = (ev: CalEvent) => {
@@ -399,9 +503,21 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
     const rowColor = evtGroupId ? getGroupColor(evtGroupColorId) : undefined;
     return (
       <React.Fragment key={ev.id}>
-        <tr className={`${selectedIds.has(ev.id) ? 'bg-primary/5' : 'bg-card'} hover:bg-muted/20 border-b border-border/30 group`}>
-          <td className={`pl-2 pr-0 py-1.5 w-8 sticky left-0 z-10 ${selectedIds.has(ev.id) ? 'bg-primary/5' : 'bg-card'} group-hover:bg-muted transition-colors`} style={{ borderLeft: rowColor ? `3px solid ${rowColor}` : '3px solid transparent' }}>
-            <Checkbox checked={selectedIds.has(ev.id)} onCheckedChange={() => toggleSelect(ev.id)} className="h-3.5 w-3.5" />
+        <tr data-row-id={ev.id} className={`${selectedIds.has(ev.id) ? 'bg-primary/5' : 'bg-card'} hover:bg-muted/20 border-b border-border/30 group${dragRowId === ev.id ? ' opacity-25' : ''}`}>
+          <td className={`pl-1 pr-0 py-1.5 w-8 sticky left-0 z-10 ${selectedIds.has(ev.id) ? 'bg-primary/5' : 'bg-card'} group-hover:bg-muted transition-colors`} style={{ borderLeft: rowColor ? `3px solid ${rowColor}` : '3px solid transparent' }}>
+            <div className="flex items-center gap-0.5 h-full">
+              <div
+                draggable
+                title="Arrastra para reordenar"
+                onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('rowId', ev.id); e.dataTransfer.effectAllowed = 'move'; setDragRowId(ev.id); dragRowIdRef.current = ev.id; }}
+                onDragEnd={() => { cancelRaf(); hideDropLine(); dropTargetRef.current = null; endRowDrag(); }}
+                onClick={e => e.stopPropagation()}
+                className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground transition-all flex-shrink-0 py-1"
+              >
+                <GripVertical className="w-3 h-3" />
+              </div>
+              <Checkbox checked={selectedIds.has(ev.id)} onCheckedChange={() => toggleSelect(ev.id)} className="h-3.5 w-3.5" />
+            </div>
           </td>
           <td className={`px-2 py-1.5 sticky z-10 ${selectedIds.has(ev.id) ? 'bg-primary/5' : 'bg-card'} group-hover:bg-muted transition-colors border-r border-border/40`} style={{ width: nameCol.width, maxWidth: nameCol.width, left: 35 }}>
             <div className="flex items-center gap-1.5">
@@ -757,7 +873,21 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
           {expandedGroups.size > 0 ? 'Colapsar todos' : 'Expandir todos'}
         </Button>
       </div>
-      <div className="bg-card border rounded-lg overflow-auto max-h-[calc(100vh-360px)]">
+      <div ref={tableContainerRef}
+        className="bg-card border rounded-lg overflow-auto max-h-[calc(100vh-360px)]"
+        style={{ position: 'relative' }}
+        onDragOver={containerDragOver}
+        onDrop={containerDrop}
+        onDragLeave={containerDragLeave}
+      >
+        <div ref={dropLineRef} style={{
+          position: 'absolute', left: 0, right: 0, height: 3, pointerEvents: 'none', opacity: 0, zIndex: 50,
+          background: 'hsl(var(--primary))', borderRadius: 9999, boxShadow: '0 0 10px hsl(var(--primary) / 0.6)',
+          willChange: 'transform, opacity', transform: 'translateY(0)', transition: 'opacity 0.08s',
+        }}>
+          <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', width: 10, height: 10, borderRadius: '50%', background: 'hsl(var(--primary))', border: '2px solid hsl(var(--card))' }} />
+          <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', width: 10, height: 10, borderRadius: '50%', background: 'hsl(var(--primary))', border: '2px solid hsl(var(--card))' }} />
+        </div>
         <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + 128 + 128 + 96 + 90 + 96 + 44 + dynCols.columns.filter(c => visibleColIds.has(c.id)).reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}>
           <colgroup>
             <col style={{ width: 32 }} />
@@ -833,10 +963,19 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
                     itemIds={eventsInGroup.map(e => e.id)} selectedIds={selectedIds}
                     onToggleSelectAll={(ids, select) => setSelectedIds(prev => { const n = new Set(prev); ids.forEach(id => select ? n.add(id) : n.delete(id)); return n; })}
                     onDragStart={id => setDragGroupId(id)}
-                    onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
+                    onDragOver={(e, id) => {
+                      e.preventDefault();
+                      if (e.dataTransfer.types.includes('rowid')) {
+                        cancelRaf(); hideDropLine();
+                        if (dropTargetRef.current) dropTargetRef.current = null;
+                        if (dropRowGroupRef.current !== id) { dropRowGroupRef.current = id; setDropRowGroupId(id); }
+                      } else {
+                        setDropTargetId(id);
+                      }
+                    }}
                     onDragEnd={() => { setDragGroupId(null); setDropTargetId(null); }}
                     onDrop={handleGroupDrop}
-                    isDragOver={dropTargetId === g.id && dragGroupId !== g.id}
+                    isDragOver={(dropTargetId === g.id && dragGroupId !== g.id) || dropRowGroupId === g.id}
                     onGroupStructureChanged={!isNone ? onGroupStructureChanged : undefined}
                   />
                   {isExpanded && eventsInGroup.length === 0 && (

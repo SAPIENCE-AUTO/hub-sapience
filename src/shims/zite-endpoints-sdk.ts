@@ -426,6 +426,7 @@ export const renameBoard = (input?: any): Promise<any> => call('renameBoard', in
 export const renameChatConversation = (input?: any): Promise<any> => call('renameChatConversation', input);
 export const reorderInternalViews = (input?: any): Promise<any> => call('reorderInternalViews', input);
 export const reorderMisPendientes = (input?: any): Promise<any> => call('reorderMisPendientes', input);
+export const reorderCalendarEvents = (input?: any): Promise<any> => call('reorderCalendarEvents', input);
 export const reorderRecruitmentRows = (input?: any): Promise<any> => call('reorderRecruitmentRows', input);
 export const reorderTasks = (input?: any): Promise<any> => call('reorderTasks', input);
 export const restoreFromTrash = (input?: any): Promise<any> => call('restoreFromTrash', input);
