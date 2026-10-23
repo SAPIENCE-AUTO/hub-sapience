@@ -52,6 +52,7 @@ export function PropuestaIA({ alcance, onCerrar }: { alcance: AlcanceIA; onCerra
   const [pedido, setPedido] = useState('');
   const [propuesta, setPropuesta] = useState<Propuesta | null>(null);
   const llamada = useLlamadaLarga();
+  const enCurso = useRef<{ cancelar: () => void } | null>(null);
   const pedidoRef = useRef<HTMLTextAreaElement>(null);
   const esPregunta = 'pregunta' in alcance;
   const despues = useMemo(() => (propuesta ? aplicarParche(def, propuesta.parche) : null), [propuesta, def]);
@@ -61,11 +62,15 @@ export function PropuestaIA({ alcance, onCerrar }: { alcance: AlcanceIA; onCerra
   const proponer = async () => {
     if (!pedido.trim()) return;
     try {
-      const r = await llamada.correr<Propuesta>(generateFormularioCambio({ formularioId: ia.formularioId, definicion: def, alcance, pedido: pedido.trim() }));
+      const c = generateFormularioCambio({ formularioId: ia.formularioId, definicion: def, alcance, pedido: pedido.trim() });
+      enCurso.current = c;
+      const r = await llamada.correr<Propuesta>(c);
       ia.contarUso();
       setPropuesta(r);
     } catch (err) {
-      toast.error((err as Error).message || 'La IA no pudo proponer el cambio.');
+      if ((err as { code?: string }).code !== 'DETENIDO') toast.error((err as Error).message || 'La IA no pudo proponer el cambio.');
+    } finally {
+      enCurso.current = null;
     }
   };
 
@@ -106,7 +111,7 @@ export function PropuestaIA({ alcance, onCerrar }: { alcance: AlcanceIA; onCerra
             className="w-full resize-y rounded-md border bg-white px-2.5 py-1.5 text-[13px] leading-snug outline-none focus:border-[#0F3D4D]/50"
           />
           {llamada.corriendo
-            ? <div className="mt-2"><AvanceIA pasos={llamada.pasos} segundos={llamada.segundos} /></div>
+            ? <div className="mt-2"><AvanceIA pasos={llamada.pasos} segundos={llamada.segundos} onDetener={() => enCurso.current?.cancelar()} /></div>
             : (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button type="button" className={botonTeal} disabled={!pedido.trim()} onClick={proponer}>Ver la propuesta</button>

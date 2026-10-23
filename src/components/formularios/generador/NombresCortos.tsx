@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { generateFormularioNombres } from 'zite-endpoints-sdk';
 import { useLlamadaLarga } from '@/components/propuestas/useLlamadaLarga';
@@ -19,18 +19,23 @@ export function NombresCortos({ def, ia, onPoner }: {
 }) {
   const faltan = useMemo(() => sinNombreCorto(def).length, [def]);
   const llamada = useLlamadaLarga();
+  const enCurso = useRef<{ cancelar: () => void } | null>(null);
   if (!faltan && !llamada.corriendo) return null;
 
   const poner = async () => {
     try {
-      const r = await llamada.correr<{ nombres: Record<string, string> }>(generateFormularioNombres({ formularioId: ia.formularioId, definicion: def }));
+      const c = generateFormularioNombres({ formularioId: ia.formularioId, definicion: def });
+      enCurso.current = c;
+      const r = await llamada.correr<{ nombres: Record<string, string> }>(c);
       ia.contarUso();
       const n = Object.keys(r.nombres).length;
       if (!n) return;
       onPoner(r.nombres);
       toast.success(`${n === 1 ? 'Nombre corto puesto' : `${n} nombres cortos puestos`}. ⌘Z los quita.`);
     } catch (err) {
-      toast.error((err as Error).message || 'La IA no pudo poner los nombres.');
+      if ((err as { code?: string }).code !== 'DETENIDO') toast.error((err as Error).message || 'La IA no pudo poner los nombres.');
+    } finally {
+      enCurso.current = null;
     }
   };
 
@@ -40,7 +45,7 @@ export function NombresCortos({ def, ia, onPoner }: {
         {faltan === 1 ? '1 pregunta sin nombre corto' : `${faltan} preguntas sin nombre corto`}: en el tablero, su columna llevaría la pregunta completa.
       </span>
       {llamada.corriendo
-        ? <div className="w-full"><AvanceIA pasos={llamada.pasos} segundos={llamada.segundos} /></div>
+        ? <div className="w-full"><AvanceIA pasos={llamada.pasos} segundos={llamada.segundos} onDetener={() => enCurso.current?.cancelar()} /></div>
         : <button type="button" className={botonSecundario} onClick={poner}><MarcaIA />Ponerlos con IA</button>}
     </div>
   );

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getFormularios, createFormulario, getFormularioDetail,
-  setFormularioEstado, deleteFormularioRespuestas, deleteFormulario,
+  setFormularioEstado, deleteFormularioRespuestas, deleteFormulario, duplicateFormulario,
 } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, FileText, Loader2, Plus, Smartphone, Users, Workflow } from 'lucide-react';
+import { ArrowLeft, CopyPlus, FileText, Loader2, MoreHorizontal, Plus, Smartphone, Trash2, Users, Workflow } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { TEAL, EstadoPill } from '@/lib/toolColors';
 import { PLANTILLAS } from '@/lib/formularios/plantillas';
 import type { Definicion } from '@/lib/formularios/tipos';
@@ -60,7 +61,7 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
   const [todos, setTodos] = useState<FormularioRow[] | null>(null);
   const [filtroBase, setFiltroBase] = useState('');
   const [creando, setCreando] = useState(false);
-  const [confirmar, setConfirmar] = useState<'pruebas' | 'formulario' | null>(null);
+  const [confirmar, setConfirmar] = useState<{ que: 'pruebas' } | { que: 'formulario'; id: string; titulo: string } | null>(null);
 
   const cargarLista = async () => {
     setCargando(true);
@@ -128,14 +129,27 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
     await Promise.all([cargarDetalle(detalle.id), cargarLista()]);
   };
 
-  const borrarFormulario = async () => {
-    if (!detalle) return;
+  const borrarFormulario = async (id: string) => {
     try {
-      await deleteFormulario({ formularioId: detalle.id });
-      setSeleccionado(null);
+      await deleteFormulario({ formularioId: id });
+      if (seleccionado === id) setSeleccionado(null);
+      toast.success('Filtro borrado');
       await cargarLista();
     } catch (err) {
       toast.error((err as Error).message);
+    }
+  };
+
+  /** Copia como borrador nuevo (mismo screener y lo de la IA) y la abre. */
+  const duplicar = async (id: string) => {
+    const espera = toast.loading('Duplicando…');
+    try {
+      const r = await duplicateFormulario({ formularioId: id });
+      toast.success('Copia creada: está en borrador', { id: espera });
+      await cargarLista();
+      setSeleccionado(r.id);
+    } catch (err) {
+      toast.error((err as Error).message || 'No se pudo duplicar.', { id: espera });
     }
   };
 
@@ -151,13 +165,32 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
           {!cargando && lista.length === 0 && <p className="text-sm text-muted-foreground">Todavía no hay formularios en este proyecto.</p>}
           <div className="grid gap-3 sm:grid-cols-2">
             {lista.map((f) => (
-              <button key={f.id} onClick={() => setSeleccionado(f.id)} className="rounded-lg border bg-white p-4 text-left transition-colors hover:border-[#0F3D4D]/50 hover:bg-[#0F3D4D]/[0.03]">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-medium leading-snug">{f.titulo}</span>
-                  <EstadoPill estado={f.estado} />
-                </div>
-                <p className="mt-1.5 text-xs text-muted-foreground">{f.respuestasPrueba + f.respuestasReales} respuestas · {f.califican} califican</p>
-              </button>
+              <div key={f.id} className="relative rounded-lg border bg-white transition-colors hover:border-[#0F3D4D]/50 hover:bg-[#0F3D4D]/[0.03]">
+                <button onClick={() => setSeleccionado(f.id)} className="w-full p-4 pr-11 text-left">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-sm font-medium leading-snug">{f.titulo}</span>
+                    <EstadoPill estado={f.estado} />
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted-foreground">{f.respuestasPrueba + f.respuestasReales} respuestas · {f.califican} califican</p>
+                </button>
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" aria-label={`Más de «${f.titulo}»`} className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-[#0F3D4D]">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-60">
+                    <DropdownMenuItem onSelect={() => void duplicar(f.id)}><CopyPlus className="mr-2 h-4 w-4" />Duplicar</DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={f.respuestasReales > 0}
+                      className="text-[#D32222] focus:text-[#D32222]"
+                      onSelect={() => setConfirmar({ que: 'formulario', id: f.id, titulo: f.titulo })}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />{f.respuestasReales > 0 ? 'Tiene respuestas reales: ciérralo' : 'Borrar'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ))}
           </div>
         </div>
@@ -173,8 +206,9 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
           onEstado={cambiarEstado}
           onRecargar={() => Promise.all([cargarDetalle(detalle.id), cargarLista()])}
           onGuardado={(definicion) => setDetalle((d) => (d ? { ...d, definicion } : d))}
-          onBorrarPruebas={() => setConfirmar('pruebas')}
-          onBorrarFormulario={() => setConfirmar('formulario')}
+          onBorrarPruebas={() => setConfirmar({ que: 'pruebas' })}
+          onBorrarFormulario={() => setConfirmar({ que: 'formulario', id: detalle.id, titulo: detalle.titulo })}
+          onDuplicar={() => void duplicar(detalle.id)}
         />
       )}
 
@@ -230,16 +264,16 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
       <AlertDialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{confirmar === 'pruebas' ? '¿Borrar las respuestas de prueba?' : '¿Borrar el formulario?'}</AlertDialogTitle>
+            <AlertDialogTitle>{confirmar?.que === 'pruebas' ? '¿Borrar las respuestas de prueba?' : `¿Borrar «${confirmar?.que === 'formulario' ? confirmar.titulo : ''}»?`}</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmar === 'pruebas'
+              {confirmar?.que === 'pruebas'
                 ? 'Se borran todas las respuestas marcadas como prueba y sus fotos. No se puede deshacer.'
                 : 'Se borra el formulario, sus versiones, sus respuestas de prueba y sus fotos. El enlace deja de funcionar. No se puede deshacer.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => (confirmar === 'pruebas' ? borrarPruebas() : borrarFormulario())}>Borrar</AlertDialogAction>
+            <AlertDialogAction onClick={() => (confirmar?.que === 'pruebas' ? borrarPruebas() : confirmar && void borrarFormulario(confirmar.id))}>Borrar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -256,7 +290,7 @@ const VISTAS: { id: Vista; nombre: string; icono: typeof FileText }[] = [
   { id: 'respuestas', nombre: 'Respuestas', icono: Users },
 ];
 
-function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, onGuardado, onBorrarPruebas, onBorrarFormulario }: {
+function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, onGuardado, onBorrarPruebas, onBorrarFormulario, onDuplicar }: {
   detalle: Detalle;
   proyectoId?: string;
   onVolver: () => void;
@@ -265,6 +299,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
   onGuardado: (def: Definicion) => void;
   onBorrarPruebas: () => void;
   onBorrarFormulario: () => void;
+  onDuplicar: () => void;
 }) {
   const [vista, setVista] = useState<Vista>('documento');
   const [versiones, setVersiones] = useState(false);
@@ -347,6 +382,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
               onEstado={onEstado}
               onEstructura={gen.g ? () => { setVista('documento'); setVerEstructura(true); } : undefined}
               onVersiones={() => setVersiones(true)}
+              onDuplicar={onDuplicar}
               onBorrar={hayReales ? undefined : onBorrarFormulario}
             />
           </div>

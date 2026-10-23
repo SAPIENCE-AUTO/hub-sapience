@@ -167,7 +167,7 @@ export function EstructuraPanel({ gen, actual, regla, onCerrar }: {
       )}
 
       {gen.llamada.corriendo
-        ? <AvanceIA pasos={gen.llamada.pasos} segundos={gen.llamada.segundos} />
+        ? <AvanceIA pasos={gen.llamada.pasos} segundos={gen.llamada.segundos} onDetener={gen.detener} />
         : (
           <section className="space-y-2 rounded-xl border border-[#0F3D4D]/20 bg-[#0F3D4D]/[0.02] px-4 py-3">
             <Etiqueta>{propuesta ? '¿Qué le cambiarías?' : '¿Qué quieres cambiar de la estructura?'}</Etiqueta>

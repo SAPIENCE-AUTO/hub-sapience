@@ -163,7 +163,7 @@ export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId:
       )}
 
       {gen.llamada.corriendo
-        ? <AvanceIA pasos={gen.llamada.pasos} segundos={gen.llamada.segundos} />
+        ? <AvanceIA pasos={gen.llamada.pasos} segundos={gen.llamada.segundos} onDetener={gen.detener} />
         : (
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" className={botonTeal} disabled={!listo || ocupado} onClick={proponer}>

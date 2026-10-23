@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Check, Loader2, RotateCcw, X } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, RotateCcw, Square, X } from 'lucide-react';
 import { ALERTA, EXITO, PELIGRO, TEAL } from '@/lib/toolColors';
 import { citar } from '@/lib/formularios/palabras';
 import type { Definicion } from '@/lib/formularios/tipos';
@@ -37,11 +37,18 @@ export function AvanceEscritura({ gen, def }: { gen: GeneradorUI; def: Definicio
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <MarcaIA />
             <span className="text-sm font-semibold" style={{ color: TEAL }}>
-              {gen.logica === 'armando' ? 'Armando quién entra a cada perfil…' : errores.length && !gen.escribiendo ? 'Faltan secciones por escribir' : `Escribiendo las preguntas: ${listas} de ${ids.length} secciones`}
+              {gen.logica === 'armando' ? 'Armando quién entra a cada perfil…'
+                : gen.escribiendo ? `Escribiendo las preguntas: ${listas} de ${ids.length} secciones`
+                  : gen.detenido ? `Se detuvo: ${listas} de ${ids.length} secciones escritas` : 'Faltan secciones por escribir'}
             </span>
-            {(errores.length > 0 || gen.logica === 'error') && !gen.escribiendo && (
+            {gen.escribiendo && (
+              <button type="button" onClick={gen.detener} className="ml-auto flex items-center gap-1 rounded-md border border-[#D32222]/30 bg-white px-2 py-0.5 text-xs font-medium text-[#D32222] hover:bg-[#D32222]/5">
+                <Square className="h-3 w-3" fill="currentColor" />Detener
+              </button>
+            )}
+            {!gen.escribiendo && (errores.length > 0 || gen.logica === 'error' || gen.detenido) && (
               <button type="button" onClick={gen.reintentar} className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:bg-muted" style={{ color: TEAL }}>
-                <RotateCcw className="h-3.5 w-3.5" />Reintentar lo que falta
+                <RotateCcw className="h-3.5 w-3.5" />{gen.detenido && !errores.length ? 'Seguir escribiendo' : 'Reintentar lo que falta'}
               </button>
             )}
           </div>

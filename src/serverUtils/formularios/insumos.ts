@@ -87,6 +87,19 @@ export async function borrarArchivoInsumo(a: ArchivoInsumo): Promise<void> {
   if (error) console.error('[filtros] no se pudo borrar un insumo de Storage', error.message);
 }
 
+/** Al duplicar un filtro: sus PDF se copian a la carpeta del filtro nuevo (si uno no se puede copiar, se deja fuera). */
+export async function copiarArchivosInsumo(archivos: ArchivoInsumo[], de: string, a: string): Promise<ArchivoInsumo[]> {
+  const admin = getSupabaseAdmin().storage.from(BUCKET);
+  const copias = await Promise.all(archivos.map(async (x) => {
+    if (!x.ruta) return x;
+    const ruta = x.ruta.replace(`insumos/${de}/`, `insumos/${a}/`);
+    const { error } = await admin.copy(x.ruta, ruta);
+    if (error) { console.error('[filtros] no se pudo copiar un insumo al duplicar', x.ruta, error.message); return null; }
+    return { ...x, ruta };
+  }));
+  return copias.filter((x): x is ArchivoInsumo => !!x);
+}
+
 export async function borrarInsumosDeFormulario(formularioId: string): Promise<void> {
   const admin = getSupabaseAdmin().storage.from(BUCKET);
   const { data } = await admin.list(`insumos/${formularioId}`);

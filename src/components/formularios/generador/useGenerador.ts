@@ -47,6 +47,23 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
   const corriendo = useRef(false);
   /** La escritura está en marcha (las secciones «en fila» después de un error no cuentan como trabajando). */
   const [enMarcha, setEnMarcha] = useState(false);
+  /** Llamadas a la IA en curso, para «Detener». */
+  const enCurso = useRef(new Set<{ cancelar: () => void }>());
+  const [detenido, setDetenido] = useState(false);
+  const detenidoRef = useRef(false);
+  const seguir = <T extends { cancelar: () => void }>(c: T): T => {
+    enCurso.current.add(c);
+    void Promise.resolve(c as unknown as Promise<unknown>).catch(() => {}).finally(() => enCurso.current.delete(c));
+    return c;
+  };
+  const fueDetenido = (err: unknown) => (err as { code?: string })?.code === 'DETENIDO';
+
+  /** «Detener»: corta lo que la IA esté haciendo (estructura, secciones o lógica); lo ya escrito se queda. */
+  const detener = useCallback(() => {
+    detenidoRef.current = true;
+    setDetenido(true);
+    for (const c of enCurso.current) c.cancelar();
+  }, []);
 
   const contarUso = useCallback((n = 1) => setUso((u) => (u ? { ...u, usadas: u.usadas + n } : u)), []);
 
@@ -57,14 +74,17 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
 
   /** Etapa 1: propone la estructura, o la ajusta con un comentario (la propuesta o la de lo ya escrito). */
   const pedirEstructura = useCallback(async (pedido?: string, sobre?: 'propuesta' | 'escrito') => {
+    detenidoRef.current = false;
+    setDetenido(false);
     try {
-      const r = await llamada.correr(generateFormularioEstructura({ formularioId, pedido, sobre, definicion: sobre === 'escrito' ? editorRef.current.leer() : undefined }));
+      const r = await llamada.correr(seguir(generateFormularioEstructura({ formularioId, pedido, sobre, definicion: sobre === 'escrito' ? editorRef.current.leer() : undefined })));
       setG(r.generador);
       setProblemasEstructura(r.problemas ?? []);
       contarUso();
       return true;
     } catch (err) {
-      toast.error((err as Error).message || 'La IA no pudo armar la estructura.');
+      if (fueDetenido(err)) toast('Se detuvo. Todo quedó como estaba.');
+      else toast.error((err as Error).message || 'La IA no pudo armar la estructura.');
       return false;
     }
   }, [formularioId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -106,7 +126,7 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
     if (!e || !plan) return false;
     setSecciones((s) => ({ ...s, [id]: { estado: 'escribiendo' } }));
     try {
-      const r = await generateFormularioSeccion({ formularioId, seccionId: id, definicion: editorRef.current.leer() });
+      const r = await seguir(generateFormularioSeccion({ formularioId, seccionId: id, definicion: editorRef.current.leer() }));
       contarUso();
       // Si mientras tanto cambió la estructura, esta sección ya no va.
       if (gRef.current?.estructura?.secciones.find((s) => s.id === id) && firmaSeccion(gRef.current.estructura.secciones.find((s) => s.id === id)!) === r.firma) {
@@ -121,7 +141,7 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
       setSecciones((s) => ({ ...s, [id]: { estado: 'lista', problemas: r.problemas } }));
       return true;
     } catch (err) {
-      setSecciones((s) => ({ ...s, [id]: { estado: 'error', error: (err as Error).message || 'No se pudo escribir.' } }));
+      setSecciones((s) => ({ ...s, [id]: fueDetenido(err) ? { estado: 'esperando' } : { estado: 'error', error: (err as Error).message || 'No se pudo escribir.' } }));
       return false;
     }
   };
@@ -130,13 +150,14 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
     setLogica('armando');
     setErrorLogica('');
     try {
-      const r = await generateFormularioLogica({ formularioId, definicion: editorRef.current.leer() });
+      const r = await seguir(generateFormularioLogica({ formularioId, definicion: editorRef.current.leer() }));
       contarUso();
       editorRef.current.aplicar((d) => aplicarParche(d, r.parche as Parche));
       setProblemasLogica(r.problemas ?? []);
       setG((x) => (x ? { ...x, supuestosLogica: r.supuestos, logicaLista: true, etapa: 'listo', supuestosRevisados: r.supuestos.length ? false : x.supuestosRevisados } : x));
       setLogica('lista');
     } catch (err) {
+      if (fueDetenido(err)) { setLogica('esperando'); return; }
       setErrorLogica((err as Error).message || 'No se pudo armar la lógica.');
       setLogica('error');
     }
@@ -153,6 +174,8 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
     const e = actual?.estructura;
     if (!actual || !e) return;
     corriendo.current = true;
+    detenidoRef.current = false;
+    setDetenido(false);
     setEnMarcha(true);
     try {
       const { porEscribir, porPoner } = avanceEscritura(actual);
@@ -170,9 +193,10 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
       // Si una sección falla, no se piden más (la causa suele ser la misma para todas: sin saldo, tope, sin conexión).
       // Las que ya iban terminan; las demás esperan a «Reintentar lo que falta».
       await Promise.all(Array.from({ length: Math.min(EN_PARALELO, cola.length) }, async () => {
-        for (let id = fallaron ? undefined : cola.shift(); id; id = fallaron ? undefined : cola.shift()) if (!(await escribirUna(id))) fallaron++;
+        const siguiente = () => (fallaron || detenidoRef.current ? undefined : cola.shift());
+        for (let id = siguiente(); id; id = siguiente()) if (!(await escribirUna(id))) fallaron++;
       }));
-      if (!fallaron && !gRef.current?.logicaLista) await armarLogica();
+      if (!fallaron && !detenidoRef.current && !gRef.current?.logicaLista) await armarLogica();
     } finally {
       corriendo.current = false;
       setEnMarcha(false);
@@ -206,8 +230,8 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
   const escribiendo = enMarcha || logica === 'armando';
 
   return {
-    g, secciones, logica, errorLogica, problemasEstructura, problemasLogica, uso, llamada, avance, escribiendo,
-    guardarInsumos, pedirEstructura, editarFrente, marcarRevisados, usarTalCual, descartar, aprobar, reintentar, contarUso,
+    g, secciones, logica, errorLogica, problemasEstructura, problemasLogica, uso, llamada, avance, escribiendo, detenido,
+    guardarInsumos, pedirEstructura, editarFrente, marcarRevisados, usarTalCual, descartar, aprobar, reintentar, contarUso, detener,
   };
 }
 

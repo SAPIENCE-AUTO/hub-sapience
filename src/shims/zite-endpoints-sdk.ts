@@ -52,7 +52,7 @@ async function call<T = any>(name: string, input?: unknown): Promise<T> {
  * El fetch arranca de inmediato (no espera a que alguien itere), así que
  * `await` por sí solo también dispara la llamada real y resuelve al final.
  */
-function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & AsyncIterable<any> {
+function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & AsyncIterable<any> & { cancelar: () => void } {
   let resolveResult!: (v: T) => void;
   let rejectResult!: (e: unknown) => void;
   const result = new Promise<T>((res, rej) => { resolveResult = res; rejectResult = rej; });
@@ -60,6 +60,8 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
   const queue: any[] = [];
   const waiters: Array<(r: IteratorResult<any>) => void> = [];
   let done = false;
+  // «Detener»: cierra la conexión; el servidor se entera y deja de trabajar (y de gastar IA).
+  const control = new AbortController();
 
   const pushChunk = (chunk: any) => {
     const waiter = waiters.shift();
@@ -82,6 +84,7 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
         headers,
         credentials: 'include',
         body: JSON.stringify(input ?? {}),
+        signal: control.signal,
       });
       if (!res.ok || !res.body) {
         let body: any = {};
@@ -117,7 +120,8 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
       if (!terminado) throw new ApiError('Se cortó la conexión con el servidor antes de terminar. Vuelve a intentarlo.', 503, 'CONEXION_CORTADA');
     } catch (err) {
       // Si la conexión se cae a media lectura, el navegador solo dice «network error»: se dice en palabras.
-      rejectResult(err instanceof TypeError ? new ApiError('Se cortó la conexión con el servidor antes de terminar. Vuelve a intentarlo.', 503, 'CONEXION_CORTADA') : err);
+      if (control.signal.aborted) rejectResult(new ApiError('Se detuvo.', 499, 'DETENIDO'));
+      else rejectResult(err instanceof TypeError ? new ApiError('Se cortó la conexión con el servidor antes de terminar. Vuelve a intentarlo.', 503, 'CONEXION_CORTADA') : err);
     } finally {
       finish();
     }
@@ -136,7 +140,8 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
     then: (onFulfilled?: any, onRejected?: any) => result.then(onFulfilled, onRejected),
     catch: (onRejected?: any) => result.catch(onRejected),
     finally: (onFinally?: any) => result.finally(onFinally),
-  } as Promise<T> & AsyncIterable<any>;
+    cancelar: () => control.abort(),
+  } as Promise<T> & AsyncIterable<any> & { cancelar: () => void };
 }
 
 export const createFormularioVersion = (input?: any): Promise<any> => call('createFormularioVersion', input);
@@ -146,12 +151,13 @@ export const getCodigoPostal = (input?: any): Promise<any> => call('getCodigoPos
 export const sugerirDireccion = (input?: any): Promise<any> => call('sugerirDireccion', input);
 export const detalleDireccion = (input?: any): Promise<any> => call('detalleDireccion', input);
 export const traerImagenDeEnlace = (input?: any): Promise<any> => call('traerImagenDeEnlace', input);
+export const duplicateFormulario = (input?: any): Promise<any> => call('duplicateFormulario', input);
 // Filtros fase 3: generador con IA (los de la IA, con avance)
-export const generateFormularioCambio = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioCambio', input);
-export const generateFormularioNombres = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioNombres', input);
-export const generateFormularioEstructura = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioEstructura', input);
-export const generateFormularioLogica = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioLogica', input);
-export const generateFormularioSeccion = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioSeccion', input);
+export const generateFormularioCambio = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateFormularioCambio', input);
+export const generateFormularioNombres = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateFormularioNombres', input);
+export const generateFormularioEstructura = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateFormularioEstructura', input);
+export const generateFormularioLogica = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateFormularioLogica', input);
+export const generateFormularioSeccion = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateFormularioSeccion', input);
 export const getFormularioReuniones = (input?: any): Promise<any> => call('getFormularioReuniones', input);
 export const saveFormularioGenerador = (input?: any): Promise<any> => call('saveFormularioGenerador', input);
 export const saveFormularioInsumos = (input?: any): Promise<any> => call('saveFormularioInsumos', input);

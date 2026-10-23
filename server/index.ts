@@ -180,10 +180,13 @@ app.post('/api/:name', async (c) => {
   // shim del front distingue por el campo `type` dentro del payload.
   if (endpoint.streaming) {
     return streamSSE(c, async (stream) => {
+      // Si el navegador cierra la conexión («Detener», cerrar la pestaña), el endpoint se entera y deja de trabajar.
+      const corte = new AbortController();
+      stream.onAbort(() => corte.abort());
       try {
         const result = await endpoint.run(input, { user }, (chunk) => {
           void stream.writeSSE({ data: JSON.stringify({ type: 'progress', ...(chunk as object) }) });
-        });
+        }, corte.signal);
         await stream.writeSSE({ data: JSON.stringify({ type: 'done', result }) });
       } catch (err) {
         if (err instanceof ZiteError) {

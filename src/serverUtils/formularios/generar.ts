@@ -139,6 +139,7 @@ export async function proponerEstructura(o: {
   const texto = promptEstructura({ origen: g.origen, estudio: o.filtro.estudio, base: sobre, pedido: o.pedido, ajuste: !!o.ajuste });
   const respuesta = await conRegistro(o.email, o.filtro.id, 'estructura', (onGasto) => conLatido(o.stream, o.ajuste ? 'Ajustando la estructura…' : 'Leyendo los insumos y armando la estructura…', async () =>
     llamarJSON({
+      signal: o.stream?.signal,
       usuario: await contenido(g, texto), esquema: EstructuraZ, modelo: MODELOS.estructura, esfuerzo: 'high', onGasto, aceptarConProblemas: true,
       revisar: (r) => revisarEstructura(conservarSinCambio(sobre, sinVacios(r) as Estructura)),
     })));
@@ -261,6 +262,7 @@ export async function escribirSeccion(o: { filtro: Filtro; email: string; stream
   const texto = promptSeccion({ origen: g.origen, estudio: o.filtro.estudio, estructura: e, plan, anterior });
   const r = await conRegistro(o.email, o.filtro.id, 'seccion', (onGasto) => conLatido(o.stream, `Escribiendo «${plan.titulo}»…`, async () =>
     llamarJSON({
+      signal: o.stream?.signal,
       usuario: await contenido(g, texto), esquema: RespuestaSeccionZ, modelo: MODELOS.preguntas, esfuerzo: 'medium', onGasto, aceptarConProblemas: true,
       revisar: (x) => revisarSeccion(sinVacios(x.seccion) as Seccion, plan, anterior, contexto, e).problemas,
     })));
@@ -315,6 +317,7 @@ export async function armarLogica(o: { filtro: Filtro; email: string; stream?: S
   // La lógica final no necesita los insumos: trabaja sobre lo ya escrito y la estructura aprobada.
   const r = await conRegistro(o.email, o.filtro.id, 'logica', (onGasto) => conLatido(o.stream, 'Armando quién entra a cada perfil…', () =>
     llamarJSON({
+      signal: o.stream?.signal,
       usuario: [{ type: 'text', text: texto }], esquema: RespuestaLogicaZ, modelo: MODELOS.preguntas, esfuerzo: 'high', onGasto, aceptarConProblemas: true,
       revisar: (x) => revisarLogica(x, def, e, ajuste).problemas,
     })));
@@ -353,6 +356,7 @@ export async function proponerCambio(o: { filtro: Filtro; email: string; stream?
   if ('pregunta' in alcance) {
     const r = await conRegistro(o.email, o.filtro.id, 'pregunta', (onGasto) => conLatido(o.stream, 'La IA está preparando el cambio…', () =>
       llamarJSON({
+        signal: o.stream?.signal,
         usuario, esquema: RespuestaCambioPreguntaZ, modelo: MODELOS.cambios, esfuerzo: 'medium', onGasto, aceptarConProblemas: true,
         revisar: (x) => revisarCambio({ preguntas: [{ ...sinVacios(x.pregunta), id: alcance.pregunta }] } as Parche, def, alcance).problemas,
       })));
@@ -361,6 +365,7 @@ export async function proponerCambio(o: { filtro: Filtro; email: string; stream?
   } else {
     const r = await conRegistro(o.email, o.filtro.id, 'comentario', (onGasto) => conLatido(o.stream, 'La IA está revisando la lógica…', () =>
       llamarJSON({
+        signal: o.stream?.signal,
         usuario, esquema: RespuestaCambioSeccionZ, modelo: MODELOS.preguntas, esfuerzo: 'medium', onGasto, aceptarConProblemas: true,
         revisar: (x) => revisarCambio(sinVacios({ ...x, explicacion: undefined }) as Parche, def, alcance).problemas,
       })));
@@ -406,6 +411,7 @@ export async function proponerNombres(o: { filtro: Filtro; email: string; stream
   const usuario: Contenido = [{ type: 'text', text: promptNombres(o.definicion, ids) }];
   const r = await conRegistro(o.email, o.filtro.id, 'nombres', (onGasto) => conLatido(o.stream, 'Poniendo los nombres cortos…', () =>
     llamarJSON({
+      signal: o.stream?.signal,
       usuario, esquema: RespuestaNombresZ, modelo: MODELOS.cambios, esfuerzo: 'low', onGasto, aceptarConProblemas: true,
       revisar: (x) => revisarNombres(x.nombres, o.definicion, ids).problemas,
     })));

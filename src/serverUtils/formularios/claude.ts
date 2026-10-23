@@ -66,6 +66,7 @@ export function extraerJSON(texto: string): unknown {
  */
 export function errorDeLaIA(err: unknown): unknown {
   if (err instanceof ZiteError) return err;
+  if (err instanceof Anthropic.APIUserAbortError) return new ZiteError({ code: 'BAD_REQUEST', message: 'Se detuvo.' });
   const zite = (message: string) => new ZiteError({ code: 'INTERNAL_ERROR', message });
   if (err instanceof Anthropic.APIConnectionError) return zite('No se pudo conectar con la IA. Vuelve a intentar en un momento.');
   if (!(err instanceof Anthropic.APIError)) return err;
@@ -99,12 +100,15 @@ export async function llamarJSON<S extends z.ZodTypeAny>(opts: {
   /** Si tras el reintento sigue algo mal armado, devolverlo igual (quien llama muestra los problemas). */
   aceptarConProblemas?: boolean;
   onGasto?: (g: Gasto) => void;
+  /** «Detener»: corta la llamada a la IA (deja de gastar). */
+  signal?: AbortSignal;
 }): Promise<z.infer<S>> {
   const system: Anthropic.Beta.Messages.BetaTextBlockParam[] = [{ type: 'text', text: systemPrompt(), cache_control: { type: 'ephemeral' } }];
   const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [{ role: 'user', content: opts.usuario }];
   let ultimoError = '';
   let conProblemas: { data: z.infer<S> } | null = null;
   for (let intento = 0; intento < 2; intento++) {
+    if (opts.signal?.aborted) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Se detuvo.' });
     let msg: Anthropic.Beta.Messages.BetaMessage;
     try {
       msg = await getClient().beta.messages.stream({
@@ -116,7 +120,7 @@ export async function llamarJSON<S extends z.ZodTypeAny>(opts: {
         // Si la IA se niega por un falso positivo de sus filtros, la API reintenta sola con otro modelo.
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
-      }).finalMessage();
+      }, { signal: opts.signal }).finalMessage();
     } catch (err) {
       throw errorDeLaIA(err);
     }

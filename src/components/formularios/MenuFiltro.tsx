@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import { Copy, ExternalLink, History, LayoutList, MoreHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
+import { Copy, CopyPlus, ExternalLink, History, LayoutList, MoreHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -10,7 +10,7 @@ import type { EstadoEditable } from './EstadoFiltro';
  * El menú «⋯» del filtro: lo que no se usa a cada rato, en un solo lugar
  * (deshacer, estructura, versiones, el enlace, cambiar de estado, borrar).
  */
-export function MenuFiltro({ editor, estado, enlace, uso, escribiendo, onEstado, onEstructura, onVersiones, onBorrar }: {
+export function MenuFiltro({ editor, estado, enlace, uso, escribiendo, onEstado, onEstructura, onVersiones, onDuplicar, onBorrar }: {
   editor: Editor;
   estado: string;
   enlace: string;
@@ -20,6 +20,7 @@ export function MenuFiltro({ editor, estado, enlace, uso, escribiendo, onEstado,
   onEstado: (e: EstadoEditable) => void;
   onEstructura?: () => void;
   onVersiones: () => void;
+  onDuplicar: () => void;
   /** Solo si no tiene respuestas reales. */
   onBorrar?: () => void;
 }) {
@@ -37,6 +38,7 @@ export function MenuFiltro({ editor, estado, enlace, uso, escribiendo, onEstado,
         <DropdownMenuSeparator />
         {onEstructura && <DropdownMenuItem disabled={escribiendo} onSelect={onEstructura}><LayoutList className={icono} />Ver y ajustar la estructura</DropdownMenuItem>}
         <DropdownMenuItem onSelect={onVersiones}><History className={icono} />Versiones</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onDuplicar}><CopyPlus className={icono} />Duplicar</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => { void navigator.clipboard.writeText(enlace); toast.success('Enlace copiado'); }}><Copy className={icono} />Copiar enlace</DropdownMenuItem>
         <DropdownMenuItem disabled={estado === 'borrador'} onSelect={() => window.open(enlace, '_blank')}><ExternalLink className={icono} />Abrir enlace</DropdownMenuItem>

@@ -12,7 +12,11 @@ import { ZiteError } from './errors';
  */
 export interface AuthUser { id: string; email: string; [k: string]: unknown }
 export interface EndpointContext { user: AuthUser | null }
-export interface StreamWriter { write: (chunk: unknown) => void }
+export interface StreamWriter {
+  write: (chunk: unknown) => void;
+  /** Se activa si quien pidió cerró la conexión (p. ej. «Detener»): el trabajo largo puede dejarse ahí. */
+  signal?: AbortSignal;
+}
 
 export interface EndpointDef<I extends z.ZodTypeAny, O extends z.ZodTypeAny> {
   authenticated?: boolean;
@@ -29,7 +33,7 @@ export interface CompiledEndpoint {
   description?: string;
   inputSchema: z.ZodTypeAny;
   outputSchema: z.ZodTypeAny;
-  run: (rawInput: unknown, context: EndpointContext, onChunk?: (chunk: unknown) => void) => Promise<unknown>;
+  run: (rawInput: unknown, context: EndpointContext, onChunk?: (chunk: unknown) => void, signal?: AbortSignal) => Promise<unknown>;
 }
 
 export function createEndpoint<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
@@ -41,7 +45,7 @@ export function createEndpoint<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
     description: def.description,
     inputSchema: def.inputSchema,
     outputSchema: def.outputSchema,
-    async run(rawInput, context, onChunk) {
+    async run(rawInput, context, onChunk, signal) {
       if ((def.authenticated ?? true) && !context.user) {
         throw new ZiteError({ code: 'UNAUTHORIZED', message: 'Sesión requerida' });
       }
@@ -53,7 +57,7 @@ export function createEndpoint<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
         });
       }
       const stream: StreamWriter | undefined = def.streaming
-        ? { write: (chunk) => onChunk?.(chunk) }
+        ? { write: (chunk) => onChunk?.(chunk), signal }
         : undefined;
       const result = await def.execute({ input: parsedIn.data, context, stream });
       // Validar la salida atrapa desalineaciones entre el esquema y la capa de datos

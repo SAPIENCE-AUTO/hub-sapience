@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, Square } from 'lucide-react';
 import { GOLD, TEAL } from '@/lib/toolColors';
 
 /** Botón principal del moodboard: teal con profundidad suave. */
@@ -11,8 +11,8 @@ export function MarcaIA({ className = 'h-3.5 w-3.5' }: { className?: string }) {
   return <Sparkles className={className} style={{ color: GOLD }} fill={GOLD} strokeWidth={1.5} />;
 }
 
-/** Lo que va diciendo la IA mientras trabaja, con el tiempo que lleva. */
-export function AvanceIA({ pasos, segundos }: { pasos: string[]; segundos: number }) {
+/** Lo que va diciendo la IA mientras trabaja, con el tiempo que lleva y, si se puede, «Detener». */
+export function AvanceIA({ pasos, segundos, onDetener }: { pasos: string[]; segundos: number; onDetener?: () => void }) {
   const m = Math.floor(segundos / 60);
   const s = segundos % 60;
   return (
@@ -22,6 +22,11 @@ export function AvanceIA({ pasos, segundos }: { pasos: string[]; segundos: numbe
         <Loader2 className="h-4 w-4 animate-spin" />
         {pasos[pasos.length - 1] ?? 'La IA está trabajando…'}
         <span className="ml-auto text-xs font-normal tabular-nums text-muted-foreground">{m}:{String(s).padStart(2, '0')}</span>
+        {onDetener && (
+          <button type="button" onClick={onDetener} className="flex items-center gap-1 rounded-md border border-[#D32222]/30 bg-white px-2 py-0.5 text-xs font-medium text-[#D32222] hover:bg-[#D32222]/5">
+            <Square className="h-3 w-3" fill="currentColor" />Detener
+          </button>
+        )}
       </p>
     </div>
   );
