@@ -523,7 +523,7 @@ Sergio pidió que esos campos se sientan de producto: lada en el celular y ayuda
 
 **Pendiente:** el catálogo de códigos postales sigue sin cargar: si algún día se consigue, la tabla y el script ya están.
 
-### Preguntas con imágenes: sin bloqueo, la IA puede y enlaces (2026-10-23)
+### Preguntas con imágenes: sin bloqueo, la IA puede y enlaces (2026-10-23, `0dd8ff3`)
 
 Sergio no podía cambiar una pregunta a «Selector con imágenes»: a mano el editor dejaba de guardar hasta que alguna opción tuviera imagen, y a la IA se lo prohibía la skill (y lo dijo como «el contrato no lo permite»).
 
@@ -561,4 +561,4 @@ Sergio no podía cambiar una pregunta a «Selector con imágenes»: a mano el ed
 - **2026-10-23 · ajustes tras el primer uso (tanda 1):** «perfiles» en vez de «frentes» en todo lo que se ve; nombre corto por pregunta (columna del tablero, Excel y panel), escrito por la IA y con «Ponerlos con IA» para lo que ya existe; las columnas del tablero se renombran solas sin pisar las que cambió el equipo; tiempo por perfil; estados Borrador › Prueba › En vivo con su explicación y la lista «¿Está listo?». 70 pruebas. Probado en local y subido a `main` con el OK de Sergio (`a69aa21`).
 - **2026-10-23 · flujo como diagrama y menos botones (tanda 2):** con los bocetos aprobados por Sergio: el Flujo es un diagrama de proceso con ramas, salidas en rojo y bloques que se repiten; las herramientas de cada pregunta solo aparecen al elegirla; encabezado con los pasos del estado, una línea de estado y un solo menú «⋯». 71 pruebas. Probado en local y subido a `main` con el OK de Sergio (`e823da6`).
 - **2026-10-23 · celular, correo y dirección más finos:** lada y largo del celular por país, sugerencia del correo mal escrito, «Busca tu dirección» con Google y dirección por código postal lista para cuando haya catálogo (tabla `codigos_postales` creada, vacía). 75 pruebas. Probado en local con respuestas simuladas.
-- **2026-10-23 · preguntas con imágenes:** se guardan aunque falten imágenes (pendiente en «¿Está listo?»), se puede pegar el enlace de una imagen (el Hub guarda su copia) y la IA ya puede cambiar a selector con imágenes. 76 pruebas. Probado en local.
+- **2026-10-23 · preguntas con imágenes:** se guardan aunque falten imágenes (pendiente en «¿Está listo?»), se puede pegar el enlace de una imagen (el Hub guarda su copia) y la IA ya puede cambiar a selector con imágenes. 76 pruebas. Probado en local y subido a `main` con el OK de Sergio (`0dd8ff3`).
