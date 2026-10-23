@@ -10,20 +10,35 @@ export function Foto({ valor, codigo, simular, onChange }: { valor: FotoSubida[]
   const [subiendo, setSubiendo] = useState(false);
   const [falla, setFalla] = useState('');
   const [vistas, setVistas] = useState<Record<string, string>>({});
+  const [encima, setEncima] = useState(false);
 
-  const subir = async (archivo: File) => {
+  const subir = async (archivos: File[]) => {
     setSubiendo(true);
     setFalla('');
+    const nuevas: FotoSubida[] = [];
     try {
-      const { fileUrl } = simular
-        ? { fileUrl: `simulada/${Date.now()}-${archivo.name}` }
-        : await uploadFile({ data: archivo, filename: archivo.name, formularioCodigo: codigo });
-      setVistas((v) => ({ ...v, [fileUrl]: URL.createObjectURL(archivo) }));
-      onChange([...valor, { ruta: fileUrl, nombre: archivo.name }]);
+      for (const archivo of archivos.slice(0, MAX_FOTOS - valor.length)) {
+        const { fileUrl } = simular
+          ? { fileUrl: `simulada/${Date.now()}-${archivo.name}` }
+          : await uploadFile({ data: archivo, filename: archivo.name, formularioCodigo: codigo });
+        setVistas((v) => ({ ...v, [fileUrl]: URL.createObjectURL(archivo) }));
+        nuevas.push({ ruta: fileUrl, nombre: archivo.name });
+      }
     } catch (err) {
       setFalla((err as Error).message || 'No se pudo subir la foto. Intenta otra vez.');
     }
+    if (nuevas.length) onChange([...valor, ...nuevas]);
     setSubiendo(false);
+  };
+
+  // En computadora la foto también se puede arrastrar y soltar sobre el recuadro.
+  const soltar = (e: React.DragEvent) => {
+    e.preventDefault();
+    setEncima(false);
+    if (subiendo) return;
+    const imagenes = Array.from(e.dataTransfer.files).filter((a) => a.type.startsWith('image/'));
+    if (imagenes.length) void subir(imagenes);
+    else if (e.dataTransfer.files.length) setFalla('Suelta una foto (una imagen).');
   };
 
   return (
@@ -46,12 +61,17 @@ export function Foto({ valor, codigo, simular, onChange }: { valor: FotoSubida[]
         ))}
       </div>
       {valor.length < MAX_FOTOS && (
-        <label className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-[#A1A1AA] bg-white px-4 py-4 text-[15px] font-medium text-[#1F1F23] ${subiendo ? 'opacity-60' : ''}`}>
+        <label
+          onDragOver={(e) => { if (Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setEncima(true); } }}
+          onDragLeave={() => setEncima(false)}
+          onDrop={soltar}
+          className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed px-4 py-4 text-[15px] font-medium text-[#1F1F23] ${encima ? 'border-[#1F1F23] bg-[#F4F4F5]' : 'border-[#A1A1AA] bg-white'} ${subiendo ? 'opacity-60' : ''}`}
+        >
           {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
-          {subiendo ? 'Subiendo…' : valor.length ? 'Agregar otra foto' : 'Tomar o elegir foto'}
+          {subiendo ? 'Subiendo…' : encima ? 'Suelta la foto aquí' : valor.length ? 'Agregar otra foto' : 'Tomar o elegir foto'}
           <input
             type="file" accept="image/*" className="hidden" disabled={subiendo}
-            onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) subir(a); }}
+            onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) void subir([a]); }}
           />
         </label>
       )}

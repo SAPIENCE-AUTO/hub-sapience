@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { FileText, Loader2, Mic, Paperclip, X } from 'lucide-react';
+import { FileText, Loader2, Mic, Upload, X } from 'lucide-react';
 import { getFormularioReuniones } from 'zite-endpoints-sdk';
 import { INFO, TEAL } from '@/lib/toolColors';
+import { traeArchivos } from '@/lib/swipe/imagenes';
 import type { ReunionInsumo } from '@/lib/formularios/generador';
 import type { GeneradorUI } from './useGenerador';
 import { AvanceIA, Etiqueta, MarcaIA, archivoABase64, botonSecundario, botonTeal } from './comun';
 
 type Reunion = ReunionInsumo & { tipo?: string };
+
+/** Lo que acepta cada punto de partida, por extensión. */
+const ACEPTA = { word: ['docx', 'pdf'], otros: ['pdf', 'pptx', 'docx'] };
+const extension = (nombre: string) => nombre.split('.').pop()?.toLowerCase() ?? '';
 
 const fecha = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 const TIPO_ARCHIVO = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint' } as const;
@@ -23,7 +28,9 @@ export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId:
   const [notas, setNotas] = useState(g.insumos.notas ?? '');
   const [subiendo, setSubiendo] = useState<string[]>([]);
   const [reuniones, setReuniones] = useState<Reunion[] | null>(null);
+  const [encima, setEncima] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const acepta = origen === 'word' ? ACEPTA.word : ACEPTA.otros;
   const elegidas = new Set(g.insumos.reuniones.map((r) => r.id));
 
   useEffect(() => {
@@ -36,8 +43,11 @@ export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId:
     try { await gen.guardarInsumos({ notas }); } catch (err) { toast.error((err as Error).message); }
   };
 
-  const subir = async (archivos: FileList | null) => {
-    for (const archivo of Array.from(archivos ?? [])) {
+  const subir = async (archivos: FileList | File[] | null) => {
+    const lista = Array.from(archivos ?? []);
+    const fuera = lista.filter((a) => !acepta.includes(extension(a.name)));
+    if (fuera.length) toast.error(`${fuera.map((a) => `«${a.name}»`).join(', ')}: sube ${origen === 'word' ? 'un Word o un PDF' : 'un PDF, un PowerPoint o un Word'}.`);
+    for (const archivo of lista.filter((a) => acepta.includes(extension(a.name)))) {
       setSubiendo((s) => [...s, archivo.name]);
       try {
         await gen.guardarInsumos({ archivo: { nombre: archivo.name, mime: archivo.type, base64: await archivoABase64(archivo) } });
@@ -71,8 +81,20 @@ export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId:
       ? 'Algo que cambiar al convertirlo (opcional).'
       : 'Lo que no dicen la propuesta ni el kick-off: cuotas, ciudad, edades, incentivo, lo que pidió el cliente…';
 
+  // Se puede soltar el archivo en cualquier parte del paso, no solo en el recuadro.
+  const arrastre = {
+    onDragOver: (e: React.DragEvent) => { if (!traeArchivos(e.dataTransfer)) return; e.preventDefault(); if (!ocupado) setEncima(true); },
+    onDragLeave: (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setEncima(false); },
+    onDrop: (e: React.DragEvent) => {
+      if (!traeArchivos(e.dataTransfer)) return;
+      e.preventDefault();
+      setEncima(false);
+      if (!ocupado) void subir(e.dataTransfer.files);
+    },
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" {...arrastre}>
       <div>
         <h3 className="text-base font-semibold" style={{ color: TEAL }}>{titulo}</h3>
         {origen === 'word' && <p className="text-xs text-muted-foreground">Se convierte en un filtro editable con su misma redacción. Lo que la IA tenga que interpretar queda en los supuestos.</p>}
@@ -94,19 +116,30 @@ export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId:
 
       <section className="space-y-1.5">
         <Etiqueta>{origen === 'word' ? 'Word o PDF del screener' : 'Archivos: propuesta en PDF o PowerPoint, o un Word'}</Etiqueta>
-        <input ref={input} type="file" multiple={origen !== 'word'} accept={origen === 'word' ? '.docx,.pdf' : '.pdf,.pptx,.docx'} className="hidden" onChange={(e) => subir(e.target.files)} />
-        <ul className="space-y-1">
-          {g.insumos.archivos.map((a) => (
-            <li key={a.id} className="flex items-center gap-2 rounded-md border bg-white px-2.5 py-1.5 text-sm">
-              <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate">{a.nombre}</span>
-              <span className="text-[11px] text-muted-foreground">{TIPO_ARCHIVO[a.tipo]}{a.caracteres ? ` · ${a.caracteres >= 1000 ? `${Math.round(a.caracteres / 1000)} mil` : a.caracteres} caracteres` : ''}</span>
-              <button type="button" aria-label={`Quitar ${a.nombre}`} disabled={ocupado} onClick={() => gen.guardarInsumos({ quitarArchivo: a.id }).catch((err) => toast.error((err as Error).message))} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-[#D32222]"><X className="h-3.5 w-3.5" /></button>
-            </li>
-          ))}
-          {subiendo.map((n) => <li key={n} className="flex items-center gap-2 px-2.5 py-1 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{n}</li>)}
-        </ul>
-        <button type="button" className={botonSecundario} disabled={ocupado} onClick={() => input.current?.click()}><Paperclip className="h-3.5 w-3.5" />Subir archivo</button>
+        <input ref={input} type="file" multiple={origen !== 'word'} accept={acepta.map((x) => `.${x}`).join(',')} className="hidden" onChange={(e) => subir(e.target.files)} />
+        {g.insumos.archivos.length > 0 && (
+          <ul className="space-y-1">
+            {g.insumos.archivos.map((a) => (
+              <li key={a.id} className="flex items-center gap-2 rounded-md border bg-white px-2.5 py-1.5 text-sm">
+                <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{a.nombre}</span>
+                <span className="text-[11px] text-muted-foreground">{TIPO_ARCHIVO[a.tipo]}{a.caracteres ? ` · ${a.caracteres >= 1000 ? `${Math.round(a.caracteres / 1000)} mil` : a.caracteres} caracteres` : ''}</span>
+                <button type="button" aria-label={`Quitar ${a.nombre}`} disabled={ocupado} onClick={() => gen.guardarInsumos({ quitarArchivo: a.id }).catch((err) => toast.error((err as Error).message))} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-[#D32222]"><X className="h-3.5 w-3.5" /></button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {subiendo.map((n) => <p key={n} className="flex items-center gap-2 px-2.5 py-1 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{n}</p>)}
+        <button
+          type="button"
+          disabled={ocupado}
+          onClick={() => input.current?.click()}
+          className={`flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors disabled:pointer-events-none disabled:opacity-50 ${encima ? 'border-[#0F3D4D] bg-[#0F3D4D]/[0.05]' : 'border-[#0F3D4D]/25 bg-white hover:border-[#0F3D4D]/50 hover:bg-[#0F3D4D]/[0.02]'}`}
+        >
+          <Upload className="h-5 w-5" style={{ color: TEAL }} />
+          <span className="text-sm font-medium" style={{ color: TEAL }}>{encima ? 'Suelta el archivo aquí' : 'Arrastra el archivo aquí o haz clic para elegirlo'}</span>
+          <span className="text-[11px] text-muted-foreground">{origen === 'word' ? 'Word o PDF' : 'PDF, PowerPoint o Word'} · hasta 25 MB</span>
+        </button>
       </section>
 
       {origen !== 'word' && (
