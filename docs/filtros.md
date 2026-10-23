@@ -21,7 +21,7 @@ Usuario: Sergio (`sergio@sapience.com.mx`). **Solo él lo ve hasta la fase 6** (
 
 ## Lo que ya existe
 
-Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octubre de 2026); fase 1 en `3d5bbfd`. Fase 2 (editor) aprobada por Sergio el 2026-10-22.
+Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octubre de 2026); fase 1 en `3d5bbfd`; fase 2 (editor) en `40d801f`.
 
 **Base de datos** (fuera del pipeline de `generate.py`, como Swipe; los endpoints usan `pool.query`):
 
@@ -164,7 +164,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 | # | Fase | Estado |
 |---|---|---|
 | 1 | Base: tipos de pregunta, lógica, opción única/múltiple, NSE por país como alerta | **Hecha** (`3d5bbfd`, 2026-10-22) |
-| 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | **Hecha** (2026-10-22, aprobada por Sergio) |
+| 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | **Hecha** (`40d801f`, 2026-10-22) |
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | Pendiente |
 | 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | Pendiente (necesita decisiones) |
 | 5 | Operación: en vivo, paso solo al tablero, base de participantes con historial, cerrar cuotas | Pendiente (necesita decisiones) |
@@ -365,4 +365,4 @@ Sale del documento de diseño («Lo primero que se ve y cómo se corrige» y la 
 
 - **2026-10-21/22 · versión inicial:** formularios en Tools, página pública, motor, panel, Excel, vínculo con Reclutamiento (todas las columnas desde que se vincula) y el screener de ALONG 2 como plantilla. Se diseñó el feature completo (documento de diseño) y se escribió esta guía.
 - **2026-10-22 · fase 1 (base del screener):** contrato versión 2 con todos los tipos de la fase 1, una o varias dicho por el tipo, país y NSE por país como alerta, revisión de definiciones, formulario en neutros, panel con NSE distinto y plantilla de prueba con todos los tipos. Con el cuestionario oficial que pasó Sergio se cargó la AMAI 2022 (cortes nuevos, redacción oficial) como regla vigente de México; 36 pruebas. Probado en local de punta a punta. Subido a `main` con el OK de Sergio (`3d5bbfd`).
-- **2026-10-22 · fase 2 (editor):** el filtro abre como documento, con la lógica en palabras y el mapa del flujo al lado, y tiene la vista Celular para contestarlo sin guardar. Se corrige a mano: textos, opciones, imágenes arrastradas o pegadas (a una carpeta pública y achicadas), tipos, «mostrar solo si», qué termina o descarta, y nombre y cuota de los frentes. Tiene deshacer, versiones, aviso de otra ventana o persona sin pisar cambios, y los minutos contra el tope de 10. El panel quedó con «Ver» y en tarjetas en pantallas angostas. En la base, la tabla `formulario_versiones` y las columnas `revision` y `editando` (con el OK de Sergio). 50 pruebas. Probado en local y subido a `main` con el OK de Sergio.
+- **2026-10-22 · fase 2 (editor):** el filtro abre como documento, con la lógica en palabras y el mapa del flujo al lado, y tiene la vista Celular para contestarlo sin guardar. Se corrige a mano: textos, opciones, imágenes arrastradas o pegadas (a una carpeta pública y achicadas), tipos, «mostrar solo si», qué termina o descarta, y nombre y cuota de los frentes. Tiene deshacer, versiones, aviso de otra ventana o persona sin pisar cambios, y los minutos contra el tope de 10. El panel quedó con «Ver» y en tarjetas en pantallas angostas. En la base, la tabla `formulario_versiones` y las columnas `revision` y `editando` (con el OK de Sergio). 50 pruebas. Probado en local y subido a `main` con el OK de Sergio (`40d801f`).
