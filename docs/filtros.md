@@ -21,7 +21,7 @@ Usuario: Sergio (`sergio@sapience.com.mx`). **Solo él lo ve hasta la fase 6** (
 
 ## Lo que ya existe
 
-Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octubre de 2026).
+Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octubre de 2026); fase 1 en `3d5bbfd`.
 
 **Base de datos** (fuera del pipeline de `generate.py`, como Swipe; los endpoints usan `pool.query`):
 
@@ -147,7 +147,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 
 | # | Fase | Estado |
 |---|---|---|
-| 1 | Base: tipos de pregunta, lógica, opción única/múltiple, NSE por país como alerta | **Lista en local** (falta el OK de commit) |
+| 1 | Base: tipos de pregunta, lógica, opción única/múltiple, NSE por país como alerta | **Hecha** (`3d5bbfd`, 2026-10-22) |
 | 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | Pendiente |
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | Pendiente |
 | 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | Pendiente (necesita decisiones) |
@@ -227,4 +227,4 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 ## Bitácora
 
 - **2026-10-21/22 · versión inicial:** formularios en Tools, página pública, motor, panel, Excel, vínculo con Reclutamiento (todas las columnas desde que se vincula) y el screener de ALONG 2 como plantilla. Se diseñó el feature completo (documento de diseño) y se escribió esta guía.
-- **2026-10-22 · fase 1 (base del screener):** contrato versión 2 con todos los tipos de la fase 1, una o varias dicho por el tipo, país y NSE por país como alerta, revisión de definiciones, formulario en neutros, panel con NSE distinto y plantilla de prueba con todos los tipos. Con el cuestionario oficial que pasó Sergio se cargó la AMAI 2022 (cortes nuevos, redacción oficial) como regla vigente de México; 36 pruebas. Probado en local de punta a punta. Sin commit hasta el OK de Sergio.
+- **2026-10-22 · fase 1 (base del screener):** contrato versión 2 con todos los tipos de la fase 1, una o varias dicho por el tipo, país y NSE por país como alerta, revisión de definiciones, formulario en neutros, panel con NSE distinto y plantilla de prueba con todos los tipos. Con el cuestionario oficial que pasó Sergio se cargó la AMAI 2022 (cortes nuevos, redacción oficial) como regla vigente de México; 36 pruebas. Probado en local de punta a punta. Subido a `main` con el OK de Sergio (`3d5bbfd`).
