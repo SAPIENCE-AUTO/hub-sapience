@@ -45,6 +45,8 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
   const [uso, setUso] = useState(usoInicial);
   const llamada = useLlamadaLarga();
   const corriendo = useRef(false);
+  /** La escritura está en marcha (las secciones «en fila» después de un error no cuentan como trabajando). */
+  const [enMarcha, setEnMarcha] = useState(false);
 
   const contarUso = useCallback((n = 1) => setUso((u) => (u ? { ...u, usadas: u.usadas + n } : u)), []);
 
@@ -151,6 +153,7 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
     const e = actual?.estructura;
     if (!actual || !e) return;
     corriendo.current = true;
+    setEnMarcha(true);
     try {
       const { porEscribir, porPoner } = avanceEscritura(actual);
       for (const id of porPoner) {
@@ -164,12 +167,15 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
       setSecciones((s) => ({ ...s, ...Object.fromEntries(porEscribir.map((id) => [id, { estado: 'esperando' as const }])) }));
       const cola = [...porEscribir];
       let fallaron = 0;
+      // Si una sección falla, no se piden más (la causa suele ser la misma para todas: sin saldo, tope, sin conexión).
+      // Las que ya iban terminan; las demás esperan a «Reintentar lo que falta».
       await Promise.all(Array.from({ length: Math.min(EN_PARALELO, cola.length) }, async () => {
-        for (let id = cola.shift(); id; id = cola.shift()) if (!(await escribirUna(id))) fallaron++;
+        for (let id = fallaron ? undefined : cola.shift(); id; id = fallaron ? undefined : cola.shift()) if (!(await escribirUna(id))) fallaron++;
       }));
       if (!fallaron && !gRef.current?.logicaLista) await armarLogica();
     } finally {
       corriendo.current = false;
+      setEnMarcha(false);
     }
   }, [formularioId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -197,7 +203,7 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const avance = g ? avanceEscritura(g) : undefined;
-  const escribiendo = Object.values(secciones).some((s) => s.estado === 'escribiendo' || s.estado === 'esperando') || logica === 'armando';
+  const escribiendo = enMarcha || logica === 'armando';
 
   return {
     g, secciones, logica, errorLogica, problemasEstructura, problemasLogica, uso, llamada, avance, escribiendo,

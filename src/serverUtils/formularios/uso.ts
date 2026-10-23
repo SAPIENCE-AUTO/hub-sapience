@@ -8,12 +8,15 @@ export const LIMITE_POR_HORA = Number(process.env.FORMULARIOS_IA_LIMITE_HORA || 
 
 export type AccionIA = 'estructura' | 'seccion' | 'logica' | 'pregunta' | 'comentario';
 
+/** Lo que cuenta para el tope: una llamada que falló sin llegar a la IA (sin saldo, sin conexión) no gastó nada y no cuenta. */
+const CUENTA = '(ok is distinct from false or modelo is not null)';
+
 /** Reserva una llamada o dice cuánto falta para poder volver a usar la IA. Devuelve el id del registro. */
 export async function reservarUsoIA(email: string, formularioId: string, accion: AccionIA): Promise<string> {
   const correo = email.toLowerCase();
   const { rows: [r] } = await pool.query(
     `select count(*)::int as n, min(created_at) as primera from formulario_ia_uso
-     where usuario_email = $1 and created_at > now() - interval '1 hour'`,
+     where usuario_email = $1 and created_at > now() - interval '1 hour' and ${CUENTA}`,
     [correo],
   );
   if (r.n >= LIMITE_POR_HORA) {
@@ -64,7 +67,7 @@ export async function conRegistro<T>(email: string, formularioId: string, accion
 /** Cuántas llamadas lleva esta hora (para mostrarlo junto a los botones de IA). */
 export async function usoDeLaHora(email: string): Promise<number> {
   const { rows: [r] } = await pool.query(
-    `select count(*)::int as n from formulario_ia_uso where usuario_email = $1 and created_at > now() - interval '1 hour'`,
+    `select count(*)::int as n from formulario_ia_uso where usuario_email = $1 and created_at > now() - interval '1 hour' and ${CUENTA}`,
     [email.toLowerCase()],
   );
   return r.n as number;

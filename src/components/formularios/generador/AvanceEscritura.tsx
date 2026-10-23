@@ -66,7 +66,10 @@ export function AvanceEscritura({ gen, def }: { gen: GeneradorUI; def: Definicio
               Frentes y alertas
             </li>
           </ul>
-          {errores.map((id) => <p key={id} className="mt-1 text-xs" style={{ color: PELIGRO }}>{e.secciones.find((s) => s.id === id)?.titulo}: {gen.secciones[id]?.error}</p>)}
+          {/* Si todas fallaron por lo mismo (sin saldo, tope…), se dice una vez. */}
+          {new Set(errores.map((id) => gen.secciones[id]?.error)).size === 1 && errores.length > 1
+            ? <p className="mt-1 text-xs" style={{ color: PELIGRO }}>{gen.secciones[errores[0]]?.error}</p>
+            : errores.map((id) => <p key={id} className="mt-1 text-xs" style={{ color: PELIGRO }}>{e.secciones.find((s) => s.id === id)?.titulo.split('{opcion}').join('…')}: {gen.secciones[id]?.error}</p>)}
           {gen.logica === 'error' && <p className="mt-1 text-xs" style={{ color: PELIGRO }}>Frentes y alertas: {gen.errorLogica}</p>}
         </>
       )}

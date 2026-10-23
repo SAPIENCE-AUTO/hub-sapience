@@ -59,6 +59,28 @@ export function extraerJSON(texto: string): unknown {
   return JSON.parse(t.slice(i, j + 1));
 }
 
+/**
+ * Un error de la API de la IA, dicho en palabras: si la cuenta se quedó sin
+ * saldo, la llave no sirve o la IA está saturada, se dice eso (no «Error
+ * interno») y que el filtro no tiene nada mal.
+ */
+export function errorDeLaIA(err: unknown): unknown {
+  if (err instanceof ZiteError) return err;
+  const zite = (message: string) => new ZiteError({ code: 'INTERNAL_ERROR', message });
+  if (err instanceof Anthropic.APIConnectionError) return zite('No se pudo conectar con la IA. Vuelve a intentar en un momento.');
+  if (!(err instanceof Anthropic.APIError)) return err;
+  // La API no da un código propio para el saldo: solo lo dice en el mensaje.
+  if (/credit balance/i.test(err.message ?? '')) {
+    return zite('La cuenta de la IA (Anthropic) se quedó sin saldo. Hay que cargar crédito en la consola de Anthropic, en Plans & Billing. El filtro no tiene nada mal: con saldo, dale «Reintentar».');
+  }
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
+    return zite('La llave de la IA no es válida o no tiene permiso (ANTHROPIC_API_KEY). El filtro no tiene nada mal.');
+  }
+  if (err instanceof Anthropic.RateLimitError) return zite('La IA está recibiendo demasiadas peticiones. Espera un minuto y dale «Reintentar».');
+  if (err.status === 529 || err instanceof Anthropic.InternalServerError) return zite('La IA está saturada en este momento. Espera un minuto y dale «Reintentar».');
+  return zite(`La IA respondió con un error (${err.status ?? 'sin código'}). Vuelve a intentar.`);
+}
+
 /** Lo que gastó una llamada (para el registro de uso). */
 export interface Gasto { modelo: string; entrada: number; cacheLeidos: number; cacheEscritos: number; salida: number }
 
@@ -83,16 +105,21 @@ export async function llamarJSON<S extends z.ZodTypeAny>(opts: {
   let ultimoError = '';
   let conProblemas: { data: z.infer<S> } | null = null;
   for (let intento = 0; intento < 2; intento++) {
-    const msg = await getClient().beta.messages.stream({
-      model: opts.modelo,
-      max_tokens: opts.maxTokens ?? 64000,
-      system,
-      messages,
-      output_config: { effort: opts.esfuerzo },
-      // Si la IA se niega por un falso positivo de sus filtros, la API reintenta sola con otro modelo.
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-    }).finalMessage();
+    let msg: Anthropic.Beta.Messages.BetaMessage;
+    try {
+      msg = await getClient().beta.messages.stream({
+        model: opts.modelo,
+        max_tokens: opts.maxTokens ?? 64000,
+        system,
+        messages,
+        output_config: { effort: opts.esfuerzo },
+        // Si la IA se niega por un falso positivo de sus filtros, la API reintenta sola con otro modelo.
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+      }).finalMessage();
+    } catch (err) {
+      throw errorDeLaIA(err);
+    }
     const u = msg.usage;
     const gasto: Gasto = {
       modelo: msg.model, entrada: u.input_tokens, cacheLeidos: u.cache_read_input_tokens ?? 0, cacheEscritos: u.cache_creation_input_tokens ?? 0, salida: u.output_tokens,

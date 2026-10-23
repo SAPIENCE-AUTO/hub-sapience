@@ -25,7 +25,8 @@ import {
 } from '../../src/lib/formularios/generador';
 import { definicionParaIA, promptCambio, promptEstructura, promptLogica, promptSeccion } from '../../src/serverUtils/formularios/prompts';
 import { EstructuraZ, RespuestaLogicaZ, RespuestaSeccionZ, sinVacios } from '../../src/serverUtils/formularios/esquemas';
-import { systemPrompt } from '../../src/serverUtils/formularios/claude';
+import Anthropic from '@anthropic-ai/sdk';
+import { errorDeLaIA, systemPrompt } from '../../src/serverUtils/formularios/claude';
 import { conservarLogica } from '../../src/serverUtils/formularios/generar';
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
 
@@ -856,6 +857,17 @@ caso('al ajustar un filtro escrito, la lógica final conserva textos, alertas y 
   assert.equal(r.alertas![1].texto, 'Alerta nueva');
   assert.equal(r.frentes!.find((f) => f.id === 'reeds')!.nombre, 'Varitas'); // el nombre viene de la estructura
   assert.ok(!('textos' in r));
+});
+
+caso('los errores de la cuenta de la IA se dicen en palabras, no como «Error interno»', () => {
+  const sinSaldo = new Anthropic.BadRequestError(400, { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } }, 'Your credit balance is too low to access the Anthropic API.', new Headers());
+  assert.match((errorDeLaIA(sinSaldo) as Error).message, /se quedó sin saldo/);
+  assert.match((errorDeLaIA(new Anthropic.RateLimitError(429, {}, 'rate limited', new Headers())) as Error).message, /demasiadas peticiones/);
+  assert.match((errorDeLaIA(new Anthropic.AuthenticationError(401, {}, 'invalid x-api-key', new Headers())) as Error).message, /llave de la IA/);
+  assert.match((errorDeLaIA(new Anthropic.InternalServerError(529, {}, 'overloaded', new Headers())) as Error).message, /saturada/);
+  assert.match((errorDeLaIA(new Anthropic.APIConnectionError({ message: 'fetch failed' })) as Error).message, /No se pudo conectar/);
+  const otro = new Error('otra cosa');
+  assert.equal(errorDeLaIA(otro), otro);
 });
 
 caso('la skill completa va en el prompt del sistema', () => {
