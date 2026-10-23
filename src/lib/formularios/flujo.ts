@@ -16,6 +16,8 @@ export interface BloqueFlujo {
   soloContenido: boolean;
   /** «Se repite por cada opción que marcó en «…»». */
   repite?: string;
+  /** La pregunta por la que se repite, por su nombre corto si lo tiene («Formatos que compró»). */
+  repiteDe?: string;
   /** Cuándo aparece, en palabras. */
   condicion?: string;
   /** Preguntas de la sección que aparecen solo si aplica. */
@@ -79,6 +81,7 @@ export function mapaFlujo(def: Definicion): BloqueFlujo[] {
       preguntas: s.preguntas.filter((p) => forma(p.tipo) !== 'ninguna').length,
       soloContenido: s.preguntas.every((p) => p.tipo === 'contenido'),
       repite: s.repetirPor ? `Se repite por cada opción que marcó en ${citar(def, s.repetirPor, 48)}` : undefined,
+      repiteDe: s.repetirPor ? (ubicar(def, s.repetirPor)?.pregunta.nombre?.trim() || citar(def, s.repetirPor, 32)) : undefined,
       condicion: s.mostrarSi ? `Solo si ${condicionEnPalabras(s.mostrarSi, def)}` : undefined,
       condicionales: s.preguntas.filter((p) => p.mostrarSi).length,
       termina: distintos(termina),
@@ -89,6 +92,47 @@ export function mapaFlujo(def: Definicion): BloqueFlujo[] {
       nse: !!def.nse && s.preguntas.some((p) => def.nse!.puntos[p.id]),
     };
   });
+}
+
+// ── el flujo como diagrama ───────────────────────────────────────────────────
+/**
+ * Una fila del diagrama: un paso por el que pasan todos, o ramas lado a lado.
+ * Una rama empieza en una sección que solo aparece si aplica (o que se
+ * repite) y sigue con las que dependen de ella (se repiten por una de sus
+ * preguntas o aparecen según lo que se contestó ahí). Las secciones
+ * condicionales seguidas que no dependen entre sí son ramas distintas; la
+ * primera sección para todos las junta otra vez.
+ */
+export type FilaFlujo =
+  | { tipo: 'paso'; bloque: BloqueFlujo }
+  | { tipo: 'ramas'; ramas: BloqueFlujo[][] };
+
+const esCondicional = (s: Seccion) => !!s.mostrarSi || !!s.repetirPor;
+
+/** Si la sección depende de lo que se contesta en alguna de estas (se repite por, o aparece según). */
+function dependeDe(s: Seccion, rama: Seccion[]): boolean {
+  const preguntas = new Set<string>();
+  const secciones = new Set<string>();
+  if (s.mostrarSi) referencias(s.mostrarSi, preguntas, secciones);
+  if (s.repetirPor) preguntas.add(s.repetirPor);
+  return rama.some((r) => secciones.has(r.id) || r.preguntas.some((p) => preguntas.has(p.id)));
+}
+
+export function filasFlujo(def: Definicion): FilaFlujo[] {
+  const bloques = new Map(mapaFlujo(def).map((b) => [b.id, b]));
+  const filas: FilaFlujo[] = [];
+  for (let i = 0; i < def.secciones.length;) {
+    const s = def.secciones[i];
+    if (!esCondicional(s)) { filas.push({ tipo: 'paso', bloque: bloques.get(s.id)! }); i++; continue; }
+    const ramas: Seccion[][] = [];
+    for (; i < def.secciones.length && esCondicional(def.secciones[i]); i++) {
+      const x = def.secciones[i];
+      const rama = ramas.find((r) => dependeDe(x, r));
+      if (rama) rama.push(x); else ramas.push([x]);
+    }
+    filas.push({ tipo: 'ramas', ramas: ramas.map((r) => r.map((x) => bloques.get(x.id)!)) });
+  }
+  return filas;
 }
 
 /** Sección donde vive una pregunta (para llevar del mapa o de un problema a su lugar en el documento). */

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, ImagePlus, Loader2, Lock, MoreHorizontal, Trash2, X } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -11,7 +11,7 @@ import { nombreCampoDireccion } from '@/lib/formularios/paises';
 import { nombreDePregunta } from '@/lib/formularios/tabla';
 import { TEAL } from '@/lib/toolColors';
 import { CAMPOS_DIRECCION, TIPOS, esDeOpciones, esMatriz, forma, type Pregunta, type Seccion } from '@/lib/formularios/tipos';
-import { BotonIcono, Logica, useAlCerrarMenu, useDoc } from './comun';
+import { Logica, useAlCerrarMenu, useDoc } from './comun';
 import { EditorCondicion, EditorMaximo, EditorRango } from './Ajustes';
 import { ListaFilas, ListaOpciones, useElegirImagen, useZonaImagen } from './Opciones';
 import { TextoEditable } from './TextoEditable';
@@ -58,7 +58,9 @@ function Respuesta({ p }: { p: Pregunta }) {
 }
 
 export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
-  const { def, aplicar, quitar, nuevo, setNuevo, ia } = useDoc();
+  const { def, aplicar, quitar, nuevo, setNuevo, ia, elegida, elegir: elegirPregunta } = useDoc();
+  const activa = elegida === p.id;
+  useEffect(() => { if (nuevo === p.id) elegirPregunta(p.id); }, [nuevo, p.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [abierto, setAbierto] = useState<Abierto>(null);
   const { despues, alCerrar } = useAlCerrarMenu();
   const abrirAl = (a: Abierto) => () => despues(() => setAbierto(a));
@@ -86,12 +88,18 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
     <div
       id={`filtro-p-${p.id}`}
       {...zona.props}
-      className={`group/p relative -mx-3 scroll-mt-24 rounded-lg px-3 py-3 transition-colors ${zona.encima ? 'bg-[#1795D3]/[0.07] ring-2 ring-[#1795D3]/40' : 'hover:bg-[#0F3D4D]/[0.025]'}`}
+      data-pregunta={p.id}
+      onPointerDownCapture={() => { if (!activa) elegirPregunta(p.id); }}
+      onFocusCapture={() => { if (!activa) elegirPregunta(p.id); }}
+      className={`group/p relative -mx-3 scroll-mt-24 rounded-lg px-3 py-3 transition-colors ${
+        zona.encima ? 'bg-[#1795D3]/[0.07] ring-2 ring-[#1795D3]/40'
+          : activa ? 'bg-[#0F3D4D]/[0.03] ring-1 ring-[#0F3D4D]/20' : 'hover:bg-[#0F3D4D]/[0.025]'
+      }`}
     >
       {input}
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          {f !== 'ninguna' && (
+          {f !== 'ninguna' && (bloqueada || activa || !!p.nombre?.trim()) && (
             <p className="mb-0.5 text-[12px] font-semibold leading-snug" style={{ color: TEAL }} title="Nombre corto: el de su columna en el tablero y en el Excel. El participante no lo ve.">
               {bloqueada ? nombreDePregunta(p) : (
                 <TextoEditable
@@ -122,11 +130,16 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
             {bloqueada && <span className="flex items-center gap-1 font-normal normal-case tracking-normal"><Lock className="h-3 w-3" />cuestionario oficial de NSE</span>}
           </p>
         </div>
-        {!bloqueada && (
-          <div className="flex flex-shrink-0 items-center opacity-100 transition-opacity sm:opacity-40 sm:group-hover/p:opacity-100 sm:focus-within:opacity-100">
-            {ia && <BotonIcono titulo="Pedir un cambio a la IA" onClick={() => setAbierto(abierto === 'ia' ? null : 'ia')}><MarcaIA className="h-4 w-4" /></BotonIcono>}
-            <BotonIcono titulo="Subir pregunta" disabled={!sePuedeMover(def, p.id, -1)} onClick={() => aplicar((d) => moverPregunta(d, p.id, -1))}><ArrowUp className="h-4 w-4" /></BotonIcono>
-            <BotonIcono titulo="Bajar pregunta" disabled={!sePuedeMover(def, p.id, 1)} onClick={() => aplicar((d) => moverPregunta(d, p.id, 1))}><ArrowDown className="h-4 w-4" /></BotonIcono>
+        {!bloqueada && activa && (
+          <div className="absolute -top-3.5 right-2 z-10 flex items-center gap-0.5 rounded-lg border border-[#D4D4D8] bg-white p-0.5 shadow-sm">
+            {ia && (
+              <button
+                type="button" onClick={() => setAbierto(abierto === 'ia' ? null : 'ia')}
+                className="flex h-7 items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-[#0F3D4D] hover:bg-muted"
+              >
+                <MarcaIA className="h-3.5 w-3.5" />IA
+              </button>
+            )}
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <button type="button" aria-label="Más de esta pregunta" className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-[#0F3D4D]">
@@ -134,6 +147,9 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64" onCloseAutoFocus={alCerrar}>
+                <DropdownMenuItem disabled={!sePuedeMover(def, p.id, -1)} onSelect={() => aplicar((d) => moverPregunta(d, p.id, -1))}><ArrowUp className="mr-2 h-4 w-4" />Subir</DropdownMenuItem>
+                <DropdownMenuItem disabled={!sePuedeMover(def, p.id, 1)} onSelect={() => aplicar((d) => moverPregunta(d, p.id, 1))}><ArrowDown className="mr-2 h-4 w-4" />Bajar</DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>Cambiar tipo</DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className="max-h-[70vh] w-60 overflow-y-auto">

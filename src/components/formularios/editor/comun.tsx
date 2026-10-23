@@ -27,6 +27,9 @@ export interface ContextoDoc {
   quitar: (q: Quitar) => void;
   /** Fase 3: pedir cambios a la IA (botón IA en cada pregunta, Comentar en cada sección). */
   ia?: { formularioId: string; contarUso: () => void };
+  /** La pregunta elegida: solo ella muestra sus herramientas (IA, menú, agregar y mover opciones). */
+  elegida: string | null;
+  elegir: (id: string | null) => void;
 }
 
 export const Contexto = createContext<ContextoDoc | null>(null);
@@ -68,6 +71,9 @@ export function Logica({ lineas, onMotivo, className = '' }: {
 }
 
 /** Pill sólido chico con puntito blanco (moodboard del Hub). */
+/** «Sección» de los perfiles en el documento, para llegar a ella desde el flujo (ningún id de sección lleva «:»). */
+export const SECCION_PERFILES = ':perfiles';
+
 export function Pill({ color, children }: { color: string; children: ReactNode }) {
   return (
     <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full px-1.5 py-px text-[9.5px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: color }}>

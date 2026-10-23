@@ -12,7 +12,7 @@ import { PRUEBA_TIPOS } from '../../src/lib/formularios/plantillas/pruebaTipos';
 import { leerDefinicion, type Definicion, type Respuestas } from '../../src/lib/formularios/tipos';
 import { calcularNse, reglaNse, reglaVigente } from '../../src/lib/formularios/nse';
 import { condicionEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion } from '../../src/lib/formularios/palabras';
-import { mapaFlujo } from '../../src/lib/formularios/flujo';
+import { filasFlujo, mapaFlujo } from '../../src/lib/formularios/flujo';
 import { duracionEstimada, duracionPorPerfil } from '../../src/lib/formularios/duracion';
 import {
   GRUPOS_TIPOS, agregarOpcion, agregarPregunta, agregarSeccion, cambiarOpcion, cambiarPregunta, cambiarTipo, comoSimple, diferencias, idNuevo,
@@ -451,6 +451,15 @@ caso('el mapa del flujo marca lo que se repite, lo que aparece si aplica, dónde
   assert.equal(b('nse').nse, true);
   assert.equal(b('aviso').nse, false);
   assert.equal(mapaFlujo(PRUEBA_TIPOS).find((x) => x.id === 'concepto')!.soloContenido, true);
+});
+
+caso('el flujo como diagrama: pasos para todos y ramas lado a lado que se juntan', () => {
+  const filas = filasFlujo(ALONG2);
+  const vista = filas.map((f) => (f.tipo === 'paso' ? f.bloque.id : f.ramas.map((r) => r.map((b) => b.id).join('>')).join('|')));
+  assert.deepEqual(vista, ['aviso', 'perfil', 'filtros', 'compras', 'aroma_formatos>aroma_bloque|limp_tipos>limp_bloque>limp_foto', 'rechazo', 'nse', 'participacion']);
+  const ramas = filas[4];
+  assert.ok(ramas.tipo === 'ramas' && ramas.ramas[0][1].repiteDe === 'Formatos que compró');
+  assert.ok(filasFlujo(PRUEBA_TIPOS).every((f) => f.tipo === 'paso'));
 });
 
 caso('la duración estimada de ALONG 2 ronda los 10 minutos y sube al agregar preguntas', () => {

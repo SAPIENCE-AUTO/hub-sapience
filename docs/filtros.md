@@ -489,7 +489,20 @@ Observaciones de Sergio al usar la fase 3: «frentes» no se entiende, los nombr
 
 **Probado en local (2026-10-23):** en `lv4los` «Ponerlos con IA» puso los 23 nombres («Frecuencia», «Tipo de mascota», «Contacto WhatsApp»…) en unos 10 segundos; al guardarse, las 45 columnas de su tablero de prueba tomaron el nombre corto (incluidas «Filtro · Perfil» y las del NSE). Costó unos 15 centavos de dólar, casi todo por escribir la skill a la caché del modelo rápido la primera vez. Los pasos, la lista «¿Está listo?» (en `lv4los` todo listo; en `rmbdmkg`, en borrador, faltan 4) y los minutos por perfil se ven bien a 800 de ancho, sin errores en la consola. 70 pruebas.
 
-**Pendiente:** la tanda 2 (el flujo como diagrama con sus ramas y menos botones: herramientas solo en la pregunta elegida) espera el visto bueno de Sergio a los bocetos. El filtro real «SCREENER ALONG 2» todavía no tiene nombres cortos: al abrirlo sale el aviso con «Ponerlos con IA».
+**Pendiente:** el filtro real «SCREENER ALONG 2» todavía no tiene nombres cortos: al abrirlo sale el aviso con «Ponerlos con IA».
+
+### Flujo como diagrama y menos botones (tanda 2, 2026-10-23)
+
+Sergio aprobó los dos bocetos (documento limpio y flujo como diagrama de proceso) antes de construir.
+
+**Qué se construyó:**
+
+- **Flujo como diagrama** (`filasFlujo` en `flujo.ts`, `MapaFlujo.tsx`): los pasos de arriba abajo unidos con flechas; a la derecha, en rojo, dónde termina alguien en cada paso; las secciones que solo salen si aplica, punteadas y lado a lado como **ramas** que se juntan otra vez en el primer paso para todos; los bloques que se repiten con «↻ uno por cada opción de …» (con el nombre corto de la pregunta); el NSE como «solo alerta»; al final, los perfiles con su cuota. Una rama empieza en una sección condicional (o que se repite) y sigue con las que dependen de ella. Un clic en una caja lleva a su parte del documento (también «Perfiles y cuotas»). En celular, lo que termina va dentro de la caja.
+- **Herramientas solo en la pregunta elegida:** al tocar una pregunta se marca con un recuadro y aparece arriba a la derecha «IA» y «⋯» (subir, bajar, tipo, obligatoria, mostrar solo si, ayuda, nota, imagen, quitar). Las demás preguntas no muestran botones, ni sus opciones, ni «+ Opción» o «+ Fila». Esc o un clic fuera la suelta. «Sin nombre corto» solo se ve en la elegida (el aviso de arriba cuenta cuántas faltan). Las secciones muestran Comentar y «⋯» (con subir y bajar) al pasar el mouse.
+- **Encabezado más simple:** título con Borrador › Prueba › En vivo a la derecha; abajo, una línea con qué significa el estado, «¿Está listo?» y el paso que sigue. Pestañas subrayadas y, a su derecha, «Guardado», los minutos como rango por perfil («9 a 10 min», el detalle al tocarlos) y un solo menú «⋯» con deshacer, rehacer, estructura, versiones, copiar y abrir el enlace, volver a borrador, cerrar, borrar y el uso de la IA.
+- Se quitó el mapa chico junto al documento (lo cubre la pestaña Flujo) y textos que solo explicaban.
+
+**Probado en local (2026-10-23):** con «Prueba fase 3 · ALONG 2 desde Word» el flujo salió como el boceto (aromatizantes y limpiadores en dos ramas que se juntan en «Marcas»); el clic en «Perfiles y cuotas» lleva a esa sección; elegir una pregunta muestra solo sus herramientas; el menú «⋯» y la lista «¿Está listo?» funcionan; en celular (375) sin desplazamiento a lo ancho. 71 pruebas.
 
 ## Decisiones pendientes (las toma Sergio)
 
@@ -515,3 +528,4 @@ Observaciones de Sergio al usar la fase 3: «frentes» no se entiende, los nombr
 - **2026-10-22 · arrastrar y soltar:** a pedido de Sergio, los insumos del generador (Word, PDF, PowerPoint) se arrastran y sueltan en un recuadro (o en cualquier parte del paso), y la foto del participante también se puede soltar sobre su recuadro en computadora.
 - **2026-10-22 · errores de la IA en palabras:** en el primer uso en producción la cuenta de Anthropic se quedó sin saldo y el generador solo decía «Error interno». Ahora dice el motivo (sin saldo, llave, saturada, sin conexión), las llamadas que no llegan a la IA no cuentan para el tope, y al primer error de una sección deja de pedir las demás y ofrece «Reintentar lo que falta». 64 pruebas.
 - **2026-10-23 · ajustes tras el primer uso (tanda 1):** «perfiles» en vez de «frentes» en todo lo que se ve; nombre corto por pregunta (columna del tablero, Excel y panel), escrito por la IA y con «Ponerlos con IA» para lo que ya existe; las columnas del tablero se renombran solas sin pisar las que cambió el equipo; tiempo por perfil; estados Borrador › Prueba › En vivo con su explicación y la lista «¿Está listo?». 70 pruebas. Probado en local y subido a `main` con el OK de Sergio (`a69aa21`).
+- **2026-10-23 · flujo como diagrama y menos botones (tanda 2):** con los bocetos aprobados por Sergio: el Flujo es un diagrama de proceso con ramas, salidas en rojo y bloques que se repiten; las herramientas de cada pregunta solo aparecen al elegirla; encabezado con los pasos del estado, una línea de estado y un solo menú «⋯». 71 pruebas. Probado en local.

@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, Clock, History, LayoutList, Loader2, Redo2, Undo2, Users } from 'lucide-react';
+import { Fragment, useEffect, useMemo } from 'react';
+import { AlertTriangle, Check, Clock, Loader2, Undo2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ALERTA, EXITO, PELIGRO } from '@/lib/toolColors';
@@ -10,12 +10,10 @@ import type { Editor } from './useEditorFiltro';
 import { Documento } from './Documento';
 import { MapaFlujo } from './MapaFlujo';
 import { VistaCelular } from './VistaCelular';
-import { Versiones } from './Versiones';
 import { supuestosDe } from '@/lib/formularios/generador';
 import type { GeneradorUI } from '../generador/useGenerador';
 import { AvanceEscritura } from '../generador/AvanceEscritura';
 import { Supuestos } from '../generador/Supuestos';
-import { UsoIA } from '../generador/comun';
 import { NombresCortos } from '../generador/NombresCortos';
 import { cambiarPregunta } from '@/lib/formularios/editar';
 
@@ -29,10 +27,13 @@ export function irAlDocumento(id: { seccion?: string; pregunta?: string }) {
   el.animate([{ backgroundColor: 'rgba(244,192,37,0.28)' }, { backgroundColor: 'rgba(244,192,37,0)' }], { duration: 1600, easing: 'ease-out' });
 }
 
-function Duracion({ editor }: { editor: Editor }) {
+export function Duracion({ editor }: { editor: Editor }) {
   const { tipico, maximo } = duracionEstimada(editor.def);
   const perfiles = duracionPorPerfil(editor.def);
   const masLento = Math.max(tipico, ...perfiles.map((p) => p.minutos));
+  // En la barra, de cuánto a cuánto tarda quien entra a cada perfil (o lo típico, sin perfiles); el detalle, al tocarlo.
+  const masRapido = perfiles.length ? Math.min(...perfiles.map((p) => p.minutos)) : tipico;
+  const rango = perfiles.length && masRapido !== masLento ? `${masRapido} a ${masLento} min` : `≈ ${masLento} min`;
   const colorDe = (min: number) => (min > TOPE_MINUTOS ? PELIGRO : EXITO);
   const color = masLento > TOPE_MINUTOS ? PELIGRO : maximo > TOPE_MINUTOS ? ALERTA : EXITO;
   const fila = (texto: string, min: number, colorMin = colorDe(min)) => (
@@ -46,8 +47,7 @@ function Duracion({ editor }: { editor: Editor }) {
       <PopoverTrigger asChild>
         <button type="button" className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium hover:bg-muted" style={{ color }}>
           <Clock className="h-3.5 w-3.5" />
-          ≈ {tipico} min{maximo > tipico ? ` · hasta ${maximo}` : ''}
-          <span className="font-normal text-muted-foreground">· tope {TOPE_MINUTOS}</span>
+          {rango}
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] text-sm">
@@ -76,7 +76,7 @@ function legible(def: Editor['def'], texto: string): string {
   });
 }
 
-function EstadoGuardado({ editor, onIr, generando }: { editor: Editor; onIr: (id: { seccion?: string; pregunta?: string }) => void; generando?: boolean }) {
+export function EstadoGuardado({ editor, onIr, generando }: { editor: Editor; onIr: (id: { seccion?: string; pregunta?: string }) => void; generando?: boolean }) {
   const { estado, problemas } = editor;
   // Mientras la IA escribe, una sección puede usar otra que todavía no llega: se guarda al completarse.
   if (generando && estado === 'por_corregir') {
@@ -125,22 +125,19 @@ function EstadoGuardado({ editor, onIr, generando }: { editor: Editor; onIr: (id
 }
 
 /**
- * El editor de un filtro (fase 2): barra con deshacer, guardado, minutos y
- * versiones; avisos de otra persona; y la vista elegida (Documento, Flujo o
- * Celular). El estado vive en useEditorFiltro, que guarda el componente de
+ * El editor de un filtro (fase 2): avisos (lo que escribe la IA, otra persona,
+ * nombres cortos, supuestos) y la vista elegida (Documento, Flujo o Celular).
+ * Guardado, minutos y el menú «⋯» van en la barra de pestañas (FormulariosPanel). El estado vive en useEditorFiltro, que guarda el componente de
  * arriba para no perderlo al pasar a Respuestas.
  */
-export function EditorFiltro({ editor, vista, formularioId, onIr, gen, onEstructura }: {
+export function EditorFiltro({ editor, vista, formularioId, onIr, gen }: {
   editor: Editor;
   vista: VistaEditor;
   formularioId: string;
   onIr: (id: { seccion?: string; pregunta?: string }) => void;
   /** Fase 3: el generador con IA (supuestos, avance de la escritura, botón IA y comentarios). */
   gen?: GeneradorUI;
-  /** Abre la estructura para cambiarla con la IA. */
-  onEstructura?: () => void;
 }) {
-  const [versiones, setVersiones] = useState(false);
   const contarUso = gen?.contarUso;
   const hayIA = !!gen;
   const ia = useMemo(() => (hayIA && contarUso ? { formularioId, contarUso: () => contarUso() } : undefined), [hayIA, contarUso, formularioId]);
@@ -160,19 +157,6 @@ export function EditorFiltro({ editor, vista, formularioId, onIr, gen, onEstruct
   const otros = editor.otros;
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="flex items-center gap-0.5">
-          <Button size="sm" variant="ghost" className="h-8 px-2" disabled={!editor.puedeDeshacer} onClick={editor.deshacer} title="Deshacer (⌘Z)"><Undo2 className="h-4 w-4" /><span className="ml-1 hidden sm:inline">Deshacer</span></Button>
-          <Button size="sm" variant="ghost" className="h-8 px-2" disabled={!editor.puedeRehacer} onClick={editor.rehacer} title="Rehacer (⌘⇧Z)"><Redo2 className="h-4 w-4" /></Button>
-        </div>
-        <EstadoGuardado editor={editor} onIr={onIr} generando={gen?.escribiendo} />
-        <Duracion editor={editor} />
-        <span className="ml-auto flex items-center gap-2">
-          {gen && <UsoIA uso={gen.uso} />}
-          {onEstructura && <Button size="sm" variant="outline" className="h-8" disabled={gen?.escribiendo} onClick={onEstructura} title="Ver la estructura y cambiarla con la IA"><LayoutList className="mr-1.5 h-3.5 w-3.5" />Estructura</Button>}
-          <Button size="sm" variant="outline" className="h-8" onClick={() => setVersiones(true)}><History className="mr-1.5 h-3.5 w-3.5" />Versiones</Button>
-        </span>
-      </div>
       {gen?.g?.estructura && <AvanceEscritura gen={gen} def={editor.def} />}
 
       {otros.length > 0 && (
@@ -214,7 +198,6 @@ export function EditorFiltro({ editor, vista, formularioId, onIr, gen, onEstruct
       {vista === 'documento' && (
         <Documento
           editor={editor}
-          onIr={(seccion) => onIr({ seccion })}
           ia={ia}
           pendientes={gen?.g?.etapa === 'preguntas' && gen.g.estructura ? {
             orden: gen.g.estructura.secciones.map((s) => s.id),
@@ -224,24 +207,11 @@ export function EditorFiltro({ editor, vista, formularioId, onIr, gen, onEstruct
         />
       )}
       {vista === 'flujo' && (
-        <div className="rounded-xl border bg-white px-4 py-5 sm:px-8">
-          <p className="mx-auto mb-1 max-w-3xl text-xs text-muted-foreground">
-            Los bloques en orden. Los corridos a la derecha aparecen solo si aplica; los que llevan sombra se repiten. Un clic lleva a esa parte del documento.
-          </p>
+        <div className="rounded-xl border bg-white px-3 py-6 sm:px-8">
           <MapaFlujo def={editor.def} onIr={(seccion) => onIr({ seccion })} />
         </div>
       )}
       {vista === 'celular' && <VistaCelular def={editor.def} conProblemas={editor.problemas.length > 0} />}
-
-      {versiones && (
-        <Versiones
-          formularioId={formularioId}
-          actual={editor.def}
-          sinGuardar={editor.sinGuardar}
-          onRestaurar={(def) => editor.aplicar(() => def)}
-          onClose={() => setVersiones(false)}
-        />
-      )}
     </div>
   );
 }

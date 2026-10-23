@@ -75,7 +75,7 @@ function Marca({ p, i }: { p: Pregunta; i: number }) {
 }
 
 function FilaOpcion({ s, p, o, i, total, bloqueada }: { s: Seccion; p: Pregunta; o: Opcion; i: number; total: number; bloqueada: boolean }) {
-  const { def, aplicar, quitar, nuevo, setNuevo } = useDoc();
+  const { def, aplicar, quitar, nuevo, setNuevo, elegida } = useDoc();
   const destino: Destino = { tipo: 'opcion', pregunta: p.id, opcion: o.id };
   const zona = useZonaImagen(destino, { tipo: 'pregunta', pregunta: p.id });
   const { input, elegir } = useElegirImagen(destino);
@@ -115,7 +115,7 @@ function FilaOpcion({ s, p, o, i, total, bloqueada }: { s: Seccion; p: Pregunta;
         <Logica lineas={lineas} className="mt-0.5" onMotivo={bloqueada ? undefined : (campo, v) => cambiar({ [campo]: v })} />
       </div>
       {!bloqueada && (
-        <div className="flex flex-shrink-0 items-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover/o:opacity-100 sm:focus-within:opacity-100">
+        <div className={`flex-shrink-0 items-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover/o:opacity-100 sm:focus-within:opacity-100 ${elegida === p.id ? 'flex' : 'hidden'}`}>
           <BotonIcono titulo="Subir" disabled={i === 0} onClick={() => aplicar((d) => moverOpcion(d, p.id, o.id, -1))}><ArrowUp className="h-3.5 w-3.5" /></BotonIcono>
           <BotonIcono titulo="Bajar" disabled={i === total - 1} onClick={() => aplicar((d) => moverOpcion(d, p.id, o.id, 1))}><ArrowDown className="h-3.5 w-3.5" /></BotonIcono>
           <DropdownMenu modal={false}>
@@ -168,7 +168,7 @@ function FilaOpcion({ s, p, o, i, total, bloqueada }: { s: Seccion; p: Pregunta;
 
 /** Opciones de una pregunta (o columnas de una matriz). Si salen de otra pregunta, aquí solo van las que se agregan al final. */
 export function ListaOpciones({ s, p, bloqueada, titulo }: { s: Seccion; p: Pregunta; bloqueada: boolean; titulo?: string }) {
-  const { aplicar, setNuevo } = useDoc();
+  const { aplicar, setNuevo, elegida } = useDoc();
   const lista = (p.opcionesDe ? p.opcionesExtra : p.opciones) ?? [];
   const agregar = () => {
     let id = '';
@@ -181,7 +181,7 @@ export function ListaOpciones({ s, p, bloqueada, titulo }: { s: Seccion; p: Preg
       <ul className="space-y-0.5">
         {lista.map((o, i) => <FilaOpcion key={o.id} s={s} p={p} o={o} i={i} total={lista.length} bloqueada={bloqueada} />)}
       </ul>
-      {!bloqueada && (
+      {!bloqueada && elegida === p.id && (
         <button type="button" onClick={agregar} className="mt-1 flex items-center gap-1 rounded px-1 py-0.5 text-[12.5px] font-medium text-[#0F3D4D]/80 hover:bg-[#0F3D4D]/5 hover:text-[#0F3D4D]">
           <Plus className="h-3.5 w-3.5" />{p.opcionesDe ? 'Opción al final' : esDeOpciones(p.tipo) || p.tipo === 'ordenar' ? 'Opción' : 'Columna'}
         </button>
@@ -192,7 +192,8 @@ export function ListaOpciones({ s, p, bloqueada, titulo }: { s: Seccion; p: Preg
 
 /** Filas de una matriz: su id es la clave de su columna en el tablero, así que solo se corrige el texto. */
 export function ListaFilas({ p }: { p: Pregunta }) {
-  const { aplicar, quitar, nuevo, setNuevo } = useDoc();
+  const { aplicar, quitar, nuevo, setNuevo, elegida } = useDoc();
+  const activa = elegida === p.id;
   const filas = p.filas ?? [];
   return (
     <div className="mt-2">
@@ -204,7 +205,7 @@ export function ListaFilas({ p }: { p: Pregunta }) {
             <div className="min-w-0 flex-1 text-[14px]">
               <TextoEditable valor={f.label} linea obligatorio etiqueta="Fila" abrir={nuevo === f.id} onCerrar={() => nuevo === f.id && setNuevo(null)} onGuardar={(v) => aplicar((d) => cambiarFila(d, p.id, f.id, v))} />
             </div>
-            <div className="flex flex-shrink-0 items-center sm:opacity-0 sm:group-hover/o:opacity-100">
+            <div className={`flex-shrink-0 items-center sm:opacity-0 sm:group-hover/o:opacity-100 ${activa ? 'flex' : 'hidden'}`}>
               <BotonIcono titulo="Subir" disabled={i === 0} onClick={() => aplicar((d) => moverFila(d, p.id, f.id, -1))}><ArrowUp className="h-3.5 w-3.5" /></BotonIcono>
               <BotonIcono titulo="Bajar" disabled={i === filas.length - 1} onClick={() => aplicar((d) => moverFila(d, p.id, f.id, 1))}><ArrowDown className="h-3.5 w-3.5" /></BotonIcono>
               <BotonIcono
@@ -220,13 +221,15 @@ export function ListaFilas({ p }: { p: Pregunta }) {
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        onClick={() => { let id = ''; aplicar((d) => { const r = agregarFila(d, p.id); id = r.id; return r.def; }); setNuevo(id); }}
-        className="mt-1 flex items-center gap-1 rounded px-1 py-0.5 text-[12.5px] font-medium text-[#0F3D4D]/80 hover:bg-[#0F3D4D]/5 hover:text-[#0F3D4D]"
-      >
-        <Plus className="h-3.5 w-3.5" />Fila
-      </button>
+      {activa && (
+        <button
+          type="button"
+          onClick={() => { let id = ''; aplicar((d) => { const r = agregarFila(d, p.id); id = r.id; return r.def; }); setNuevo(id); }}
+          className="mt-1 flex items-center gap-1 rounded px-1 py-0.5 text-[12.5px] font-medium text-[#0F3D4D]/80 hover:bg-[#0F3D4D]/5 hover:text-[#0F3D4D]"
+        >
+          <Plus className="h-3.5 w-3.5" />Fila
+        </button>
+      )}
     </div>
   );
 }

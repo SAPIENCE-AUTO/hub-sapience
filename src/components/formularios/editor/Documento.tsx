@@ -8,7 +8,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ALERTA, TEAL } from '@/lib/toolColors';
+import { ALERTA } from '@/lib/toolColors';
 import { alertaEnPalabras, frenteEnPalabras, logicaDeSeccion, ubicar } from '@/lib/formularios/palabras';
 import {
   GRUPOS_TIPOS, agregarPregunta, agregarSeccion, cambiarFrente, cambiarPregunta, cambiarSeccion, cambiarTextos, moverSeccion, quitarSeccion, usosDeSeccion,
@@ -17,11 +17,10 @@ import { PAISES } from '@/lib/formularios/paises';
 import { reglaVigente } from '@/lib/formularios/nse';
 import { TIPOS, type Definicion, type Seccion, type TipoPregunta } from '@/lib/formularios/tipos';
 import type { Editor } from './useEditorFiltro';
-import { BotonIcono, Contexto, Logica, claveDestino, useAlCerrarMenu, type ContextoDoc, type Destino, type Quitar } from './comun';
+import { BotonIcono, Contexto, Logica, SECCION_PERFILES, claveDestino, useAlCerrarMenu, type ContextoDoc, type Destino, type Quitar } from './comun';
 import { EditorCondicion } from './Ajustes';
 import { conImagenEnOpcion, tipoConImagen } from './Opciones';
 import { PreguntaDoc } from './PreguntaDoc';
-import { MapaFlujo } from './MapaFlujo';
 import { TextoEditable } from './TextoEditable';
 import { esCampoDeTexto, imagenesDe, subirImagenFiltro, traeArchivos } from './imagenes';
 import { PropuestaIA } from '../generador/PropuestaIA';
@@ -90,8 +89,8 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
   };
 
   return (
-    <section id={`filtro-s-${s.id}`} className="group/s scroll-mt-24 border-t border-[#E4E4E7] pt-6">
-      <div className="flex items-start gap-2">
+    <section id={`filtro-s-${s.id}`} className="scroll-mt-24 border-t border-[#E4E4E7] pt-6">
+      <div className="group/s flex items-start gap-2">
         <h2 className="min-w-0 flex-1 text-[18px] font-bold leading-snug text-[#1F1F23]">
           <TextoEditable
             valor={s.titulo ?? ''} linea etiqueta="Título de la sección" placeholder="Sección sin título"
@@ -99,10 +98,8 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
             onGuardar={(v) => aplicar((d) => cambiarSeccion(d, s.id, { titulo: v || undefined }))}
           />
         </h2>
-        <div className="flex flex-shrink-0 items-center sm:opacity-40 sm:group-hover/s:opacity-100 sm:focus-within:opacity-100">
+        <div className="flex flex-shrink-0 items-center transition-opacity sm:opacity-0 sm:group-hover/s:opacity-100 sm:focus-within:opacity-100">
           {ia && !delNse && <BotonIcono titulo="Comentar la lógica de esta sección a la IA" onClick={() => setComentar((x) => !x)}><MessageSquareText className="h-4 w-4" /></BotonIcono>}
-          <BotonIcono titulo="Subir sección" disabled={i === 0} onClick={() => aplicar((d) => moverSeccion(d, s.id, -1))}><ArrowUp className="h-4 w-4" /></BotonIcono>
-          <BotonIcono titulo="Bajar sección" disabled={i === total - 1} onClick={() => aplicar((d) => moverSeccion(d, s.id, 1))}><ArrowDown className="h-4 w-4" /></BotonIcono>
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <button type="button" aria-label="Más de esta sección" className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-[#0F3D4D]">
@@ -110,6 +107,9 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60" onCloseAutoFocus={alCerrar}>
+              <DropdownMenuItem disabled={i === 0} onSelect={() => aplicar((d) => moverSeccion(d, s.id, -1))}><ArrowUp className="mr-2 h-4 w-4" />Subir sección</DropdownMenuItem>
+              <DropdownMenuItem disabled={i === total - 1} onSelect={() => aplicar((d) => moverSeccion(d, s.id, 1))}><ArrowDown className="mr-2 h-4 w-4" />Bajar sección</DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => despues(() => setCondicion(true))}>{s.mostrarSi ? 'Cambiar cuándo aparece…' : 'Mostrar solo si…'}</DropdownMenuItem>
               {!s.intro && <DropdownMenuItem onSelect={() => despues(() => setIntro(true))}>Agregar texto de entrada</DropdownMenuItem>}
               <DropdownMenuSeparator />
@@ -145,12 +145,11 @@ function Frentes({ ctx }: { ctx: ContextoDoc }) {
   const pais = PAISES[def.pais];
   const vigente = reglaVigente(def.pais);
   return (
-    <section className="border-t border-[#E4E4E7] pt-6">
+    <section id={`filtro-s-${SECCION_PERFILES}`} className="scroll-mt-24 border-t border-[#E4E4E7] pt-6">
       <div className="flex items-start gap-2">
         <h2 className="min-w-0 flex-1 text-[18px] font-bold text-[#1F1F23]">Perfiles y cuotas</h2>
         {ia && <BotonIcono titulo="Comentar los perfiles y cuotas a la IA" onClick={() => setComentar((x) => !x)}><MessageSquareText className="h-4 w-4" /></BotonIcono>}
       </div>
-      <p className="mt-0.5 text-[12.5px] text-muted-foreground">{ia ? 'El nombre y la cuota se corrigen a mano; quién entra a cada perfil, comentándolo a la IA.' : 'Quién entra a cada perfil se lee aquí en palabras; el nombre y la cuota se corrigen a mano.'}</p>
       {comentar && <PropuestaIA alcance={{ frentes: true }} onCerrar={() => setComentar(false)} />}
       {frentes.length === 0 && <p className="mt-2 text-[13px] text-muted-foreground">Este filtro no tiene perfiles.</p>}
       <ul className="mt-3 space-y-3">
@@ -207,13 +206,11 @@ function CuotaFrente({ valor, onGuardar }: { valor: number; onGuardar: (n: numbe
 
 /**
  * Vista Documento: el screener de arriba abajo, como lo leerá el cliente, con
- * la lógica en palabras bajo cada pregunta y opción, y el mapa del flujo al
- * lado en pantallas anchas. Todo texto se corrige con un clic; las imágenes
+ * la lógica en palabras bajo cada pregunta y opción. Todo texto se corrige con un clic; las imágenes
  * se arrastran o se pegan sobre la opción o la pregunta.
  */
-export function Documento({ editor, onIr, ia, pendientes }: {
+export function Documento({ editor, ia, pendientes }: {
   editor: Editor;
-  onIr: (seccionId: string) => void;
   ia?: ContextoDoc['ia'];
   /** Fase 3: secciones de la estructura que la IA todavía está escribiendo, en su orden. Se ven como un hueco en su lugar. */
   pendientes?: { orden: string[]; titulos: Record<string, string>; escribiendo: Set<string> };
@@ -222,6 +219,7 @@ export function Documento({ editor, onIr, ia, pendientes }: {
   const [subiendo, setSubiendo] = useState<Set<string>>(new Set());
   const [nuevo, setNuevo] = useState<string | null>(null);
   const [porQuitar, setPorQuitar] = useState<Quitar | null>(null);
+  const [elegida, setElegida] = useState<string | null>(null);
   const apuntado = useRef<Destino | null>(null);
   const defRef = useRef<Definicion>(def);
   defRef.current = def;
@@ -267,13 +265,22 @@ export function Documento({ editor, onIr, ia, pendientes }: {
     return () => window.removeEventListener('paste', pegar);
   }); // se vuelve a enganchar en cada render: ponerImagen usa el editor del momento
 
+  // Esc suelta la pregunta elegida (si no se está escribiendo).
+  useEffect(() => {
+    const soltar = (e: KeyboardEvent) => { if (e.key === 'Escape' && !esCampoDeTexto(e.target)) setElegida(null); };
+    window.addEventListener('keydown', soltar);
+    return () => window.removeEventListener('keydown', soltar);
+  }, []);
+
   const ctx: ContextoDoc = useMemo(() => ({
     def, aplicar, subiendo, nuevo, setNuevo,
     ponerImagen: (d, a) => { void ponerImagen(d, a); },
     apuntar: (d) => { apuntado.current = d; },
     quitar: (q) => (q.usos.length || q.confirmar ? setPorQuitar(q) : q.hacer()),
     ia,
-  }), [def, aplicar, subiendo, nuevo, ia]); // eslint-disable-line react-hooks/exhaustive-deps
+    elegida,
+    elegir: setElegida,
+  }), [def, aplicar, subiendo, nuevo, ia, elegida]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const agregarSeccionAl = (indice: number) => {
     let id = '';
@@ -293,7 +300,14 @@ export function Documento({ editor, onIr, ia, pendientes }: {
         onDragOver={(e) => { if (traeArchivos(e.dataTransfer)) e.preventDefault(); }}
         onDrop={(e) => { if (traeArchivos(e.dataTransfer)) { e.preventDefault(); toast('Suelta la imagen sobre una opción o una pregunta.'); } }}
       >
-        <article className="mx-auto w-full min-w-0 max-w-[780px] flex-1 space-y-6 rounded-xl border border-[#E4E4E7] bg-white px-4 py-6 shadow-sm sm:px-10 sm:py-9">
+        <article
+          className="mx-auto w-full min-w-0 max-w-[780px] flex-1 space-y-6 rounded-xl border border-[#E4E4E7] bg-white px-4 py-6 shadow-sm sm:px-10 sm:py-9"
+          // Un clic fuera de toda pregunta la suelta. Lo que abre una pregunta en otra capa (menús, avisos) no cuenta.
+          onPointerDown={(e) => {
+            const t = e.target as HTMLElement;
+            if (e.currentTarget.contains(t) && !t.closest('[data-pregunta]')) setElegida(null);
+          }}
+        >
           <header>
             <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">Lo que ve el participante al entrar</p>
             <h1 className="mt-1 text-[24px] font-bold leading-tight text-[#1F1F23]">{textos('tituloPublico', 'Título', '')}</h1>
@@ -316,10 +330,6 @@ export function Documento({ editor, onIr, ia, pendientes }: {
           <Frentes ctx={ctx} />
         </article>
 
-        <aside className="sticky top-2 hidden max-h-[calc(100vh-6rem)] w-64 flex-shrink-0 overflow-y-auto pb-6 xl:block">
-          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: TEAL }}>Flujo</p>
-          <MapaFlujo def={def} compacto onIr={onIr} />
-        </aside>
       </div>
 
       <AlertDialog open={!!porQuitar} onOpenChange={(o) => !o && setPorQuitar(null)}>

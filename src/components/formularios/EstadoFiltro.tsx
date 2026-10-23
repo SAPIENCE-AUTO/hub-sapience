@@ -1,9 +1,9 @@
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Check, ChevronRight, CircleDashed } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ALERTA, EXITO, GRIS, INFO, TEAL } from '@/lib/toolColors';
 import type { Chequeo } from '@/lib/formularios/listo';
-import { botonSecundario, botonTeal } from './generador/comun';
+import { botonTeal } from './generador/comun';
 
 export type EstadoEditable = 'borrador' | 'prueba' | 'cerrado';
 
@@ -13,16 +13,16 @@ const PASOS = [
   { id: 'en_vivo', nombre: 'En vivo' },
 ] as const;
 
-/** Qué significa el estado, en una línea (va junto al enlace). */
+/** Qué significa el estado, en una línea. */
 export const EXPLICA_ESTADO: Record<string, string> = {
   borrador: 'Nadie lo puede contestar todavía.',
-  prueba: 'El enlace ya funciona para probarlo: lo que entra queda marcado como prueba y lo que cambies se ve al momento.',
+  prueba: 'El enlace ya funciona para probarlo: lo que entra queda marcado como prueba.',
   en_vivo: 'Lo contestan participantes reales.',
   cerrado: 'Ya no recibe respuestas; lo que entró se queda.',
 };
 
-/** Borrador › Prueba › En vivo: dónde va el filtro y el paso que sigue. */
-function Pasos({ estado }: { estado: string }) {
+/** Borrador › Prueba › En vivo: dónde va el filtro. */
+export function PasosEstado({ estado }: { estado: string }) {
   const actual = PASOS.findIndex((p) => p.id === estado);
   return (
     <ol className="flex items-center gap-1 text-xs" aria-label="Estado del filtro">
@@ -56,13 +56,13 @@ function EstaListo({ chequeos }: { chequeos: Chequeo[] }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className={botonSecundario}>
+        <button type="button" className="flex items-center gap-1 rounded font-medium underline-offset-2 hover:underline" style={{ color: TEAL }}>
           {faltan
-            ? <><CircleDashed className="h-3.5 w-3.5" style={{ color: ALERTA }} />¿Está listo? · faltan {faltan}</>
-            : <><Check className="h-3.5 w-3.5" style={{ color: EXITO }} />Listo</>}
+            ? <><CircleDashed className="h-3.5 w-3.5" style={{ color: ALERTA }} />¿Está listo? Faltan {faltan}</>
+            : <><Check className="h-3.5 w-3.5" style={{ color: EXITO }} />Listo para participantes</>}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] text-sm">
+      <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] text-sm">
         <p className="mb-2 font-semibold" style={{ color: TEAL }}>Antes de abrirlo a participantes</p>
         <ul className="space-y-1.5">
           {chequeos.map((c) => (
@@ -83,22 +83,24 @@ function EstaListo({ chequeos }: { chequeos: Chequeo[] }) {
   );
 }
 
-/** El estado del filtro con su paso siguiente y la lista de lo que falta para abrirlo a participantes. */
-export function EstadoFiltro({ estado, chequeos, onEstado }: {
+/**
+ * La línea bajo el título: qué significa el estado, «¿Está listo?» y el paso
+ * que sigue. Lo demás (volver a borrador, cerrar, el enlace) va en el menú «⋯».
+ */
+export function LineaEstado({ estado, chequeos, onEstado, extra }: {
   estado: string;
   chequeos: Chequeo[];
   onEstado: (e: EstadoEditable) => void;
+  /** Lo que se agrega al final de la línea (el enlace en prueba, un aviso del NSE). */
+  extra?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
-      <Pasos estado={estado} />
-      <div className="flex flex-wrap gap-2">
-        {estado === 'borrador' && <button type="button" className={botonTeal} onClick={() => onEstado('prueba')}>Pasar a prueba</button>}
-        {estado === 'prueba' && <button type="button" className={botonSecundario} onClick={() => onEstado('borrador')}>Volver a borrador</button>}
-        {estado === 'prueba' && <button type="button" className={botonSecundario} onClick={() => onEstado('cerrado')}>Cerrar</button>}
-        {estado === 'cerrado' && <button type="button" className={botonSecundario} onClick={() => onEstado('prueba')}>Reabrir en prueba</button>}
-        {estado !== 'cerrado' && <EstaListo chequeos={chequeos} />}
-      </div>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+      <span>{EXPLICA_ESTADO[estado]}</span>
+      {estado !== 'cerrado' && <EstaListo chequeos={chequeos} />}
+      {estado === 'borrador' && <button type="button" className={`${botonTeal} !px-2.5 !py-1 !text-xs`} onClick={() => onEstado('prueba')}>Pasar a prueba</button>}
+      {estado === 'cerrado' && <button type="button" className={`${botonTeal} !px-2.5 !py-1 !text-xs`} onClick={() => onEstado('prueba')}>Reabrir en prueba</button>}
+      {extra}
     </div>
   );
 }
