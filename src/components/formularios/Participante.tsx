@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { pantallas, terminacion, validarPantalla } from '@/lib/formularios/motor';
 import type { Definicion, Respuestas, Valor } from '@/lib/formularios/tipos';
 import { CampoPregunta } from './CampoPregunta';
+import { EnlaceAviso } from './AvisoPrivacidad';
 
 // Mismo logo que SwipePage.tsx — página pública sin login. Quitarlo es de la fase 4 (formulario neutro en el dominio de Sharpli).
 const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png';
@@ -146,6 +147,7 @@ export function Participante({ def, prueba, codigo, semilla, modo = 'pagina', in
         >
           {actualId ? 'Continuar' : 'Empezar'}
         </button>
+        <EnlaceAviso className="mx-auto mt-5 block !text-[13px] !font-normal text-[#62626B]" texto="Aviso de privacidad" />
       </div>,
     );
   }

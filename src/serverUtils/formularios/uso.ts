@@ -6,7 +6,7 @@ import type { Gasto } from './claude';
 // van en paralelo; al terminar se anota cuánto gastó. Un filtro completo son unas 12 llamadas.
 export const LIMITE_POR_HORA = Number(process.env.FORMULARIOS_IA_LIMITE_HORA || 60);
 
-export type AccionIA = 'estructura' | 'seccion' | 'logica' | 'pregunta' | 'comentario' | 'nombres';
+export type AccionIA = 'estructura' | 'seccion' | 'logica' | 'pregunta' | 'comentario' | 'nombres' | 'identificacion';
 
 /** Lo que cuenta para el tope: una llamada que falló sin llegar a la IA (sin saldo, sin conexión) no gastó nada y no cuenta. */
 const CUENTA = '(ok is distinct from false or modelo is not null)';
@@ -46,6 +46,18 @@ export async function anotarGasto(id: string, g: Gasto): Promise<void> {
 
 export async function cerrarUso(id: string, ok: boolean): Promise<void> {
   await pool.query(`update formulario_ia_uso set ok = $2 where id = $1`, [id, ok]).catch(() => {});
+}
+
+/**
+ * Registro de una llamada que no hace una persona del Hub (la revisión de la
+ * identificación al recibir una respuesta): queda en el uso, sin el tope por hora.
+ */
+export async function registrarUsoAutomatico(formularioId: string, accion: AccionIA): Promise<string> {
+  const { rows: [r] } = await pool.query(
+    `insert into formulario_ia_uso (formulario_id, usuario_email, accion) values ($1, 'participante', $2) returning id`,
+    [formularioId, accion],
+  );
+  return r.id as string;
 }
 
 /** Corre una llamada a la IA con su registro: reserva, anota lo gastado y si salió bien. */

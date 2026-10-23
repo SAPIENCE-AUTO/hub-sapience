@@ -1,5 +1,6 @@
 import { duracionEstimada, duracionPorSeccion, type Duracion } from './duracion';
 import { idNuevo } from './editar';
+import { SECCION_INICIO, inicioPrimero, seccionInicio } from './inicio';
 import { preguntasNse, reglaNse } from './nse';
 import { preguntasDeCondicion } from './flujo';
 import { condicionEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta } from './palabras';
@@ -224,7 +225,8 @@ export function estructuraDeDefinicion(def: Definicion, anterior?: Estructura): 
     tituloPublico: def.tituloPublico,
     perfil: anterior?.perfil ?? '',
     frentes: (def.frentes ?? []).map((f) => ({ id: f.id, nombre: f.nombre, grupo: f.grupo, meta: f.meta, quien: frenteEnPalabras(def, f) })),
-    secciones: def.secciones.map((s) => {
+    // «Antes de empezar» la pone el Hub: no es parte de lo que se planea con la IA.
+    secciones: def.secciones.filter((s) => s.id !== SECCION_INICIO).map((s) => {
       const plan: SeccionPlan = {
         id: s.id,
         titulo: s.titulo ?? '',
@@ -417,7 +419,9 @@ export function bocetoDeEstructura(e: Estructura): Definicion {
 
 export function minutosDeEstructura(e: Estructura): { total: Duracion; porSeccion: Record<string, Duracion> } {
   const boceto = bocetoDeEstructura(e);
-  return { total: duracionEstimada(boceto), porSeccion: duracionPorSeccion(boceto) };
+  // «Antes de empezar» no va en la estructura (la pone el Hub), pero sí cuenta en los minutos.
+  const conInicio = { ...boceto, secciones: [seccionInicio(), ...boceto.secciones] };
+  return { total: duracionEstimada(conInicio), porSeccion: duracionPorSeccion(boceto) };
 }
 
 // ── NSE ──────────────────────────────────────────────────────────────────────
@@ -436,7 +440,7 @@ export function ponerSeccion(def: Definicion, seccion: Seccion, e: Estructura): 
   const i = orden.get(seccion.id) ?? Infinity;
   // Va antes de la primera sección que en la estructura va después de ella.
   const antesDe = otras.findIndex((s) => (orden.get(s.id) ?? Infinity) > i);
-  const secciones = antesDe < 0 ? [...otras, seccion] : [...otras.slice(0, antesDe), seccion, ...otras.slice(antesDe)];
+  const secciones = inicioPrimero(antesDe < 0 ? [...otras, seccion] : [...otras.slice(0, antesDe), seccion, ...otras.slice(antesDe)]);
   let nueva: Definicion = { ...def, secciones };
   // La sección del NSE trae su regla.
   if (seccion.preguntas.some((p) => preguntasNse(def.pais).some((q) => q.id === p.id)) && !def.nse) nueva = { ...nueva, nse: reglaNse(def.pais) };
@@ -449,9 +453,9 @@ export function ponerSeccion(def: Definicion, seccion: Seccion, e: Estructura): 
  */
 export function prepararParaEscribir(def: Definicion, e: Estructura, salen: string[]): Definicion {
   const orden = new Map(e.secciones.map((s, i) => [s.id, i]));
-  const secciones = def.secciones
+  const secciones = inicioPrimero(def.secciones
     .filter((s) => !salen.includes(s.id))
-    .sort((a, b) => (orden.get(a.id) ?? Infinity) - (orden.get(b.id) ?? Infinity));
+    .sort((a, b) => (orden.get(a.id) ?? Infinity) - (orden.get(b.id) ?? Infinity)));
   const frentesQueSiguen = new Set(e.frentes.map((f) => f.id));
   const frentes = def.frentes?.filter((f) => frentesQueSiguen.has(f.id)).map((f) => {
     const p = e.frentes.find((x) => x.id === f.id)!;

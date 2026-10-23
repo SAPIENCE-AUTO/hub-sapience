@@ -10,6 +10,7 @@ import { Direccion } from './campos/Direccion';
 import { Telefono } from './campos/Telefono';
 import { Correo } from './campos/Correo';
 import { Foto } from './campos/Foto';
+import { EnlaceAviso } from './AvisoPrivacidad';
 
 interface Props {
   pv: PreguntaVisible;
@@ -68,6 +69,7 @@ export function CampoPregunta({ pv, resp, error, codigo, pais, simular, onChange
       <div>
         <p className="text-[16px] font-semibold leading-snug text-[#1F1F23]">{pv.texto}</p>
         {pv.ayuda && <p className="mt-1 text-[13px] text-[#62626B]">{pv.ayuda}</p>}
+        {p.enlaceAviso && <EnlaceAviso className="mt-2" />}
         {nota && <p className="mt-1 text-[12px] text-[#62626B]">{nota}</p>}
       </div>
       {p.imagen && <img src={p.imagen} alt="" className="w-full rounded-xl border border-[#E4E4E7] bg-white" />}

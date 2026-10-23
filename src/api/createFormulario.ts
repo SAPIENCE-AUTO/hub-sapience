@@ -6,6 +6,7 @@ import { PLANTILLAS } from '../lib/formularios/plantillas';
 import { revisarDefinicion } from '../lib/formularios/revisar';
 import { definicionVacia, generadorNuevo, type Generador } from '../lib/formularios/generador';
 import { leerDefinicion, type Definicion } from '../lib/formularios/tipos';
+import { conInicio } from '../lib/formularios/inicio';
 
 /**
  * Crea un formulario. Arranca en borrador: nadie puede contestarlo hasta
@@ -50,6 +51,8 @@ export default createEndpoint({
       generador = generadorNuevo(input.origen);
       plantilla = 'ia';
     }
+    // Todo filtro arranca con «Antes de empezar» (aviso, nombre e identificación); lo pone el Hub.
+    definicion = conInicio(definicion);
     const problemas = revisarDefinicion(definicion);
     if (problemas.length) throw new ZiteError({ code: 'BAD_REQUEST', message: `El screener de partida tiene problemas: ${problemas.join(' ')}` });
 

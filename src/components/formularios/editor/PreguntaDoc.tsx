@@ -6,7 +6,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { logicaDePregunta } from '@/lib/formularios/palabras';
 import { imagenesQueFaltan } from '@/lib/formularios/revisar';
-import { GRUPOS_TIPOS, cambiarPregunta, cambiarTipo, esDelNse, moverPregunta, quitarPregunta, sePuedeMover, usosDePregunta } from '@/lib/formularios/editar';
+import { GRUPOS_TIPOS, cambiarPregunta, cambiarTipo, esDelNse, esFija, moverPregunta, quitarPregunta, sePuedeMover, usosDePregunta } from '@/lib/formularios/editar';
 import { rango } from '@/lib/formularios/motor';
 import { nombreCampoDireccion, telefonoDe } from '@/lib/formularios/paises';
 import { nombreDePregunta } from '@/lib/formularios/tabla';
@@ -66,7 +66,8 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
   const [abierto, setAbierto] = useState<Abierto>(null);
   const { despues, alCerrar } = useAlCerrarMenu();
   const abrirAl = (a: Abierto) => () => despues(() => setAbierto(a));
-  const bloqueada = esDelNse(def, p.id);
+  const bloqueada = esFija(def, p.id);
+  const delNse = esDelNse(def, p.id);
   const destino = { tipo: 'pregunta' as const, pregunta: p.id };
   const zona = useZonaImagen(destino);
   const { input, elegir } = useElegirImagen(destino);
@@ -130,7 +131,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
             {TIPOS[p.tipo]?.nombre ?? p.tipo}
             {p.opcional && f !== 'ninguna' && <span className="font-normal normal-case tracking-normal">· opcional</span>}
             {faltanImagenes > 0 && <span className="font-semibold normal-case tracking-normal text-[#8a4b00]">· faltan {faltanImagenes === 1 ? '1 imagen' : `${faltanImagenes} imágenes`}</span>}
-            {bloqueada && <span className="flex items-center gap-1 font-normal normal-case tracking-normal"><Lock className="h-3 w-3" />cuestionario oficial de NSE</span>}
+            {bloqueada && <span className="flex items-center gap-1 font-normal normal-case tracking-normal"><Lock className="h-3 w-3" />{delNse ? 'cuestionario oficial de NSE' : 'la pone el Hub en todos los filtros'}</span>}
           </p>
         </div>
         {!bloqueada && activa && (

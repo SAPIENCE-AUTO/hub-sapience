@@ -29,6 +29,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { errorDeLaIA, systemPrompt } from '../../src/serverUtils/formularios/claude';
 import { conservarLogica, revisarNombres } from '../../src/serverUtils/formularios/generar';
 import { chequeosListo } from '../../src/lib/formularios/listo';
+import { conInicio, SECCION_INICIO } from '../../src/lib/formularios/inicio';
+import { compararIdentificacion, declaradoDe, edadDe } from '../../src/serverUtils/formularios/identificacion';
 import { agruparTelefono, limpiarTelefono, telefonoDe } from '../../src/lib/formularios/paises';
 import { sugerirCorreo } from '../../src/lib/formularios/correo';
 import { leerCatalogoSepomex } from '../../src/serverUtils/formularios/codigosPostales';
@@ -1067,6 +1069,55 @@ caso('el flujo de una estructura (antes de escribir) sale con las mismas ramas q
   assert.ok(ramas && ramas.tipo === 'ramas' && ramas.ramas[0].map((b) => b.id).join('>') === 'aroma_formatos>aroma_bloque');
   const filtros = filasFlujoDeEstructura(e).find((f) => f.tipo === 'paso' && f.bloque.id === 'filtros');
   assert.ok(filtros && filtros.tipo === 'paso' && filtros.bloque.termina.length > 0);
+});
+
+caso('todo filtro arranca con «Antes de empezar»: aviso, nombre e identificación', () => {
+  const d = conInicio(ALONG2);
+  assert.equal(d.secciones[0].id, SECCION_INICIO);
+  assert.equal(d.secciones.flatMap((x) => x.preguntas).filter((p) => p.id === 'aviso' || p.id === 'nombre').length, 0);
+  assert.equal(d.claves?.nombre, 'hub_nombre');
+  assert.deepEqual(revisarDefinicion(d), []);
+  assert.equal(conInicio(d), d); // no se pone dos veces
+  // La plantilla que ya tenía su «Antes de empezar» (con indicaciones) no queda con dos secciones con el mismo nombre.
+  const prueba = conInicio(PRUEBA_TIPOS);
+  assert.deepEqual(prueba.secciones.slice(0, 2).map((x) => x.titulo), ['Antes de empezar', 'Indicaciones']);
+  assert.deepEqual(revisarDefinicion(prueba), []);
+  // «No acepto» termina sin pedir lo demás; aceptar pide nombre y si da la identificación; «No» termina; con «Sí», la foto.
+  const [inicio] = pantallas(d, {});
+  assert.deepEqual(inicio.preguntas.map((p) => p.clave), ['hub_aviso']);
+  assert.equal(evaluar(d, { hub_aviso: 'no_acepto' }).terminado?.motivo, 'No aceptó el aviso de privacidad');
+  assert.equal(evaluar(d, { hub_aviso: 'acepto', hub_nombre: 'Persona de Prueba', hub_id_acepta: 'no' }).terminado?.motivo, 'No quiso dar su identificación');
+  assert.deepEqual(pantallas(d, { hub_aviso: 'acepto' })[0].preguntas.map((p) => p.clave), ['hub_aviso', 'hub_nombre', 'hub_id_acepta']);
+  assert.deepEqual(pantallas(d, { hub_aviso: 'acepto', hub_id_acepta: 'si' })[0].preguntas.map((p) => p.clave), ['hub_aviso', 'hub_nombre', 'hub_id_acepta', 'hub_id_foto']);
+  // Al escribir con la IA, lo que llega va después de «Antes de empezar», y la IA no lo puede quitar.
+  const e = estructuraDeDefinicion(d);
+  assert.ok(!e.secciones.some((x) => x.id === SECCION_INICIO));
+  const puesta = ponerSeccion(conInicio(definicionVacia()), d.secciones[1], e);
+  assert.equal(puesta.secciones[0].id, SECCION_INICIO);
+  const protegido = protegerNse({ quitarSecciones: [SECCION_INICIO], orden: [d.secciones[1].id, SECCION_INICIO] }, d);
+  assert.deepEqual(protegido.quitarSecciones, []);
+  assert.equal(protegido.orden?.[0], SECCION_INICIO);
+});
+
+caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {
+  const hoy = new Date('2026-10-23T12:00:00');
+  assert.equal(edadDe('1990-11-30', hoy), 35);
+  assert.equal(edadDe('1990-10-23', hoy), 36);
+  const leido = { esIdentificacion: true, legible: true, tipo: 'INE', nombre: 'PERSONA DE PRUEBA EJEMPLO', fechaNacimiento: '1990-11-30', ciudad: 'Municipio Prueba', estado: 'Méx.' };
+  const bien = compararIdentificacion(leido, { nombre: 'Persona Ejemplo', edad: 35, estado: 'Estado de México' }, 'MX', hoy);
+  assert.deepEqual(bien.alertas, []);
+  assert.equal(bien.edad, 35);
+  const mal = compararIdentificacion(leido, { nombre: 'Otra Persona Distinta', edad: 25, estado: 'Jalisco' }, 'MX', hoy);
+  assert.deepEqual(mal.alertas, [
+    'La identificación dice otro nombre: «PERSONA DE PRUEBA EJEMPLO»',
+    'Edad distinta en la identificación: 35 años',
+    'La identificación es de otro lugar: Municipio Prueba, Méx.',
+  ]);
+  assert.deepEqual(compararIdentificacion({ ...leido, esIdentificacion: false }, {}, 'MX', hoy).alertas, ['La foto no parece una identificación oficial']);
+  // Si tapó la dirección, no se compara el lugar.
+  assert.deepEqual(compararIdentificacion({ ...leido, ciudad: null, estado: null }, { nombre: 'Persona Ejemplo', estado: 'Jalisco' }, 'MX', hoy).alertas, []);
+  const d = conInicio(ALONG2);
+  assert.deepEqual(declaradoDe(d, { hub_nombre: 'Persona Ejemplo', edad: 35 }), { nombre: 'Persona Ejemplo', edad: 35, ciudad: undefined, estado: undefined });
 });
 
 await Promise.all(pendientes);

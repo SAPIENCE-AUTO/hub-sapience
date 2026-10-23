@@ -14,7 +14,7 @@ Así guarda el Hub un filtro. `assets/ejemplos/hogar.json` es un filtro completo
 }
 ```
 
-`version`, `pais` y la regla de NSE (`nse`) los pone el Hub. `claves` dice qué pregunta tiene el nombre, el celular, la edad y el género, para mostrarlos en el panel.
+`version`, `pais` y la regla de NSE (`nse`) los pone el Hub, igual que la sección `hub_inicio` («Antes de empezar»: aviso de privacidad, nombre e identificación), que va primero en todo filtro y no se toca. `claves` dice qué pregunta tiene el nombre (`hub_nombre`), el celular, la edad y el género, para mostrarlos en el panel.
 
 ## Secciones
 

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { traerImagenDeEnlace } from 'zite-endpoints-sdk';
-import { ArrowDown, ArrowUp, Loader2, MessageSquareText, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Loader2, Lock, MessageSquareText, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { SECCION_INICIO } from '@/lib/formularios/inicio';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -76,6 +77,9 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
   const [intro, setIntro] = useState(false);
   const [comentar, setComentar] = useState(false);
   const delNse = s.preguntas.some((p) => !!def.nse?.puntos[p.id]);
+  // «Antes de empezar» la pone el Hub en todos los filtros: no se mueve, no se quita y no se le agregan preguntas.
+  const inicio = s.id === SECCION_INICIO;
+  const despuesDelInicio = i === 1 && def.secciones[0]?.id === SECCION_INICIO;
   const { despues, alCerrar } = useAlCerrarMenu();
 
   const agregar = (tipo: TipoPregunta) => {
@@ -93,13 +97,16 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
     <section id={`filtro-s-${s.id}`} className="scroll-mt-24 border-t border-[#E4E4E7] pt-6">
       <div className="group/s flex items-start gap-2">
         <h2 className="min-w-0 flex-1 text-[18px] font-bold leading-snug text-[#1F1F23]">
-          <TextoEditable
-            valor={s.titulo ?? ''} linea etiqueta="Título de la sección" placeholder="Sección sin título"
-            abrir={nuevo === s.id} onCerrar={() => nuevo === s.id && setNuevo(null)}
-            onGuardar={(v) => aplicar((d) => cambiarSeccion(d, s.id, { titulo: v || undefined }))}
-          />
+          {inicio ? s.titulo : (
+            <TextoEditable
+              valor={s.titulo ?? ''} linea etiqueta="Título de la sección" placeholder="Sección sin título"
+              abrir={nuevo === s.id} onCerrar={() => nuevo === s.id && setNuevo(null)}
+              onGuardar={(v) => aplicar((d) => cambiarSeccion(d, s.id, { titulo: v || undefined }))}
+            />
+          )}
+          {inicio && <span className="ml-2 inline-flex items-center gap-1 align-middle text-[11px] font-normal text-muted-foreground"><Lock className="h-3 w-3" />va en todos los filtros</span>}
         </h2>
-        <div className="flex flex-shrink-0 items-center transition-opacity sm:opacity-0 sm:group-hover/s:opacity-100 sm:focus-within:opacity-100">
+        {!inicio && <div className="flex flex-shrink-0 items-center transition-opacity sm:opacity-0 sm:group-hover/s:opacity-100 sm:focus-within:opacity-100">
           {ia && !delNse && <BotonIcono titulo="Comentar la lógica de esta sección a la IA" onClick={() => setComentar((x) => !x)}><MessageSquareText className="h-4 w-4" /></BotonIcono>}
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
@@ -108,7 +115,7 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60" onCloseAutoFocus={alCerrar}>
-              <DropdownMenuItem disabled={i === 0} onSelect={() => aplicar((d) => moverSeccion(d, s.id, -1))}><ArrowUp className="mr-2 h-4 w-4" />Subir sección</DropdownMenuItem>
+              <DropdownMenuItem disabled={i === 0 || despuesDelInicio} onSelect={() => aplicar((d) => moverSeccion(d, s.id, -1))}><ArrowUp className="mr-2 h-4 w-4" />Subir sección</DropdownMenuItem>
               <DropdownMenuItem disabled={i === total - 1} onSelect={() => aplicar((d) => moverSeccion(d, s.id, 1))}><ArrowDown className="mr-2 h-4 w-4" />Bajar sección</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => despues(() => setCondicion(true))}>{s.mostrarSi ? 'Cambiar cuándo aparece…' : 'Mostrar solo si…'}</DropdownMenuItem>
@@ -117,7 +124,7 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
               <DropdownMenuItem disabled={total === 1} className="text-[#D32222] focus:text-[#D32222]" onSelect={pedirQuitar}><Trash2 className="mr-2 h-4 w-4" />Quitar sección</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
+        </div>}
       </div>
       {(s.intro || intro) && (
         <p className="mt-1 whitespace-pre-line text-[14px] leading-relaxed text-[#45454D]">
@@ -132,9 +139,9 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
       <div className="mt-2 space-y-1">
         {s.preguntas.map((p) => <PreguntaDoc key={p.id} s={s} p={p} />)}
       </div>
-      <MenuTipos onElegir={agregar}>
+      {!inicio && <MenuTipos onElegir={agregar}>
         <button type="button" className={`${botonAgregar} mt-1`}><Plus className="h-3.5 w-3.5" />Pregunta</button>
-      </MenuTipos>
+      </MenuTipos>}
     </section>
   );
 }

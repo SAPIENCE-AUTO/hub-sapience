@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { evaluar } from '../lib/formularios/motor';
 import { leerDefinicion, type FotoSubida, type Respuestas } from '../lib/formularios/tipos';
+import { ID_FOTO_IDENTIFICACION } from '../lib/formularios/inicio';
+import { revisarIdentificacion } from '../serverUtils/formularios/identificacion';
 
 /**
  * Público — guarda una respuesta, completa o cortada por un descarte. La
@@ -43,14 +45,18 @@ export default createEndpoint({
     const resultado = evaluar(def, respuestas);
     const texto = (id?: string) => (id && typeof respuestas[id] === 'string' ? (respuestas[id] as string).slice(0, 200) : null);
 
-    await pool.query(
+    const { rows: [nueva] } = await pool.query(
       `insert into formulario_respuestas (formulario_id, es_prueba, respuestas, resultado, califica, nombre, telefono, device_token, duracion_seg)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
       [
         f.id, f.estado === 'prueba', JSON.stringify(respuestas), JSON.stringify(resultado), resultado.califica,
         texto(def.claves?.nombre), texto(def.claves?.telefono), input.deviceToken ?? null, input.duracionSeg ?? null,
       ],
     );
+    // La identificación se revisa con la IA después de contestarle al participante (no lo hace esperar).
+    if (Array.isArray(respuestas[ID_FOTO_IDENTIFICACION]) && (respuestas[ID_FOTO_IDENTIFICACION] as FotoSubida[]).length) {
+      revisarIdentificacion(nueva.id as string).catch((err) => console.error('[filtros] revisión de identificación', err));
+    }
     return { ok: true };
   },
 });

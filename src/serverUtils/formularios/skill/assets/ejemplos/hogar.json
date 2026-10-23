@@ -5,13 +5,9 @@
  "bienvenida": "¡Hola! En Sapience hacemos estudios sobre los productos que la gente compra para su casa. Contestar toma unos 10 minutos y te pediremos un par de fotos desde tu celular. Tus respuestas son confidenciales y solo se usan para investigación.",
  "despedida": "¡Gracias! Revisaremos tus respuestas y, si tu perfil coincide con lo que buscamos, te escribiremos por WhatsApp.",
  "noCalifica": "¡Gracias por tu tiempo! Por ahora tu perfil no coincide con lo que buscamos para este estudio.",
- "claves": {"nombre":"nombre","telefono":"celular","edad":"edad","genero":"genero"},
+ "claves": {"nombre":"hub_nombre","telefono":"celular","edad":"edad","genero":"genero"},
  "secciones": [
-  {"id":"aviso","titulo":"Antes de empezar", "preguntas": [
-   {"id":"aviso","tipo":"unica","nombre":"Aviso de privacidad","texto":"¿Leíste y aceptas el aviso de privacidad de Sapience?","ayuda":"Tus datos solo se usan para invitarte a estudios. Puedes pedir que los borremos cuando quieras.","opciones":[{"id":"si","label":"Sí, acepto"},{"id":"no","label":"No acepto","termina":"No aceptó el aviso de privacidad"}]}
-  ]},
   {"id":"perfil","titulo":"Sobre ti", "preguntas": [
-   {"id":"nombre","tipo":"texto","nombre":"Nombre","texto":"Nombre completo"},
    {"id":"celular","tipo":"telefono","nombre":"Celular","texto":"Celular (WhatsApp)"},
    {"id":"genero","tipo":"unica","nombre":"Género","texto":"Eres…","opciones":[{"id":"mujer","label":"Mujer"},{"id":"hombre","label":"Hombre"},{"id":"otro","label":"Otro / prefiero no decir"}]},
    {"id":"edad","tipo":"numero","nombre":"Edad","texto":"¿Cuántos años tienes?","min":15,"max":99,"terminaFuera":{"min":25,"max":65,"motivo":"Edad fuera de 25 a 65"},"nota":"41 a 44 solo entra a Marca A; 56 a 65 solo a Marca B (lo resuelven los perfiles)."},

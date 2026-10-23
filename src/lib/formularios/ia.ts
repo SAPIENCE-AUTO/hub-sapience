@@ -1,4 +1,5 @@
-import { esDelNse, idNuevo, type TextosGenerales } from './editar';
+import { esDelNse, esFija, idNuevo, type TextosGenerales } from './editar';
+import { SECCION_INICIO } from './inicio';
 import { alertaEnPalabras, citar, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion, sinMarcador, ubicar, unirY } from './palabras';
 import { opcionesDe } from './tabla';
 import { TIPOS, forma, type Alerta, type Condicion, type Definicion, type Frente, type Opcion, type Pregunta, type Seccion } from './tipos';
@@ -238,9 +239,9 @@ export function aplicarParche(def: Definicion, parche: Parche): Definicion {
  */
 export function protegerNse(parche: Parche, def: Definicion): Parche {
   const original = (id: string) => ubicar(def, id)?.pregunta;
-  const fija = (p: Pregunta) => (esDelNse(def, p.id) ? original(p.id) ?? p : p);
-  // La sección que tiene las preguntas del NSE se queda como está y no se quita.
-  const delNse = new Set(def.secciones.filter((s) => s.preguntas.some((p) => esDelNse(def, p.id))).map((s) => s.id));
+  const fija = (p: Pregunta) => (esFija(def, p.id) ? original(p.id) ?? p : p);
+  // La sección que tiene las preguntas del NSE y «Antes de empezar» se quedan como están y no se quitan.
+  const delNse = new Set(def.secciones.filter((s) => s.id === SECCION_INICIO || s.preguntas.some((p) => esDelNse(def, p.id))).map((s) => s.id));
   return {
     ...parche,
     ...(parche.preguntas ? { preguntas: parche.preguntas.map(fija) } : {}),
@@ -248,6 +249,8 @@ export function protegerNse(parche: Parche, def: Definicion): Parche {
       secciones: parche.secciones.map((s) => (delNse.has(s.id) ? def.secciones.find((x) => x.id === s.id)! : { ...s, preguntas: s.preguntas.map(fija) })),
     } : {}),
     ...(parche.quitarSecciones ? { quitarSecciones: parche.quitarSecciones.filter((id) => !delNse.has(id)) } : {}),
+    ...(parche.orden && def.secciones.some((s) => s.id === SECCION_INICIO)
+      ? { orden: [SECCION_INICIO, ...parche.orden.filter((id) => id !== SECCION_INICIO)] } : {}),
   };
 }
 

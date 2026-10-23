@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { PaginaAviso } from '@/components/formularios/AvisoPrivacidad';
 import { Loader2 } from 'lucide-react';
 import { getFormularioPublico, submitFormularioRespuesta } from 'zite-endpoints-sdk';
 import type { Definicion } from '@/lib/formularios/tipos';
@@ -28,6 +29,12 @@ function dispositivo(): string {
  */
 export default function FormularioPublicoPage() {
   const { codigo = '' } = useParams<{ codigo: string }>();
+  // /f/aviso: el aviso de privacidad solo, para mandar el enlace (ningún código de formulario tiene 5 letras).
+  if (codigo === 'aviso') return <PaginaAviso />;
+  return <Formulario codigo={codigo} />;
+}
+
+function Formulario({ codigo }: { codigo: string }) {
   const claveBorrador = `formulario_${codigo}`;
   const [fase, setFase] = useState<Fase>('cargando');
   const [def, setDef] = useState<Definicion | null>(null);

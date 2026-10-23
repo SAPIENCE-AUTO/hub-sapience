@@ -9,8 +9,8 @@ Salen de las versiones del screener de ALONG 2 (ejemplo 1) y de cómo trabaja el
 
 ## Orden: un embudo
 
-1. **Aviso de privacidad** primero, con «No acepto» que termina.
-2. **Datos de contacto y perfil básico**: nombre, celular, género, edad, código postal o ciudad, cómo es su hogar. Van al inicio para poder recuperar a quien abandona y para cortar pronto por edad o zona.
+1. **«Antes de empezar» lo pone el Hub** en todos los filtros: el aviso de privacidad (con «No acepto» que termina), el nombre y la foto de una identificación oficial (quien no quiere darla termina). No los escribas ni los repitas: la estructura empieza en lo que sigue.
+2. **Datos de contacto y perfil básico**: celular, género, edad, código postal o ciudad, cómo es su hogar (el nombre ya lo pide el Hub). Van al inicio para poder recuperar a quien abandona y para cortar pronto por edad o zona.
 3. **Filtros de seguridad**: giros y estudios recientes.
 4. **De lo general a lo particular:** primero las categorías que compra o usa, después los formatos o tipos dentro de la categoría que importa, y **solo dentro de cada uno** el detalle (marcas, aroma o variante, lugar de compra, antigüedad, última compra, foto).
 5. **Marcas que no compraría** (rechazo) después de los bloques, para no sugerir marcas antes.

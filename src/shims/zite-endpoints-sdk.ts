@@ -152,6 +152,7 @@ export const sugerirDireccion = (input?: any): Promise<any> => call('sugerirDire
 export const detalleDireccion = (input?: any): Promise<any> => call('detalleDireccion', input);
 export const traerImagenDeEnlace = (input?: any): Promise<any> => call('traerImagenDeEnlace', input);
 export const duplicateFormulario = (input?: any): Promise<any> => call('duplicateFormulario', input);
+export const getAvisoPrivacidad = (input?: any): Promise<any> => call('getAvisoPrivacidad', input);
 // Filtros fase 3: generador con IA (los de la IA, con avance)
 export const generateFormularioCambio = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateFormularioCambio', input);
 export const generateFormularioNombres = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateFormularioNombres', input);

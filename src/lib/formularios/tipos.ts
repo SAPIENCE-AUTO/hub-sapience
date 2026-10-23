@@ -121,6 +121,8 @@ export interface Pregunta {
    */
   nombre?: string;
   ayuda?: string;
+  /** Muestra «Leer el aviso de privacidad» bajo la pregunta (la del aviso en «Antes de empezar»). */
+  enlaceAviso?: boolean;
   /** Imagen arriba de la pregunta (URL). En `contenido` es lo que se muestra. */
   imagen?: string;
   opcional?: boolean;

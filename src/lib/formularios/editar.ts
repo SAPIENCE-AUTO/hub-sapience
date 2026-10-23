@@ -1,4 +1,5 @@
 import { citar, ubicar } from './palabras';
+import { esDelInicio } from './inicio';
 import {
   esDeOpciones, esMatriz, forma,
   type Condicion, type Definicion, type FilaMatriz, type Frente, type Opcion, type Pregunta, type Seccion, type TipoPregunta,
@@ -122,6 +123,8 @@ export function usosDeSeccion(def: Definicion, seccionId: string): string[] {
 
 /** Las preguntas del NSE son las del cuestionario oficial del país: no se corrigen a mano. */
 export const esDelNse = (def: Definicion, preguntaId: string) => !!def.nse?.puntos[preguntaId];
+/** Preguntas que pone el Hub y no se editan: las del NSE y las de «Antes de empezar». */
+export const esFija = (def: Definicion, preguntaId: string) => esDelNse(def, preguntaId) || esDelInicio(preguntaId);
 
 // ── cambios ──────────────────────────────────────────────────────────────────
 /** Quita las llaves en `undefined`, para que «quitar» un dato no deje rastro en el JSON. */

@@ -35,7 +35,7 @@ La estructura se revisa rápido antes de que se escriban las preguntas. Dice qui
 
 - `perfil` es a quién se busca en general; los **perfiles** con su cuota van en la lista `"frentes"` (su nombre interno). A la persona siempre se le dice «perfiles».
 - **Perfiles y cuotas** salen de la propuesta o del kick-off, con sus nombres. `quien` dice en palabras quién entra (lo vuelve condición la etapa final). Perfiles de la misma marca del cliente, mismo `grupo`.
-- **Secciones en orden de embudo** (ver `reglas.md`): aviso, contacto y perfil, filtros de seguridad, categorías, formatos, bloques por formato, rechazo de marcas, NSE, condiciones. Cada sección dice `para` qué está, en una frase.
+- **Secciones en orden de embudo** (ver `reglas.md`): contacto y perfil, filtros de seguridad, categorías, formatos, bloques por formato, rechazo de marcas, NSE, condiciones. El aviso de privacidad, el nombre y la identificación los pone el Hub antes («Antes de empezar»): no los incluyas. Cada sección dice `para` qué está, en una frase.
 - **Preguntas en una línea**: `texto` es la redacción propuesta (la etapa 2 la pule). Las de opciones llevan **todas sus opciones** con id; así se calculan bien los minutos y la lógica de otras secciones puede usarlas.
 - `tipo` es el que va a tener (ver `contrato.md`); una o varias decidido por lo que se pregunta.
 - `nombre` es el nombre corto de la columna, de 1 a 3 palabras («Edad», «Marcas que compra»; ver `contrato.md`).

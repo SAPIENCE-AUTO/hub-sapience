@@ -14,7 +14,7 @@ Antes de escribir, lee las referencias:
 - `references/contrato.md` — el formato JSON del filtro (tipos de pregunta, lógica, perfiles, alertas, ids).
 - `references/estructura.md` — el formato de la estructura (etapa 1) y cómo se ajusta.
 
-Los ejemplos están en `assets/ejemplos/`: tres filtros reales del equipo, sin marcas. `hogar_word.md` y `hogar.json` son el mismo estudio en Word y en el formato del Hub (visita en casa con bloques que se repiten por formato, controles y dos clientes); `bebidas_frias.md` es un filtro de consumo y actitudes con dos perfiles; `refrescos_cr.md` es de Costa Rica, con perfiles por generación y voseo.
+Los ejemplos están en `assets/ejemplos/`: tres filtros reales del equipo, sin marcas. `hogar_word.md` y `hogar.json` son el mismo estudio en Word y en el formato del Hub (visita en casa con bloques que se repiten por formato, controles y dos clientes; el aviso y el nombre del Word no están en `hogar.json` porque van en «Antes de empezar»); `bebidas_frias.md` es un filtro de consumo y actitudes con dos perfiles; `refrescos_cr.md` es de Costa Rica, con perfiles por generación y voseo.
 
 ## Flujo de trabajo
 
@@ -23,6 +23,8 @@ Los ejemplos están en `assets/ejemplos/`: tres filtros reales del equipo, sin m
 3. **Etapa 2 · Preguntas.** Con la estructura aprobada, escribir sección por sección: redacción final, todas las opciones y la lógica, conservando los ids que trae la estructura.
 4. **Lógica final.** Con todas las secciones escritas, armar quién entra a cada perfil, las alertas, las claves para el panel y los textos de bienvenida, despedida y no califica.
 5. **Revisar** contra `reglas.md`: embudo, máximo 10 minutos, una o varias decidido por lo que se pregunta, controles, filtros de seguridad, nada del cliente a la vista y lógica que no dependa de algo que va después.
+
+El **aviso de privacidad, el nombre y la identificación oficial** van en «Antes de empezar», que el Hub pone al principio de todo filtro: no se escriben (si el screener que se convierte los trae, se omiten y se dice en `supuestos`).
 
 Si se parte de un **screener que ya existe**, se respeta su redacción, su orden y su lógica: se convierte, no se rediseña. Lo que hubo que interpretar (casillas de Fillout en preguntas de una sola respuesta, instrucciones de encuestador, reglas que no se pueden expresar igual) va en `supuestos`.
 
