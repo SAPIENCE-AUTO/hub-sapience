@@ -92,6 +92,7 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let terminado = false;
       while (true) {
         const { done: readerDone, value } = await reader.read();
         if (readerDone) break;
@@ -107,12 +108,16 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
           let parsed: any;
           try { parsed = JSON.parse(raw); } catch { continue; }
           if (parsed.type === 'progress') pushChunk(parsed);
-          else if (parsed.type === 'done') resolveResult(parsed.result);
+          else if (parsed.type === 'done') { terminado = true; resolveResult(parsed.result); }
           else if (parsed.type === 'error') throw new ApiError(parsed.message ?? `${name} falló`, 500, parsed.code);
         }
       }
+      // El servidor cerró sin decir ni «listo» ni «error» (se reinició a media respuesta, p. ej. al
+      // publicar una versión nueva): sin esto la pantalla se quedaba esperando para siempre.
+      if (!terminado) throw new ApiError('Se cortó la conexión con el servidor antes de terminar. Vuelve a intentarlo.', 503, 'CONEXION_CORTADA');
     } catch (err) {
-      rejectResult(err);
+      // Si la conexión se cae a media lectura, el navegador solo dice «network error»: se dice en palabras.
+      rejectResult(err instanceof TypeError ? new ApiError('Se cortó la conexión con el servidor antes de terminar. Vuelve a intentarlo.', 503, 'CONEXION_CORTADA') : err);
     } finally {
       finish();
     }
