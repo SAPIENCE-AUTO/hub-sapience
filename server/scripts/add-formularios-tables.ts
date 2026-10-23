@@ -1,4 +1,4 @@
-// Crea las 2 tablas de Tools → Formularios y el bucket PRIVADO de Storage donde viven las fotos que suben los
+// Crea las tablas de Tools → Formularios (formularios, formulario_respuestas y, desde la fase 2, formulario_versiones) y el bucket PRIVADO de Storage donde viven las fotos que suben los
 // participantes. Igual que Swipe (add-swipe-tables.ts), estas tablas nunca existieron en Zite: viven fuera del
 // pipeline de generate.py y los endpoints les hablan con `pool.query(...)`. Solo agrega: no toca ninguna tabla
 // existente. Idempotente. No se ejecuta solo.
@@ -48,6 +48,25 @@ async function main() {
     -- Agregada después del alta inicial: tablero de Reclutamiento al que se pasan las respuestas
     -- { boardId, boardName, projectCode, columnas: { claveDeColumna: board_columns.id } }.
     alter table formularios add column if not exists vinculo jsonb;
+
+    -- Fase 2 (editor). revision: sube con cada guardado del screener; quien guarda con una revisión vieja
+    -- recibe un aviso en vez de pisar los cambios de otra persona. editando: quién tiene abierto el editor
+    -- ahora, { sesion: { nombre, email, hasta } } (lo renueva cada ventana abierta, ver pingFormularioEditor).
+    alter table formularios add column if not exists revision int not null default 0;
+    alter table formularios add column if not exists editando jsonb;
+
+    -- Versiones guardadas del screener: una automática antes de cada tanda de cambios (nota null) y las que
+    -- se guardan a mano con un nombre. Restaurar una es cargarla en el editor y guardarla como cualquier cambio.
+    create table if not exists formulario_versiones (
+      id             uuid primary key default gen_random_uuid(),
+      formulario_id  uuid not null references formularios(id) on delete cascade,
+      revision       int not null,
+      definicion     jsonb not null,
+      nota           text,
+      created_by     uuid references users(id) on delete set null,
+      created_at     timestamptz not null default now()
+    );
+    create index if not exists formulario_versiones_formulario_id_idx on formulario_versiones (formulario_id, created_at desc);
   `);
   console.log('✅ Tablas de formularios creadas (o ya existían).');
 

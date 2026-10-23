@@ -5,7 +5,8 @@ import type { FotoSubida } from '@/lib/formularios/tipos';
 
 const MAX_FOTOS = 3;
 
-export function Foto({ valor, codigo, onChange }: { valor: FotoSubida[]; codigo: string; onChange: (v: FotoSubida[]) => void }) {
+/** `simular`: en la vista Celular del editor la foto se queda en el navegador; nada se sube. */
+export function Foto({ valor, codigo, simular, onChange }: { valor: FotoSubida[]; codigo: string; simular?: boolean; onChange: (v: FotoSubida[]) => void }) {
   const [subiendo, setSubiendo] = useState(false);
   const [falla, setFalla] = useState('');
   const [vistas, setVistas] = useState<Record<string, string>>({});
@@ -14,7 +15,9 @@ export function Foto({ valor, codigo, onChange }: { valor: FotoSubida[]; codigo:
     setSubiendo(true);
     setFalla('');
     try {
-      const { fileUrl } = await uploadFile({ data: archivo, filename: archivo.name, formularioCodigo: codigo });
+      const { fileUrl } = simular
+        ? { fileUrl: `simulada/${Date.now()}-${archivo.name}` }
+        : await uploadFile({ data: archivo, filename: archivo.name, formularioCodigo: codigo });
       setVistas((v) => ({ ...v, [fileUrl]: URL.createObjectURL(archivo) }));
       onChange([...valor, { ruta: fileUrl, nombre: archivo.name }]);
     } catch (err) {

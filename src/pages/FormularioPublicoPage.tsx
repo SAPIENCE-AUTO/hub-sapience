@@ -1,17 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { getFormularioPublico, submitFormularioRespuesta } from 'zite-endpoints-sdk';
-import { pantallas, terminacion, validarPantalla } from '@/lib/formularios/motor';
-import type { Definicion, Respuestas, Valor } from '@/lib/formularios/tipos';
-import { CampoPregunta } from '@/components/formularios/CampoPregunta';
+import type { Definicion } from '@/lib/formularios/tipos';
+import { Participante, type Borrador } from '@/components/formularios/Participante';
 
-// Mismo logo que SwipePage.tsx — página pública sin login. Quitarlo es de la fase 4 (formulario neutro en el dominio de Sharpli).
-const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png';
-
-type Fase = 'cargando' | 'noexiste' | 'cerrado' | 'bienvenida' | 'preguntas' | 'enviando' | 'gracias' | 'nocalifica' | 'error';
-
-interface Borrador { respuestas: Respuestas; pantallaId?: string; inicio: number }
+type Fase = 'cargando' | 'noexiste' | 'cerrado' | 'listo' | 'error';
 
 const leer = <T,>(clave: string): T | null => { try { const v = localStorage.getItem(clave); return v ? JSON.parse(v) as T : null; } catch { return null; } };
 const guardar = (clave: string, v: unknown) => { try { localStorage.setItem(clave, JSON.stringify(v)); } catch { /* sin almacenamiento */ } };
@@ -25,24 +19,12 @@ function dispositivo(): string {
   return nuevo;
 }
 
-/** Deja solo lo que contestó en preguntas que siguen visibles (si regresó y cambió algo, lo demás sobra). */
-function soloVisibles(def: Definicion, resp: Respuestas): Respuestas {
-  const limpio: Respuestas = {};
-  for (const pantalla of pantallas(def, resp)) {
-    for (const pv of pantalla.preguntas) {
-      if (resp[pv.clave] !== undefined) limpio[pv.clave] = resp[pv.clave];
-      if (resp[`${pv.clave}#otra`] !== undefined) limpio[`${pv.clave}#otra`] = resp[`${pv.clave}#otra`];
-    }
-  }
-  return limpio;
-}
-
 /**
  * Página pública `/f/:codigo` de Tools → Formularios — hermana de <Layout>
- * en App.tsx, nunca pasa por useAuth(). Una pantalla por sección (o por cada
- * repetición de un bloque). Lo contestado se guarda en el celular mientras
- * tanto, así recargar no borra nada. Si una respuesta descarta, se envía lo
- * que hay y se despide sin decir por qué.
+ * en App.tsx, nunca pasa por useAuth(). El formulario en sí es <Participante>,
+ * el mismo que prueba la vista Celular del editor. Lo contestado se guarda en
+ * el celular mientras tanto, así recargar no borra nada. Si una respuesta
+ * descarta, se envía lo que hay y se despide sin decir por qué.
  */
 export default function FormularioPublicoPage() {
   const { codigo = '' } = useParams<{ codigo: string }>();
@@ -50,11 +32,7 @@ export default function FormularioPublicoPage() {
   const [fase, setFase] = useState<Fase>('cargando');
   const [def, setDef] = useState<Definicion | null>(null);
   const [prueba, setPrueba] = useState(false);
-  const [resp, setResp] = useState<Respuestas>({});
-  const [actualId, setActualId] = useState<string>();
-  const [errores, setErrores] = useState<Record<string, string>>({});
-  const [falla, setFalla] = useState('');
-  const inicio = useRef(Date.now());
+  const [inicial, setInicial] = useState<Borrador | null>(null);
   const device = useMemo(dispositivo, []);
 
   useEffect(() => {
@@ -64,161 +42,31 @@ export default function FormularioPublicoPage() {
         if (r.estado === 'cerrado') return setFase('cerrado');
         setDef(r.definicion);
         setPrueba(r.estado === 'prueba');
-        const borrador = leer<Borrador>(claveBorrador);
-        if (borrador) {
-          setResp(borrador.respuestas);
-          setActualId(borrador.pantallaId);
-          inicio.current = borrador.inicio;
-          setFase(borrador.pantallaId ? 'preguntas' : 'bienvenida');
-        } else {
-          setFase('bienvenida');
-        }
+        setInicial(leer<Borrador>(claveBorrador));
+        setFase('listo');
       })
       .catch(() => setFase('error'));
   }, [codigo, claveBorrador]);
 
-  const lista = useMemo(() => (def ? pantallas(def, resp, device) : []), [def, resp, device]);
-  const indice = Math.max(0, lista.findIndex((p) => p.id === actualId));
-  const pantalla = lista[indice];
-
-  useEffect(() => {
-    if (fase === 'preguntas') guardar(claveBorrador, { respuestas: resp, pantallaId: pantalla?.id, inicio: inicio.current } satisfies Borrador);
-  }, [fase, resp, pantalla?.id, claveBorrador]);
-
-  const cambiar = (clave: string, valor: Valor | undefined) => {
-    setResp((r) => {
-      const n = { ...r };
-      if (valor === undefined) delete n[clave]; else n[clave] = valor;
-      return n;
-    });
-    setErrores((e) => { const n = { ...e }; delete n[clave]; delete n[clave.split('#')[0]]; return n; });
-  };
-
-  const enviar = async (final: Fase) => {
-    if (!def) return;
-    setFase('enviando');
-    setFalla('');
-    try {
-      await submitFormularioRespuesta({
-        codigo, respuestas: soloVisibles(def, resp), deviceToken: device,
-        duracionSeg: Math.round((Date.now() - inicio.current) / 1000),
-      });
-      borrar(claveBorrador);
-      setFase(final);
-    } catch (err) {
-      setFalla((err as Error).message || 'No se pudo enviar. Revisa tu conexión e intenta otra vez.');
-      setFase('preguntas');
-    }
-  };
-
-  const siguiente = () => {
-    if (!def || !pantalla) return;
-    const e = validarPantalla(pantalla, resp, def.pais);
-    setErrores(e);
-    if (Object.keys(e).length) return;
-    if (terminacion(def, resp, lista)) return enviar('nocalifica');
-    const sig = lista[indice + 1];
-    if (!sig) return enviar('gracias');
-    setActualId(sig.id);
-    window.scrollTo({ top: 0 });
-  };
-
-  const atras = () => {
-    if (indice === 0) return setFase('bienvenida');
-    setActualId(lista[indice - 1].id);
-    setErrores({});
-    window.scrollTo({ top: 0 });
-  };
-
-  const otraVez = () => {
-    borrar(claveBorrador);
-    setResp({});
-    setActualId(undefined);
-    inicio.current = Date.now();
-    setFase('bienvenida');
-  };
-
   if (fase === 'cargando') return <Mensaje><Loader2 className="mx-auto h-6 w-6 animate-spin" /></Mensaje>;
   if (fase === 'noexiste') return <Mensaje>Este enlace no existe o todavía no está disponible.</Mensaje>;
   if (fase === 'cerrado') return <Mensaje>Este cuestionario ya cerró. ¡Gracias por tu interés!</Mensaje>;
-  if (fase === 'error') return <Mensaje>No pudimos cargar el cuestionario. Revisa tu conexión y vuelve a intentar.</Mensaje>;
-  if (!def) return null;
-
-  if (fase === 'gracias' || fase === 'nocalifica') {
-    return (
-      <Marco prueba={prueba}>
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <p className="max-w-sm text-[17px] leading-relaxed text-[#1F1F23]">{fase === 'gracias' ? def.despedida : def.noCalifica}</p>
-          {prueba && (
-            <button onClick={otraVez} className="mt-8 rounded-full border-[1.5px] border-[#1F1F23] px-6 py-2.5 text-[14px] font-semibold text-[#1F1F23]">
-              Contestar otra vez (prueba)
-            </button>
-          )}
-        </div>
-      </Marco>
-    );
-  }
-
-  if (fase === 'bienvenida') {
-    return (
-      <Marco prueba={prueba}>
-        <div className="flex flex-1 flex-col justify-center px-6 py-10">
-          <h1 className="text-[26px] font-bold leading-tight text-[#1F1F23]">{def.tituloPublico}</h1>
-          <p className="mt-4 text-[16px] leading-relaxed text-[#45454D]">{def.bienvenida}</p>
-          <button
-            onClick={() => { setActualId(actualId ?? lista[0]?.id); setFase('preguntas'); }}
-            className="mt-10 w-full rounded-xl bg-[#1F1F23] py-4 text-[16px] font-semibold text-white"
-          >
-            {actualId ? 'Continuar' : 'Empezar'}
-          </button>
-        </div>
-      </Marco>
-    );
-  }
-
-  const progreso = lista.length ? Math.round(((indice + 1) / lista.length) * 100) : 0;
+  if (fase === 'error' || !def) return <Mensaje>No pudimos cargar el cuestionario. Revisa tu conexión y vuelve a intentar.</Mensaje>;
 
   return (
-    <Marco prueba={prueba} progreso={progreso}>
-      <div className="flex-1 px-5 pb-32 pt-6">
-        {pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#1F1F23]">{pantalla.titulo}</h2>}
-        {pantalla?.intro && <p className="mt-2 text-[15px] leading-relaxed text-[#45454D]">{pantalla.intro}</p>}
-        <div className="mt-6 space-y-9">
-          {pantalla?.preguntas.map((pv) => (
-            <CampoPregunta key={pv.clave} pv={pv} resp={resp} error={errores[pv.clave]} codigo={codigo} pais={def.pais} onChange={cambiar} />
-          ))}
-        </div>
-        {falla && <p className="mt-6 rounded-xl bg-[#FBEAEA] px-4 py-3 text-[14px] text-[#C2272D]">{falla}</p>}
-      </div>
-      <div className="fixed inset-x-0 bottom-0 border-t border-[#E4E4E7] bg-white/95 px-5 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-lg gap-3">
-          <button onClick={atras} disabled={fase === 'enviando'} className="rounded-xl border-[1.5px] border-[#D9D9DE] px-5 py-3.5 text-[15px] font-medium text-[#1F1F23]">
-            Atrás
-          </button>
-          <button onClick={siguiente} disabled={fase === 'enviando'} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#1F1F23] py-3.5 text-[15px] font-semibold text-white disabled:opacity-60">
-            {fase === 'enviando' && <Loader2 className="h-4 w-4 animate-spin" />}
-            {indice === lista.length - 1 ? 'Enviar' : 'Siguiente'}
-          </button>
-        </div>
-      </div>
-    </Marco>
-  );
-}
-
-function Marco({ children, prueba, progreso }: { children: React.ReactNode; prueba: boolean; progreso?: number }) {
-  return (
-    <div className="flex min-h-dvh flex-col bg-[#F6F6F7]">
-      <header className="bg-[#1F1F23]">
-        <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-4">
-          <img src={LOGO_URL} alt="Sapience" className="h-6 w-auto" />
-          {prueba && <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#1F1F23]">Prueba</span>}
-        </div>
-        {progreso !== undefined && (
-          <div className="h-1 bg-white/15"><div className="h-1 bg-white transition-all" style={{ width: `${progreso}%` }} /></div>
-        )}
-      </header>
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col">{children}</main>
-    </div>
+    <Participante
+      def={def}
+      prueba={prueba}
+      codigo={codigo}
+      semilla={device}
+      inicial={inicial}
+      onAvance={(b) => guardar(claveBorrador, b)}
+      onEnviar={async (respuestas, duracionSeg) => {
+        await submitFormularioRespuesta({ codigo, respuestas, deviceToken: device, duracionSeg });
+        borrar(claveBorrador);
+      }}
+      onOtraVez={() => borrar(claveBorrador)}
+    />
   );
 }
 

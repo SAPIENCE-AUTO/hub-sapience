@@ -15,6 +15,8 @@ interface Props {
   error?: string;
   codigo: string;
   pais?: string;
+  /** Vista Celular del editor: las fotos se ven pero no se suben. */
+  simular?: boolean;
   onChange: (clave: string, valor: Valor | undefined) => void;
 }
 
@@ -30,7 +32,7 @@ function indicacion(pv: PreguntaVisible): string | undefined {
 }
 
 /** Una pregunta de la página pública /f/:codigo, pensada para el celular. */
-export function CampoPregunta({ pv, resp, error, codigo, pais, onChange }: Props) {
+export function CampoPregunta({ pv, resp, error, codigo, pais, simular, onChange }: Props) {
   const { pregunta: p, clave } = pv;
   const valor = resp[clave];
   const campo: CampoProps = { pv, resp, onChange };
@@ -105,7 +107,7 @@ export function CampoPregunta({ pv, resp, error, codigo, pais, onChange }: Props
       {p.tipo === 'estrellas' && <Estrellas {...campo} />}
       {p.tipo === 'deslizador' && <Deslizador {...campo} />}
 
-      {p.tipo === 'foto' && <Foto valor={(valor as FotoSubida[] | undefined) ?? []} codigo={codigo} onChange={(v) => onChange(clave, v)} />}
+      {p.tipo === 'foto' && <Foto valor={(valor as FotoSubida[] | undefined) ?? []} codigo={codigo} simular={simular} onChange={(v) => onChange(clave, v)} />}
 
       {error && <p className="text-[13px] font-medium" style={{ color: ERROR }}>{error}</p>}
     </div>

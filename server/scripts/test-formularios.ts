@@ -11,6 +11,14 @@ import { ALONG2 } from '../../src/lib/formularios/plantillas/along2';
 import { PRUEBA_TIPOS } from '../../src/lib/formularios/plantillas/pruebaTipos';
 import { leerDefinicion, type Definicion, type Respuestas } from '../../src/lib/formularios/tipos';
 import { calcularNse, reglaNse, reglaVigente } from '../../src/lib/formularios/nse';
+import { condicionEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion } from '../../src/lib/formularios/palabras';
+import { mapaFlujo } from '../../src/lib/formularios/flujo';
+import { duracionEstimada } from '../../src/lib/formularios/duracion';
+import {
+  GRUPOS_TIPOS, agregarOpcion, agregarPregunta, agregarSeccion, cambiarOpcion, cambiarPregunta, cambiarTipo, comoSimple, diferencias, idNuevo,
+  moverPregunta, moverSeccion, preguntasParaCondicion, quitarOpcion, quitarPregunta, usosDeOpcion, usosDePregunta, usosDeSeccion,
+} from '../../src/lib/formularios/editar';
+import { TIPOS, forma } from '../../src/lib/formularios/tipos';
 
 const NSE_CMAS: Respuestas = { nse_escolaridad: 'lic', nse_banos: '2', nse_autos: '1', nse_internet: 'si', nse_trabajan: '1', nse_cuartos: '2' }; // 59+47+22+32+15+16 = 191 → C+
 const NSE_C: Respuestas = { nse_escolaridad: 'prepa', nse_banos: '1', nse_autos: '1', nse_internet: 'si', nse_trabajan: '2', nse_cuartos: '1' }; // 27+24+22+32+31+8 = 144 → C
@@ -378,6 +386,197 @@ caso('el Excel trae una columna por campo y por fila, con números donde va núm
   } finally {
     globalThis.fetch = fetchOriginal;
   }
+});
+
+// ── fase 2: editor ───────────────────────────────────────────────────────────
+const pregunta = (d: Definicion, id: string) => d.secciones.flatMap((x) => x.preguntas).find((p) => p.id === id)!;
+
+caso('la lógica en palabras dice lo que hace el motor: cada opción que termina, termina con su motivo', () => {
+  let revisadas = 0;
+  for (const s of ALONG2.secciones) {
+    if (s.repetirPor || s.mostrarSi) continue;
+    for (const p of s.preguntas) {
+      for (const o of p.opciones ?? []) {
+        if (!o.termina) continue;
+        const r = evaluar(ALONG2, { ...base, [p.id]: forma(p.tipo) === 'una' ? o.id : [o.id] });
+        assert.equal(r.terminado?.motivo, o.termina, `${p.id}/${o.id}`);
+        const linea = logicaDeOpcion(ALONG2, p, o).find((l) => l.tipo === 'termina')!;
+        assert.equal(linea.motivo, o.termina);
+        assert.match(linea.texto, forma(p.tipo) === 'una' ? /^Si contesta esta, termina el filtro: / : /^Si la marca, termina el filtro: /);
+        revisadas++;
+      }
+    }
+  }
+  assert.equal(revisadas, 7);
+});
+
+caso('la lógica en palabras de ALONG 2 se lee como la escribiría una persona', () => {
+  const s = (id: string) => ALONG2.secciones.find((x) => x.id === id)!;
+  assert.equal(logicaDeSeccion(ALONG2, s('aroma_formatos'))[0].texto, 'Solo aparece si marcó Aromatizantes para la casa o el auto en «¿Cuáles de estos productos compras tú para tu casa?».');
+  assert.match(logicaDeSeccion(ALONG2, s('limp_bloque'))[0].texto, /Se repite por cada opción que marcó en «¿Qué tipos de limpiador compras para tu casa\?» \(solo Todo propósito, Multiusos o Especializado\)/);
+  const brasso = ALONG2.frentes!.find((f) => f.id === 'brasso')!;
+  assert.match(frenteEnPalabras(ALONG2, brasso), /^Entra si contestó de 25 a 40 o de 45 a 65 en «¿Cuántos años tienes\?» y alguna de estas: \(tiene el bloque «Tu limpiador especializado» sin descartarlo, /);
+  assert.match(frenteEnPalabras(ALONG2, brasso), /El NSE no saca a nadie/);
+  const acuerdos = logicaDePregunta(ALONG2, pregunta(ALONG2, 'acuerdos')).find((l) => l.campo === 'terminaSi')!;
+  assert.equal(acuerdos.prefijo, 'Termina el filtro si no marcó todas las opciones de «Marca todo con lo que estás de acuerdo»: ');
+  const antiguedad = pregunta(ALONG2, 'antiguedad').opciones!.find((o) => o.id === 'menos3m')!;
+  assert.equal(logicaDeOpcion(ALONG2, pregunta(ALONG2, 'antiguedad'), antiguedad)[0].texto, 'Si contesta esta, no cuenta este bloque: Menos de 3 meses usándolo.');
+  assert.equal(condicionEnPalabras({ pregunta: 'espacios', instancia: 'esfera', incluye: ['auto'] }, ALONG2), 'marcó Auto en «¿En qué lugares lo usas?» (en el bloque de adorno o esfera aromática)');
+  assert.equal(condicionEnPalabras({ pregunta: 'mascota', incluye: ['si'] }, PRUEBA_TIPOS), 'contestó Sí en «¿Tienes mascota?»');
+});
+
+caso('el mapa del flujo marca lo que se repite, lo que aparece si aplica, dónde termina y qué toca frentes', () => {
+  const mapa = mapaFlujo(ALONG2);
+  const b = (id: string) => mapa.find((x) => x.id === id)!;
+  assert.equal(mapa.length, ALONG2.secciones.length);
+  assert.match(b('aroma_bloque').repite ?? '', /últimos 3 meses/);
+  assert.deepEqual(b('aroma_bloque').descarta.length, 2);
+  assert.ok(b('aroma_bloque').frentes.includes('Aerosoles / Pure'));
+  assert.ok(!b('aroma_bloque').frentes.includes('Brasso / limpiadores'));
+  assert.match(b('aroma_formatos').condicion ?? '', /^Solo si marcó Aromatizantes/);
+  assert.equal(b('filtros').termina.length, 6);
+  assert.ok(b('rechazo').excluye.includes('Reeds') && b('rechazo').excluye.includes('Brasso / limpiadores'));
+  assert.deepEqual(b('aroma_formatos').alertas, ['Marcó más de 7 aromatizantes: posible sobredeclarante']);
+  assert.equal(b('nse').nse, true);
+  assert.equal(b('aviso').nse, false);
+  assert.equal(mapaFlujo(PRUEBA_TIPOS).find((x) => x.id === 'concepto')!.soloContenido, true);
+});
+
+caso('la duración estimada de ALONG 2 ronda los 10 minutos y sube al agregar preguntas', () => {
+  const d = duracionEstimada(ALONG2);
+  assert.ok(d.tipico >= 8 && d.tipico <= 12, JSON.stringify(d));
+  assert.ok(d.maximo > d.tipico);
+  assert.ok(duracionEstimada(PRUEBA_TIPOS).tipico <= 10);
+  let mas = ALONG2;
+  for (let i = 0; i < 6; i++) mas = agregarPregunta(mas, 'perfil', 'foto').def;
+  assert.ok(duracionEstimada(mas).tipico >= d.tipico + 3);
+});
+
+caso('un id nuevo es al azar, sin separadores y nunca repite uno que ya existe', () => {
+  const usados = new Set<string>();
+  for (let i = 0; i < 500; i++) {
+    const id = idNuevo('p', usados);
+    assert.match(id, /^p_[0-9a-z]{6}$/);
+    assert.ok(!usados.has(id));
+    usados.add(id);
+  }
+  let vuelta = 0;
+  const azar = () => [0, 0, 0, 0, 0, 0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5][vuelta++ % 12];
+  assert.equal(idNuevo('o', ['o_000000'], azar), 'o_iiiiii');
+});
+
+caso('una pregunta nueva de cada tipo queda bien armada (el selector con imágenes pide su imagen)', () => {
+  for (const g of GRUPOS_TIPOS) {
+    for (const tipo of g.tipos) {
+      const { def, id } = agregarPregunta(PRUEBA_TIPOS, 'cierre', tipo);
+      const problemas = revisarDefinicion(def);
+      if (tipo === 'imagen_unica' || tipo === 'imagen_multiple') assert.deepEqual(problemas, [`«${id}»: es un selector con imágenes y ninguna opción tiene imagen.`], tipo);
+      else assert.deepEqual(problemas, [], tipo);
+    }
+  }
+  assert.equal(GRUPOS_TIPOS.flatMap((g) => g.tipos).length, Object.keys(TIPOS).length);
+});
+
+caso('una imagen que no está en una dirección pública no se guarda', () => {
+  const conBlob = cambiarOpcion(PRUEBA_TIPOS, 'empaque', 'lata', { imagen: 'blob:http://localhost:5173/abc' });
+  assert.match(revisarDefinicion(conBlob).join(' '), /la imagen de «Lata» no está en una carpeta pública/);
+  const arriba = cambiarPregunta(PRUEBA_TIPOS, 'genero', { imagen: 'http://ejemplo.test/a.jpg' });
+  assert.match(revisarDefinicion(arriba).join(' '), /«genero»: su imagen no está en una carpeta pública/);
+  assert.deepEqual(revisarDefinicion(cambiarPregunta(PRUEBA_TIPOS, 'genero', { imagen: 'https://ejemplo.test/a.jpg' })), []);
+});
+
+caso('cambiar de tipo conserva los ids y quita lo que el tipo nuevo no admite', () => {
+  const giros = pregunta(ALONG2, 'giros');
+  const unica = pregunta(cambiarTipo(ALONG2, 'giros', 'unica'), 'giros');
+  assert.deepEqual(unica.opciones!.map((o) => o.id), giros.opciones!.map((o) => o.id));
+  assert.ok(!unica.opciones!.some((o) => o.exclusiva));
+  assert.ok(unica.opciones!.some((o) => o.termina));
+  const orden = pregunta(cambiarTipo(ALONG2, 'giros', 'ordenar'), 'giros');
+  assert.ok(!orden.opciones!.some((o) => o.termina || o.exclusiva));
+  const texto = pregunta(cambiarTipo(ALONG2, 'giros', 'texto'), 'giros');
+  assert.equal(texto.opciones, undefined);
+  const edad = pregunta(cambiarTipo(ALONG2, 'edad', 'escala'), 'edad');
+  assert.equal(edad.min, undefined);
+  assert.equal(edad.terminaFuera, undefined);
+  const deslizador = pregunta(cambiarTipo(PRUEBA_TIPOS, 'probabilidad', 'deslizador'), 'probabilidad');
+  assert.deepEqual(deslizador.etiquetas, { min: 'Nada probable', max: 'Muy probable' });
+  const matriz = pregunta(cambiarTipo(PRUEBA_TIPOS, 'frecuencia', 'matriz_multiple'), 'frecuencia');
+  assert.deepEqual(matriz.filas!.map((f) => f.id), ['barrer', 'trapear', 'ropa']);
+  for (const [id, tipo] of [['giros', 'unica'], ['tienda', 'unica'], ['frecuencia', 'matriz_multiple'], ['probabilidad', 'deslizador'], ['comentarios', 'texto']] as const) {
+    const def = id === 'giros' ? ALONG2 : PRUEBA_TIPOS;
+    assert.deepEqual(revisarDefinicion(cambiarTipo(def, id, tipo)), [], `${id} → ${tipo}`);
+  }
+  // Lo que otra lógica necesita del tipo lo dice la revisión, para deshacer.
+  assert.match(revisarDefinicion(cambiarTipo(ALONG2, 'formatos_compra', 'unica')).join(' '), /se repite por «formatos_compra», que no es de varias respuestas/);
+});
+
+caso('editar no cambia las claves de columna de lo que ya existía', () => {
+  const antes = columnas(ALONG2, [], { completas: true }).map((c) => c.clave);
+  let d = cambiarPregunta(ALONG2, 'edad', { texto: '¿Qué edad tienes?' });
+  d = cambiarOpcion(d, 'genero', 'mujer', { label: 'Mujer (cis o trans)' });
+  d = agregarOpcion(d, 'formatos_uso', 'Popurrí').def;
+  d = agregarPregunta(d, 'perfil', 'unica', 2).def;
+  d = moverPregunta(d, 'hogar', -1);
+  d = moverSeccion(d, 'rechazo', -1);
+  d = agregarSeccion(d, 3).def;
+  const despues = new Set(columnas(d, [], { completas: true }).map((c) => c.clave));
+  for (const clave of antes) assert.ok(despues.has(clave), clave);
+  assert.ok(despues.has('aromas@' + pregunta(d, 'formatos_uso').opciones!.find((o) => o.label === 'Popurrí')!.id));
+  assert.deepEqual(revisarDefinicion(d), []);
+});
+
+caso('una pregunta no se mueve a otra sección que se repite distinto (cambiaría su columna)', () => {
+  const primera = ALONG2.secciones.find((x) => x.id === 'aroma_bloque')!.preguntas[0].id;
+  assert.equal(moverPregunta(ALONG2, primera, -1), ALONG2);
+  const ultimaPerfil = ALONG2.secciones.find((x) => x.id === 'perfil')!.preguntas.at(-1)!.id;
+  const movida = moverPregunta(ALONG2, ultimaPerfil, 1);
+  assert.equal(movida.secciones.find((x) => x.id === 'filtros')!.preguntas[0].id, ultimaPerfil);
+});
+
+caso('la revisión no deja que la lógica dependa de algo que va después', () => {
+  const alReves = moverSeccion(ALONG2, 'aroma_formatos', -1);
+  assert.match(revisarDefinicion(alReves).join(' '), /la sección «aroma_formatos» se usa «categorias», que va después/);
+  const compraAntes = moverPregunta(ALONG2, 'formatos_compra', -1);
+  assert.match(revisarDefinicion(compraAntes).join(' '), /«formatos_compra»: sus opciones salen de «formatos_uso», que va después/);
+  assert.deepEqual(revisarDefinicion(ALONG2), []);
+});
+
+caso('antes de quitar algo se sabe dónde se usa', () => {
+  assert.ok(usosDePregunta(ALONG2, 'edad').includes('el frente Aerosoles / Pure'));
+  assert.ok(usosDePregunta(ALONG2, 'nombre').includes('el nombre que muestra el panel'));
+  assert.deepEqual(usosDePregunta(ALONG2, 'sucursal'), []);
+  const usos = usosDeOpcion(ALONG2, 'categorias', 'aromatizantes');
+  assert.ok(usos.includes('cuándo aparece la sección «Aromatizantes»'));
+  assert.ok(usos.some((u) => u.startsWith('cuándo termina el filtro en «¿Cuáles de estos productos')));
+  assert.deepEqual(usosDeOpcion(ALONG2, 'categorias', 'cafe'), []);
+  assert.ok(usosDeOpcion(ALONG2, 'formatos_uso', 'aerosol').includes('el frente Aerosoles / Pure'));
+  assert.deepEqual(usosDeSeccion(ALONG2, 'participacion'), []);
+  assert.ok(usosDeSeccion(ALONG2, 'limp_bloque').includes('el frente Brasso / limpiadores'));
+  const sinSucursal = quitarPregunta(ALONG2, 'sucursal');
+  assert.deepEqual(revisarDefinicion(sinSucursal), []);
+  assert.deepEqual(revisarDefinicion(quitarOpcion(ALONG2, 'categorias', 'cafe')), []);
+});
+
+caso('«mostrar solo si» simple: qué preguntas se pueden usar y cómo se guarda', () => {
+  const candidatas = preguntasParaCondicion(PRUEBA_TIPOS, { seccion: 'casa', pregunta: 'mascota_cual' }).map((p) => p.id);
+  assert.ok(candidatas.includes('mascota') && candidatas.includes('genero'));
+  assert.ok(!candidatas.includes('mascota_cual') && !candidatas.includes('probabilidad') && !candidatas.includes('nombre'));
+  // Una pregunta de una sección que se repite solo sirve dentro de esa misma repetición.
+  assert.ok(!preguntasParaCondicion(ALONG2, { seccion: 'rechazo' }).some((p) => p.id === 'marcas'));
+  assert.ok(preguntasParaCondicion(ALONG2, { seccion: 'aroma_bloque', pregunta: 'espacios' }).some((p) => p.id === 'marcas'));
+  assert.deepEqual(comoSimple(pregunta(PRUEBA_TIPOS, 'mascota_cual').mostrarSi), { pregunta: 'mascota', incluye: ['si'] });
+  assert.equal(comoSimple(pregunta(ALONG2, 'formatos_compra').mostrarSi), undefined); // «no marcó Ninguno»: se lee, no se edita aquí
+  const d = cambiarPregunta(PRUEBA_TIPOS, 'comentarios', { mostrarSi: { pregunta: 'genero', incluye: ['mujer'] } });
+  assert.deepEqual(revisarDefinicion(d), []);
+  assert.deepEqual(pantallas(d, { genero: 'hombre' }).find((x) => x.id === 'cierre')!.preguntas.map((p) => p.pregunta.id), ['foto_producto', 'whatsapp']);
+});
+
+caso('comparar una versión con lo de ahora, en palabras', () => {
+  assert.deepEqual(diferencias(ALONG2, ALONG2), []);
+  const ahora = agregarPregunta(cambiarPregunta(ALONG2, 'edad', { texto: 'Edad' }), 'perfil', 'texto').def;
+  assert.deepEqual(diferencias(ahora, ALONG2), ['Le falta 1 pregunta de hoy', '1 texto distinto']);
+  assert.deepEqual(diferencias(ALONG2, quitarOpcion(ALONG2, 'categorias', 'cafe')), ['Le falta 1 opción de hoy']);
+  assert.deepEqual(diferencias(ALONG2, cambiarTipo(ALONG2, 'giros', 'unica')), ['1 pregunta con otra lógica, tipo u orden de opciones']);
 });
 
 await Promise.all(pendientes);

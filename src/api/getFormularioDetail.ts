@@ -21,6 +21,8 @@ export default createEndpoint({
     titulo: z.string().optional(),
     estado: z.string().optional(),
     definicion: z.any().optional(),
+    /** Sube con cada guardado del editor: con ella se evita pisar cambios de otra persona. */
+    revision: z.number().optional(),
     tablero: z.object({ id: z.string(), nombre: z.string() }).optional(),
     respuestas: z.array(z.object({
       id: z.string(),
@@ -45,7 +47,7 @@ export default createEndpoint({
   }),
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
-    const { rows: [f] } = await pool.query(`select id, codigo, titulo, estado, definicion, vinculo from formularios where id = $1`, [input.formularioId]);
+    const { rows: [f] } = await pool.query(`select id, codigo, titulo, estado, definicion, revision, vinculo from formularios where id = $1`, [input.formularioId]);
     if (!f) return { found: false };
     const def = leerDefinicion(f.definicion);
 
@@ -65,7 +67,7 @@ export default createEndpoint({
     }
 
     return {
-      found: true, id: f.id, codigo: f.codigo, titulo: f.titulo, estado: f.estado, definicion: def,
+      found: true, id: f.id, codigo: f.codigo, titulo: f.titulo, estado: f.estado, definicion: def, revision: f.revision,
       tablero: vinculo ? { id: vinculo.boardId, nombre: vinculo.boardName } : undefined,
       respuestas: rows.map((r) => {
         const resp = r.respuestas as Respuestas;

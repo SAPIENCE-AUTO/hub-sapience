@@ -15,7 +15,8 @@ export async function uploadFile(
   },
 ): Promise<UploadResult> {
   // La foto de un participante de formulario no depende de la sesión simulada: sube de verdad para poder probarla.
-  if (import.meta.env.VITE_MOCK_USER === 'true' && !formularioCodigo) {
+  // Las imágenes de las preguntas de un filtro tampoco: se guardan en el screener y el formulario las muestra a otros.
+  if (import.meta.env.VITE_MOCK_USER === 'true' && !formularioCodigo && folder !== 'formularios-imagenes') {
     return { fileUrl: URL.createObjectURL(data), name: filename, size: data.size, mimeType: data.type };
   }
 

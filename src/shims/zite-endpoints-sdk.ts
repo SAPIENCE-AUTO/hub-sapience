@@ -134,6 +134,9 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
   } as Promise<T> & AsyncIterable<any>;
 }
 
+export const createFormularioVersion = (input?: any): Promise<any> => call('createFormularioVersion', input);
+export const getFormularioVersion = (input?: any): Promise<any> => call('getFormularioVersion', input);
+export const getFormularioVersiones = (input?: any): Promise<any> => call('getFormularioVersiones', input);
 export const getMe = (input?: any): Promise<any> => call('getMe', input);
 
 export const addExpenseComment = (input?: any): Promise<any> => call('addExpenseComment', input);
@@ -290,6 +293,8 @@ export const getMeetingRecordings = (input?: any): Promise<any> => call('getMeet
 export const getMessages = (input?: any): Promise<any> => call('getMessages', input);
 export const getMisPendientes = (input?: any): Promise<any> => call('getMisPendientes', input);
 export const getNotetakerBotStatus = (input?: any): Promise<any> => call('getNotetakerBotStatus', input);
+export const pingFormularioEditor = (input?: any): Promise<any> => call('pingFormularioEditor', input);
+export const saveFormularioDefinicion = (input?: any): Promise<any> => call('saveFormularioDefinicion', input);
 export const searchMessages = (input?: any): Promise<any> => call('searchMessages', input);
 export const getMigrationLogs = (input?: any): Promise<any> => call('getMigrationLogs', input);
 export const getMinutasOverview = (input?: any): Promise<any> => call('getMinutasOverview', input);

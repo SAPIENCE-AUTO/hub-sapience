@@ -108,7 +108,9 @@ export async function pasarAlReclutamiento(
   const nuevas = filas.filter((f) => !ya.has(f.id));
   if (nuevas.length === 0) return { pasadas: 0, yaEstaban: ya.size, columnasCreadas: 0 };
 
-  const todas = columnas(formulario.definicion, nuevas);
+  // Todas las columnas del screener, no solo las contestadas: así una pregunta que se agregó en el editor
+  // después de vincular también llega al tablero (con su texto de ese momento).
+  const todas = columnas(formulario.definicion, nuevas, { completas: true });
   const colNombre = todas.find((c) => c.clave === 'nombre');
   const colCelular = todas.find((c) => c.clave === 'celular');
   const cols = todas.filter((c) => c !== colNombre && c !== colCelular);

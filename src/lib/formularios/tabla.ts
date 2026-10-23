@@ -47,7 +47,8 @@ function buscar(def: Definicion, id: string): Pregunta | undefined {
   return undefined;
 }
 
-function opcionesDe(def: Definicion, p: Pregunta): Opcion[] {
+/** Las opciones de una pregunta, también las que salen de otra (`opcionesDe`) más sus extras. */
+export function opcionesDe(def: Definicion, p: Pregunta): Opcion[] {
   if (!p.opcionesDe) return p.opciones ?? [];
   const origen = buscar(def, p.opcionesDe);
   return [...(origen ? opcionesDe(def, origen) : []), ...(p.opcionesExtra ?? [])];

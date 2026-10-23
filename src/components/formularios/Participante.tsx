@@ -1,0 +1,203 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { pantallas, terminacion, validarPantalla } from '@/lib/formularios/motor';
+import type { Definicion, Respuestas, Valor } from '@/lib/formularios/tipos';
+import { CampoPregunta } from './CampoPregunta';
+
+// Mismo logo que SwipePage.tsx — página pública sin login. Quitarlo es de la fase 4 (formulario neutro en el dominio de Sharpli).
+const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png';
+
+type Fase = 'bienvenida' | 'preguntas' | 'enviando' | 'gracias' | 'nocalifica';
+
+export interface Borrador { respuestas: Respuestas; pantallaId?: string; inicio: number }
+
+/** Deja solo lo que contestó en preguntas que siguen visibles (si regresó y cambió algo, lo demás sobra). */
+export function soloVisibles(def: Definicion, resp: Respuestas): Respuestas {
+  const limpio: Respuestas = {};
+  for (const pantalla of pantallas(def, resp)) {
+    for (const pv of pantalla.preguntas) {
+      if (resp[pv.clave] !== undefined) limpio[pv.clave] = resp[pv.clave];
+      if (resp[`${pv.clave}#otra`] !== undefined) limpio[`${pv.clave}#otra`] = resp[`${pv.clave}#otra`];
+    }
+  }
+  return limpio;
+}
+
+interface Props {
+  def: Definicion;
+  prueba: boolean;
+  /** Código del enlace: con él se suben las fotos. */
+  codigo: string;
+  /** Semilla del orden aleatorio: la misma persona ve siempre el mismo orden. */
+  semilla: string;
+  /**
+   * `pagina`: la página pública, a pantalla completa. `marco`: dentro de la
+   * vista Celular del editor, que tiene su propio alto y su propio scroll; ahí
+   * las fotos no se suben.
+   */
+  modo?: 'pagina' | 'marco';
+  /** Lo que ya llevaba contestado (la página lo guarda en el celular). */
+  inicial?: Borrador | null;
+  onAvance?: (b: Borrador) => void;
+  /** Manda lo contestado. Si falla, el error se muestra y se puede reintentar. */
+  onEnviar: (respuestas: Respuestas, duracionSeg: number) => Promise<void>;
+  onOtraVez?: () => void;
+}
+
+/**
+ * El formulario que contesta el participante: bienvenida, una pantalla por
+ * sección (o por cada repetición de un bloque) y la despedida. Lo usan la
+ * página pública /f/:codigo y la vista Celular del editor, así lo que se
+ * prueba en el editor es lo mismo que verá la gente.
+ */
+export function Participante({ def, prueba, codigo, semilla, modo = 'pagina', inicial, onAvance, onEnviar, onOtraVez }: Props) {
+  const [fase, setFase] = useState<Fase>(inicial?.pantallaId ? 'preguntas' : 'bienvenida');
+  const [resp, setResp] = useState<Respuestas>(inicial?.respuestas ?? {});
+  const [actualId, setActualId] = useState<string | undefined>(inicial?.pantallaId);
+  const [errores, setErrores] = useState<Record<string, string>>({});
+  const [falla, setFalla] = useState('');
+  const inicio = useRef(inicial?.inicio ?? Date.now());
+  const scroll = useRef<HTMLDivElement>(null);
+  const enMarco = modo === 'marco';
+
+  const lista = useMemo(() => pantallas(def, resp, semilla), [def, resp, semilla]);
+  const indice = Math.max(0, lista.findIndex((p) => p.id === actualId));
+  const pantalla = lista[indice];
+
+  useEffect(() => {
+    if (fase === 'preguntas') onAvance?.({ respuestas: resp, pantallaId: pantalla?.id, inicio: inicio.current });
+  }, [fase, resp, pantalla?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const arriba = () => (enMarco ? scroll.current?.scrollTo({ top: 0 }) : window.scrollTo({ top: 0 }));
+
+  const cambiar = (clave: string, valor: Valor | undefined) => {
+    setResp((r) => {
+      const n = { ...r };
+      if (valor === undefined) delete n[clave]; else n[clave] = valor;
+      return n;
+    });
+    setErrores((e) => { const n = { ...e }; delete n[clave]; delete n[clave.split('#')[0]]; return n; });
+  };
+
+  const enviar = async (final: 'gracias' | 'nocalifica') => {
+    setFase('enviando');
+    setFalla('');
+    try {
+      await onEnviar(soloVisibles(def, resp), Math.round((Date.now() - inicio.current) / 1000));
+      setFase(final);
+    } catch (err) {
+      setFalla((err as Error).message || 'No se pudo enviar. Revisa tu conexión e intenta otra vez.');
+      setFase('preguntas');
+    }
+  };
+
+  const siguiente = () => {
+    if (!pantalla) return;
+    const e = validarPantalla(pantalla, resp, def.pais);
+    setErrores(e);
+    if (Object.keys(e).length) return;
+    if (terminacion(def, resp, lista)) return enviar('nocalifica');
+    const sig = lista[indice + 1];
+    if (!sig) return enviar('gracias');
+    setActualId(sig.id);
+    arriba();
+  };
+
+  const atras = () => {
+    if (indice === 0) return setFase('bienvenida');
+    setActualId(lista[indice - 1].id);
+    setErrores({});
+    arriba();
+  };
+
+  const otraVez = () => {
+    setResp({});
+    setActualId(undefined);
+    inicio.current = Date.now();
+    setFase('bienvenida');
+    onOtraVez?.();
+  };
+
+  const marco = (children: React.ReactNode, progreso?: number) => (
+    <Marco prueba={prueba} progreso={progreso} enMarco={enMarco} scroll={scroll}>{children}</Marco>
+  );
+
+  if (fase === 'gracias' || fase === 'nocalifica') {
+    return marco(
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <p className="max-w-sm text-[17px] leading-relaxed text-[#1F1F23]">{fase === 'gracias' ? def.despedida : def.noCalifica}</p>
+        {prueba && (
+          <button onClick={otraVez} className="mt-8 rounded-full border-[1.5px] border-[#1F1F23] px-6 py-2.5 text-[14px] font-semibold text-[#1F1F23]">
+            Contestar otra vez (prueba)
+          </button>
+        )}
+      </div>,
+    );
+  }
+
+  if (fase === 'bienvenida') {
+    return marco(
+      <div className="flex flex-1 flex-col justify-center px-6 py-10">
+        <h1 className="text-[26px] font-bold leading-tight text-[#1F1F23]">{def.tituloPublico}</h1>
+        <p className="mt-4 text-[16px] leading-relaxed text-[#45454D]">{def.bienvenida}</p>
+        <button
+          onClick={() => { setActualId(actualId ?? lista[0]?.id); setFase('preguntas'); }}
+          className="mt-10 w-full rounded-xl bg-[#1F1F23] py-4 text-[16px] font-semibold text-white"
+        >
+          {actualId ? 'Continuar' : 'Empezar'}
+        </button>
+      </div>,
+    );
+  }
+
+  const progreso = lista.length ? Math.round(((indice + 1) / lista.length) * 100) : 0;
+  const barra = (
+    <div className={`${enMarco ? 'sticky' : 'fixed inset-x-0'} bottom-0 border-t border-[#E4E4E7] bg-white/95 px-5 py-3 backdrop-blur`}>
+      <div className="mx-auto flex max-w-lg gap-3">
+        <button onClick={atras} disabled={fase === 'enviando'} className="rounded-xl border-[1.5px] border-[#D9D9DE] px-5 py-3.5 text-[15px] font-medium text-[#1F1F23]">
+          Atrás
+        </button>
+        <button onClick={siguiente} disabled={fase === 'enviando'} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#1F1F23] py-3.5 text-[15px] font-semibold text-white disabled:opacity-60">
+          {fase === 'enviando' && <Loader2 className="h-4 w-4 animate-spin" />}
+          {indice === lista.length - 1 ? 'Enviar' : 'Siguiente'}
+        </button>
+      </div>
+    </div>
+  );
+
+  return marco(
+    <>
+      <div className={`flex-1 px-5 pt-6 ${enMarco ? 'pb-8' : 'pb-32'}`}>
+        {pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#1F1F23]">{pantalla.titulo}</h2>}
+        {pantalla?.intro && <p className="mt-2 text-[15px] leading-relaxed text-[#45454D]">{pantalla.intro}</p>}
+        <div className="mt-6 space-y-9">
+          {pantalla?.preguntas.map((pv) => (
+            <CampoPregunta key={pv.clave} pv={pv} resp={resp} error={errores[pv.clave]} codigo={codigo} pais={def.pais} simular={enMarco} onChange={cambiar} />
+          ))}
+        </div>
+        {falla && <p className="mt-6 rounded-xl bg-[#FBEAEA] px-4 py-3 text-[14px] text-[#C2272D]">{falla}</p>}
+      </div>
+      {barra}
+    </>,
+    progreso,
+  );
+}
+
+function Marco({ children, prueba, progreso, enMarco, scroll }: {
+  children: React.ReactNode; prueba: boolean; progreso?: number; enMarco: boolean; scroll: React.RefObject<HTMLDivElement>;
+}) {
+  return (
+    <div ref={scroll} className={`flex flex-col bg-[#F6F6F7] ${enMarco ? 'h-full overflow-y-auto' : 'min-h-dvh'}`}>
+      <header className={`bg-[#1F1F23] ${enMarco ? 'sticky top-0 z-10' : ''}`}>
+        <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-4">
+          <img src={LOGO_URL} alt="Sapience" className="h-6 w-auto" />
+          {prueba && <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#1F1F23]">Prueba</span>}
+        </div>
+        {progreso !== undefined && (
+          <div className="h-1 bg-white/15"><div className="h-1 bg-white transition-all" style={{ width: `${progreso}%` }} /></div>
+        )}
+      </header>
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col">{children}</main>
+    </div>
+  );
+}
