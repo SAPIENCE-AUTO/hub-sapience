@@ -7,6 +7,8 @@ import { Botones, Imagenes, ListaUna, ListaVarias, Ordenar } from './campos/Opci
 import { Matriz } from './campos/Matriz';
 import { Deslizador, Escala, Estrellas } from './campos/Escalas';
 import { Direccion } from './campos/Direccion';
+import { Telefono } from './campos/Telefono';
+import { Correo } from './campos/Correo';
 import { Foto } from './campos/Foto';
 
 interface Props {
@@ -70,16 +72,17 @@ export function CampoPregunta({ pv, resp, error, codigo, pais, simular, onChange
       </div>
       {p.imagen && <img src={p.imagen} alt="" className="w-full rounded-xl border border-[#E4E4E7] bg-white" />}
 
-      {(p.tipo === 'texto' || p.tipo === 'telefono' || p.tipo === 'correo') && (
+      {p.tipo === 'texto' && (
         <input
           className={inputClass}
-          type={p.tipo === 'telefono' ? 'tel' : p.tipo === 'correo' ? 'email' : 'text'}
-          inputMode={p.tipo === 'telefono' ? 'tel' : p.tipo === 'correo' ? 'email' : p.patron?.includes('\\d') ? 'numeric' : undefined}
+          inputMode={p.patron?.includes('\\d') ? 'numeric' : undefined}
           value={typeof valor === 'string' ? valor : ''}
           onChange={(e) => onChange(clave, e.target.value)}
-          autoComplete={p.tipo === 'telefono' ? 'tel' : p.tipo === 'correo' ? 'email' : 'off'}
+          autoComplete="off"
         />
       )}
+      {p.tipo === 'telefono' && <Telefono {...campo} pais={pais} />}
+      {p.tipo === 'correo' && <Correo {...campo} />}
       {p.tipo === 'texto_largo' && (
         <textarea className={`${inputClass} min-h-[96px]`} value={typeof valor === 'string' ? valor : ''} onChange={(e) => onChange(clave, e.target.value)} />
       )}
@@ -94,7 +97,7 @@ export function CampoPregunta({ pv, resp, error, codigo, pais, simular, onChange
           }}
         />
       )}
-      {p.tipo === 'direccion' && <Direccion {...campo} pais={pais} />}
+      {p.tipo === 'direccion' && <Direccion {...campo} pais={pais} codigo={codigo} />}
 
       {(p.tipo === 'unica' || p.tipo === 'multiple') && <Botones {...campo} />}
       {(p.tipo === 'imagen_unica' || p.tipo === 'imagen_multiple') && <Imagenes {...campo} />}

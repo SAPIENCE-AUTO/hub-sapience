@@ -1,4 +1,4 @@
-// Crea las tablas de Tools → Formularios (formularios, formulario_respuestas, desde la fase 2 formulario_versiones y desde la 3 formulario_ia_uso) y el bucket PRIVADO de Storage donde viven las fotos que suben los
+// Crea las tablas de Tools → Formularios (formularios, formulario_respuestas, desde la fase 2 formulario_versiones, desde la 3 formulario_ia_uso, y codigos_postales) y el bucket PRIVADO de Storage donde viven las fotos que suben los
 // participantes. Igual que Swipe (add-swipe-tables.ts), estas tablas nunca existieron en Zite: viven fuera del
 // pipeline de generate.py y los endpoints les hablan con `pool.query(...)`. Solo agrega: no toca ninguna tabla
 // existente. Idempotente. No se ejecuta solo.
@@ -78,7 +78,7 @@ async function main() {
       id                     uuid primary key default gen_random_uuid(),
       formulario_id          uuid references formularios(id) on delete set null,
       usuario_email          text not null,
-      -- estructura | seccion | logica | pregunta | comentario
+      -- estructura | seccion | logica | pregunta | comentario | nombres
       accion                 text not null,
       modelo                 text,
       tokens_entrada         int,
@@ -89,6 +89,21 @@ async function main() {
       created_at             timestamptz not null default now()
     );
     create index if not exists formulario_ia_uso_email_idx on formulario_ia_uso (usuario_email, created_at desc);
+
+    -- Catálogo oficial de códigos postales (en México, el de Correos de México): con el código postal, la
+    -- dirección del participante se llena sola (estado, municipio y la lista de colonias). Lo carga
+    -- scripts/cargar-codigos-postales.ts; es información pública, sin datos de personas.
+    create table if not exists codigos_postales (
+      id         bigint generated always as identity primary key,
+      pais       text not null,
+      cp         text not null,
+      colonia    text not null,
+      tipo       text,
+      municipio  text,
+      estado     text,
+      ciudad     text
+    );
+    create index if not exists codigos_postales_pais_cp_idx on codigos_postales (pais, cp);
   `);
   console.log('✅ Tablas de formularios creadas (o ya existían).');
 

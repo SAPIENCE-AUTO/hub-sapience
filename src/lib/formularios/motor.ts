@@ -1,5 +1,5 @@
 import { calcularNse } from './nse';
-import { PAISES, nombreCampoDireccion } from './paises';
+import { PAISES, nombreCampoDireccion, telefonoDe } from './paises';
 import {
   CAMPOS_DIRECCION, esDeOpciones, forma,
   type Condicion, type Definicion, type FotoSubida, type Opcion, type Pregunta, type Respuestas,
@@ -259,7 +259,10 @@ export function validar(pv: PreguntaVisible, resp: Respuestas, pais?: string): s
     const { min, max } = rango(p);
     if (typeof v !== 'number' || v < min || v > max) return SIN_CONTESTAR[p.tipo] ?? 'Contesta esta pregunta';
   }
-  if (p.tipo === 'telefono' && String(v).replace(/\D/g, '').length !== 10) return 'Escribe un celular de 10 dígitos';
+  if (p.tipo === 'telefono') {
+    const { digitos } = telefonoDe(pais);
+    if (String(v).replace(/\D/g, '').length !== digitos) return `Escribe un celular de ${digitos} dígitos`;
+  }
   if (p.tipo === 'correo' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v))) return 'Escribe un correo válido';
   if (p.patron && f === 'texto' && !new RegExp(p.patron).test(String(v))) return p.patronMensaje ?? 'Revisa lo que escribiste';
   const marcadas = seleccion(v);

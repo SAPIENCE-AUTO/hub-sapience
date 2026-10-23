@@ -29,6 +29,10 @@ import Anthropic from '@anthropic-ai/sdk';
 import { errorDeLaIA, systemPrompt } from '../../src/serverUtils/formularios/claude';
 import { conservarLogica, revisarNombres } from '../../src/serverUtils/formularios/generar';
 import { chequeosListo } from '../../src/lib/formularios/listo';
+import { agruparTelefono, limpiarTelefono, telefonoDe } from '../../src/lib/formularios/paises';
+import { sugerirCorreo } from '../../src/lib/formularios/correo';
+import { leerCatalogoSepomex } from '../../src/serverUtils/formularios/codigosPostales';
+import { direccionDeComponentes } from '../../src/serverUtils/formularios/direcciones';
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
 
 const NSE_CMAS: Respuestas = { nse_escolaridad: 'lic', nse_banos: '2', nse_autos: '1', nse_internet: 'si', nse_trabajan: '1', nse_cuartos: '2' }; // 59+47+22+32+15+16 = 191 → C+
@@ -979,6 +983,64 @@ caso('«¿Está listo?» dice qué falta, en palabras', () => {
   assert.deepEqual(r.filter((c) => !c.ok).map((c) => c.id), ['problemas', 'perfiles', 'nombres', 'supuestos', 'probado', 'tablero']);
   assert.equal(r.find((c) => c.id === 'problemas')?.falta, '2 cosas por corregir');
   assert.equal(r.find((c) => c.id === 'nombres')?.falta, '1 pregunta sin nombre');
+});
+
+caso('celular con la lada y el largo del país', () => {
+  const mx = telefonoDe('MX');
+  assert.equal(limpiarTelefono('+52 55 0000 0000', mx), '5500000000');
+  assert.equal(limpiarTelefono('55-0000-00009999', mx), '5500000000');
+  assert.equal(agruparTelefono('5500000000', mx), '55 0000 0000');
+  assert.equal(agruparTelefono('550', mx), '55 0');
+  const cr = telefonoDe('CR');
+  assert.equal(cr.lada, '+506');
+  assert.equal(agruparTelefono(limpiarTelefono('+506 8000 0000', cr), cr), '8000 0000');
+  const def: Definicion = { ...definicionVacia('CR'), secciones: [{ id: 's', preguntas: [{ id: 'cel', tipo: 'telefono', texto: 'Celular' }] }] };
+  const [pantalla] = pantallas(def, {});
+  assert.deepEqual(validarPantalla(pantalla, { cel: '80000000' }, 'CR'), {});
+  assert.equal(validarPantalla(pantalla, { cel: '5500000000' }, 'CR').cel, 'Escribe un celular de 8 dígitos');
+});
+
+caso('el correo mal escrito trae sugerencia; uno de empresa, no', () => {
+  assert.equal(sugerirCorreo('persona@gmial.com'), 'persona@gmail.com');
+  assert.equal(sugerirCorreo('persona@hotmail'), 'persona@hotmail.com');
+  assert.equal(sugerirCorreo('persona@gmail.com'), undefined);
+  assert.equal(sugerirCorreo('persona@ejemplo.test'), undefined);
+});
+
+caso('el catálogo de códigos postales se lee con los nombres de estado del Hub', () => {
+  const texto = [
+    'El Catálogo Nacional de Códigos Postales… (nota)',
+    'd_codigo|d_asenta|d_tipo_asenta|D_mnpio|d_estado|d_ciudad|d_CP|c_estado|c_oficina|c_CP|c_tipo_asenta|c_mnpio|id_asenta_cpcons|d_zona|c_cve_ciudad',
+    '01000|Colonia Uno|Colonia|Municipio Prueba|Ciudad de México|Ciudad de México|01001|09|01001||09|010|0001|Urbano|01',
+    '50000|Barrio Dos|Barrio|Toluca|México|Toluca de Lerdo|50001|15|50001||02|106|0002|Urbano|01',
+    '91000|Fracc. Tres|Fraccionamiento|Xalapa|Veracruz de Ignacio de la Llave|Xalapa|91001|30|91001||21|087|0003|Urbano|01',
+    '',
+  ].join('\n');
+  const { filas, estadosDesconocidos } = leerCatalogoSepomex(texto);
+  assert.deepEqual(filas.map((f) => [f.cp, f.colonia, f.municipio, f.estado]), [
+    ['01000', 'Colonia Uno', 'Municipio Prueba', 'Ciudad de México'],
+    ['50000', 'Barrio Dos', 'Toluca', 'Estado de México'],
+    ['91000', 'Fracc. Tres', 'Xalapa', 'Veracruz'],
+  ]);
+  assert.deepEqual(estadosDesconocidos, []);
+  assert.throws(() => leerCatalogoSepomex('otra cosa'), /encabezados/);
+});
+
+caso('la dirección de Google cae en los campos del Hub, por tipo y con el nombre de estado del Hub', () => {
+  const comp = (longText: string, types: string[], shortText = longText) => ({ longText, shortText, types });
+  const d = direccionDeComponentes([
+    comp('México', ['country', 'political'], 'MX'),
+    comp('01000', ['postal_code']),
+    comp('Estado de México', ['administrative_area_level_1', 'political'], 'Méx.'),
+    comp('Municipio Prueba', ['locality', 'political']),
+    comp('Colonia Prueba', ['sublocality_level_1', 'sublocality', 'political']),
+    comp('Calle Inventada', ['route']),
+    comp('123', ['street_number']),
+  ], 'MX');
+  assert.deepEqual(d, { calle: 'Calle Inventada', numero: '123', colonia: 'Colonia Prueba', ciudad: 'Municipio Prueba', estado: 'Estado de México', cp: '01000' });
+  assert.equal(direccionDeComponentes([comp('CDMX', ['administrative_area_level_1'])], 'MX').estado, 'Ciudad de México');
+  assert.equal(direccionDeComponentes([comp('Ver.', ['administrative_area_level_1'], 'Ver.')], 'MX').estado, 'Veracruz');
+  assert.equal(direccionDeComponentes([comp('Provincia Inventada', ['administrative_area_level_1'])], 'CR').estado, 'Provincia Inventada');
 });
 
 await Promise.all(pendientes);

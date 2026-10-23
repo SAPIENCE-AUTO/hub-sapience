@@ -19,7 +19,15 @@ export interface Pais {
   estados?: string[];
   /** Validación del código postal. */
   cp?: { patron: string; mensaje: string };
+  /** El código postal llena estado, municipio y colonias (catálogo oficial en la tabla codigos_postales). */
+  buscaCp?: boolean;
+  /** Celular: lada, bandera y cuántos dígitos lleva sin la lada, agrupados como se dicta. */
+  telefono?: Telefono;
 }
+
+export interface Telefono { lada: string; bandera: string; digitos: number; grupos: number[]; ejemplo: string }
+
+const tel8 = (lada: string, bandera: string): Telefono => ({ lada, bandera, digitos: 8, grupos: [4, 4], ejemplo: '8888 8888' });
 
 export const NOMBRES_DIRECCION: Record<CampoDireccion, string> = {
   calle: 'Calle',
@@ -48,19 +56,42 @@ export const PAISES: Record<string, Pais & { nota?: string }> = {
     direccion: { numero: 'Número exterior e interior', colonia: 'Colonia', ciudad: 'Alcaldía o municipio', estado: 'Estado' },
     estados: ESTADOS_MX,
     cp: { patron: '^\\d{5}$', mensaje: 'El código postal lleva 5 dígitos' },
+    buscaCp: true,
+    telefono: { lada: '+52', bandera: '🇲🇽', digitos: 10, grupos: [2, 4, 4], ejemplo: '55 1234 5678' },
   },
-  PE: { nombre: 'Perú', asociacionNse: 'APEIM' },
-  BR: { nombre: 'Brasil', asociacionNse: 'ABEP' },
-  CL: { nombre: 'Chile', asociacionNse: 'AIM' },
-  AR: { nombre: 'Argentina', asociacionNse: 'SAIMO' },
-  CO: { nombre: 'Colombia', asociacionNse: 'Estrato del recibo' },
-  GT: { nombre: 'Guatemala', nota: CENTROAMERICA },
-  SV: { nombre: 'El Salvador', nota: CENTROAMERICA },
-  HN: { nombre: 'Honduras', nota: CENTROAMERICA },
-  NI: { nombre: 'Nicaragua', nota: CENTROAMERICA },
-  CR: { nombre: 'Costa Rica', nota: CENTROAMERICA },
-  PA: { nombre: 'Panamá', nota: CENTROAMERICA },
+  PE: { nombre: 'Perú', asociacionNse: 'APEIM', telefono: { lada: '+51', bandera: '🇵🇪', digitos: 9, grupos: [3, 3, 3], ejemplo: '912 345 678' } },
+  BR: { nombre: 'Brasil', asociacionNse: 'ABEP', telefono: { lada: '+55', bandera: '🇧🇷', digitos: 11, grupos: [2, 5, 4], ejemplo: '11 91234 5678' } },
+  CL: { nombre: 'Chile', asociacionNse: 'AIM', telefono: { lada: '+56', bandera: '🇨🇱', digitos: 9, grupos: [1, 4, 4], ejemplo: '9 1234 5678' } },
+  AR: { nombre: 'Argentina', asociacionNse: 'SAIMO', telefono: { lada: '+54', bandera: '🇦🇷', digitos: 10, grupos: [2, 4, 4], ejemplo: '11 2345 6789' } },
+  CO: { nombre: 'Colombia', asociacionNse: 'Estrato del recibo', telefono: { lada: '+57', bandera: '🇨🇴', digitos: 10, grupos: [3, 3, 4], ejemplo: '312 345 6789' } },
+  GT: { nombre: 'Guatemala', nota: CENTROAMERICA, telefono: tel8('+502', '🇬🇹') },
+  SV: { nombre: 'El Salvador', nota: CENTROAMERICA, telefono: tel8('+503', '🇸🇻') },
+  HN: { nombre: 'Honduras', nota: CENTROAMERICA, telefono: tel8('+504', '🇭🇳') },
+  NI: { nombre: 'Nicaragua', nota: CENTROAMERICA, telefono: tel8('+505', '🇳🇮') },
+  CR: { nombre: 'Costa Rica', nota: CENTROAMERICA, telefono: tel8('+506', '🇨🇷') },
+  PA: { nombre: 'Panamá', nota: CENTROAMERICA, telefono: tel8('+507', '🇵🇦') },
 };
+
+/** El celular del país; sin país conocido, 10 dígitos sin lada. */
+export const telefonoDe = (pais?: string): Telefono =>
+  (pais && PAISES[pais]?.telefono) || { lada: '', bandera: '', digitos: 10, grupos: [3, 3, 4], ejemplo: '' };
+
+/** Solo los dígitos del celular, sin la lada si la pegaron con ella («+52 55…»), hasta los que lleva el país. */
+export function limpiarTelefono(texto: string, t: Telefono): string {
+  let d = texto.replace(/\D/g, '');
+  const lada = t.lada.replace(/\D/g, '');
+  if (lada && d.length > t.digitos && d.startsWith(lada)) d = d.slice(lada.length);
+  return d.slice(0, t.digitos);
+}
+
+/** Los dígitos en grupos, como se dicta: «55 1234 5678». */
+export function agruparTelefono(digitos: string, t: Telefono): string {
+  const partes: string[] = [];
+  let i = 0;
+  for (const n of t.grupos) { if (i >= digitos.length) break; partes.push(digitos.slice(i, i + n)); i += n; }
+  if (i < digitos.length) partes.push(digitos.slice(i));
+  return partes.join(' ');
+}
 
 export const nombreCampoDireccion = (pais: string | undefined, campo: CampoDireccion) =>
   (pais && PAISES[pais]?.direccion?.[campo]) || NOMBRES_DIRECCION[campo];

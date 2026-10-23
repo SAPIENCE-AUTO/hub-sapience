@@ -7,7 +7,7 @@ import {
 import { logicaDePregunta } from '@/lib/formularios/palabras';
 import { GRUPOS_TIPOS, cambiarPregunta, cambiarTipo, esDelNse, moverPregunta, quitarPregunta, sePuedeMover, usosDePregunta } from '@/lib/formularios/editar';
 import { rango } from '@/lib/formularios/motor';
-import { nombreCampoDireccion } from '@/lib/formularios/paises';
+import { nombreCampoDireccion, telefonoDe } from '@/lib/formularios/paises';
 import { nombreDePregunta } from '@/lib/formularios/tabla';
 import { TEAL } from '@/lib/toolColors';
 import { CAMPOS_DIRECCION, TIPOS, esDeOpciones, esMatriz, forma, type Pregunta, type Seccion } from '@/lib/formularios/tipos';
@@ -28,7 +28,7 @@ function Respuesta({ p }: { p: Pregunta }) {
     case 'texto': return linea(p.patronMensaje ? `Respuesta corta · ${p.patronMensaje}` : 'Respuesta corta');
     case 'texto_largo': return linea('Respuesta larga');
     case 'numero': return linea('Número');
-    case 'telefono': return linea('Celular de 10 dígitos');
+    case 'telefono': { const t = telefonoDe(def.pais); return linea(`${t.lada ? `${t.lada} · ` : ''}Celular de ${t.digitos} dígitos`); }
     case 'correo': return linea('Correo');
     case 'direccion': return linea(CAMPOS_DIRECCION.map((c) => nombreCampoDireccion(def.pais, c)).join(' · '));
     case 'foto': return linea('Foto desde el celular (hasta 3)');
