@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { pasarAlReclutamiento, vinculoVigente, type Vinculo } from '../serverUtils/formularios/reclutamiento';
-import type { Definicion } from '../lib/formularios/tipos';
+import { leerDefinicion } from '../lib/formularios/tipos';
 
 /**
  * Pasa respuestas al tablero vinculado. Sin `respuestaIds`: todas las que
@@ -35,7 +35,7 @@ export default createEndpoint({
       );
 
     const res = await pasarAlReclutamiento(
-      { id: f.id, titulo: f.titulo, definicion: f.definicion as Definicion, vinculo },
+      { id: f.id, titulo: f.titulo, definicion: leerDefinicion(f.definicion), vinculo },
       rows.map((r) => ({
         id: r.id, createdAt: new Date(r.created_at).toISOString(), esPrueba: r.es_prueba,
         respuestas: r.respuestas, resultado: r.resultado, duracionSeg: r.duracion_seg ?? undefined,

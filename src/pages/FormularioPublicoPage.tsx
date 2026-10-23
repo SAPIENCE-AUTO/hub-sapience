@@ -6,7 +6,7 @@ import { pantallas, terminacion, validarPantalla } from '@/lib/formularios/motor
 import type { Definicion, Respuestas, Valor } from '@/lib/formularios/tipos';
 import { CampoPregunta } from '@/components/formularios/CampoPregunta';
 
-// Mismo logo que SwipePage.tsx — página pública sin login.
+// Mismo logo que SwipePage.tsx — página pública sin login. Quitarlo es de la fase 4 (formulario neutro en el dominio de Sharpli).
 const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png';
 
 type Fase = 'cargando' | 'noexiste' | 'cerrado' | 'bienvenida' | 'preguntas' | 'enviando' | 'gracias' | 'nocalifica' | 'error';
@@ -113,7 +113,7 @@ export default function FormularioPublicoPage() {
 
   const siguiente = () => {
     if (!def || !pantalla) return;
-    const e = validarPantalla(pantalla, resp);
+    const e = validarPantalla(pantalla, resp, def.pais);
     setErrores(e);
     if (Object.keys(e).length) return;
     if (terminacion(def, resp, lista)) return enviar('nocalifica');
@@ -148,9 +148,9 @@ export default function FormularioPublicoPage() {
     return (
       <Marco prueba={prueba}>
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <p className="max-w-sm text-[17px] leading-relaxed text-[#0F3D4D]">{fase === 'gracias' ? def.despedida : def.noCalifica}</p>
+          <p className="max-w-sm text-[17px] leading-relaxed text-[#1F1F23]">{fase === 'gracias' ? def.despedida : def.noCalifica}</p>
           {prueba && (
-            <button onClick={otraVez} className="mt-8 rounded-full border-[1.5px] border-[#0F3D4D] px-6 py-2.5 text-[14px] font-semibold text-[#0F3D4D]">
+            <button onClick={otraVez} className="mt-8 rounded-full border-[1.5px] border-[#1F1F23] px-6 py-2.5 text-[14px] font-semibold text-[#1F1F23]">
               Contestar otra vez (prueba)
             </button>
           )}
@@ -163,11 +163,11 @@ export default function FormularioPublicoPage() {
     return (
       <Marco prueba={prueba}>
         <div className="flex flex-1 flex-col justify-center px-6 py-10">
-          <h1 className="text-[26px] font-bold leading-tight text-[#0F3D4D]">{def.tituloPublico}</h1>
-          <p className="mt-4 text-[16px] leading-relaxed text-[#3F5960]">{def.bienvenida}</p>
+          <h1 className="text-[26px] font-bold leading-tight text-[#1F1F23]">{def.tituloPublico}</h1>
+          <p className="mt-4 text-[16px] leading-relaxed text-[#45454D]">{def.bienvenida}</p>
           <button
             onClick={() => { setActualId(actualId ?? lista[0]?.id); setFase('preguntas'); }}
-            className="mt-10 w-full rounded-xl bg-[#0F3D4D] py-4 text-[16px] font-semibold text-white"
+            className="mt-10 w-full rounded-xl bg-[#1F1F23] py-4 text-[16px] font-semibold text-white"
           >
             {actualId ? 'Continuar' : 'Empezar'}
           </button>
@@ -181,21 +181,21 @@ export default function FormularioPublicoPage() {
   return (
     <Marco prueba={prueba} progreso={progreso}>
       <div className="flex-1 px-5 pb-32 pt-6">
-        {pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#0F3D4D]">{pantalla.titulo}</h2>}
-        {pantalla?.intro && <p className="mt-2 text-[15px] leading-relaxed text-[#3F5960]">{pantalla.intro}</p>}
+        {pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#1F1F23]">{pantalla.titulo}</h2>}
+        {pantalla?.intro && <p className="mt-2 text-[15px] leading-relaxed text-[#45454D]">{pantalla.intro}</p>}
         <div className="mt-6 space-y-9">
           {pantalla?.preguntas.map((pv) => (
-            <CampoPregunta key={pv.clave} pv={pv} resp={resp} error={errores[pv.clave]} codigo={codigo} onChange={cambiar} />
+            <CampoPregunta key={pv.clave} pv={pv} resp={resp} error={errores[pv.clave]} codigo={codigo} pais={def.pais} onChange={cambiar} />
           ))}
         </div>
-        {falla && <p className="mt-6 rounded-xl bg-[#FDECEC] px-4 py-3 text-[14px] text-[#D32222]">{falla}</p>}
+        {falla && <p className="mt-6 rounded-xl bg-[#FBEAEA] px-4 py-3 text-[14px] text-[#C2272D]">{falla}</p>}
       </div>
-      <div className="fixed inset-x-0 bottom-0 border-t border-[#D5E2E5] bg-white/95 px-5 py-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 border-t border-[#E4E4E7] bg-white/95 px-5 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-lg gap-3">
-          <button onClick={atras} disabled={fase === 'enviando'} className="rounded-xl border-[1.5px] border-[#D5E2E5] px-5 py-3.5 text-[15px] font-medium text-[#0F3D4D]">
+          <button onClick={atras} disabled={fase === 'enviando'} className="rounded-xl border-[1.5px] border-[#D9D9DE] px-5 py-3.5 text-[15px] font-medium text-[#1F1F23]">
             Atrás
           </button>
-          <button onClick={siguiente} disabled={fase === 'enviando'} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#0F3D4D] py-3.5 text-[15px] font-semibold text-white disabled:opacity-60">
+          <button onClick={siguiente} disabled={fase === 'enviando'} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#1F1F23] py-3.5 text-[15px] font-semibold text-white disabled:opacity-60">
             {fase === 'enviando' && <Loader2 className="h-4 w-4 animate-spin" />}
             {indice === lista.length - 1 ? 'Enviar' : 'Siguiente'}
           </button>
@@ -207,14 +207,14 @@ export default function FormularioPublicoPage() {
 
 function Marco({ children, prueba, progreso }: { children: React.ReactNode; prueba: boolean; progreso?: number }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-[#F2F7F8]">
-      <header className="bg-[#0F3D4D]">
+    <div className="flex min-h-dvh flex-col bg-[#F6F6F7]">
+      <header className="bg-[#1F1F23]">
         <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-4">
           <img src={LOGO_URL} alt="Sapience" className="h-6 w-auto" />
-          {prueba && <span className="rounded-full bg-[#F4C025] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#0F3D4D]">Prueba</span>}
+          {prueba && <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#1F1F23]">Prueba</span>}
         </div>
         {progreso !== undefined && (
-          <div className="h-1 bg-white/15"><div className="h-1 bg-[#F4C025] transition-all" style={{ width: `${progreso}%` }} /></div>
+          <div className="h-1 bg-white/15"><div className="h-1 bg-white transition-all" style={{ width: `${progreso}%` }} /></div>
         )}
       </header>
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col">{children}</main>
@@ -223,5 +223,5 @@ function Marco({ children, prueba, progreso }: { children: React.ReactNode; prue
 }
 
 function Mensaje({ children }: { children: React.ReactNode }) {
-  return <div className="flex min-h-dvh items-center justify-center bg-[#F2F7F8] px-6 text-center text-[15px] text-[#6E8388]">{children}</div>;
+  return <div className="flex min-h-dvh items-center justify-center bg-[#F6F6F7] px-6 text-center text-[15px] text-[#62626B]">{children}</div>;
 }

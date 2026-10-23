@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, Boards, pool, ZiteError } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { asegurarColumnas, columnasParaTablero, type Vinculo } from '../serverUtils/formularios/reclutamiento';
-import type { Definicion } from '../lib/formularios/tipos';
+import { leerDefinicion } from '../lib/formularios/tipos';
 
 /**
  * Crea un tablero de Reclutamiento en el proyecto del formulario y lo deja
@@ -39,7 +39,7 @@ export default createEndpoint({
       record: { boardName: nombre, projectCode: f.project_code, boardOrder: vivos.length, boardType: 'recruitment' },
     });
     const vinculo: Vinculo = { boardId: tablero.id, boardName: nombre, projectCode: f.project_code, columnas: {} };
-    const { creadas } = await asegurarColumnas(f.id, vinculo, columnasParaTablero(f.definicion as Definicion));
+    const { creadas } = await asegurarColumnas(f.id, vinculo, columnasParaTablero(leerDefinicion(f.definicion)));
     return { id: tablero.id, nombre, columnasCreadas: creadas };
   },
 });

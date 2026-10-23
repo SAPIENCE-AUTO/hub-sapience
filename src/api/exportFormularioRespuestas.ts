@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
+import { leerDefinicion } from '../lib/formularios/tipos';
 
 /**
  * Todas las respuestas completas de un formulario, para el Excel del panel
@@ -33,7 +34,7 @@ export default createEndpoint({
       [input.formularioId],
     );
     return {
-      found: true, titulo: f.titulo, definicion: f.definicion,
+      found: true, titulo: f.titulo, definicion: leerDefinicion(f.definicion),
       filas: rows.map((r) => ({
         createdAt: new Date(r.created_at).toISOString(),
         esPrueba: r.es_prueba,

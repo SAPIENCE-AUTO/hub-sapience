@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { etiqueta, explicarResultado } from '../lib/formularios/motor';
-import type { Definicion, Respuestas, Resultado } from '../lib/formularios/tipos';
+import { leerDefinicion, type Respuestas, type Resultado } from '../lib/formularios/tipos';
 import { respuestasYaPasadas, vinculoVigente, type Vinculo } from '../serverUtils/formularios/reclutamiento';
 
 /**
@@ -31,6 +31,8 @@ export default createEndpoint({
       edad: z.string().optional(),
       genero: z.string().optional(),
       nse: z.string().optional(),
+      /** Frentes donde entró aunque su NSE no es el que pide el frente. */
+      nseFueraDe: z.array(z.string()),
       califica: z.boolean(),
       frentes: z.array(z.string()),
       motivo: z.string().optional(),
@@ -45,7 +47,7 @@ export default createEndpoint({
     exigirAccesoFormularios(context);
     const { rows: [f] } = await pool.query(`select id, codigo, titulo, estado, definicion, vinculo from formularios where id = $1`, [input.formularioId]);
     if (!f) return { found: false };
-    const def = f.definicion as Definicion;
+    const def = leerDefinicion(f.definicion);
 
     const { rows } = await pool.query(
       `select id, created_at, es_prueba, respuestas, resultado, califica, nombre, telefono, duracion_seg
@@ -77,6 +79,7 @@ export default createEndpoint({
           edad: etiqueta(def, def.claves?.edad, resp),
           genero: etiqueta(def, def.claves?.genero, resp),
           nse: res.nse?.nivel,
+          nseFueraDe: res.nse?.fueraDe ?? [],
           califica: r.califica,
           frentes: res.frentes,
           motivo: explicarResultado(res),

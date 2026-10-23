@@ -1,3 +1,4 @@
+import { preguntasNse, reglaNse } from '../nse';
 import type { Definicion, Opcion } from '../tipos';
 
 /**
@@ -32,7 +33,8 @@ const ULTIMA_COMPRA = (descarta: string): Opcion[] => [
 ];
 
 export const ALONG2: Definicion = {
-  version: 1,
+  version: 2,
+  pais: 'MX',
   tituloPublico: 'Estudio sobre productos para el hogar',
   bienvenida: '¡Hola! En Sapience hacemos estudios sobre los productos que la gente compra para su casa. Contestar toma unos 10 minutos y te pediremos un par de fotos desde tu celular. Tus respuestas son confidenciales y solo se usan para investigación.',
   despedida: '¡Gracias! Revisaremos tus respuestas y, si tu perfil coincide con lo que buscamos, te escribiremos por WhatsApp.',
@@ -327,24 +329,8 @@ export const ALONG2: Definicion = {
     {
       id: 'nse',
       titulo: 'Tu hogar',
-      preguntas: [
-        {
-          id: 'nse_escolaridad', tipo: 'unica', texto: '¿Cuál es el último grado de estudios de la persona que más aporta al gasto de tu casa?',
-          opciones: [
-            { id: 'ninguno', label: 'No estudió' }, { id: 'prim_inc', label: 'Primaria incompleta' }, { id: 'prim', label: 'Primaria completa' },
-            { id: 'sec_inc', label: 'Secundaria incompleta' }, { id: 'sec', label: 'Secundaria completa' },
-            { id: 'tecnica', label: 'Carrera técnica o comercial' },
-            { id: 'prepa_inc', label: 'Preparatoria incompleta' }, { id: 'prepa', label: 'Preparatoria completa' },
-            { id: 'lic_inc', label: 'Licenciatura incompleta' }, { id: 'lic', label: 'Licenciatura completa' },
-            { id: 'posgrado', label: 'Diplomado o maestría' }, { id: 'doctorado', label: 'Doctorado' },
-          ],
-        },
-        { id: 'nse_banos', tipo: 'unica', texto: '¿Cuántos baños completos, con regadera y excusado, hay en tu casa?', opciones: [{ id: '0', label: '0' }, { id: '1', label: '1' }, { id: '2', label: '2 o más' }] },
-        { id: 'nse_autos', tipo: 'unica', texto: '¿Cuántos autos o camionetas tienen en tu casa?', opciones: [{ id: '0', label: '0' }, { id: '1', label: '1' }, { id: '2', label: '2 o más' }] },
-        { id: 'nse_internet', tipo: 'unica', texto: 'Sin contar los datos del celular, ¿tu casa tiene internet?', opciones: [{ id: 'no', label: 'No' }, { id: 'si', label: 'Sí' }] },
-        { id: 'nse_trabajan', tipo: 'unica', texto: 'De las personas de 14 años o más que viven en tu casa, ¿cuántas trabajaron el mes pasado?', opciones: ['0', '1', '2', '3', '4'].map((n) => ({ id: n, label: n === '4' ? '4 o más' : n })) },
-        { id: 'nse_cuartos', tipo: 'unica', texto: '¿Cuántos cuartos se usan para dormir en tu casa, sin contar pasillos ni baños?', opciones: ['0', '1', '2', '3', '4'].map((n) => ({ id: n, label: n === '4' ? '4 o más' : n })) },
-      ],
+      // Preguntas estándar de la regla AMAI vigente (nse.ts): mismos ids que en la versión 1, así no cambian las columnas.
+      preguntas: preguntasNse('MX'),
     },
     {
       id: 'participacion',
@@ -417,19 +403,6 @@ export const ALONG2: Definicion = {
     { texto: 'Marcó más de 7 aromatizantes: posible sobredeclarante', contar: { pregunta: 'formatos_uso', masDe: 7 } },
   ],
 
-  // Regla AMAI NSE (puntos y cortes de la regla 2018). Confirmar contra la regla vigente antes del campo real.
-  nse: {
-    puntos: {
-      nse_escolaridad: { ninguno: 0, prim_inc: 6, prim: 11, sec_inc: 12, sec: 18, tecnica: 23, prepa_inc: 23, prepa: 27, lic_inc: 36, lic: 59, posgrado: 85, doctorado: 85 },
-      nse_banos: { 0: 0, 1: 24, 2: 47 },
-      nse_autos: { 0: 0, 1: 22, 2: 43 },
-      nse_internet: { no: 0, si: 32 },
-      nse_trabajan: { 0: 0, 1: 15, 2: 31, 3: 46, 4: 61 },
-      nse_cuartos: { 0: 0, 1: 8, 2: 16, 3: 24, 4: 32 },
-    },
-    cortes: [
-      { nivel: 'A/B', desde: 205 }, { nivel: 'C+', desde: 166 }, { nivel: 'C', desde: 136 }, { nivel: 'C-', desde: 112 },
-      { nivel: 'D+', desde: 90 }, { nivel: 'D', desde: 48 }, { nivel: 'E', desde: 0 },
-    ],
-  },
+  // Regla AMAI vigente (2022, nse.ts). El ensayo ya guardado conserva la de 2018 con la que se creó.
+  nse: reglaNse('MX'),
 };

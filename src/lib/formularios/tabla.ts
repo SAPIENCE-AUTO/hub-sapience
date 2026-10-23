@@ -1,5 +1,9 @@
-import { explicarResultado, seleccion } from './motor';
-import type { Condicion, Definicion, FotoSubida, Opcion, Pregunta, Respuestas, Resultado } from './tipos';
+import { explicarResultado, seleccion, textoRespuesta } from './motor';
+import { nombreCampoDireccion } from './paises';
+import {
+  CAMPOS_DIRECCION, esMatriz, forma,
+  type Condicion, type Definicion, type FotoSubida, type Opcion, type Pregunta, type Respuestas, type Resultado,
+} from './tipos';
 
 /**
  * Convierte las respuestas de un formulario en una tabla: una fila por
@@ -11,6 +15,10 @@ import type { Condicion, Definicion, FotoSubida, Opcion, Pregunta, Respuestas, R
  * Con `completas` salen todas las columnas que el screener puede llegar a
  * tener, aunque nadie haya contestado: así se arma un tablero de Reclutamiento
  * desde que se vincula, igual que un formulario de Fillout.
+ *
+ * Una matriz da una columna por fila y una dirección una por campo (calle,
+ * colonia, código postal…); las escalas son columnas de número; un texto o
+ * imagen sin pregunta no da columna.
  */
 
 export interface FilaRespuesta {
@@ -63,19 +71,8 @@ function celda(def: Definicion, p: Pregunta, clave: string, resp: Respuestas): C
     const n = (v as FotoSubida[]).length;
     return `${n} foto${n === 1 ? '' : 's'}`;
   }
-  if (p.tipo === 'numero') return typeof v === 'number' ? v : Number(v);
-  if (p.tipo === 'unica' || p.tipo === 'multiple') {
-    const opciones = opcionesDe(def, p);
-    const otra = resp[`${clave}#otra`];
-    return seleccion(v)
-      .map((id) => {
-        const o = opciones.find((x) => x.id === id);
-        if (!o) return id;
-        return o.otra && otra ? `${o.label}: ${otra}` : o.label;
-      })
-      .join(', ');
-  }
-  return String(v);
+  if (forma(p.tipo) === 'numero') return typeof v === 'number' ? v : Number(v);
+  return textoRespuesta(p, opcionesDe(def, p), clave, resp);
 }
 
 export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = false }: { completas?: boolean } = {}): Columna[] {
@@ -113,18 +110,26 @@ export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = 
         if (yaFijas.has(p.id) || !puedeAparecer(p.mostrarSi, inst?.id)) continue;
         const clave = inst ? `${p.id}@${inst.id}` : p.id;
         const titulo = conOpcion(p.texto, inst);
-        if (p.tipo === 'matriz') {
+        if (forma(p.tipo) === 'ninguna') continue;
+        if (esMatriz(p.tipo)) {
           for (const fila of p.filas ?? []) {
             deSecciones.push({
               clave: `${clave}.${fila.id}`, tipo: 'Texto', seccion, titulo: `${titulo} · ${fila.label}`,
               valor: (f) => {
-                const elegida = (f.respuestas[clave] as Record<string, string> | undefined)?.[fila.id];
-                return p.opciones?.find((o) => o.id === elegida)?.label;
+                const elegidas = seleccion((f.respuestas[clave] as Record<string, string | string[]> | undefined)?.[fila.id]);
+                return (p.opciones ?? []).filter((o) => elegidas.includes(o.id)).map((o) => o.label).join(', ') || undefined;
               },
             });
           }
+        } else if (p.tipo === 'direccion') {
+          for (const campo of CAMPOS_DIRECCION) {
+            deSecciones.push({
+              clave: `${clave}.${campo}`, tipo: 'Texto', seccion, titulo: `${titulo} · ${nombreCampoDireccion(def.pais, campo)}`,
+              valor: (f) => (f.respuestas[clave] as Record<string, string> | undefined)?.[campo]?.trim() || undefined,
+            });
+          }
         } else {
-          deSecciones.push({ clave, tipo: p.tipo === 'numero' ? 'Número' : 'Texto', seccion, titulo, valor: (f) => celda(def, p, clave, f.respuestas) });
+          deSecciones.push({ clave, tipo: forma(p.tipo) === 'numero' ? 'Número' : 'Texto', seccion, titulo, valor: (f) => celda(def, p, clave, f.respuestas) });
         }
       }
     }

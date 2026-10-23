@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { PLANTILLAS } from '../lib/formularios/plantillas';
+import { revisarDefinicion } from '../lib/formularios/revisar';
 
 /**
  * Crea un formulario a partir de una plantilla. Arranca en borrador: nadie
@@ -22,6 +23,8 @@ export default createEndpoint({
     exigirAccesoFormularios(context);
     const plantilla = PLANTILLAS[input.plantilla];
     if (!plantilla) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Esa plantilla no existe.' });
+    const problemas = revisarDefinicion(plantilla.definicion);
+    if (problemas.length) throw new ZiteError({ code: 'BAD_REQUEST', message: `La plantilla tiene problemas: ${problemas.join(' ')}` });
 
     for (let intento = 0; intento < 5; intento++) {
       const codigo = randomBytes(5).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 7);

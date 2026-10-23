@@ -16,6 +16,8 @@ import {
 import { ArrowRightLeft, Copy, Download, ExternalLink, Loader2, Plus, RefreshCw, Trash2, TriangleAlert, Users } from 'lucide-react';
 import { TEAL, EXITO, PELIGRO, ALERTA, GRIS, INFO, EstadoPill } from '@/lib/toolColors';
 import { describir } from '@/lib/formularios/motor';
+import { PAISES } from '@/lib/formularios/paises';
+import { reglaVigente } from '@/lib/formularios/nse';
 import { PLANTILLAS } from '@/lib/formularios/plantillas';
 import { descargarExcel } from '@/lib/formularios/excel';
 import type { Definicion, Respuestas, Resultado } from '@/lib/formularios/tipos';
@@ -23,6 +25,8 @@ import type { Definicion, Respuestas, Resultado } from '@/lib/formularios/tipos'
 interface FormularioRow { id: string; codigo: string; titulo: string; estado: string; respuestasPrueba: number; respuestasReales: number; califican: number }
 interface RespuestaRow {
   id: string; createdAt: string; esPrueba: boolean; nombre?: string; telefono?: string; edad?: string; genero?: string; nse?: string;
+  /** Frentes donde entró aunque su NSE no es el que pide el frente: alerta, no descarte. */
+  nseFueraDe: string[];
   califica: boolean; frentes: string[]; motivo?: string; alertas: string[]; incompleto: boolean; duplicado: boolean; duracionSeg?: number;
   enReclutamiento: boolean;
 }
@@ -238,7 +242,10 @@ function DetalleFormulario({ detalle, proyectoId, onEstado, onRecargar, onVer, o
 
   const cuotas = useMemo(() => frentes.map((f) => {
     const filas = detalle.respuestas.filter((r) => r.califica && r.frentes.includes(f.id));
-    return { ...f, califican: filas.length, mujeres: filas.filter((r) => r.genero === 'Mujer').length, hombres: filas.filter((r) => r.genero === 'Hombre').length };
+    return {
+      ...f, califican: filas.length, nseDistinto: filas.filter((r) => r.nseFueraDe.includes(f.id)).length,
+      mujeres: filas.filter((r) => r.genero === 'Mujer').length, hombres: filas.filter((r) => r.genero === 'Hombre').length,
+    };
   }), [frentes, detalle.respuestas]);
 
   return (
@@ -250,6 +257,10 @@ function DetalleFormulario({ detalle, proyectoId, onEstado, onRecargar, onVer, o
             <EstadoPill estado={detalle.estado} />
           </div>
           <p className="text-xs text-muted-foreground">El participante ve: «{def.tituloPublico}»</p>
+          <p className="text-xs text-muted-foreground">
+            {PAISES[def.pais]?.nombre ?? def.pais}
+            {def.nse && <> · NSE {def.nse.regla ?? 'propio'}<AvisoRegla def={def} /></>}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {detalle.estado === 'borrador' && <Button size="sm" onClick={() => onEstado('prueba')}>Abrir en modo prueba</Button>}
@@ -275,7 +286,8 @@ function DetalleFormulario({ detalle, proyectoId, onEstado, onRecargar, onVer, o
         </CardContent>
       </Card>
 
-      <TarjetaReclutamiento detalle={detalle} proyectoId={proyectoId} onCambio={onRecargar} />
+      {/* key: al cambiar de formulario se reinicia (el nombre propuesto para un tablero nuevo es el del formulario). */}
+      <TarjetaReclutamiento key={detalle.id} detalle={detalle} proyectoId={proyectoId} onCambio={onRecargar} />
 
       {frentes.length > 0 && (
         <div>
@@ -283,13 +295,14 @@ function DetalleFormulario({ detalle, proyectoId, onEstado, onRecargar, onVer, o
           <div className="overflow-hidden rounded-lg border">
             <table className="w-full text-sm">
               <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
-                <tr><th className="px-3 py-2">Frente</th><th className="px-3 py-2">Califican / meta</th><th className="px-3 py-2">Mujeres · hombres</th></tr>
+                <tr><th className="px-3 py-2">Frente</th><th className="px-3 py-2">Califican / meta</th><th className="px-3 py-2">Con NSE distinto</th><th className="px-3 py-2">Mujeres · hombres</th></tr>
               </thead>
               <tbody>
                 {cuotas.map((c) => (
                   <tr key={c.id} className="border-t">
                     <td className="px-3 py-2">{c.nombre}</td>
                     <td className="px-3 py-2 font-medium" style={{ color: c.califican >= c.meta ? EXITO : undefined }}>{c.califican} / {c.meta}</td>
+                    <td className="px-3 py-2" style={{ color: c.nseDistinto ? ALERTA : undefined }}>{c.nseDistinto || '—'}</td>
                     <td className="px-3 py-2 text-muted-foreground">{c.mujeres} · {c.hombres}</td>
                   </tr>
                 ))}
@@ -333,7 +346,9 @@ function DetalleFormulario({ detalle, proyectoId, onEstado, onRecargar, onVer, o
                         {r.duplicado && <span className="ml-1.5 text-[10px] font-semibold" style={{ color: ALERTA }}>tel. repetido</span>}
                       </td>
                       <td className="px-3 py-2">{r.edad ?? '—'}{r.genero ? ` · ${r.genero}` : ''}</td>
-                      <td className="px-3 py-2">{r.nse ?? '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-2" style={{ color: r.nseFueraDe.length ? ALERTA : undefined }} title={r.nseFueraDe.length ? 'No es el NSE que pide su frente (no descarta)' : undefined}>
+                        {r.nse ?? '—'}{r.nseFueraDe.length > 0 && <TriangleAlert className="ml-1 inline h-3 w-3" />}
+                      </td>
                       <td className="px-3 py-2">
                         <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase text-white" style={{ backgroundColor: r.califica ? EXITO : r.incompleto ? GRIS : PELIGRO }}>
                           {r.califica ? 'Califica' : r.incompleto ? 'Incompleta' : 'No califica'}
@@ -351,6 +366,14 @@ function DetalleFormulario({ detalle, proyectoId, onEstado, onRecargar, onVer, o
       </div>
     </div>
   );
+}
+
+/** Si los puntos del NSE están por confirmar, o si el filtro trae una regla que ya no es la vigente del país. */
+function AvisoRegla({ def }: { def: Definicion }) {
+  const vigente = reglaVigente(def.pais);
+  const texto = def.nse?.porConfirmar ? 'puntos por confirmar'
+    : vigente && def.nse?.regla && def.nse.regla !== vigente ? `la vigente es ${vigente}` : undefined;
+  return texto ? <span style={{ color: ALERTA }}> ({texto})</span> : null;
 }
 
 function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Detalle; proyectoId?: string; onCambio: () => void }) {
@@ -516,7 +539,7 @@ function RespuestaDialog({ formularioId, definicion, tablero, fila, onClose, onP
               <p>
                 <span className="font-semibold" style={{ color: fila.califica ? EXITO : PELIGRO }}>{fila.califica ? 'Califica' : 'No califica'}</span>
                 {datos.resultado.frentes.length > 0 && ` · ${datos.resultado.frentes.map(nombreFrente).join(', ')}`}
-                {datos.resultado.nse && ` · NSE ${datos.resultado.nse.nivel} (${datos.resultado.nse.puntos} puntos)`}
+                {datos.resultado.nse && ` · NSE ${datos.resultado.nse.nivel} (${datos.resultado.nse.puntos} puntos${definicion.nse?.regla ? `, ${definicion.nse.regla}` : ''}${definicion.nse?.porConfirmar ? ' por confirmar' : ''})`}
                 {fila.duracionSeg !== undefined && ` · ${Math.round(fila.duracionSeg / 60)} min`}
               </p>
               {fila.motivo && <p className="mt-1 text-muted-foreground">{fila.motivo}</p>}

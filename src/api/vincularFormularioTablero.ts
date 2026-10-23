@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { asegurarColumnas, columnasParaTablero, type Vinculo } from '../serverUtils/formularios/reclutamiento';
-import type { Definicion } from '../lib/formularios/tipos';
+import { leerDefinicion } from '../lib/formularios/tipos';
 
 /**
  * Elige el tablero de Reclutamiento al que se pasan las respuestas y le arma
@@ -30,7 +30,7 @@ export default createEndpoint({
       boardId: b.id, boardName: b.board_name ?? '', projectCode: b.project_code ?? '',
       columnas: anterior?.boardId === b.id ? anterior.columnas : {},
     };
-    const { creadas } = await asegurarColumnas(input.formularioId, vinculo, columnasParaTablero(f.definicion as Definicion));
+    const { creadas } = await asegurarColumnas(input.formularioId, vinculo, columnasParaTablero(leerDefinicion(f.definicion)));
     return { ok: true, columnasCreadas: creadas };
   },
 });

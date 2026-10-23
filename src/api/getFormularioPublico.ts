@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
 import { definicionPublica } from '../lib/formularios/motor';
-import type { Definicion } from '../lib/formularios/tipos';
+import { leerDefinicion } from '../lib/formularios/tipos';
 
 /**
  * Público — la página /f/:codigo pide el formulario. Un borrador responde
@@ -21,6 +21,6 @@ export default createEndpoint({
     const { rows: [f] } = await pool.query(`select estado, definicion from formularios where codigo = $1`, [input.codigo]);
     if (!f || f.estado === 'borrador') return { found: false };
     if (f.estado === 'cerrado') return { found: true, estado: 'cerrado' };
-    return { found: true, estado: f.estado, definicion: definicionPublica(f.definicion as Definicion) };
+    return { found: true, estado: f.estado, definicion: definicionPublica(leerDefinicion(f.definicion)) };
   },
 });

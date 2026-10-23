@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { evaluar } from '../lib/formularios/motor';
-import type { Definicion, FotoSubida, Respuestas } from '../lib/formularios/tipos';
+import { leerDefinicion, type FotoSubida, type Respuestas } from '../lib/formularios/tipos';
 
 /**
  * Público — guarda una respuesta, completa o cortada por un descarte. La
@@ -39,7 +39,7 @@ export default createEndpoint({
       }
     }
 
-    const def = f.definicion as Definicion;
+    const def = leerDefinicion(f.definicion);
     const resultado = evaluar(def, respuestas);
     const texto = (id?: string) => (id && typeof respuestas[id] === 'string' ? (respuestas[id] as string).slice(0, 200) : null);
 

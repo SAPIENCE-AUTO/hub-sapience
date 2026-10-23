@@ -1,5 +1,9 @@
-import type {
-  Condicion, Definicion, FotoSubida, Opcion, Pregunta, Respuestas, Resultado, Seccion, Valor,
+import { calcularNse } from './nse';
+import { PAISES, nombreCampoDireccion } from './paises';
+import {
+  CAMPOS_DIRECCION, esDeOpciones, forma,
+  type Condicion, type Definicion, type FotoSubida, type Opcion, type Pregunta, type Respuestas,
+  type Resultado, type Seccion, type TipoPregunta, type Valor,
 } from './tipos';
 
 /**
@@ -45,6 +49,14 @@ function claveDe(ubic: Ubicacion | undefined, id: string, instancia?: string) {
   return ubic?.seccion.repetirPor && instancia ? `${id}@${instancia}` : id;
 }
 
+const RANGOS: Partial<Record<TipoPregunta, [number, number]>> = { escala: [0, 10], estrellas: [1, 5], deslizador: [0, 100] };
+
+/** Rango de una escala, estrellas o deslizador, con lo que se usa si el screener no lo dice. */
+export function rango(p: Pregunta): { min: number; max: number; paso: number } {
+  const [min, max] = RANGOS[p.tipo] ?? [0, 10];
+  return { min: p.tipo === 'estrellas' ? 1 : p.min ?? min, max: p.max ?? max, paso: p.paso ?? 1 };
+}
+
 // ── orden aleatorio estable (misma persona, mismo orden al recargar) ─────────
 function hash(texto: string) {
   let h = 2166136261;
@@ -60,7 +72,7 @@ function barajar<T>(lista: T[], semilla: string): T[] {
   return copia;
 }
 
-function ordenar(opciones: Opcion[], aleatorio: boolean | undefined, semilla: string): Opcion[] {
+function mezclar(opciones: Opcion[], aleatorio: boolean | undefined, semilla: string): Opcion[] {
   if (!aleatorio) return opciones;
   const moviles = opciones.filter((o) => !o.fija);
   const fijas = opciones.filter((o) => o.fija);
@@ -101,7 +113,7 @@ export function cumple(c: Condicion, ctx: Contexto): boolean {
   if ('instanciaEs' in c) return !!ctx.instancia && c.instanciaEs.includes(ctx.instancia);
   if ('nse' in c) return !!ctx.nseNivel && c.nse.includes(ctx.nseNivel);
   if ('numero' in c) {
-    const v = ctx.resp[c.numero];
+    const v = ctx.resp[claveDe(ctx.idx.get(c.numero), c.numero, c.instancia ?? ctx.instancia)];
     return typeof v === 'number' && v >= c.entre[0] && v <= c.entre[1];
   }
   if ('bloque' in c) {
@@ -116,6 +128,48 @@ export function cumple(c: Condicion, ctx: Contexto): boolean {
   if ('noIncluye' in c) return !c.noIncluye.some((x) => marcadas.includes(x));
   return c.incluyeTodas.every((x) => marcadas.includes(x));
 }
+
+// ── NSE en los frentes: alerta, nunca descarte ───────────────────────────────
+/** La condición sin lo que pide de NSE. `undefined` = no pide nada más. */
+function sinNse(c: Condicion): Condicion | undefined {
+  if ('nse' in c) return undefined;
+  if ('todas' in c) {
+    const resto = c.todas.map(sinNse).filter((x): x is Condicion => !!x);
+    return resto.length ? { todas: resto } : undefined;
+  }
+  if ('alguna' in c) {
+    const resto = c.alguna.map(sinNse);
+    return resto.some((x) => !x) ? undefined : { alguna: resto as Condicion[] };
+  }
+  if ('no' in c) {
+    const resto = sinNse(c.no);
+    return resto ? { no: resto } : undefined;
+  }
+  return c;
+}
+
+const cumpleSinNse = (c: Condicion, ctx: Contexto) => { const resto = sinNse(c); return !resto || cumple(resto, ctx); };
+
+/**
+ * Los niveles de NSE que pide el camino por el que la persona entró al frente.
+ * `undefined` si ese camino no pide NSE (en una «alguna», basta una rama que
+ * no lo pida).
+ */
+function nivelesPedidos(c: Condicion, ctx: Contexto): string[] | undefined {
+  if ('nse' in c) return c.nse;
+  if ('todas' in c) {
+    const pedidos = c.todas.map((x) => nivelesPedidos(x, ctx)).filter((x): x is string[] => !!x);
+    return pedidos.length ? pedidos.reduce((a, b) => a.filter((n) => b.includes(n))) : undefined;
+  }
+  if ('alguna' in c) {
+    const pedidos = c.alguna.filter((x) => cumpleSinNse(x, ctx)).map((x) => nivelesPedidos(x, ctx));
+    if (pedidos.length === 0 || pedidos.some((x) => !x)) return undefined;
+    return [...new Set(pedidos.flat() as string[])];
+  }
+  return undefined;
+}
+
+const unirO = (lista: string[]) => (lista.length < 2 ? lista.join('') : `${lista.slice(0, -1).join(', ')} o ${lista[lista.length - 1]}`);
 
 // ── pantallas ────────────────────────────────────────────────────────────────
 /** Pantallas visibles con las respuestas actuales. Una pantalla = una sección (o una repetición de ella). */
@@ -137,7 +191,7 @@ export function pantallas(def: Definicion, resp: Respuestas, semilla = ''): Pant
             pregunta: p, clave,
             texto: reemplazar(p.texto, instancia)!,
             ayuda: reemplazar(p.ayuda, instancia),
-            opciones: ordenar(opciones, p.aleatorio, `${semilla}:${clave}`),
+            opciones: mezclar(opciones, p.aleatorio, `${semilla}:${clave}`),
           };
         });
       if (preguntas.length === 0) continue;
@@ -154,48 +208,91 @@ export function pantallas(def: Definicion, resp: Respuestas, semilla = ''): Pant
 }
 
 // ── validación ───────────────────────────────────────────────────────────────
-function vacio(v: Valor | undefined) {
+function vacio(v: Valor | undefined): boolean {
   if (v === undefined || v === null || v === '') return true;
   if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'object') return Object.values(v).every((x) => vacio(x as Valor));
   return false;
 }
 
-export function validar(pv: PreguntaVisible, resp: Respuestas): string | undefined {
+const SIN_CONTESTAR: Partial<Record<TipoPregunta, string>> = {
+  foto: 'Sube la foto',
+  casilla: 'Marca la casilla para continuar',
+  ordenar: 'Ordena las opciones',
+  estrellas: 'Elige cuántas estrellas',
+  deslizador: 'Mueve el deslizador',
+  direccion: 'Escribe tu dirección',
+};
+
+const entreTexto = (min?: number, max?: number) =>
+  min !== undefined && max !== undefined ? `entre ${min} y ${max}` : min !== undefined ? `de ${min} o más` : `de ${max} o menos`;
+
+/** Cuántas hay que ordenar: todas, o las primeras `maxOpciones`. */
+export const porOrdenar = (pv: PreguntaVisible) => Math.min(pv.pregunta.maxOpciones ?? pv.opciones.length, pv.opciones.length);
+
+export function validar(pv: PreguntaVisible, resp: Respuestas, pais?: string): string | undefined {
   const p = pv.pregunta;
   const v = resp[pv.clave];
-  if (p.tipo === 'matriz') {
-    const fila = (p.filas ?? []).find((f) => !(v as Record<string, string> | undefined)?.[f.id]);
-    return fila && !p.opcional ? 'Contesta todas las filas' : undefined;
+  const f = forma(p.tipo);
+  if (f === 'ninguna') return undefined;
+  if (f === 'matriz_una' || f === 'matriz_varias') {
+    const filas = (v as Record<string, string | string[]> | undefined) ?? {};
+    const falta = (p.filas ?? []).some((fila) => seleccion(filas[fila.id]).length === 0);
+    return falta && !p.opcional ? 'Contesta todas las filas' : undefined;
   }
-  if (vacio(v)) return p.opcional ? undefined : p.tipo === 'foto' ? 'Sube la foto' : 'Contesta esta pregunta';
+  if (p.tipo === 'casilla' && !p.opcional && v !== 'si') return SIN_CONTESTAR.casilla;
+  if (vacio(v)) return p.opcional ? undefined : SIN_CONTESTAR[p.tipo] ?? 'Contesta esta pregunta';
+
+  if (f === 'direccion') {
+    const d = v as Record<string, string>;
+    const falta = CAMPOS_DIRECCION.find((c) => !String(d[c] ?? '').trim());
+    if (falta) return `Falta: ${nombreCampoDireccion(pais, falta)}`;
+    const cp = pais ? PAISES[pais]?.cp : undefined;
+    if (cp && !new RegExp(cp.patron).test(d.cp.trim())) return cp.mensaje;
+    return undefined;
+  }
   if (p.tipo === 'numero') {
     if (typeof v !== 'number' || Number.isNaN(v)) return 'Escribe un número';
-    if ((p.min !== undefined && v < p.min) || (p.max !== undefined && v > p.max)) return `Escribe un número entre ${p.min} y ${p.max}`;
+    if ((p.min !== undefined && v < p.min) || (p.max !== undefined && v > p.max)) return `Escribe un número ${entreTexto(p.min, p.max)}`;
+  }
+  if (f === 'numero' && p.tipo !== 'numero') {
+    const { min, max } = rango(p);
+    if (typeof v !== 'number' || v < min || v > max) return SIN_CONTESTAR[p.tipo] ?? 'Contesta esta pregunta';
   }
   if (p.tipo === 'telefono' && String(v).replace(/\D/g, '').length !== 10) return 'Escribe un celular de 10 dígitos';
   if (p.tipo === 'correo' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v))) return 'Escribe un correo válido';
-  if (p.patron && !new RegExp(p.patron).test(String(v))) return p.patronMensaje ?? 'Revisa lo que escribiste';
+  if (p.patron && f === 'texto' && !new RegExp(p.patron).test(String(v))) return p.patronMensaje ?? 'Revisa lo que escribiste';
   const marcadas = seleccion(v);
-  if (p.maxOpciones && marcadas.length > p.maxOpciones) return `Marca máximo ${p.maxOpciones}`;
+  if (f === 'orden') {
+    const faltan = porOrdenar(pv);
+    if (marcadas.length < faltan) return faltan === pv.opciones.length ? 'Ordena todas las opciones' : `Elige tus ${faltan} primeras, en orden`;
+    return undefined;
+  }
+  if (f === 'varias' && p.maxOpciones && marcadas.length > p.maxOpciones) return `Marca máximo ${p.maxOpciones}`;
   const otra = pv.opciones.find((o) => o.otra && marcadas.includes(o.id));
   if (otra && !String(resp[`${pv.clave}#otra`] ?? '').trim()) return 'Escribe cuál';
   return undefined;
 }
 
-export function validarPantalla(pantalla: Pantalla, resp: Respuestas): Record<string, string> {
+export function validarPantalla(pantalla: Pantalla, resp: Respuestas, pais?: string): Record<string, string> {
   const errores: Record<string, string> = {};
   for (const pv of pantalla.preguntas) {
-    const e = validar(pv, resp);
+    const e = validar(pv, resp, pais);
     if (e) errores[pv.clave] = e;
   }
   return errores;
 }
 
 // ── calificación ─────────────────────────────────────────────────────────────
+/** Opciones marcadas en una pregunta de opciones (una o varias). Las demás no descartan por opción. */
 function opcionesMarcadas(pv: PreguntaVisible, resp: Respuestas): Opcion[] {
+  if (!esDeOpciones(pv.pregunta.tipo)) return [];
   const marcadas = seleccion(resp[pv.clave]);
   return pv.opciones.filter((o) => marcadas.includes(o.id));
 }
+
+const marcoEnFila = (resp: Valor | undefined, fila: string, columnas: string[]) =>
+  seleccion((resp as Record<string, string | string[]> | undefined)?.[fila]).some((x) => columnas.includes(x));
 
 /** Primer motivo que termina el formulario, en el orden en que se contestó. */
 export function terminacion(def: Definicion, resp: Respuestas, lista = pantallas(def, resp)): Resultado['terminado'] {
@@ -210,11 +307,8 @@ export function terminacion(def: Definicion, resp: Respuestas, lista = pantallas
       if (p.terminaFuera && typeof v === 'number' && (v < p.terminaFuera.min || v > p.terminaFuera.max)) {
         return { motivo: p.terminaFuera.motivo, clave: pv.clave };
       }
-      if (p.tipo === 'matriz') {
-        const filas = v as Record<string, string>;
-        const regla = (p.reglasMatriz ?? []).find((r) => r.termina && r.columnas.includes(filas[r.fila]));
-        if (regla) return { motivo: regla.termina!, clave: pv.clave };
-      }
+      const regla = (p.reglasMatriz ?? []).find((r) => r.termina && marcoEnFila(v, r.fila, r.columnas));
+      if (regla) return { motivo: regla.termina!, clave: pv.clave };
       if (p.terminaSi && cumple(p.terminaSi.si, { def, idx, resp, instancia: pantalla.instancia?.id })) {
         return { motivo: p.terminaSi.motivo, clave: pv.clave };
       }
@@ -238,39 +332,44 @@ export function evaluar(def: Definicion, resp: Respuestas): Resultado {
           descartes.push({ seccion: pantalla.seccion.id, opcion: pantalla.instancia.id, motivo: o.descarta });
         }
       }
-      if (pv.pregunta.tipo === 'matriz' && resp[pv.clave]) {
-        const filas = resp[pv.clave] as Record<string, string>;
-        (pv.pregunta.reglasMatriz ?? [])
-          .filter((r) => r.columnas.includes(filas[r.fila]))
-          .forEach((r) => r.excluyeGrupos?.forEach((g) => grupos.add(g)));
+      (pv.pregunta.reglasMatriz ?? [])
+        .filter((r) => marcoEnFila(resp[pv.clave], r.fila, r.columnas))
+        .forEach((r) => r.excluyeGrupos?.forEach((g) => grupos.add(g)));
+    }
+  }
+
+  const nse = def.nse ? calcularNse(def.nse, resp) : undefined;
+  const ctx: Contexto = { def, idx, resp, descartes: new Set(descartes.map((d) => `${d.seccion}@${d.opcion}`)), nseNivel: nse?.nivel };
+
+  // El NSE no saca a nadie de un frente: si no es el que pide, entra con alerta.
+  const enFrentes = terminado ? [] : (def.frentes ?? []).filter((f) => !grupos.has(f.grupo) && cumpleSinNse(f.califica, ctx));
+  const fueraDe: string[] = [];
+  const alertasNse: string[] = [];
+  if (nse) {
+    for (const f of enFrentes) {
+      const pide = nivelesPedidos(f.califica, ctx);
+      if (pide?.length && !pide.includes(nse.nivel)) {
+        fueraDe.push(f.id);
+        alertasNse.push(`NSE ${nse.nivel}, el frente ${f.nombre} pide ${unirO(pide)}`);
       }
     }
   }
 
-  let nse: Resultado['nse'];
-  if (def.nse) {
-    const ids = Object.keys(def.nse.puntos);
-    if (ids.every((id) => typeof resp[id] === 'string')) {
-      const puntos = ids.reduce((suma, id) => suma + (def.nse!.puntos[id][resp[id] as string] ?? 0), 0);
-      const nivel = def.nse.cortes.find((c) => puntos >= c.desde)?.nivel ?? '?';
-      nse = { puntos, nivel };
-    }
-  }
+  const alertas = [
+    ...alertasNse,
+    ...(def.alertas ?? []).filter((a) =>
+      (a.contar && seleccion(resp[a.contar.pregunta]).length > a.contar.masDe) || (a.si && cumple(a.si, ctx)),
+    ).map((a) => a.texto),
+  ];
 
-  const ctx: Contexto = { def, idx, resp, descartes: new Set(descartes.map((d) => `${d.seccion}@${d.opcion}`)), nseNivel: nse?.nivel };
-  const frentes = terminado ? [] : (def.frentes ?? [])
-    .filter((f) => !grupos.has(f.grupo) && cumple(f.califica, ctx))
-    .map((f) => f.id);
-
-  const alertas = (def.alertas ?? []).filter((a) =>
-    (a.contar && seleccion(resp[a.contar.pregunta]).length > a.contar.masDe) || (a.si && cumple(a.si, ctx)),
-  ).map((a) => a.texto);
-
-  const incompleto = !terminado && lista.some((p) => Object.keys(validarPantalla(p, resp)).length > 0);
+  const incompleto = !terminado && lista.some((p) => Object.keys(validarPantalla(p, resp, def.pais)).length > 0);
+  const frentes = enFrentes.map((f) => f.id);
 
   return {
     califica: !terminado && !incompleto && frentes.length > 0,
-    terminado, descartes, gruposExcluidos: [...grupos], nse, frentes, alertas, incompleto,
+    terminado, descartes, gruposExcluidos: [...grupos],
+    nse: nse && (fueraDe.length ? { ...nse, fueraDe } : nse),
+    frentes, alertas, incompleto,
   };
 }
 
@@ -283,7 +382,7 @@ export function explicarResultado(res: Resultado): string | undefined {
     ...res.descartes.map((d) => d.motivo),
     ...res.gruposExcluidos.map((g) => `Fuera de ${g} (rechazo de marca o no se encarga)`),
   ];
-  return motivos.join(' · ') || 'No entra a ningún frente (edad, NSE o formato)';
+  return motivos.join(' · ') || 'No entra a ningún frente (edad, formato u otra condición del frente)';
 }
 
 // ── lo que puede ver el navegador del participante ───────────────────────────
@@ -293,11 +392,11 @@ export function explicarResultado(res: Resultado): string | undefined {
  */
 export function definicionPublica(def: Definicion): Definicion {
   const limpiarOpcion = (o: Opcion): Opcion => ({
-    id: o.id, label: o.label, corto: o.corto, otra: o.otra, exclusiva: o.exclusiva, fija: o.fija,
+    id: o.id, label: o.label, corto: o.corto, imagen: o.imagen, otra: o.otra, exclusiva: o.exclusiva, fija: o.fija,
     termina: o.termina ? '1' : undefined, descarta: o.descarta ? '1' : undefined,
   });
   return {
-    version: def.version, tituloPublico: def.tituloPublico, bienvenida: def.bienvenida,
+    version: def.version, pais: def.pais, tituloPublico: def.tituloPublico, bienvenida: def.bienvenida,
     despedida: def.despedida, noCalifica: def.noCalifica,
     secciones: def.secciones.map((s) => ({
       ...s,
@@ -314,29 +413,60 @@ export function definicionPublica(def: Definicion): Definicion {
   };
 }
 
-// ── para leer una respuesta en el panel ──────────────────────────────────────
+// ── para leer una respuesta en el panel, el Excel y el tablero ───────────────
+const etiquetaDe = (opciones: Opcion[], id: string) => opciones.find((o) => o.id === id)?.label ?? id;
+/** Lo marcado en el orden de las opciones (no en el que se tocó), para que todas las personas se lean igual. */
+const enOrdenDeOpciones = (opciones: Opcion[], marcadas: string[]) =>
+  [...opciones.filter((o) => marcadas.includes(o.id)).map((o) => o.id), ...marcadas.filter((id) => !opciones.some((o) => o.id === id))];
+
+/** Dirección en una línea: «Calle 1 23, Colonia, Ciudad, Estado, CP 01000». */
+export function direccionEnLinea(d: Record<string, string>): string {
+  const calle = [d.calle, d.numero].filter(Boolean).join(' ');
+  return [calle, d.colonia, d.ciudad, d.estado, d.cp && `CP ${d.cp}`].filter(Boolean).join(', ');
+}
+
+/**
+ * Una respuesta en texto. `opciones` son las de la pregunta (con «{opcion}»
+ * ya reemplazado o no, según quien lo pida). Las fotos y lo que no tiene
+ * respuesta dan `undefined`.
+ */
+export function textoRespuesta(p: Pregunta, opciones: Opcion[], clave: string, resp: Respuestas): string | undefined {
+  const v = resp[clave];
+  if (vacio(v)) return undefined;
+  switch (forma(p.tipo)) {
+    case 'ninguna': case 'fotos': return undefined;
+    case 'si_no': return v === 'si' ? 'Sí' : 'No';
+    case 'numero': return p.tipo === 'numero' ? String(v) : `${v} de ${rango(p).max}`;
+    case 'direccion': return direccionEnLinea(v as Record<string, string>);
+    case 'orden': return seleccion(v).map((id, i) => `${i + 1}. ${etiquetaDe(opciones, id)}`).join(', ');
+    case 'una': case 'varias': {
+      const otra = resp[`${clave}#otra`];
+      return enOrdenDeOpciones(opciones, seleccion(v)).map((id) => {
+        const o = opciones.find((x) => x.id === id);
+        if (!o) return id;
+        return o.otra && otra ? `${o.label}: ${otra}` : o.label;
+      }).join(', ');
+    }
+    case 'matriz_una': case 'matriz_varias': {
+      const filas = v as Record<string, string | string[]>;
+      return (p.filas ?? [])
+        .map((f) => `${f.label}: ${enOrdenDeOpciones(opciones, seleccion(filas[f.id])).map((id) => etiquetaDe(opciones, id)).join(', ') || '—'}`)
+        .join(' · ');
+    }
+    default: return String(v);
+  }
+}
+
 export interface Linea { texto: string; valor: string; fotos?: FotoSubida[] }
 
 export function describir(def: Definicion, resp: Respuestas): { titulo: string; lineas: Linea[] }[] {
   return pantallas(def, resp).map((pantalla) => ({
     titulo: pantalla.titulo ?? pantalla.seccion.id,
-    lineas: pantalla.preguntas.filter((pv) => !vacio(resp[pv.clave])).map((pv): Linea => {
-      const v = resp[pv.clave];
-      const p = pv.pregunta;
-      if (p.tipo === 'foto') return { texto: pv.texto, valor: '', fotos: v as FotoSubida[] };
-      if (p.tipo === 'matriz') {
-        const filas = v as Record<string, string>;
-        const valor = (p.filas ?? []).map((f) => `${f.label}: ${pv.opciones.find((o) => o.id === filas[f.id])?.label ?? '—'}`).join(' · ');
-        return { texto: pv.texto, valor };
-      }
-      if (p.tipo === 'unica' || p.tipo === 'multiple') {
-        const otra = resp[`${pv.clave}#otra`];
-        const valor = opcionesMarcadas(pv, resp).map((o) => (o.otra && otra ? `${o.label}: ${otra}` : o.label)).join(', ');
-        return { texto: pv.texto, valor };
-      }
-      return { texto: pv.texto, valor: String(v) };
+    lineas: pantalla.preguntas.filter((pv) => !vacio(resp[pv.clave]) && forma(pv.pregunta.tipo) !== 'ninguna').map((pv): Linea => {
+      if (pv.pregunta.tipo === 'foto') return { texto: pv.texto, valor: '', fotos: resp[pv.clave] as FotoSubida[] };
+      return { texto: pv.texto, valor: textoRespuesta(pv.pregunta, pv.opciones, pv.clave, resp) ?? '' };
     }),
-  }));
+  })).filter((s) => s.lineas.length > 0);
 }
 
 /** Texto de la opción elegida (para columnas del panel como género). */
