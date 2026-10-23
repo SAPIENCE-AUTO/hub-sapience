@@ -12,7 +12,7 @@ import { PRUEBA_TIPOS } from '../../src/lib/formularios/plantillas/pruebaTipos';
 import { leerDefinicion, type Definicion, type Respuestas } from '../../src/lib/formularios/tipos';
 import { calcularNse, reglaNse, reglaVigente } from '../../src/lib/formularios/nse';
 import { condicionEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion } from '../../src/lib/formularios/palabras';
-import { filasFlujo, mapaFlujo } from '../../src/lib/formularios/flujo';
+import { filasFlujo, filasFlujoDeEstructura, mapaFlujo } from '../../src/lib/formularios/flujo';
 import { duracionEstimada, duracionPorPerfil } from '../../src/lib/formularios/duracion';
 import {
   GRUPOS_TIPOS, agregarOpcion, agregarPregunta, agregarSeccion, cambiarOpcion, cambiarPregunta, cambiarTipo, comoSimple, diferencias, idNuevo,
@@ -1054,6 +1054,19 @@ caso('las imágenes que faltan salen en «¿Está listo?»; «Ninguno» no lleva
   assert.match(r.falta ?? '', /empaque|Qué empaque/i);
   assert.equal(chequeosListo({ def: PRUEBA_TIPOS, problemas: 0, respuestasDePrueba: 1, vinculado: true }).find((c) => c.id === 'imagenes')?.ok, true);
   assert.equal(chequeosListo({ def: ALONG2, problemas: 0, respuestasDePrueba: 1, vinculado: true }).some((c) => c.id === 'imagenes'), false);
+});
+
+caso('el flujo de una estructura (antes de escribir) sale con las mismas ramas que el filtro escrito', () => {
+  const vista = (filas: ReturnType<typeof filasFlujo>) => filas.map((f) => (f.tipo === 'paso' ? f.bloque.id : f.ramas.map((r) => r.map((b) => b.id).join('>')).join('|')));
+  const e = estructuraDeDefinicion(ALONG2);
+  assert.deepEqual(e.secciones.find((s) => s.id === 'aroma_formatos')?.segun, ['categorias']);
+  assert.deepEqual(vista(filasFlujoDeEstructura(e)), vista(filasFlujo(ALONG2)));
+  // Sin «segun» (una propuesta vieja), cada sección que aparece si aplica abre su rama; lo que se repite sigue a su pregunta.
+  const sinSegun = { ...e, secciones: e.secciones.map(({ segun: _s, ...s }) => s) };
+  const ramas = filasFlujoDeEstructura(sinSegun).find((f) => f.tipo === 'ramas');
+  assert.ok(ramas && ramas.tipo === 'ramas' && ramas.ramas[0].map((b) => b.id).join('>') === 'aroma_formatos>aroma_bloque');
+  const filtros = filasFlujoDeEstructura(e).find((f) => f.tipo === 'paso' && f.bloque.id === 'filtros');
+  assert.ok(filtros && filtros.tipo === 'paso' && filtros.bloque.termina.length > 0);
 });
 
 await Promise.all(pendientes);

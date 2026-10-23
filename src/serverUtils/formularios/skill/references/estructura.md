@@ -14,6 +14,7 @@ La estructura se revisa rápido antes de que se escriban las preguntas. Dice qui
     "id": "aroma_formatos", "titulo": "Aromatizantes",
     "para": "Qué formatos usa y cuáles compró: decide qué bloques se abren.",
     "aparece": "Solo si compra aromatizantes.",            // opcional
+    "segun": ["categorias"],                               // con «aparece»: ids de las preguntas de las que depende
     "repetirPor": "idPregunta", "repetirSolo": ["idOpcion"], // opcional, si la sección se repite
     "nse": true,                                           // solo en la sección del NSE (sin preguntas: las pone el Hub)
     "preguntas": [{

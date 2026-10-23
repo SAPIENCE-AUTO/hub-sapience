@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { PELIGRO, TEAL } from '@/lib/toolColors';
-import { filasFlujo, type BloqueFlujo } from '@/lib/formularios/flujo';
+import { filasFlujo, type BloqueFlujo, type FilaFlujo } from '@/lib/formularios/flujo';
 import type { Definicion } from '@/lib/formularios/tipos';
 import { SECCION_PERFILES } from './comun';
 import { ConMarcador } from './TextoEditable';
@@ -31,7 +31,7 @@ function Detalle({ b }: { b: BloqueFlujo }) {
 }
 
 /** Un paso del filtro. `adentro`: lo que termina va en la caja (en las ramas y en celular). */
-function Caja({ b, onIr, adentro }: { b: BloqueFlujo; onIr: (id: string) => void; adentro: 'siempre' | 'celular' }) {
+function Caja({ b, onIr, adentro, marcada }: { b: BloqueFlujo; onIr: (id: string) => void; adentro: 'siempre' | 'celular'; marcada?: boolean }) {
   const rama = !!b.condicion || !!b.repite;
   const titulo = [b.termina.length ? `Termina si: ${b.termina.join(' · ')}` : '', b.descarta.length ? `No cuenta el bloque si: ${b.descarta.join(' · ')}` : ''].filter(Boolean).join('\n');
   return (
@@ -39,7 +39,7 @@ function Caja({ b, onIr, adentro }: { b: BloqueFlujo; onIr: (id: string) => void
       type="button"
       onClick={() => onIr(b.id)}
       title={titulo || undefined}
-      className={`w-full rounded-lg border bg-white px-3 py-2 text-center transition-colors hover:border-[#0F3D4D]/60 hover:bg-[#0F3D4D]/[0.03] ${rama ? 'border-dashed border-[#0F3D4D]/40' : 'border-[#0F3D4D]/25'}`}
+      className={`w-full rounded-lg border bg-white px-3 py-2 text-center transition-colors hover:border-[#0F3D4D]/60 hover:bg-[#0F3D4D]/[0.03] ${rama ? 'border-dashed border-[#0F3D4D]/40' : 'border-[#0F3D4D]/25'} ${marcada ? 'ring-2 ring-[#DC7A09]/60' : ''}`}
     >
       <span className="block text-[13.5px] font-semibold leading-snug text-[#1F1F23]"><ConMarcador texto={b.titulo} /></span>
       <Detalle b={b} />
@@ -70,9 +70,18 @@ function Union({ j, total, abajo }: { j: number; total: number; abajo?: boolean 
  * aplica lado a lado (punteadas) y los bloques que se repiten con ↻; al final,
  * los perfiles con su cuota. Un clic lleva a esa parte del documento.
  */
-export function MapaFlujo({ def, onIr }: { def: Definicion; onIr: (seccionId: string) => void }) {
-  const filas = filasFlujo(def);
-  const perfiles = def.frentes ?? [];
+export function MapaFlujo({ def, filas: dadas, perfiles: dados, marcadas, ayuda = 'Un clic lleva a esa parte del documento', onIr }: {
+  def?: Definicion;
+  /** Para dibujar algo que todavía no es un filtro escrito (la estructura del generador). */
+  filas?: FilaFlujo[];
+  perfiles?: { nombre: string; meta: number }[];
+  /** Cajas con un comentario pendiente (se marcan en ámbar). */
+  marcadas?: Set<string>;
+  ayuda?: string;
+  onIr: (seccionId: string) => void;
+}) {
+  const filas = dadas ?? (def ? filasFlujo(def) : []);
+  const perfiles = dados ?? def?.frentes ?? [];
   return (
     <div className="mx-auto max-w-3xl">
       {filas.map((f, i) => (
@@ -81,7 +90,7 @@ export function MapaFlujo({ def, onIr }: { def: Definicion; onIr: (seccionId: st
           {f.tipo === 'paso' ? (
             <div className="grid grid-cols-1 items-center sm:grid-cols-[1fr_minmax(0,15rem)_1fr]">
               <span className="hidden sm:block" />
-              <div className="mx-auto w-full max-w-[15rem]"><Caja b={f.bloque} onIr={onIr} adentro="celular" /></div>
+              <div className="mx-auto w-full max-w-[15rem]"><Caja b={f.bloque} onIr={onIr} adentro="celular" marcada={marcadas?.has(f.bloque.id)} /></div>
               {f.bloque.termina.length > 0 && (
                 <div className="hidden min-w-0 items-center sm:flex">
                   <span aria-hidden className="h-px w-6 flex-shrink-0" style={{ backgroundColor: `${PELIGRO}99` }} />
@@ -105,7 +114,7 @@ export function MapaFlujo({ def, onIr }: { def: Definicion; onIr: (seccionId: st
                   {r.map((b, m) => (
                     <Fragment key={b.id}>
                       {m > 0 && <Flecha />}
-                      <Caja b={b} onIr={onIr} adentro="siempre" />
+                      <Caja b={b} onIr={onIr} adentro="siempre" marcada={marcadas?.has(b.id)} />
                     </Fragment>
                   ))}
                   {f.ramas.length > 1 && <span aria-hidden className={`min-h-3 w-px flex-1 ${LINEA}`} />}
@@ -121,7 +130,7 @@ export function MapaFlujo({ def, onIr }: { def: Definicion; onIr: (seccionId: st
       <button
         type="button"
         onClick={() => onIr(SECCION_PERFILES)}
-        className="mx-auto block w-full max-w-sm rounded-lg border px-3 py-2 text-center transition-colors hover:bg-[#0F3D4D]/[0.07]"
+        className={`mx-auto block w-full max-w-sm rounded-lg border px-3 py-2 text-center transition-colors hover:bg-[#0F3D4D]/[0.07] ${marcadas?.has(SECCION_PERFILES) ? 'ring-2 ring-[#DC7A09]/60' : ''}`}
         style={{ borderColor: `${TEAL}55`, backgroundColor: `${TEAL}0d` }}
       >
         <span className="block text-[13.5px] font-semibold" style={{ color: TEAL }}>Perfiles y cuotas</span>
@@ -134,7 +143,7 @@ export function MapaFlujo({ def, onIr }: { def: Definicion; onIr: (seccionId: st
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm border" style={{ borderColor: `${PELIGRO}88`, backgroundColor: `${PELIGRO}14` }} />Termina el filtro</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm border border-dashed border-[#0F3D4D]/50" />Solo si aplica</span>
         <span>↻ Se repite</span>
-        <span>Un clic lleva a esa parte del documento</span>
+        {ayuda && <span>{ayuda}</span>}
       </p>
     </div>
   );

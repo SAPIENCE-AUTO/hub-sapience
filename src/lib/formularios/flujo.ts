@@ -1,4 +1,5 @@
 import { condicionEnPalabras, citar, ubicar } from './palabras';
+import type { Estructura, SeccionPlan } from './generador';
 import { forma, type Condicion, type Definicion, type Seccion } from './tipos';
 
 /**
@@ -45,6 +46,13 @@ function referencias(c: Condicion, preguntas: Set<string>, secciones: Set<string
 }
 
 const distintos = (lista: string[]) => [...new Set(lista)];
+
+/** Las preguntas que usa una condición (para saber de qué depende una sección). */
+export function preguntasDeCondicion(c: Condicion): string[] {
+  const preguntas = new Set<string>();
+  referencias(c, preguntas, new Set());
+  return [...preguntas];
+}
 
 export function mapaFlujo(def: Definicion): BloqueFlujo[] {
   const usaSeccion = (s: Seccion, c: Condicion) => {
@@ -107,7 +115,25 @@ export type FilaFlujo =
   | { tipo: 'paso'; bloque: BloqueFlujo }
   | { tipo: 'ramas'; ramas: BloqueFlujo[][] };
 
-const esCondicional = (s: Seccion) => !!s.mostrarSi || !!s.repetirPor;
+/**
+ * Agrupa en filas: una sección para todos es un paso; las condicionales
+ * seguidas van en ramas lado a lado, y cada una se suma a la rama de la que
+ * depende (o abre una nueva).
+ */
+function agrupar<T>(items: T[], condicional: (x: T) => boolean, dependeDe: (x: T, rama: T[]) => boolean, bloque: (x: T) => BloqueFlujo): FilaFlujo[] {
+  const filas: FilaFlujo[] = [];
+  for (let i = 0; i < items.length;) {
+    if (!condicional(items[i])) { filas.push({ tipo: 'paso', bloque: bloque(items[i]) }); i++; continue; }
+    const ramas: T[][] = [];
+    for (; i < items.length && condicional(items[i]); i++) {
+      const x = items[i];
+      const rama = ramas.find((r) => dependeDe(x, r));
+      if (rama) rama.push(x); else ramas.push([x]);
+    }
+    filas.push({ tipo: 'ramas', ramas: ramas.map((r) => r.map(bloque)) });
+  }
+  return filas;
+}
 
 /** Si la sección depende de lo que se contesta en alguna de estas (se repite por, o aparece según). */
 function dependeDe(s: Seccion, rama: Seccion[]): boolean {
@@ -120,19 +146,39 @@ function dependeDe(s: Seccion, rama: Seccion[]): boolean {
 
 export function filasFlujo(def: Definicion): FilaFlujo[] {
   const bloques = new Map(mapaFlujo(def).map((b) => [b.id, b]));
-  const filas: FilaFlujo[] = [];
-  for (let i = 0; i < def.secciones.length;) {
-    const s = def.secciones[i];
-    if (!esCondicional(s)) { filas.push({ tipo: 'paso', bloque: bloques.get(s.id)! }); i++; continue; }
-    const ramas: Seccion[][] = [];
-    for (; i < def.secciones.length && esCondicional(def.secciones[i]); i++) {
-      const x = def.secciones[i];
-      const rama = ramas.find((r) => dependeDe(x, r));
-      if (rama) rama.push(x); else ramas.push([x]);
-    }
-    filas.push({ tipo: 'ramas', ramas: ramas.map((r) => r.map((x) => bloques.get(x.id)!)) });
-  }
-  return filas;
+  return agrupar(def.secciones, (s) => !!s.mostrarSi || !!s.repetirPor, dependeDe, (s) => bloques.get(s.id)!);
+}
+
+/**
+ * El flujo de una estructura del generador, antes de que existan las
+ * preguntas: lo que aparece solo si aplica lo dice en palabras (`aparece`) y
+ * de qué depende (`segun`); dónde puede terminar alguien sale de la lógica en
+ * una línea de cada pregunta.
+ */
+export function filasFlujoDeEstructura(e: Estructura): FilaFlujo[] {
+  const nombreDe = (id: string) => {
+    for (const s of e.secciones) for (const p of s.preguntas) if (p.id === id) return p.nombre?.trim() || `«${p.texto.length > 32 ? `${p.texto.slice(0, 32).replace(/\s+\S*$/, '')}…` : p.texto}»`;
+    return undefined;
+  };
+  const bloque = (s: SeccionPlan): BloqueFlujo => {
+    const logicas = s.preguntas.map((p) => p.logica ?? '').filter(Boolean);
+    return {
+      id: s.id, titulo: s.titulo, preguntas: s.preguntas.length, soloContenido: false,
+      repite: s.repetirPor ? 'Se repite' : undefined,
+      repiteDe: s.repetirPor ? nombreDe(s.repetirPor) : undefined,
+      condicion: s.aparece, condicionales: s.preguntas.filter((p) => p.soloSi).length,
+      // De «“No acepto”: Si contesta esta, termina el filtro: No aceptó el aviso» basta el motivo.
+      termina: logicas.filter((l) => /termina/i.test(l))
+        .map((l) => /termina el filtro:\s*(.+)$/i.exec(l)?.[1] ?? l.replace(/^termina(?: el filtro)?\s*/i, '').replace(/^./, (c) => c.toUpperCase())),
+      descarta: logicas.filter((l) => /no cuenta|descarta/i.test(l)),
+      frentes: [], excluye: [], alertas: [], nse: !!s.nse,
+    };
+  };
+  const depende = (s: SeccionPlan, rama: SeccionPlan[]) => {
+    const usa = new Set([...(s.segun ?? []), ...(s.repetirPor ? [s.repetirPor] : [])]);
+    return rama.some((r) => r.preguntas.some((p) => usa.has(p.id)));
+  };
+  return agrupar(e.secciones, (s) => !!s.aparece || !!s.repetirPor, depende, bloque);
 }
 
 /** Sección donde vive una pregunta (para llevar del mapa o de un problema a su lugar en el documento). */

@@ -1,6 +1,7 @@
 import { duracionEstimada, duracionPorSeccion, type Duracion } from './duracion';
 import { idNuevo } from './editar';
 import { preguntasNse, reglaNse } from './nse';
+import { preguntasDeCondicion } from './flujo';
 import { condicionEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta } from './palabras';
 import { esDeOpciones, esMatriz, forma, type Definicion, type Opcion, type Pregunta, type Seccion, type TipoPregunta } from './tipos';
 
@@ -66,6 +67,8 @@ export interface SeccionPlan {
   para: string;
   /** En palabras, si solo aparece en ciertos casos. */
   aparece?: string;
+  /** Ids de las preguntas de las que depende `aparece` (para dibujar la rama en el flujo). */
+  segun?: string[];
   /** Se repite por cada opción marcada en esta pregunta, de una sección anterior. */
   repetirPor?: string;
   repetirSolo?: string[];
@@ -228,7 +231,11 @@ export function estructuraDeDefinicion(def: Definicion, anterior?: Estructura): 
         para: anterior?.secciones.find((x) => x.id === s.id)?.para ?? '',
         preguntas: s.preguntas.map((p) => planDePregunta(def, p)),
       };
-      if (s.mostrarSi) plan.aparece = condicionEnPalabras(s.mostrarSi, def);
+      if (s.mostrarSi) {
+        plan.aparece = condicionEnPalabras(s.mostrarSi, def);
+        const usa = preguntasDeCondicion(s.mostrarSi);
+        if (usa.length) plan.segun = usa;
+      }
       if (s.repetirPor) plan.repetirPor = s.repetirPor;
       if (s.repetirSolo) plan.repetirSolo = s.repetirSolo;
       if (s.preguntas.length && s.preguntas.every((p) => nse.has(p.id))) plan.nse = true;

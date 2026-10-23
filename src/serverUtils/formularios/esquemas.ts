@@ -97,7 +97,7 @@ export const EstructuraZ = z.object({
     id: z.string().min(1),
     titulo: z.string().default(''),
     para: z.string().default(''),
-    aparece: texto, repetirPor: texto, repetirSolo: ids.nullish(), nse: si, cambia: si,
+    aparece: texto, segun: ids.nullish(), repetirPor: texto, repetirSolo: ids.nullish(), nse: si, cambia: si,
     preguntas: z.array(PreguntaPlanZ).default([]),
   })).min(1),
   supuestos,
