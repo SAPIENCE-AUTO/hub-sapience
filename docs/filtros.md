@@ -491,7 +491,7 @@ Observaciones de Sergio al usar la fase 3: «frentes» no se entiende, los nombr
 
 **Pendiente:** el filtro real «SCREENER ALONG 2» todavía no tiene nombres cortos: al abrirlo sale el aviso con «Ponerlos con IA».
 
-### Flujo como diagrama y menos botones (tanda 2, 2026-10-23)
+### Flujo como diagrama y menos botones (tanda 2, 2026-10-23, `e823da6`)
 
 Sergio aprobó los dos bocetos (documento limpio y flujo como diagrama de proceso) antes de construir.
 
@@ -528,4 +528,4 @@ Sergio aprobó los dos bocetos (documento limpio y flujo como diagrama de proces
 - **2026-10-22 · arrastrar y soltar:** a pedido de Sergio, los insumos del generador (Word, PDF, PowerPoint) se arrastran y sueltan en un recuadro (o en cualquier parte del paso), y la foto del participante también se puede soltar sobre su recuadro en computadora.
 - **2026-10-22 · errores de la IA en palabras:** en el primer uso en producción la cuenta de Anthropic se quedó sin saldo y el generador solo decía «Error interno». Ahora dice el motivo (sin saldo, llave, saturada, sin conexión), las llamadas que no llegan a la IA no cuentan para el tope, y al primer error de una sección deja de pedir las demás y ofrece «Reintentar lo que falta». 64 pruebas.
 - **2026-10-23 · ajustes tras el primer uso (tanda 1):** «perfiles» en vez de «frentes» en todo lo que se ve; nombre corto por pregunta (columna del tablero, Excel y panel), escrito por la IA y con «Ponerlos con IA» para lo que ya existe; las columnas del tablero se renombran solas sin pisar las que cambió el equipo; tiempo por perfil; estados Borrador › Prueba › En vivo con su explicación y la lista «¿Está listo?». 70 pruebas. Probado en local y subido a `main` con el OK de Sergio (`a69aa21`).
-- **2026-10-23 · flujo como diagrama y menos botones (tanda 2):** con los bocetos aprobados por Sergio: el Flujo es un diagrama de proceso con ramas, salidas en rojo y bloques que se repiten; las herramientas de cada pregunta solo aparecen al elegirla; encabezado con los pasos del estado, una línea de estado y un solo menú «⋯». 71 pruebas. Probado en local.
+- **2026-10-23 · flujo como diagrama y menos botones (tanda 2):** con los bocetos aprobados por Sergio: el Flujo es un diagrama de proceso con ramas, salidas en rojo y bloques que se repiten; las herramientas de cada pregunta solo aparecen al elegirla; encabezado con los pasos del estado, una línea de estado y un solo menú «⋯». 71 pruebas. Probado en local y subido a `main` con el OK de Sergio (`e823da6`).
