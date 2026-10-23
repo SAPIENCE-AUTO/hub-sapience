@@ -56,7 +56,7 @@ Campos comunes: `id`, `tipo`, `texto`, `nombre`; opcionales `ayuda` (bajo la pre
 | `contenido` | texto sin pregunta (instrucciones) | |
 
 - **`nombre`** es el nombre corto de la pregunta: el encabezado de su columna en el tablero de Reclutamiento y en el Excel (el participante no lo ve). De 1 a 3 palabras, sin signos de interrogación, como lo escribiría el equipo: «Edad», «Género», «Hijos», «Código postal», «Marcas que compra», «Marca favorita», «Rechazo de marcas», «Aviso de privacidad». Distinto de los demás nombres del filtro; en una sección que se repite, distinto dentro de la sección y sin el nombre de la opción (la columna ya lleva el del bloque: «Tu aerosol · Marcas que compra»). Lo lleva toda pregunta menos `contenido`.
-- **No uses `imagen_unica` ni `imagen_multiple`**: las imágenes las pone una persona después. Si mostrar fotos ayudaría (formatos, empaques), usa `unica` o `multiple` y dilo en `supuestos`.
+- **Imágenes** (`imagen_unica`, `imagen_multiple`, y `imagen` en una opción o arriba de una pregunta): úsalas cuando te lo pidan o cuando el screener que conviertes las trae (selector con imágenes). Si te dan los enlaces de las imágenes (https://…), ponlos en `imagen` de cada opción; el Hub guarda su copia. Si no te los dan, deja las opciones sin `imagen`: la persona las pone después (la pregunta se guarda igual y queda como pendiente). Nunca inventes enlaces. Si mostrar fotos ayudaría y nadie lo pidió, usa `unica` o `multiple` y sugiérelo en `supuestos`.
 - **Una o varias lo dice el tipo**: `unica`, `lista` y `matriz` son de una; `multiple`, `lista_multiple` y `matriz_multiple` son de varias.
 - `casilla` e `interruptor` guardan `"si"` o `"no"`: en la lógica se usan como opciones con esos ids.
 

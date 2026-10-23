@@ -1,5 +1,6 @@
 import { TOPE_MINUTOS, duracionEstimada, duracionPorPerfil } from './duracion';
-import { unirY } from './palabras';
+import { citar, unirY } from './palabras';
+import { imagenesQueFaltan } from './revisar';
 import { sinNombreCorto } from './tabla';
 import type { Definicion } from './tipos';
 
@@ -23,6 +24,8 @@ export function chequeosListo(o: {
   const sinNombre = sinNombreCorto(o.def).length;
   const lentos = duracionPorPerfil(o.def).filter((p) => p.minutos > TOPE_MINUTOS);
   const { tipico } = duracionEstimada(o.def);
+  const faltanImagenes = imagenesQueFaltan(o.def);
+  const conImagenes = o.def.secciones.some((s) => s.preguntas.some((p) => p.tipo === 'imagen_unica' || p.tipo === 'imagen_multiple'));
   const n = (k: number, una: string, varias: string) => `${k} ${k === 1 ? una : varias}`;
   return [
     { id: 'problemas', texto: 'Nada por corregir', ok: o.problemas === 0, falta: n(o.problemas, 'cosa por corregir', 'cosas por corregir') },
@@ -35,6 +38,12 @@ export function chequeosListo(o: {
       falta: lentos.length ? `Se pasa${lentos.length === 1 ? '' : 'n'}: ${unirY(lentos.map((p) => `${p.nombre} (${p.minutos} min)`))}` : `Lo típico son ${tipico} min`,
     },
     { id: 'nombres', texto: 'Cada pregunta con nombre corto', ok: sinNombre === 0, falta: n(sinNombre, 'pregunta sin nombre', 'preguntas sin nombre') },
+    ...(faltanImagenes.length || conImagenes
+      ? [{
+        id: 'imagenes', texto: 'Las preguntas con imágenes tienen sus imágenes', ok: !faltanImagenes.length,
+        falta: `Faltan en ${unirY(faltanImagenes.map((x) => `${citar(o.def, x.pregunta.id, 40)} (${x.faltan})`))}`,
+      }]
+      : []),
     ...(o.supuestosPorRevisar !== undefined
       ? [{ id: 'supuestos', texto: 'Supuestos de la IA revisados', ok: o.supuestosPorRevisar === 0, falta: 'Están arriba del documento' }]
       : []),

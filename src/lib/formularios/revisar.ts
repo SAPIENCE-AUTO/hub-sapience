@@ -96,9 +96,6 @@ export function revisarConLugar(def: Definicion): Problema[] {
       for (const r of p.reglasMatriz ?? []) {
         if (!p.filas?.some((x) => x.id === r.fila)) mal(`${donde}: una regla usa la fila «${r.fila}», que no existe.`);
       }
-      if (p.tipo === 'imagen_unica' || p.tipo === 'imagen_multiple') {
-        if (!p.opcionesDe && !opciones.some((o) => o.imagen)) mal(`${donde}: es un selector con imágenes y ninguna opción tiene imagen.`);
-      }
       if ((p.min !== undefined || p.max !== undefined) && f !== 'numero') mal(`${donde}: solo los números y las escalas llevan rango.`);
       if (p.min !== undefined && p.max !== undefined && p.min >= p.max) mal(`${donde}: el mínimo tiene que ser menor que el máximo.`);
       if (p.terminaFuera && f !== 'numero') mal(`${donde}: «termina si está fuera de rango» solo va en números y escalas.`);
@@ -161,4 +158,16 @@ export function revisarConLugar(def: Definicion): Problema[] {
     if (!preguntas.has(c.pregunta)) mal(`En ${donde} se usa «${c.pregunta}», que no existe.`);
     else if (despues(c.pregunta)) mal(`En ${donde} se usa «${c.pregunta}», que va después.`);
   }
+}
+
+/**
+ * Preguntas con imágenes a las que les faltan imágenes. No impide guardar
+ * (al participante una opción sin imagen le sale como renglón de texto): es
+ * un pendiente de «¿Está listo?». «Ninguno» y «Otra» no llevan imagen.
+ */
+export function imagenesQueFaltan(def: Definicion): { pregunta: Pregunta; faltan: number }[] {
+  return def.secciones.flatMap((s) => s.preguntas)
+    .filter((p) => p.tipo === 'imagen_unica' || p.tipo === 'imagen_multiple')
+    .map((p) => ({ pregunta: p, faltan: [...(p.opcionesDe ? [] : p.opciones ?? []), ...(p.opcionesExtra ?? [])].filter((o) => !o.imagen && !o.exclusiva && !o.otra).length }))
+    .filter((x) => x.faltan > 0);
 }

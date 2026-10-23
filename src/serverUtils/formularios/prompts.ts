@@ -89,7 +89,7 @@ export function promptSeccion(o: {
       o.plan.aparece ? `- La sección solo aparece en este caso: «${o.plan.aparece}». Escríbelo como "mostrarSi" de la sección, con ids de preguntas de secciones anteriores.` : '',
       o.plan.repetirPor ? `- La sección se repite por cada opción marcada en ${o.plan.repetirPor}${o.plan.repetirSolo ? ` (solo ${o.plan.repetirSolo.join(', ')})` : ''}: lleva "repetirPor"${o.plan.repetirSolo ? ' y "repetirSolo"' : ''}, usa «{opcion}» donde va el nombre y "descarta" en las opciones que hacen que ese bloque no cuente.` : '',
       '- La lógica solo usa preguntas de esta sección o de secciones anteriores. No escribas perfiles ni alertas: van en la etapa final.',
-      '- No uses selectores con imágenes ni pongas direcciones de imágenes.',
+      '- Nunca inventes direcciones de imágenes (ver «Imágenes» en references/contrato.md).',
     ].filter(Boolean).join('\n'),
   ];
   if (o.anterior) {

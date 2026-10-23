@@ -5,7 +5,7 @@ import ExcelJS from 'exceljs';
 import { evaluar, pantallas, definicionPublica, validarPantalla, describir, type Pantalla } from '../../src/lib/formularios/motor';
 import { columnas, columnasPorRenombrar, nombreColumnaTablero, sinNombreCorto, type FilaRespuesta } from '../../src/lib/formularios/tabla';
 import { construirExcel } from '../../src/lib/formularios/excel';
-import { revisarDefinicion } from '../../src/lib/formularios/revisar';
+import { imagenesQueFaltan, revisarDefinicion } from '../../src/lib/formularios/revisar';
 import { PLANTILLAS } from '../../src/lib/formularios/plantillas';
 import { ALONG2 } from '../../src/lib/formularios/plantillas/along2';
 import { PRUEBA_TIPOS } from '../../src/lib/formularios/plantillas/pruebaTipos';
@@ -178,7 +178,7 @@ caso('la revisión encuentra lo mal armado', () => {
   const problemas = revisarDefinicion(mal).join('\n');
   assert.match(problemas, /«a».*máximo de opciones/);
   assert.match(problemas, /«a».*exclusiva/);
-  assert.match(problemas, /«b».*ninguna opción tiene imagen/);
+  assert.doesNotMatch(problemas, /«b»/); // sin imágenes se guarda: es un pendiente de «¿Está listo?»
   assert.match(problemas, /«c».*no lleva opciones/);
   assert.match(problemas, /NSE suma «nse_escolaridad», que no existe/);
 });
@@ -489,13 +489,13 @@ caso('un id nuevo es al azar, sin separadores y nunca repite uno que ya existe',
   assert.equal(idNuevo('o', ['o_000000'], azar), 'o_iiiiii');
 });
 
-caso('una pregunta nueva de cada tipo queda bien armada (el selector con imágenes pide su imagen)', () => {
+caso('una pregunta nueva de cada tipo queda bien armada (al selector con imágenes le faltan, sin impedir guardar)', () => {
   for (const g of GRUPOS_TIPOS) {
     for (const tipo of g.tipos) {
       const { def, id } = agregarPregunta(PRUEBA_TIPOS, 'cierre', tipo);
-      const problemas = revisarDefinicion(def);
-      if (tipo === 'imagen_unica' || tipo === 'imagen_multiple') assert.deepEqual(problemas, [`«${id}»: es un selector con imágenes y ninguna opción tiene imagen.`], tipo);
-      else assert.deepEqual(problemas, [], tipo);
+      assert.deepEqual(revisarDefinicion(def), [], tipo);
+      const faltan = imagenesQueFaltan(def).filter((x) => x.pregunta.id === id);
+      assert.equal(faltan.length, tipo === 'imagen_unica' || tipo === 'imagen_multiple' ? 1 : 0, tipo);
     }
   }
   assert.equal(GRUPOS_TIPOS.flatMap((g) => g.tipos).length, Object.keys(TIPOS).length);
@@ -1043,6 +1043,17 @@ caso('la dirección de Google cae en los campos del Hub, por tipo y con el nombr
   assert.equal(cdmx.ciudad, ''); // Google no da la alcaldía: la escriben
   assert.equal(direccionDeComponentes([comp('Ver.', ['administrative_area_level_1'], 'Ver.')], 'MX').estado, 'Veracruz');
   assert.equal(direccionDeComponentes([comp('Provincia Inventada', ['administrative_area_level_1'])], 'CR').estado, 'Provincia Inventada');
+});
+
+caso('las imágenes que faltan salen en «¿Está listo?»; «Ninguno» no lleva imagen', () => {
+  const sinUna = cambiarOpcion(PRUEBA_TIPOS, 'empaque', 'lata', { imagen: undefined });
+  const faltan = imagenesQueFaltan(sinUna);
+  assert.deepEqual(faltan.map((x) => [x.pregunta.id, x.faltan]), [['empaque', 1]]);
+  const r = chequeosListo({ def: sinUna, problemas: 0, respuestasDePrueba: 1, vinculado: true }).find((c) => c.id === 'imagenes')!;
+  assert.equal(r.ok, false);
+  assert.match(r.falta ?? '', /empaque|Qué empaque/i);
+  assert.equal(chequeosListo({ def: PRUEBA_TIPOS, problemas: 0, respuestasDePrueba: 1, vinculado: true }).find((c) => c.id === 'imagenes')?.ok, true);
+  assert.equal(chequeosListo({ def: ALONG2, problemas: 0, respuestasDePrueba: 1, vinculado: true }).some((c) => c.id === 'imagenes'), false);
 });
 
 await Promise.all(pendientes);

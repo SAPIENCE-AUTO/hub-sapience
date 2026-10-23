@@ -523,6 +523,18 @@ Sergio pidió que esos campos se sientan de producto: lada en el celular y ayuda
 
 **Pendiente:** el catálogo de códigos postales sigue sin cargar: si algún día se consigue, la tabla y el script ya están.
 
+### Preguntas con imágenes: sin bloqueo, la IA puede y enlaces (2026-10-23)
+
+Sergio no podía cambiar una pregunta a «Selector con imágenes»: a mano el editor dejaba de guardar hasta que alguna opción tuviera imagen, y a la IA se lo prohibía la skill (y lo dijo como «el contrato no lo permite»).
+
+**Qué se construyó:**
+
+- **Se guarda aunque falten imágenes.** Ya no es un problema de `revisarDefinicion`: al participante una opción sin imagen le sale como renglón de texto. Lo que falta es un pendiente: en la pregunta («· faltan 3 imágenes») y en «¿Está listo?» («Las preguntas con imágenes tienen sus imágenes»; `imagenesQueFaltan` en `revisar.ts`). «Ninguno» y «Otra» no cuentan.
+- **Pegar el enlace de una imagen:** en el menú de la opción («Pegar enlace de imagen…»), en el de la pregunta («Imagen arriba desde un enlace…») o con ⌘V de un enlace sobre una opción o pregunta. El servidor la descarga (`traerImagenDeEnlace` → `imagenesEnlace.ts`): solo http(s) de internet (no la red interna del servidor, ni en las redirecciones), solo JPG, PNG, WebP o GIF, hasta 10 MB y 15 segundos. El editor la achica y la sube como cualquier imagen: el Hub guarda su copia y no depende de esa página.
+- **La IA puede usar selectores con imágenes** cuando se lo piden o cuando el screener que convierte los trae. Si le dan enlaces, los pone y el servidor guarda la copia (si uno no se puede traer, lo quita y lo dice); nunca inventa enlaces; si no hay, deja las opciones sin imagen y lo explica. En el ejemplo de ALONG 2 (`hogar.json`), las dos preguntas que en el Word son selector con imágenes ya van así. Y en sus explicaciones no nombra la skill, el contrato ni el JSON.
+
+**Probado en local (2026-10-23):** en «Prueba fase 3 · desde lv4los», una opción de «Eres…» con el enlace del logo de Google: la imagen quedó en la carpeta del Hub, la pregunta pasó sola a selector con imágenes con «faltan 3 imágenes» y se guardó; ⌘Z lo dejó como estaba. Enlaces a la propia máquina, a la red interna, a la dirección de datos de la nube, `ftp://` o a una página que no es imagen se rechazan con su motivo. El botón IA («Cámbiala a selector con imágenes») propuso el cambio y explicó en palabras simples que faltan las imágenes; se cerró sin aplicar. 76 pruebas.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
@@ -549,3 +561,4 @@ Sergio pidió que esos campos se sientan de producto: lada en el celular y ayuda
 - **2026-10-23 · ajustes tras el primer uso (tanda 1):** «perfiles» en vez de «frentes» en todo lo que se ve; nombre corto por pregunta (columna del tablero, Excel y panel), escrito por la IA y con «Ponerlos con IA» para lo que ya existe; las columnas del tablero se renombran solas sin pisar las que cambió el equipo; tiempo por perfil; estados Borrador › Prueba › En vivo con su explicación y la lista «¿Está listo?». 70 pruebas. Probado en local y subido a `main` con el OK de Sergio (`a69aa21`).
 - **2026-10-23 · flujo como diagrama y menos botones (tanda 2):** con los bocetos aprobados por Sergio: el Flujo es un diagrama de proceso con ramas, salidas en rojo y bloques que se repiten; las herramientas de cada pregunta solo aparecen al elegirla; encabezado con los pasos del estado, una línea de estado y un solo menú «⋯». 71 pruebas. Probado en local y subido a `main` con el OK de Sergio (`e823da6`).
 - **2026-10-23 · celular, correo y dirección más finos:** lada y largo del celular por país, sugerencia del correo mal escrito, «Busca tu dirección» con Google y dirección por código postal lista para cuando haya catálogo (tabla `codigos_postales` creada, vacía). 75 pruebas. Probado en local con respuestas simuladas.
+- **2026-10-23 · preguntas con imágenes:** se guardan aunque falten imágenes (pendiente en «¿Está listo?»), se puede pegar el enlace de una imagen (el Hub guarda su copia) y la IA ya puede cambiar a selector con imágenes. 76 pruebas. Probado en local.

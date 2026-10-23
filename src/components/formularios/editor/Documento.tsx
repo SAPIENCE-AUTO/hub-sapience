@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { traerImagenDeEnlace } from 'zite-endpoints-sdk';
 import { ArrowDown, ArrowUp, Loader2, MessageSquareText, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -251,15 +252,30 @@ export function Documento({ editor, ia, pendientes }: {
     }
   };
 
-  // Pegar una imagen (⌘V) la pone donde está el cursor.
+  const ponerImagenDeEnlace = async (destino: Destino, url: string) => {
+    const clave = claveDestino(destino);
+    setSubiendo((s) => new Set(s).add(clave));
+    try {
+      const r = await traerImagenDeEnlace({ url }) as { base64: string; tipo: string; nombre: string };
+      const bytes = Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0));
+      await ponerImagen(destino, new File([bytes], r.nombre, { type: r.tipo }));
+    } catch (err) {
+      toast.error((err as Error).message || 'No se pudo traer la imagen de ese enlace.');
+      setSubiendo((s) => { const n = new Set(s); n.delete(clave); return n; });
+    }
+  };
+
+  // Pegar una imagen (⌘V), o el enlace de una, la pone donde está el cursor.
   useEffect(() => {
     const pegar = (e: ClipboardEvent) => {
       if (esCampoDeTexto(e.target)) return;
       const [archivo] = imagenesDe(e.clipboardData);
-      if (!archivo) return;
+      const enlace = archivo ? '' : (e.clipboardData?.getData('text/plain') ?? '').trim();
+      if (!archivo && !/^https?:\/\/\S+$/i.test(enlace)) return;
       e.preventDefault();
       if (!apuntado.current) { toast('Pon el cursor sobre la opción o la pregunta y vuelve a pegar la imagen.'); return; }
-      void ponerImagen(apuntado.current, archivo);
+      if (archivo) void ponerImagen(apuntado.current, archivo);
+      else void ponerImagenDeEnlace(apuntado.current, enlace);
     };
     window.addEventListener('paste', pegar);
     return () => window.removeEventListener('paste', pegar);
@@ -275,6 +291,7 @@ export function Documento({ editor, ia, pendientes }: {
   const ctx: ContextoDoc = useMemo(() => ({
     def, aplicar, subiendo, nuevo, setNuevo,
     ponerImagen: (d, a) => { void ponerImagen(d, a); },
+    ponerImagenDeEnlace: (d, u) => { void ponerImagenDeEnlace(d, u); },
     apuntar: (d) => { apuntado.current = d; },
     quitar: (q) => (q.usos.length || q.confirmar ? setPorQuitar(q) : q.hacer()),
     ia,

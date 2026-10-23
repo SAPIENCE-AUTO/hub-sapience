@@ -1,24 +1,25 @@
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, ImagePlus, Loader2, Lock, MoreHorizontal, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ImagePlus, Link2, Loader2, Lock, MoreHorizontal, Trash2, X } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { logicaDePregunta } from '@/lib/formularios/palabras';
+import { imagenesQueFaltan } from '@/lib/formularios/revisar';
 import { GRUPOS_TIPOS, cambiarPregunta, cambiarTipo, esDelNse, moverPregunta, quitarPregunta, sePuedeMover, usosDePregunta } from '@/lib/formularios/editar';
 import { rango } from '@/lib/formularios/motor';
 import { nombreCampoDireccion, telefonoDe } from '@/lib/formularios/paises';
 import { nombreDePregunta } from '@/lib/formularios/tabla';
 import { TEAL } from '@/lib/toolColors';
 import { CAMPOS_DIRECCION, TIPOS, esDeOpciones, esMatriz, forma, type Pregunta, type Seccion } from '@/lib/formularios/tipos';
-import { Logica, useAlCerrarMenu, useDoc } from './comun';
+import { EnlaceImagen, Logica, useAlCerrarMenu, useDoc } from './comun';
 import { EditorCondicion, EditorMaximo, EditorRango } from './Ajustes';
 import { ListaFilas, ListaOpciones, useElegirImagen, useZonaImagen } from './Opciones';
 import { TextoEditable } from './TextoEditable';
 import { PropuestaIA } from '../generador/PropuestaIA';
 import { MarcaIA } from '../generador/comun';
 
-type Abierto = 'condicion' | 'rango' | 'maximo' | 'ayuda' | 'nota' | 'ia' | null;
+type Abierto = 'condicion' | 'rango' | 'maximo' | 'ayuda' | 'nota' | 'ia' | 'enlace' | null;
 
 /** Cómo se ve la respuesta en el documento cuando no es de opciones (como en el Word: una línea, los campos…). */
 function Respuesta({ p }: { p: Pregunta }) {
@@ -58,8 +59,9 @@ function Respuesta({ p }: { p: Pregunta }) {
 }
 
 export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
-  const { def, aplicar, quitar, nuevo, setNuevo, ia, elegida, elegir: elegirPregunta } = useDoc();
+  const { def, aplicar, quitar, nuevo, setNuevo, ia, elegida, elegir: elegirPregunta, ponerImagenDeEnlace } = useDoc();
   const activa = elegida === p.id;
+  const faltanImagenes = imagenesQueFaltan({ ...def, secciones: [{ id: '', preguntas: [p] }] })[0]?.faltan ?? 0;
   useEffect(() => { if (nuevo === p.id) elegirPregunta(p.id); }, [nuevo, p.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [abierto, setAbierto] = useState<Abierto>(null);
   const { despues, alCerrar } = useAlCerrarMenu();
@@ -127,6 +129,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
           <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
             {TIPOS[p.tipo]?.nombre ?? p.tipo}
             {p.opcional && f !== 'ninguna' && <span className="font-normal normal-case tracking-normal">· opcional</span>}
+            {faltanImagenes > 0 && <span className="font-semibold normal-case tracking-normal text-[#8a4b00]">· faltan {faltanImagenes === 1 ? '1 imagen' : `${faltanImagenes} imágenes`}</span>}
             {bloqueada && <span className="flex items-center gap-1 font-normal normal-case tracking-normal"><Lock className="h-3 w-3" />cuestionario oficial de NSE</span>}
           </p>
         </div>
@@ -178,6 +181,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
                 {!p.ayuda && p.tipo !== 'contenido' && <DropdownMenuItem onSelect={abrirAl('ayuda')}>Agregar ayuda</DropdownMenuItem>}
                 {!p.nota && <DropdownMenuItem onSelect={abrirAl('nota')}>Agregar nota para el equipo</DropdownMenuItem>}
                 <DropdownMenuItem onSelect={() => despues(elegir)}><ImagePlus className="mr-2 h-4 w-4" />{p.imagen ? 'Cambiar imagen…' : p.tipo === 'contenido' ? 'Poner imagen…' : 'Poner imagen arriba…'}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={abrirAl('enlace')}><Link2 className="mr-2 h-4 w-4" />{p.tipo === 'contenido' ? 'Imagen desde un enlace…' : 'Imagen arriba desde un enlace…'}</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem disabled={ultima} className="text-[#D32222] focus:text-[#D32222]" onSelect={pedirQuitar}>
                   <Trash2 className="mr-2 h-4 w-4" />{ultima ? 'Es la única de la sección' : 'Quitar pregunta'}
@@ -188,6 +192,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
         )}
       </div>
 
+      {abierto === 'enlace' && <EnlaceImagen onPoner={(url) => ponerImagenDeEnlace(destino, url)} onCerrar={() => setAbierto(null)} />}
       {(p.imagen || zona.cargando) && (
         <div className="relative mt-2 inline-block max-w-full">
           {p.imagen && <img src={p.imagen} alt="" className="max-h-56 max-w-full rounded-md border bg-white" />}

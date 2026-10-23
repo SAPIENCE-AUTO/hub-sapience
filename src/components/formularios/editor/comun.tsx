@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import { ALERTA, EXITO, INFO, NEUTRAL, PELIGRO, TEAL } from '@/lib/toolColors';
 import type { LineaLogica } from '@/lib/formularios/palabras';
 import type { Definicion } from '@/lib/formularios/tipos';
@@ -18,6 +18,8 @@ export interface ContextoDoc {
   /** Destinos con una imagen subiéndose. */
   subiendo: Set<string>;
   ponerImagen: (destino: Destino, archivo: File) => void;
+  /** La imagen de un enlace de internet: el Hub la descarga y guarda su copia, como si se hubiera subido. */
+  ponerImagenDeEnlace: (destino: Destino, url: string) => void;
   /** Dónde está el cursor: ahí cae una imagen pegada. */
   apuntar: (destino: Destino | null) => void;
   /** Id de lo recién agregado: su texto se abre en edición. */
@@ -120,4 +122,25 @@ export function useAlCerrarMenu() {
       fn?.();
     },
   };
+}
+
+/** Cuadro para pegar el enlace de una imagen (.jpg, .png…) y ponerla. */
+export function EnlaceImagen({ onPoner, onCerrar }: { onPoner: (url: string) => void; onCerrar: () => void }) {
+  const [url, setUrl] = useState('');
+  const poner = () => { if (url.trim()) { onPoner(url.trim()); onCerrar(); } };
+  return (
+    <div className="mt-1.5 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <input
+        autoFocus
+        aria-label="Enlace de la imagen"
+        placeholder="https://… (JPG, PNG, WebP o GIF)"
+        className="h-8 min-w-0 flex-1 rounded-md border border-[#0F3D4D]/30 bg-white px-2 text-[13px] outline-none focus:border-[#0F3D4D]"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') poner(); if (e.key === 'Escape') onCerrar(); }}
+      />
+      <button type="button" disabled={!url.trim()} onClick={poner} className="h-8 rounded-md bg-[#0F3D4D] px-3 text-[12.5px] font-medium text-white disabled:opacity-40">Poner</button>
+      <button type="button" onClick={onCerrar} className="h-8 px-1 text-[12.5px] text-muted-foreground hover:text-[#0F3D4D]">Cancelar</button>
+    </div>
+  );
 }

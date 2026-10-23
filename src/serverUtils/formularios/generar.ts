@@ -9,12 +9,13 @@ import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQ
 import { reglaNse } from '../../lib/formularios/nse';
 import { revisarConLugar } from '../../lib/formularios/revisar';
 import { sinNombreCorto } from '../../lib/formularios/tabla';
-import { leerDefinicion, type Definicion, type Seccion } from '../../lib/formularios/tipos';
+import { leerDefinicion, type Definicion, type Pregunta, type Seccion } from '../../lib/formularios/tipos';
 import { conLatido, llamarJSON, MODELOS, type Contenido } from './claude';
 import {
   EstructuraZ, RespuestaCambioPreguntaZ, RespuestaCambioSeccionZ, RespuestaLogicaZ, RespuestaNombresZ, RespuestaSeccionZ, sinVacios,
 } from './esquemas';
 import { contenidoDeInsumos, hayInsumos } from './insumos';
+import { descargarImagen, esImagenNuestra, guardarCopiaDeImagen } from './imagenesEnlace';
 import { promptCambio, promptEstructura, promptLogica, promptNombres, promptSeccion, type Alcance, type DatosEstudio } from './prompts';
 import { conRegistro } from './uso';
 
@@ -78,9 +79,30 @@ function problemasNuevos(antes: Definicion, despues: Definicion): string[] {
   return revisarConLugar(despues).map((p) => p.texto).filter((t) => !ya.has(t));
 }
 
-const sinImagenes = (secciones: Seccion[]) => secciones.flatMap((s) => s.preguntas)
-  .filter((p) => p.tipo === 'imagen_unica' || p.tipo === 'imagen_multiple')
-  .map((p) => `«${p.id}» es un selector con imágenes: usa opción única o múltiple (las imágenes se ponen a mano después).`);
+/**
+ * Las imágenes que la IA puso con un enlace (porque la persona se lo dio en su pedido) se copian al Hub,
+ * como si se hubieran subido. Si una no se puede traer, se quita y se dice por qué.
+ */
+async function copiarImagenesExternas(preguntas: Pregunta[]): Promise<string[]> {
+  const avisos: string[] = [];
+  const copias = new Map<string, Promise<string | undefined>>();
+  const copiar = (url: string) => {
+    if (!copias.has(url)) {
+      copias.set(url, descargarImagen(url).then(guardarCopiaDeImagen).catch((err: Error) => {
+        avisos.push(`No se pudo traer la imagen ${url}: ${err.message}`);
+        return undefined;
+      }));
+    }
+    return copias.get(url)!;
+  };
+  await Promise.all(preguntas.flatMap((p) => [
+    ...(p.imagen && !esImagenNuestra(p.imagen) ? [copiar(p.imagen).then((c) => { p.imagen = c; })] : []),
+    ...[...(p.opciones ?? []), ...(p.opcionesExtra ?? [])]
+      .filter((x) => x.imagen && !esImagenNuestra(x.imagen))
+      .map((x) => copiar(x.imagen!).then((c) => { x.imagen = c; })),
+  ]));
+  return avisos;
+}
 
 // ── etapa 1 ──────────────────────────────────────────────────────────────────
 export async function proponerEstructura(o: {
@@ -212,7 +234,6 @@ function revisarSeccion(seccion: Seccion, plan: SeccionPlan, anterior: Seccion |
   const problemas = [
     ...revisarConLugar(despues).filter((p) => p.seccion === plan.id).map((p) => p.texto),
     ...avisosDeLogica(contexto, despues),
-    ...sinImagenes([asentada]),
   ];
   const escritas = new Map(asentada.preguntas.map((p) => [p.id, p]));
   for (const p of plan.preguntas) {
@@ -243,10 +264,13 @@ export async function escribirSeccion(o: { filtro: Filtro; email: string; stream
       usuario: await contenido(g, texto), esquema: RespuestaSeccionZ, modelo: MODELOS.preguntas, esfuerzo: 'medium', onGasto, aceptarConProblemas: true,
       revisar: (x) => revisarSeccion(sinVacios(x.seccion) as Seccion, plan, anterior, contexto, e).problemas,
     })));
-  const { asentada, problemas } = revisarSeccion(sinVacios(r.seccion) as Seccion, plan, anterior, contexto, e);
+  const escrita = sinVacios(r.seccion) as Seccion;
+  const sinTraer = await copiarImagenesExternas(escrita.preguntas);
+  const supuestos = [...r.supuestos, ...sinTraer];
+  const { asentada, problemas } = revisarSeccion(escrita, plan, anterior, contexto, e);
   await guardarEn(o.filtro.id, ['escritas', plan.id], { seccion: asentada, firma });
-  await guardarEn(o.filtro.id, ['supuestosSecciones', plan.id], r.supuestos);
-  return { seccion: asentada, firma, supuestos: r.supuestos, problemas };
+  await guardarEn(o.filtro.id, ['supuestosSecciones', plan.id], supuestos);
+  return { seccion: asentada, firma, supuestos, problemas };
 }
 
 // ── lógica final ─────────────────────────────────────────────────────────────
@@ -309,7 +333,6 @@ function revisarCambio(parcheIA: Parche, def: Definicion, alcance: Alcance) {
   const problemas = [
     ...problemasNuevos(def, despues),
     ...columnasQueCambian(def, despues),
-    ...sinImagenes([...(parche.secciones ?? []), { id: '', preguntas: parche.preguntas ?? [] }]),
   ];
   return { parche, despues, problemas };
 }
@@ -344,6 +367,8 @@ export async function proponerCambio(o: { filtro: Filtro; email: string; stream?
     parcheIA = sinVacios({ ...r, explicacion: undefined }) as Parche;
     explicacion = r.explicacion;
   }
+  const sinTraer = await copiarImagenesExternas([...(parcheIA.preguntas ?? []), ...(parcheIA.secciones ?? []).flatMap((x) => x.preguntas)]);
+  if (sinTraer.length) explicacion = [explicacion, ...sinTraer].filter(Boolean).join(' ');
   const { parche, despues, problemas } = revisarCambio(parcheIA, def, alcance);
   return { parche, explicacion, cambios: cambiosEnPalabras(def, despues), avisos: avisosDeLogica(def, despues), problemas };
 }
