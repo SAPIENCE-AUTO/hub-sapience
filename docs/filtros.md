@@ -519,7 +519,9 @@ Sergio pidió que esos campos se sientan de producto: lada en el celular y ayuda
 
 **Probado en local (2026-10-23):** en `/f/lv4los` en celular: la lada, el número agrupado al pegarlo con «+52», la sugerencia del correo y la dirección sin catálogo (se escribe a mano); con una respuesta simulada en el navegador (sin datos en la base), municipio y estado llenos, la lista de colonias y escribir una que no está. «Busca tu dirección» con respuestas de Google simuladas en el navegador (datos inventados): sugerencias, elegir una llena los seis campos y la lista no se vuelve a abrir; sin la llave en local, el cuadro no aparece. 75 pruebas.
 
-**Pendiente:** que Sergio prenda «Places API (New)» en el proyecto de Google Cloud de la llave de mapas del Hub y probarlo de verdad (con el filtro de prueba en producción). El catálogo de códigos postales sigue sin cargar: si algún día se consigue, la tabla y el script ya están.
+**Probado en producción (2026-10-23, `8a0d635`):** Sergio prendió «Places API (New)» en el proyecto «Sapience maps» de Google Cloud. En `/f/lv4los` (sin enviar nada) «Avenida Vallarta 1500 Guadalajara» dio sugerencias reales y al elegirla quedaron calle, colonia (Americana), municipio (Guadalajara), estado (Jalisco) y código postal (44600). Por la API: Naucalpan con «Estado de México» bien puesto; en la Ciudad de México Google no da la alcaldía (pone «Ciudad de México»), así que ahí el campo se deja vacío para que la escriban. El servidor de la API en producción es `hub-sapience-api.onrender.com` (el sitio, `hub.sapience.com.mx`).
+
+**Pendiente:** el catálogo de códigos postales sigue sin cargar: si algún día se consigue, la tabla y el script ya están.
 
 ## Decisiones pendientes (las toma Sergio)
 

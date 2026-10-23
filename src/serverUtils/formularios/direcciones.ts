@@ -101,12 +101,16 @@ export function direccionDeComponentes(componentes: Componente[], pais: string):
     for (const t of tipos) { const c = componentes.find((x) => x.types?.includes(t)); if (c) return c; }
     return undefined;
   };
+  const estado = estadoDelPais(de('administrative_area_level_1'), pais) ?? '';
+  let ciudad = de('administrative_area_level_2', 'locality')?.longText ?? '';
+  // En la Ciudad de México Google no da la alcaldía (pone la ciudad): mejor vacío, para que la escriban.
+  if (pais === 'MX' && estado === 'Ciudad de México' && sinAcentos(ciudad) === sinAcentos(estado)) ciudad = '';
   return {
     calle: de('route')?.longText ?? '',
     numero: de('street_number')?.longText ?? '',
     colonia: de('sublocality_level_1', 'sublocality', 'neighborhood')?.longText ?? '',
-    ciudad: de('administrative_area_level_2', 'locality')?.longText ?? '',
-    estado: estadoDelPais(de('administrative_area_level_1'), pais) ?? '',
+    ciudad,
+    estado,
     cp: de('postal_code')?.longText ?? '',
   };
 }

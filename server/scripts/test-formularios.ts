@@ -1038,7 +1038,9 @@ caso('la dirección de Google cae en los campos del Hub, por tipo y con el nombr
     comp('123', ['street_number']),
   ], 'MX');
   assert.deepEqual(d, { calle: 'Calle Inventada', numero: '123', colonia: 'Colonia Prueba', ciudad: 'Municipio Prueba', estado: 'Estado de México', cp: '01000' });
-  assert.equal(direccionDeComponentes([comp('CDMX', ['administrative_area_level_1'])], 'MX').estado, 'Ciudad de México');
+  const cdmx = direccionDeComponentes([comp('Ciudad de México', ['locality']), comp('CDMX', ['administrative_area_level_1'])], 'MX');
+  assert.equal(cdmx.estado, 'Ciudad de México');
+  assert.equal(cdmx.ciudad, ''); // Google no da la alcaldía: la escriben
   assert.equal(direccionDeComponentes([comp('Ver.', ['administrative_area_level_1'], 'Ver.')], 'MX').estado, 'Veracruz');
   assert.equal(direccionDeComponentes([comp('Provincia Inventada', ['administrative_area_level_1'])], 'CR').estado, 'Provincia Inventada');
 });
