@@ -51,8 +51,8 @@ Después de las sesiones hacen 5 días de actividades en línea (collage, playli
 
 ## Lo que enseña para el Hub
 
-- Los **perfiles** por edad, hijos y consumo son los frentes; cada perfil pide combinaciones distintas (edad + hijos + marca), así que van como condiciones con «y» y «alguna».
-- «TERMINAR para los consumidores de la marca» no es terminar el filtro: es quedar fuera de los frentes de consumidores (en el Hub: frentes de consumidores que piden la frecuencia y frentes de no rechazadores que piden «no la rechaza»). El rechazo («no la consumiría») sí termina para todos.
+- Los **perfiles** van por edad, hijos y consumo; cada uno pide combinaciones distintas (edad + hijos + marca), así que van como condiciones con «y» y «alguna».
+- «TERMINAR para los consumidores de la marca» no es terminar el filtro: es quedar fuera de los perfiles de consumidores (en el Hub: perfiles de consumidores que piden la frecuencia y perfiles de no rechazadores que piden «no la rechaza»). El rechazo («no la consumiría») sí termina para todos.
 - Las preguntas «solo si…» (9A, 12A, 13 a 15A) son «mostrar solo si» y opciones que salen de otra pregunta.
 - Las condiciones de la sesión en línea (dispositivo, cámara, lugar tranquilo) van juntas al final, como las condiciones de la visita en el ejemplo 1.
 - Se le habla al participante como se habla en su país.

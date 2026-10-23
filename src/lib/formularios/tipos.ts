@@ -114,6 +114,12 @@ export interface Pregunta {
   id: string;
   tipo: TipoPregunta;
   texto: string;
+  /**
+   * Nombre corto («Edad», «Marcas que compra»): el encabezado de su columna en
+   * el tablero, el Excel y el panel. El participante no lo ve. Sin él, la
+   * columna lleva el texto de la pregunta (tabla.ts → nombreDePregunta).
+   */
+  nombre?: string;
   ayuda?: string;
   /** Imagen arriba de la pregunta (URL). En `contenido` es lo que se muestra. */
   imagen?: string;

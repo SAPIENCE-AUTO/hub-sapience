@@ -14,7 +14,7 @@ Cómo leer este documento
 - Duración: unos 10 minutos para quien compra 2 o 3 formatos de aromatizante y 1 o 2 tipos de limpiador.
 Muestra y cuotas
 Uso interno. No se programa como texto visible.
-Frente
+Perfil
 Casos | Quién califica
 Aerosoles
 6 | Compró aerosol en los últimos 3 meses (P13) y pasa su bloque.
@@ -29,7 +29,7 @@ Esferas
 Limpiadores diluibles
 10 | Compra limpiador todo propósito y lo diluye (P31), o especializado de cocina, baño o vidrios (P23).
 Total
-40 | En cada frente, mezclar usuarios de la marca del cliente y de competencia (marca favorita) y quien resuelve lo mismo con otro formato.
+40 | En cada perfil, mezclar usuarios de la marca del cliente y de competencia (marca favorita) y quien resuelve lo mismo con otro formato.
 Criterio
 Marca A (30 casos) | Marca B (10 casos)
 Edad
@@ -67,7 +67,7 @@ P7. ¿Cómo es tu hogar?  [opción única]
 ○  Pareja sin hijos
 ○  Vivo solo/a
 ○  Vivo con roomies
-LÓGICA  Variedad de hogares en cada frente. Solo/a o con roomies: máximo 1 por frente.
+LÓGICA  Variedad de hogares en cada perfil. Solo/a o con roomies: máximo 1 por perfil.
 P8. ¿Tú o alguien de tu familia o amigos cercanos trabaja en alguno de estos giros?  [opción múltiple]
 ○  Bancos o seguros
 ○  Publicidad o marketing   ▸ TERMINAR
@@ -110,7 +110,7 @@ Que la casa huela bien
 ○ | ○ | ○
 Lavar la ropa
 ○ | ○ | ○
-LÓGICA  «Que la casa huela bien» = Otra persona → no entra a frentes Marca A. «Limpiar la casa» = Otra persona → no entra a Marca B. Las demás filas disimulan.
+LÓGICA  «Que la casa huela bien» = Otra persona → no entra a perfiles Marca A. «Limpiar la casa» = Otra persona → no entra a Marca B. Las demás filas disimulan.
 Aromatizantes
 Solo si marcó aromatizantes en P10.
 P12. ¿Cuáles de estos aromatizantes usas en tu casa o en tu auto?  [selector con imágenes · múltiple]
@@ -129,7 +129,7 @@ P12. ¿Cuáles de estos aromatizantes usas en tu casa o en tu auto?  [selector c
 ○  Otro
 LÓGICA  Orden al azar. Más de 7 marcados → revisar a mano (posible sobredeclarante).
 P13. ¿Y cuáles compraste en los últimos 3 meses?  [opción múltiple · solo las opciones marcadas antes]
-LÓGICA  Muestra solo lo marcado en P12. Cada formato marcado aquí abre su bloque (P14 a P21). Ninguno → no entra a frentes Marca A.
+LÓGICA  Muestra solo lo marcado en P12. Cada formato marcado aquí abre su bloque (P14 a P21). Ninguno → no entra a perfiles Marca A.
 Bloque por formato de aromatizante
 Una página por cada formato marcado en P13. [FORMATO] se reemplaza por su nombre.
 P14. ¿Qué aroma o aromas de [FORMATO] compras? Escríbelos como vienen en el empaque  [abierta corta]  ABIERTA
@@ -146,7 +146,7 @@ P15. ¿Qué marcas de [FORMATO] compras?  [opción múltiple]
 ○  Otra, ¿cuál?
 LÓGICA  Lumerra no existe: si la marca → TERMINAR (sobredeclarante). Confirmar antes de programar que no exista en México. Orden al azar.
 P16. ¿Cuál es tu marca favorita de [FORMATO]?  [opción única · solo las marcadas antes]
-LÓGICA  Define si es usuario de la marca del cliente (Marca A) o de competencia, para la mezcla de cada frente.
+LÓGICA  Define si es usuario de la marca del cliente (Marca A) o de competencia, para la mezcla de cada perfil.
 P17. ¿Dónde lo compras normalmente?  [opción múltiple]
 ○  Walmart
 ○  Bodega Aurrera
@@ -223,7 +223,7 @@ P24. ¿Qué marcas de [TIPO] compras?  [opción múltiple]
 ○  Otra, ¿cuál?
 LÓGICA  Orden al azar. En Fillout se puede acotar la lista según el tipo.
 P25. ¿Cuál es tu marca favorita de [TIPO]?  [opción única · solo las marcadas antes]
-LÓGICA  Usuario de Marca B o de competencia, para la mezcla del frente.
+LÓGICA  Usuario de Marca B o de competencia, para la mezcla del perfil.
 P26. ¿Qué variante o aroma compras? Escríbelo como viene en la etiqueta  [abierta corta]  ABIERTA
 ______________________________________________________________
 LÓGICA  «No sé» o «el normal» → TERMINAR en ese tipo. Debe coincidir con la foto.
@@ -270,13 +270,13 @@ LÓGICA  Muestra lo que de verdad tiene. Debe verse al menos un limpiador de lo 
 Marcas
 P33. ¿Hay alguna de estas marcas que no comprarías por ningún motivo?  [opción múltiple]
 ○  Marca de botanas
-○  Marca A   ▸ TERMINAR frentes Marca A
+○  Marca A   ▸ TERMINAR perfiles Marca A
 ○  Marca de detergente
 ○  Marca C
 ○  Marca de shampoo
 ○  Marca G
 ○  Marca de refresco
-○  Marca B   ▸ TERMINAR frente Marca B
+○  Marca B   ▸ TERMINAR perfil Marca B
 ○  Marca H
 ○  Marca de suavizante
 ○  Ninguna
@@ -347,8 +347,8 @@ P42. ¿Qué horarios tienes libres en noviembre?  [opción múltiple]
 ¡Gracias! Revisaremos tus respuestas y, si tu perfil coincide con lo que buscamos, te escribiremos por WhatsApp.
 Videollamada de verificación
 Uso interno, 10 minutos. No se programa.
-- Pedir que muestre en cámara el producto de su frente en el lugar donde lo usa. Debe coincidir con la foto, la marca y el aroma que contestó.
+- Pedir que muestre en cámara el producto de su perfil en el lugar donde lo usa. Debe coincidir con la foto, la marca y el aroma que contestó.
 - Sin leerle sus respuestas, preguntar otra vez el aroma y cuándo lo compró. Deben coincidir.
 - «Cuéntame cómo lo usas en un día normal.» Sirve para ver si se expresa con soltura: la visita la hace el equipo del cliente. Respuestas cortas o sin detalle → reserva.
-- Frente Marca B: «Enséñame cómo preparas tu limpiador.»
+- Perfil Marca B: «Enséñame cómo preparas tu limpiador.»
 - Confirmar edad con la identificación, la dirección de la visita y la sucursal de la tienda.

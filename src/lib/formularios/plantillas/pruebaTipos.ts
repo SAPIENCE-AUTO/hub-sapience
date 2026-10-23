@@ -55,19 +55,19 @@ export const PRUEBA_TIPOS: Definicion = {
       titulo: 'Antes de empezar',
       preguntas: [
         { id: 'instrucciones', tipo: 'contenido', texto: 'Contesta como lo harías normalmente. No hay respuestas buenas ni malas.' },
-        { id: 'aviso', tipo: 'casilla', texto: 'Leí y acepto el aviso de privacidad', ayuda: 'Tus datos solo se usan para invitarte a estudios.' },
+        { id: 'aviso', tipo: 'casilla', nombre: 'Aviso de privacidad', texto: 'Leí y acepto el aviso de privacidad', ayuda: 'Tus datos solo se usan para invitarte a estudios.' },
       ],
     },
     {
       id: 'perfil',
       titulo: 'Sobre ti',
       preguntas: [
-        { id: 'nombre', tipo: 'texto', texto: 'Nombre completo' },
-        { id: 'celular', tipo: 'telefono', texto: 'Celular (WhatsApp)' },
-        { id: 'correo', tipo: 'correo', texto: 'Correo', opcional: true },
-        { id: 'genero', tipo: 'unica', texto: 'Eres…', opciones: [{ id: 'mujer', label: 'Mujer' }, { id: 'hombre', label: 'Hombre' }, { id: 'otro', label: 'Otro / prefiero no decir' }] },
-        { id: 'edad', tipo: 'numero', texto: '¿Cuántos años tienes?', min: 15, max: 99, terminaFuera: { min: 18, max: 65, motivo: 'Edad fuera de 18 a 65' } },
-        { id: 'domicilio', tipo: 'direccion', texto: '¿Cuál es la dirección de tu casa?', ayuda: 'Solo la usamos si te visitamos.' },
+        { id: 'nombre', tipo: 'texto', nombre: 'Nombre', texto: 'Nombre completo' },
+        { id: 'celular', tipo: 'telefono', nombre: 'Celular', texto: 'Celular (WhatsApp)' },
+        { id: 'correo', tipo: 'correo', nombre: 'Correo', texto: 'Correo', opcional: true },
+        { id: 'genero', tipo: 'unica', nombre: 'Género', texto: 'Eres…', opciones: [{ id: 'mujer', label: 'Mujer' }, { id: 'hombre', label: 'Hombre' }, { id: 'otro', label: 'Otro / prefiero no decir' }] },
+        { id: 'edad', tipo: 'numero', nombre: 'Edad', texto: '¿Cuántos años tienes?', min: 15, max: 99, terminaFuera: { min: 18, max: 65, motivo: 'Edad fuera de 18 a 65' } },
+        { id: 'domicilio', tipo: 'direccion', nombre: 'Domicilio', texto: '¿Cuál es la dirección de tu casa?', ayuda: 'Solo la usamos si te visitamos.' },
       ],
     },
     {
@@ -75,14 +75,14 @@ export const PRUEBA_TIPOS: Definicion = {
       titulo: 'Tus compras',
       preguntas: [
         {
-          id: 'tienda', tipo: 'lista', texto: '¿En qué tipo de tienda haces la mayor parte de tus compras?',
+          id: 'tienda', tipo: 'lista', nombre: 'Tipo de tienda', texto: '¿En qué tipo de tienda haces la mayor parte de tus compras?',
           opciones: [
             ...deTexto(['Supermercado', 'Tienda de autoservicio grande', 'Club de precios', 'Tienda de conveniencia', 'Tienda de la esquina', 'Mercado', 'Tianguis', 'Farmacia', 'Tienda departamental', 'Tienda en línea', 'Mayorista', 'Tienda de descuento', 'Venta por catálogo']),
             { id: 'otra', label: 'Otra', otra: true },
             { id: 'nadie', label: 'No hago compras para mi casa', termina: 'No hace compras para su casa' },
           ],
         },
-        { id: 'frutas', tipo: 'lista_multiple', texto: '¿Qué frutas compraste este mes?', maxOpciones: 5, opciones: [...deTexto(FRUTAS), { id: 'ninguna', label: 'Ninguna', exclusiva: true }] },
+        { id: 'frutas', tipo: 'lista_multiple', nombre: 'Frutas', texto: '¿Qué frutas compraste este mes?', maxOpciones: 5, opciones: [...deTexto(FRUTAS), { id: 'ninguna', label: 'Ninguna', exclusiva: true }] },
       ],
     },
     {
@@ -90,14 +90,14 @@ export const PRUEBA_TIPOS: Definicion = {
       titulo: 'Empaques',
       preguntas: [
         {
-          id: 'empaque', tipo: 'imagen_unica', texto: '¿Qué empaque te llama más la atención?',
+          id: 'empaque', tipo: 'imagen_unica', nombre: 'Empaque', texto: '¿Qué empaque te llama más la atención?',
           opciones: [
             { id: 'lata', label: 'Lata', imagen: LATA }, { id: 'botella', label: 'Botella', imagen: BOTELLA },
             { id: 'frasco', label: 'Frasco', imagen: FRASCO }, { id: 'bolsa', label: 'Bolsa', imagen: BOLSA },
           ],
         },
         {
-          id: 'formatos', tipo: 'imagen_multiple', texto: '¿Cuáles de estos aromatizantes has usado en tu casa?',
+          id: 'formatos', tipo: 'imagen_multiple', nombre: 'Formatos usados', texto: '¿Cuáles de estos aromatizantes has usado en tu casa?',
           opciones: [
             { id: 'aerosol', label: 'Aerosol', imagen: LATA }, { id: 'spray', label: 'Spray sin gas', imagen: BOTELLA },
             { id: 'vela', label: 'Vela', imagen: VELA }, { id: 'varitas', label: 'Difusor de varitas', imagen: VARITAS },
@@ -111,18 +111,18 @@ export const PRUEBA_TIPOS: Definicion = {
       titulo: 'En tu casa',
       preguntas: [
         {
-          id: 'frecuencia', tipo: 'matriz', texto: '¿Cada cuánto haces cada cosa?',
+          id: 'frecuencia', tipo: 'matriz', nombre: 'Frecuencia', texto: '¿Cada cuánto haces cada cosa?',
           filas: [{ id: 'barrer', label: 'Barrer' }, { id: 'trapear', label: 'Trapear' }, { id: 'ropa', label: 'Lavar la ropa' }],
           opciones: [{ id: 'diario', label: 'Diario' }, { id: 'semana', label: 'Cada semana' }, { id: 'mes', label: 'Cada mes' }, { id: 'nunca', label: 'Nunca' }],
         },
         {
-          id: 'lugares', tipo: 'matriz_multiple', texto: '¿Dónde usas cada producto?', ayuda: 'Puedes marcar varios lugares en cada uno.',
+          id: 'lugares', tipo: 'matriz_multiple', nombre: 'Dónde usa cada producto', texto: '¿Dónde usas cada producto?', ayuda: 'Puedes marcar varios lugares en cada uno.',
           filas: [{ id: 'aromatizante', label: 'Aromatizante' }, { id: 'limpiador', label: 'Limpiador' }, { id: 'toallitas', label: 'Toallitas' }],
           opciones: [{ id: 'casa', label: 'Casa' }, { id: 'auto', label: 'Auto' }, { id: 'oficina', label: 'Oficina' }, { id: 'no_uso', label: 'No lo uso' }],
         },
-        { id: 'mascota', tipo: 'interruptor', texto: '¿Tienes mascota?' },
+        { id: 'mascota', tipo: 'interruptor', nombre: 'Mascota', texto: '¿Tienes mascota?' },
         {
-          id: 'mascota_cual', tipo: 'unica', texto: '¿Qué mascota tienes?', mostrarSi: { pregunta: 'mascota', incluye: ['si'] },
+          id: 'mascota_cual', tipo: 'unica', nombre: 'Qué mascota', texto: '¿Qué mascota tienes?', mostrarSi: { pregunta: 'mascota', incluye: ['si'] },
           opciones: [{ id: 'perro', label: 'Perro' }, { id: 'gato', label: 'Gato' }, { id: 'otra', label: 'Otra', otra: true }],
         },
       ],
@@ -137,11 +137,11 @@ export const PRUEBA_TIPOS: Definicion = {
       id: 'opinion',
       titulo: 'Tu opinión de la idea',
       preguntas: [
-        { id: 'probabilidad', tipo: 'escala', texto: '¿Qué tan probable es que lo compres?', min: 0, max: 10, etiquetas: { min: 'Nada probable', max: 'Muy probable' } },
-        { id: 'agrado', tipo: 'estrellas', texto: '¿Qué tanto te gusta?' },
-        { id: 'peso_aroma', tipo: 'deslizador', texto: '¿Qué tanto pesa el aroma cuando eliges un aromatizante?', min: 0, max: 100, paso: 5, etiquetas: { min: 'Nada', max: 'Muchísimo' } },
+        { id: 'probabilidad', tipo: 'escala', nombre: 'Probabilidad de compra', texto: '¿Qué tan probable es que lo compres?', min: 0, max: 10, etiquetas: { min: 'Nada probable', max: 'Muy probable' } },
+        { id: 'agrado', tipo: 'estrellas', nombre: 'Agrado', texto: '¿Qué tanto te gusta?' },
+        { id: 'peso_aroma', tipo: 'deslizador', nombre: 'Peso del aroma', texto: '¿Qué tanto pesa el aroma cuando eliges un aromatizante?', min: 0, max: 100, paso: 5, etiquetas: { min: 'Nada', max: 'Muchísimo' } },
         {
-          id: 'atributos', tipo: 'ordenar', texto: 'Ordena de lo que más a lo que menos te importa', aleatorio: true,
+          id: 'atributos', tipo: 'ordenar', nombre: 'Atributos', texto: 'Ordena de lo que más a lo que menos te importa', aleatorio: true,
           opciones: deTexto(['Aroma', 'Duración', 'Precio', 'Diseño', 'Que sea fácil de usar']),
         },
       ],
@@ -151,9 +151,9 @@ export const PRUEBA_TIPOS: Definicion = {
       id: 'cierre',
       titulo: 'Para terminar',
       preguntas: [
-        { id: 'foto_producto', tipo: 'foto', texto: 'Si quieres, sube una foto de un producto que uses en tu casa', opcional: true },
-        { id: 'whatsapp', tipo: 'casilla', texto: 'Acepto que me contacten por WhatsApp', opcional: true },
-        { id: 'comentarios', tipo: 'texto_largo', texto: '¿Algo más que quieras contarnos?', opcional: true },
+        { id: 'foto_producto', tipo: 'foto', nombre: 'Foto del producto', texto: 'Si quieres, sube una foto de un producto que uses en tu casa', opcional: true },
+        { id: 'whatsapp', tipo: 'casilla', nombre: 'Contacto por WhatsApp', texto: 'Acepto que me contacten por WhatsApp', opcional: true },
+        { id: 'comentarios', tipo: 'texto_largo', nombre: 'Comentarios', texto: '¿Algo más que quieras contarnos?', opcional: true },
       ],
     },
   ],

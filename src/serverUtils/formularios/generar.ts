@@ -8,13 +8,14 @@ import {
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse, type Conocidos, type Parche } from '../../lib/formularios/ia';
 import { reglaNse } from '../../lib/formularios/nse';
 import { revisarConLugar } from '../../lib/formularios/revisar';
+import { sinNombreCorto } from '../../lib/formularios/tabla';
 import { leerDefinicion, type Definicion, type Seccion } from '../../lib/formularios/tipos';
 import { conLatido, llamarJSON, MODELOS, type Contenido } from './claude';
 import {
-  EstructuraZ, RespuestaCambioPreguntaZ, RespuestaCambioSeccionZ, RespuestaLogicaZ, RespuestaSeccionZ, sinVacios,
+  EstructuraZ, RespuestaCambioPreguntaZ, RespuestaCambioSeccionZ, RespuestaLogicaZ, RespuestaNombresZ, RespuestaSeccionZ, sinVacios,
 } from './esquemas';
 import { contenidoDeInsumos, hayInsumos } from './insumos';
-import { promptCambio, promptEstructura, promptLogica, promptSeccion, type Alcance, type DatosEstudio } from './prompts';
+import { promptCambio, promptEstructura, promptLogica, promptNombres, promptSeccion, type Alcance, type DatosEstudio } from './prompts';
 import { conRegistro } from './uso';
 
 // El generador de Filtros del lado del servidor (fase 3): cada paso arma lo que se le pide a la IA,
@@ -203,7 +204,10 @@ function conocidosDeSeccion(plan: SeccionPlan, anterior?: Seccion): Conocidos {
 /** La sección con ids definitivos, puesta en el contexto; y lo que tiene mal armado. */
 function revisarSeccion(seccion: Seccion, plan: SeccionPlan, anterior: Seccion | undefined, contexto: Definicion, e: Estructura) {
   const propia: Seccion = { ...seccion, id: plan.id };
-  const [asentada] = asentarIds({ secciones: [propia] }, conocidosDeSeccion(plan, anterior), contexto).secciones!;
+  const [conIds] = asentarIds({ secciones: [propia] }, conocidosDeSeccion(plan, anterior), contexto).secciones!;
+  // Si al escribirla se le olvidó el nombre corto a una pregunta, se queda el de la estructura.
+  const nombres = new Map(plan.preguntas.map((p) => [p.id, p.nombre]));
+  const asentada: Seccion = { ...conIds, preguntas: conIds.preguntas.map((p) => (p.nombre?.trim() || !nombres.get(p.id) ? p : { ...p, nombre: nombres.get(p.id) })) };
   const despues = ponerSeccion(contexto, asentada, e);
   const problemas = [
     ...revisarConLugar(despues).filter((p) => p.seccion === plan.id).map((p) => p.texto),
@@ -272,7 +276,7 @@ function revisarLogica(r: { frentes: unknown[]; alertas: unknown[]; claves: unkn
     ...revisarConLugar(despues).filter((p) => !p.seccion && !p.pregunta).map((p) => p.texto),
     ...avisosDeLogica(def, despues),
   ];
-  if (!despues.frentes?.length) problemas.push('Falta al menos un frente: sin frentes nadie califica.');
+  if (!despues.frentes?.length) problemas.push('Falta al menos un perfil: sin perfiles nadie califica.');
   return { parche: completo, problemas };
 }
 
@@ -285,7 +289,7 @@ export async function armarLogica(o: { filtro: Filtro; email: string; stream?: S
   const ajuste = !!g.base;
   const texto = promptLogica({ estudio: o.filtro.estudio, estructura: e, definicion: def, ajuste });
   // La lógica final no necesita los insumos: trabaja sobre lo ya escrito y la estructura aprobada.
-  const r = await conRegistro(o.email, o.filtro.id, 'logica', (onGasto) => conLatido(o.stream, 'Armando quién entra a cada frente…', () =>
+  const r = await conRegistro(o.email, o.filtro.id, 'logica', (onGasto) => conLatido(o.stream, 'Armando quién entra a cada perfil…', () =>
     llamarJSON({
       usuario: [{ type: 'text', text: texto }], esquema: RespuestaLogicaZ, modelo: MODELOS.preguntas, esfuerzo: 'high', onGasto, aceptarConProblemas: true,
       revisar: (x) => revisarLogica(x, def, e, ajuste).problemas,
@@ -342,4 +346,43 @@ export async function proponerCambio(o: { filtro: Filtro; email: string; stream?
   }
   const { parche, despues, problemas } = revisarCambio(parcheIA, def, alcance);
   return { parche, explicacion, cambios: cambiosEnPalabras(def, despues), avisos: avisosDeLogica(def, despues), problemas };
+}
+
+/** Lo que tiene de malo una propuesta de nombres cortos: ids que no se pidieron, que faltan, largos o repetidos. */
+export function revisarNombres(nombres: Record<string, string>, def: Definicion, ids: string[]): { limpios: Record<string, string>; problemas: string[] } {
+  const pedidos = new Set(ids);
+  const problemas: string[] = [];
+  const limpios: Record<string, string> = {};
+  for (const [id, n] of Object.entries(nombres)) {
+    const nombre = n.trim().replace(/[¿?]/g, '').trim();
+    if (!pedidos.has(id) || !nombre) continue;
+    if (nombre.length > 40) problemas.push(`«${nombre}» (${id}) es muy largo para una columna: de 1 a 3 palabras.`);
+    limpios[id] = nombre.slice(0, 40);
+  }
+  for (const id of ids) if (!limpios[id]) problemas.push(`Falta el nombre de ${id}.`);
+  // En una sección que se repite, la columna lleva el nombre del bloque: ahí basta con no repetirse dentro de la sección.
+  const vistos = new Map<string, string>();
+  for (const s of def.secciones) {
+    for (const p of s.preguntas) {
+      const nombre = (limpios[p.id] ?? p.nombre ?? '').toLowerCase();
+      if (!nombre) continue;
+      const llave = s.repetirPor ? `${s.id}·${nombre}` : nombre;
+      if (vistos.has(llave)) problemas.push(`«${limpios[p.id] ?? p.nombre}» se repite (${vistos.get(llave)} y ${p.id}): cada columna con su nombre.`);
+      else vistos.set(llave, p.id);
+    }
+  }
+  return { limpios, problemas };
+}
+
+/** Nombres cortos para las preguntas que no tienen, en una sola llamada. Los pone el editor (se deshacen con ⌘Z). */
+export async function proponerNombres(o: { filtro: Filtro; email: string; stream?: StreamWriter; definicion: Definicion }) {
+  const ids = sinNombreCorto(o.definicion).map((p) => p.id);
+  if (!ids.length) return { nombres: {} };
+  const usuario: Contenido = [{ type: 'text', text: promptNombres(o.definicion, ids) }];
+  const r = await conRegistro(o.email, o.filtro.id, 'nombres', (onGasto) => conLatido(o.stream, 'Poniendo los nombres cortos…', () =>
+    llamarJSON({
+      usuario, esquema: RespuestaNombresZ, modelo: MODELOS.cambios, esfuerzo: 'low', onGasto, aceptarConProblemas: true,
+      revisar: (x) => revisarNombres(x.nombres, o.definicion, ids).problemas,
+    })));
+  return { nombres: revisarNombres(r.nombres, o.definicion, ids).limpios };
 }

@@ -40,7 +40,7 @@ function condiciones(def: Definicion): ConDueno[] {
       if (p.terminaSi) out.push({ c: p.terminaSi.si, donde: `cuándo termina el filtro en ${citar(def, p.id, 40)}`, pregunta: p.id, seccion: s.id });
     }
   }
-  for (const f of def.frentes ?? []) out.push({ c: f.califica, donde: `el frente ${f.nombre}` });
+  for (const f of def.frentes ?? []) out.push({ c: f.califica, donde: `el perfil ${f.nombre}` });
   for (const a of def.alertas ?? []) if (a.si) out.push({ c: a.si, donde: `la alerta «${a.texto}»` });
   return out;
 }
@@ -436,6 +436,6 @@ export function diferencias(ahora: Definicion, version: Definicion): string[] {
   if (otros) out.push(`${plural(otros, 'pregunta con otra lógica, tipo u orden de opciones', 'preguntas con otra lógica, tipo u orden de opciones')}`);
   const orden = (d: Definicion) => d.secciones.map((s) => `${s.id}:${s.preguntas.map((p) => p.id).join(',')}`).join('|');
   if (!out.length && orden(ahora) !== orden(version)) out.push('Mismo contenido en otro orden');
-  if (!out.length && JSON.stringify(ahora) !== JSON.stringify(version)) out.push('Cambios en la lógica, los frentes o las alertas');
+  if (!out.length && JSON.stringify(ahora) !== JSON.stringify(version)) out.push('Cambios en la lógica, los perfiles o las alertas');
   return out;
 }

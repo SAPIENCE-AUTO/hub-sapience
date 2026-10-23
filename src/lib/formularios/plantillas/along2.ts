@@ -46,7 +46,7 @@ export const ALONG2: Definicion = {
       id: 'aviso',
       titulo: 'Antes de empezar',
       preguntas: [{
-        id: 'aviso', tipo: 'unica', texto: '¿Leíste y aceptas el aviso de privacidad de Sapience?',
+        id: 'aviso', tipo: 'unica', nombre: 'Aviso de privacidad', texto: '¿Leíste y aceptas el aviso de privacidad de Sapience?',
         ayuda: 'Tus datos solo se usan para invitarte a estudios. Puedes pedir que los borremos cuando quieras.',
         opciones: [{ id: 'si', label: 'Sí, acepto' }, { id: 'no', label: 'No acepto', termina: 'No aceptó el aviso de privacidad' }],
       }],
@@ -55,20 +55,20 @@ export const ALONG2: Definicion = {
       id: 'perfil',
       titulo: 'Sobre ti',
       preguntas: [
-        { id: 'nombre', tipo: 'texto', texto: 'Nombre completo' },
-        { id: 'celular', tipo: 'telefono', texto: 'Celular (WhatsApp)' },
+        { id: 'nombre', tipo: 'texto', nombre: 'Nombre', texto: 'Nombre completo' },
+        { id: 'celular', tipo: 'telefono', nombre: 'Celular', texto: 'Celular (WhatsApp)' },
         {
-          id: 'genero', tipo: 'unica', texto: 'Eres…',
+          id: 'genero', tipo: 'unica', nombre: 'Género', texto: 'Eres…',
           opciones: [{ id: 'mujer', label: 'Mujer' }, { id: 'hombre', label: 'Hombre' }, { id: 'otro', label: 'Otro / prefiero no decir' }],
         },
         {
-          id: 'edad', tipo: 'numero', texto: '¿Cuántos años tienes?', min: 15, max: 99,
+          id: 'edad', tipo: 'numero', nombre: 'Edad', texto: '¿Cuántos años tienes?', min: 15, max: 99,
           terminaFuera: { min: 25, max: 65, motivo: 'Edad fuera de 25 a 65' },
-          nota: '41 a 44 solo entra a Air Wick; 56 a 65 solo a Brasso (lo resuelven los frentes).',
+          nota: '41 a 44 solo entra a Air Wick; 56 a 65 solo a Brasso (lo resuelven los perfiles).',
         },
-        { id: 'cp', tipo: 'texto', texto: 'Código postal de tu casa', patron: '^\\d{5}$', patronMensaje: 'Escribe los 5 dígitos', nota: 'Zona de campo por definir con operación.' },
+        { id: 'cp', tipo: 'texto', nombre: 'Código postal', texto: 'Código postal de tu casa', patron: '^\\d{5}$', patronMensaje: 'Escribe los 5 dígitos', nota: 'Zona de campo por definir con operación.' },
         {
-          id: 'hogar', tipo: 'unica', texto: '¿Cómo es tu hogar?',
+          id: 'hogar', tipo: 'unica', nombre: 'Tipo de hogar', texto: '¿Cómo es tu hogar?',
           opciones: [
             { id: 'pareja_hijos', label: 'Pareja con hijos' },
             { id: 'extensa', label: 'Familia extensa (con abuelos, tíos o primos)' },
@@ -86,7 +86,7 @@ export const ALONG2: Definicion = {
       titulo: 'Algunas preguntas rápidas',
       preguntas: [
         {
-          id: 'giros', tipo: 'multiple', texto: '¿Tú o alguien de tu familia o amigos cercanos trabaja en alguno de estos giros?',
+          id: 'giros', tipo: 'multiple', nombre: 'Giros', texto: '¿Tú o alguien de tu familia o amigos cercanos trabaja en alguno de estos giros?',
           opciones: [
             { id: 'bancos', label: 'Bancos o seguros' },
             { id: 'publicidad', label: 'Publicidad o marketing', termina: 'Trabaja en publicidad o marketing' },
@@ -100,7 +100,7 @@ export const ALONG2: Definicion = {
           ],
         },
         {
-          id: 'estudio_previo', tipo: 'multiple', texto: '¿Has participado en un estudio de mercado en los últimos 6 meses? ¿De qué tema?',
+          id: 'estudio_previo', tipo: 'multiple', nombre: 'Estudios recientes', texto: '¿Has participado en un estudio de mercado en los últimos 6 meses? ¿De qué tema?',
           opciones: [
             { id: 'no', label: 'No he participado', exclusiva: true },
             { id: 'alimentos', label: 'Sí, de alimentos o bebidas' },
@@ -118,7 +118,7 @@ export const ALONG2: Definicion = {
       titulo: 'Lo que compras para tu casa',
       preguntas: [
         {
-          id: 'categorias', tipo: 'multiple', texto: '¿Cuáles de estos productos compras tú para tu casa?', aleatorio: true,
+          id: 'categorias', tipo: 'multiple', nombre: 'Categorías que compra', texto: '¿Cuáles de estos productos compras tú para tu casa?', aleatorio: true,
           opciones: [
             { id: 'shampoo', label: 'Shampoo y jabón' },
             { id: 'botanas', label: 'Botanas y galletas' },
@@ -134,7 +134,7 @@ export const ALONG2: Definicion = {
           nota: 'Las demás categorías solo disimulan.',
         },
         {
-          id: 'rol', tipo: 'matriz', texto: 'En tu casa, ¿quién se encarga de cada cosa?',
+          id: 'rol', tipo: 'matriz', nombre: 'Quién se encarga', texto: 'En tu casa, ¿quién se encarga de cada cosa?',
           filas: [
             { id: 'super', label: 'Hacer el súper' },
             { id: 'cocinar', label: 'Cocinar' },
@@ -158,7 +158,7 @@ export const ALONG2: Definicion = {
       mostrarSi: { pregunta: 'categorias', incluye: ['aromatizantes'] },
       preguntas: [
         {
-          id: 'formatos_uso', tipo: 'multiple', texto: '¿Cuáles de estos aromatizantes usas en tu casa o en tu auto?', aleatorio: true,
+          id: 'formatos_uso', tipo: 'multiple', nombre: 'Formatos que usa', texto: '¿Cuáles de estos aromatizantes usas en tu casa o en tu auto?', aleatorio: true,
           opciones: [
             { id: 'aerosol', label: 'Aerosol (lata que rocías)', corto: 'aerosol' },
             { id: 'spray', label: 'Spray para ambiente y telas, sin gas', corto: 'spray sin gas' },
@@ -176,7 +176,7 @@ export const ALONG2: Definicion = {
           ],
         },
         {
-          id: 'formatos_compra', tipo: 'multiple', texto: '¿Y cuáles compraste en los últimos 3 meses?',
+          id: 'formatos_compra', tipo: 'multiple', nombre: 'Formatos que compró', texto: '¿Y cuáles compraste en los últimos 3 meses?',
           opcionesDe: 'formatos_uso',
           opcionesExtra: [{ id: 'ninguno', label: 'Ninguno en los últimos 3 meses', exclusiva: true }],
           mostrarSi: { pregunta: 'formatos_uso', noIncluye: ['ninguno'] },
@@ -189,9 +189,9 @@ export const ALONG2: Definicion = {
       titulo: 'Tu {opcion}',
       repetirPor: 'formatos_compra',
       preguntas: [
-        { id: 'aromas', tipo: 'texto', texto: '¿Qué aroma o aromas de {opcion} compras? Escríbelos como vienen en el empaque', nota: '«No sé», «el normal» o «varios» sin nombrarlos: descartar a mano en la revisión.' },
+        { id: 'aromas', tipo: 'texto', nombre: 'Aromas', texto: '¿Qué aroma o aromas de {opcion} compras? Escríbelos como vienen en el empaque', nota: '«No sé», «el normal» o «varios» sin nombrarlos: descartar a mano en la revisión.' },
         {
-          id: 'marcas', tipo: 'multiple', texto: '¿Qué marcas de {opcion} compras?', aleatorio: true,
+          id: 'marcas', tipo: 'multiple', nombre: 'Marcas que compra', texto: '¿Qué marcas de {opcion} compras?', aleatorio: true,
           opciones: [
             { id: 'airwick', label: 'Air Wick' },
             { id: 'glade', label: 'Glade' },
@@ -204,10 +204,10 @@ export const ALONG2: Definicion = {
           ],
           nota: 'Confirmar antes del campo real que Lumerra no exista en México.',
         },
-        { id: 'favorita', tipo: 'unica', texto: '¿Cuál es tu marca favorita de {opcion}?', opcionesDe: 'marcas' },
-        { id: 'lugar', tipo: 'multiple', texto: '¿Dónde lo compras normalmente?', opciones: SI_NO_TIENDAS },
+        { id: 'favorita', tipo: 'unica', nombre: 'Marca favorita', texto: '¿Cuál es tu marca favorita de {opcion}?', opcionesDe: 'marcas' },
+        { id: 'lugar', tipo: 'multiple', nombre: 'Lugar de compra', texto: '¿Dónde lo compras normalmente?', opciones: SI_NO_TIENDAS },
         {
-          id: 'antiguedad', tipo: 'unica', texto: '¿Desde hace cuánto usas {opcion}?',
+          id: 'antiguedad', tipo: 'unica', nombre: 'Antigüedad de uso', texto: '¿Desde hace cuánto usas {opcion}?',
           opciones: [
             { id: 'menos3m', label: 'Menos de 3 meses', descarta: 'Menos de 3 meses usándolo' },
             { id: '3a6m', label: '3 a 6 meses' },
@@ -216,9 +216,9 @@ export const ALONG2: Definicion = {
             { id: 'mas3a', label: 'Más de 3 años' },
           ],
         },
-        { id: 'ultima', tipo: 'unica', texto: '¿Cuándo fue la última vez que lo compraste?', opciones: ULTIMA_COMPRA('Última compra hace más de 3 meses (contradice el filtro)') },
+        { id: 'ultima', tipo: 'unica', nombre: 'Última compra', texto: '¿Cuándo fue la última vez que lo compraste?', opciones: ULTIMA_COMPRA('Última compra hace más de 3 meses (contradice el filtro)') },
         {
-          id: 'espacios', tipo: 'multiple', texto: '¿En qué lugares lo usas?',
+          id: 'espacios', tipo: 'multiple', nombre: 'Dónde lo usa', texto: '¿En qué lugares lo usas?',
           opciones: [
             { id: 'sala', label: 'Sala' }, { id: 'comedor', label: 'Comedor' }, { id: 'recamaras', label: 'Recámaras' },
             { id: 'bano', label: 'Baño' }, { id: 'cocina', label: 'Cocina' }, { id: 'entrada', label: 'Entrada o pasillo' },
@@ -226,7 +226,7 @@ export const ALONG2: Definicion = {
             { id: 'auto', label: 'Auto' }, { id: 'otro', label: 'Otro', otra: true },
           ],
         },
-        { id: 'foto', tipo: 'foto', texto: 'Sube una foto de tu {opcion} donde se vean la marca y el aroma' },
+        { id: 'foto', tipo: 'foto', nombre: 'Foto del producto', texto: 'Sube una foto de tu {opcion} donde se vean la marca y el aroma' },
       ],
     },
 
@@ -236,7 +236,7 @@ export const ALONG2: Definicion = {
       titulo: 'Limpiadores',
       mostrarSi: { pregunta: 'categorias', incluye: ['limpiadores'] },
       preguntas: [{
-        id: 'tipos', tipo: 'multiple', texto: '¿Qué tipos de limpiador compras para tu casa?',
+        id: 'tipos', tipo: 'multiple', nombre: 'Limpiadores que compra', texto: '¿Qué tipos de limpiador compras para tu casa?',
         opciones: [
           { id: 'todo_proposito', label: 'Todo propósito: limpiador líquido para pisos y toda la casa', corto: 'limpiador todo propósito' },
           { id: 'multiusos', label: 'Multiusos: limpiador para varias superficies, normalmente en atomizador', corto: 'limpiador multiusos' },
@@ -254,7 +254,7 @@ export const ALONG2: Definicion = {
       repetirSolo: ['todo_proposito', 'multiusos', 'especializado'],
       preguntas: [
         {
-          id: 'superficies', tipo: 'multiple', texto: '¿Para qué superficies compras limpiador especializado?',
+          id: 'superficies', tipo: 'multiple', nombre: 'Superficies', texto: '¿Para qué superficies compras limpiador especializado?',
           mostrarSi: { instanciaEs: ['especializado'] },
           opciones: [
             { id: 'cocina', label: 'Cocina (grasa, estufa, horno)' }, { id: 'bano', label: 'Baño (sarro, excusado, regadera)' },
@@ -263,7 +263,7 @@ export const ALONG2: Definicion = {
           ],
         },
         {
-          id: 'marcas_l', tipo: 'multiple', texto: '¿Qué marcas de {opcion} compras?', aleatorio: true,
+          id: 'marcas_l', tipo: 'multiple', nombre: 'Marcas que compra', texto: '¿Qué marcas de {opcion} compras?', aleatorio: true,
           opciones: [
             { id: 'fabuloso', label: 'Fabuloso' }, { id: 'pinol', label: 'Pinol' }, { id: 'maestro', label: 'Maestro Limpio' },
             { id: 'flash', label: 'Flash' }, { id: 'brasso', label: 'Brasso' }, { id: 'musculo', label: 'Mr Músculo' },
@@ -272,10 +272,10 @@ export const ALONG2: Definicion = {
             { id: 'otra', label: 'Otra', otra: true, fija: true },
           ],
         },
-        { id: 'favorita_l', tipo: 'unica', texto: '¿Cuál es tu marca favorita de {opcion}?', opcionesDe: 'marcas_l' },
-        { id: 'variante', tipo: 'texto', texto: '¿Qué variante o aroma compras? Escríbelo como viene en la etiqueta' },
+        { id: 'favorita_l', tipo: 'unica', nombre: 'Marca favorita', texto: '¿Cuál es tu marca favorita de {opcion}?', opcionesDe: 'marcas_l' },
+        { id: 'variante', tipo: 'texto', nombre: 'Variante', texto: '¿Qué variante o aroma compras? Escríbelo como viene en la etiqueta' },
         {
-          id: 'presentacion', tipo: 'multiple', texto: '¿En qué presentación lo compras?',
+          id: 'presentacion', tipo: 'multiple', nombre: 'Presentación', texto: '¿En qué presentación lo compras?',
           opciones: [
             { id: 'diluir', label: 'Líquido que se mezcla con agua' }, { id: 'atomizador', label: 'Listo para usar, con atomizador' },
             { id: 'repuesto', label: 'Repuesto en bolsa o doypack' }, { id: 'gel', label: 'Gel o crema' },
@@ -283,16 +283,16 @@ export const ALONG2: Definicion = {
           ],
         },
         {
-          id: 'tamano', tipo: 'unica', texto: '¿De qué tamaño lo compras normalmente?',
+          id: 'tamano', tipo: 'unica', nombre: 'Tamaño', texto: '¿De qué tamaño lo compras normalmente?',
           opciones: [
             { id: 'chico', label: 'Menos de 500 ml' }, { id: 'medio', label: '500 ml a 1 litro' },
             { id: 'grande', label: 'Más de 1 hasta 2 litros' }, { id: 'galon', label: 'Más de 2 litros (garrafa o galón)' },
           ],
         },
-        { id: 'lugar_l', tipo: 'multiple', texto: '¿Dónde lo compras normalmente?', opciones: SI_NO_TIENDAS.filter((t) => t.id !== 'decoracion') },
-        { id: 'ultima_l', tipo: 'unica', texto: '¿Cuándo fue la última vez que lo compraste?', opciones: ULTIMA_COMPRA('Última compra hace más de 3 meses') },
+        { id: 'lugar_l', tipo: 'multiple', nombre: 'Lugar de compra', texto: '¿Dónde lo compras normalmente?', opciones: SI_NO_TIENDAS.filter((t) => t.id !== 'decoracion') },
+        { id: 'ultima_l', tipo: 'unica', nombre: 'Última compra', texto: '¿Cuándo fue la última vez que lo compraste?', opciones: ULTIMA_COMPRA('Última compra hace más de 3 meses') },
         {
-          id: 'diluye', tipo: 'unica', texto: '¿Cómo lo usas?',
+          id: 'diluye', tipo: 'unica', nombre: 'Cómo lo usa', texto: '¿Cómo lo usas?',
           mostrarSi: { instanciaEs: ['todo_proposito'] },
           opciones: [
             { id: 'cubeta', label: 'Lo mezclo con agua en una cubeta' },
@@ -308,7 +308,7 @@ export const ALONG2: Definicion = {
       id: 'limp_foto',
       titulo: 'Tus limpiadores',
       mostrarSi: { pregunta: 'tipos', incluye: ['todo_proposito', 'multiusos', 'especializado'] },
-      preguntas: [{ id: 'foto_limpiadores', tipo: 'foto', texto: 'Sube una foto del lugar donde guardas tus limpiadores, que se vean las marcas' }],
+      preguntas: [{ id: 'foto_limpiadores', tipo: 'foto', nombre: 'Foto de limpiadores', texto: 'Sube una foto del lugar donde guardas tus limpiadores, que se vean las marcas' }],
     },
 
     // ── marcas, NSE y participación ──
@@ -316,7 +316,7 @@ export const ALONG2: Definicion = {
       id: 'rechazo',
       titulo: 'Marcas',
       preguntas: [{
-        id: 'rechazo', tipo: 'multiple', texto: '¿Hay alguna de estas marcas que no comprarías por ningún motivo?', aleatorio: true,
+        id: 'rechazo', tipo: 'multiple', nombre: 'Rechazo de marcas', texto: '¿Hay alguna de estas marcas que no comprarías por ningún motivo?', aleatorio: true,
         opciones: [
           { id: 'sabritas', label: 'Sabritas' }, { id: 'airwick', label: 'Air Wick', excluyeGrupos: ['airwick'] },
           { id: 'ariel', label: 'Ariel' }, { id: 'glade', label: 'Glade' }, { id: 'pantene', label: 'Pantene' },
@@ -338,13 +338,13 @@ export const ALONG2: Definicion = {
       intro: 'El estudio es una visita a tu casa y después acompañarte a la tienda donde compras normalmente. Recibes un incentivo por participar.',
       preguntas: [
         {
-          id: 'tienda', tipo: 'unica', texto: '¿En qué tienda física compras más seguido estos productos?',
+          id: 'tienda', tipo: 'unica', nombre: 'Tienda', texto: '¿En qué tienda física compras más seguido estos productos?',
           opciones: [...SI_NO_TIENDAS.slice(0, 8), { id: 'otra', label: 'Otra', otra: true }],
           nota: 'Aquí será la compra acompañada.',
         },
-        { id: 'sucursal', tipo: 'texto', texto: '¿Qué sucursal?', ayuda: 'Por ejemplo: «Plaza Universidad».' },
+        { id: 'sucursal', tipo: 'texto', nombre: 'Sucursal', texto: '¿Qué sucursal?', ayuda: 'Por ejemplo: «Plaza Universidad».' },
         {
-          id: 'acuerdos', tipo: 'multiple', texto: 'Marca todo con lo que estás de acuerdo',
+          id: 'acuerdos', tipo: 'multiple', nombre: 'Condiciones', texto: 'Marca todo con lo que estás de acuerdo',
           opciones: [
             { id: 'visita', label: 'Recibir una visita en mi casa de 60 a 75 minutos' },
             { id: 'tienda', label: 'Que después me acompañen a mi tienda, de 30 a 45 minutos' },
@@ -358,7 +358,7 @@ export const ALONG2: Definicion = {
           },
         },
         {
-          id: 'horarios', tipo: 'multiple', texto: '¿Qué horarios tienes libres en noviembre?',
+          id: 'horarios', tipo: 'multiple', nombre: 'Horarios', texto: '¿Qué horarios tienes libres en noviembre?',
           opciones: [{ id: 'manana', label: 'Entre semana en la mañana' }, { id: 'tarde', label: 'Entre semana en la tarde' }, { id: 'sabado', label: 'Sábado' }, { id: 'domingo', label: 'Domingo' }],
         },
       ],

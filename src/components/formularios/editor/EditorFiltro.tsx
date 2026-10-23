@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Clock, History, LayoutList, Loader2, Redo2, Undo2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ALERTA, EXITO, PELIGRO } from '@/lib/toolColors';
-import { TOPE_MINUTOS, duracionEstimada } from '@/lib/formularios/duracion';
+import { TOPE_MINUTOS, duracionEstimada, duracionPorPerfil } from '@/lib/formularios/duracion';
 import { citar, unirY } from '@/lib/formularios/palabras';
 import { esCampoDeTexto } from './imagenes';
 import type { Editor } from './useEditorFiltro';
@@ -16,6 +16,8 @@ import type { GeneradorUI } from '../generador/useGenerador';
 import { AvanceEscritura } from '../generador/AvanceEscritura';
 import { Supuestos } from '../generador/Supuestos';
 import { UsoIA } from '../generador/comun';
+import { NombresCortos } from '../generador/NombresCortos';
+import { cambiarPregunta } from '@/lib/formularios/editar';
 
 export type VistaEditor = 'documento' | 'flujo' | 'celular';
 
@@ -29,17 +31,39 @@ export function irAlDocumento(id: { seccion?: string; pregunta?: string }) {
 
 function Duracion({ editor }: { editor: Editor }) {
   const { tipico, maximo } = duracionEstimada(editor.def);
-  const color = tipico > TOPE_MINUTOS ? PELIGRO : maximo > TOPE_MINUTOS ? ALERTA : EXITO;
+  const perfiles = duracionPorPerfil(editor.def);
+  const masLento = Math.max(tipico, ...perfiles.map((p) => p.minutos));
+  const colorDe = (min: number) => (min > TOPE_MINUTOS ? PELIGRO : EXITO);
+  const color = masLento > TOPE_MINUTOS ? PELIGRO : maximo > TOPE_MINUTOS ? ALERTA : EXITO;
+  const fila = (texto: string, min: number, colorMin = colorDe(min)) => (
+    <li className="flex items-baseline gap-2">
+      <span className="min-w-0 flex-1 truncate">{texto}</span>
+      <span className="font-semibold tabular-nums" style={{ color: colorMin }}>{min} min</span>
+    </li>
+  );
   return (
-    <span
-      className="flex items-center gap-1.5 text-xs font-medium"
-      style={{ color }}
-      title={`Estimado en el celular: lo típico y lo más largo (si le salen todos los bloques que se repiten, hasta 3 veces). El tope es de ${TOPE_MINUTOS} minutos.`}
-    >
-      <Clock className="h-3.5 w-3.5" />
-      ≈ {tipico} min{maximo > tipico ? ` · hasta ${maximo}` : ''}
-      <span className="font-normal text-muted-foreground">· tope {TOPE_MINUTOS}</span>
-    </span>
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium hover:bg-muted" style={{ color }}>
+          <Clock className="h-3.5 w-3.5" />
+          ≈ {tipico} min{maximo > tipico ? ` · hasta ${maximo}` : ''}
+          <span className="font-normal text-muted-foreground">· tope {TOPE_MINUTOS}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] text-sm">
+        <p className="mb-2 text-xs text-muted-foreground">Estimado en el celular. Lo más largo: si le salen todos los bloques. Tope: {TOPE_MINUTOS} min.</p>
+        {perfiles.length > 0 && (
+          <>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Por perfil</p>
+            <ul className="mb-2 mt-1 space-y-1">{perfiles.map((p) => <Fragment key={p.id}>{fila(p.nombre, p.minutos)}</Fragment>)}</ul>
+          </>
+        )}
+        <ul className="space-y-1 border-t pt-2">
+          {fila('Lo típico', tipico)}
+          {fila('Lo más largo', maximo, maximo > TOPE_MINUTOS ? ALERTA : EXITO)}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -173,9 +197,16 @@ export function EditorFiltro({ editor, vista, formularioId, onIr, gen, onEstruct
         </div>
       )}
 
+      {vista === 'documento' && ia && !gen?.escribiendo && gen?.g?.etapa !== 'preguntas' && (
+        <NombresCortos
+          def={editor.def}
+          ia={ia}
+          onPoner={(nombres) => editor.aplicar((d) => Object.entries(nombres).reduce((x, [id, nombre]) => cambiarPregunta(x, id, { nombre }), d))}
+        />
+      )}
       {vista === 'documento' && gen?.g && (
         <Supuestos
-          items={supuestosDe(gen.g).map((x) => ({ texto: x.texto, donde: x.seccion === 'frentes' ? 'Frentes' : x.seccion ? gen.g!.estructura?.secciones.find((s) => s.id === x.seccion)?.titulo.split('{opcion}').join('…') : undefined }))}
+          items={supuestosDe(gen.g).map((x) => ({ texto: x.texto, donde: x.seccion === 'frentes' ? 'Perfiles' : x.seccion ? gen.g!.estructura?.secciones.find((s) => s.id === x.seccion)?.titulo.split('{opcion}').join('…') : undefined }))}
           revisado={gen.g.supuestosRevisados}
           onRevisar={gen.marcarRevisados}
         />

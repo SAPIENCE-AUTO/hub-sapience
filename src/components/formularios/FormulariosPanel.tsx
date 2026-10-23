@@ -12,11 +12,13 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ArrowLeft, Copy, ExternalLink, FileText, Loader2, Plus, Smartphone, Trash2, Users, Workflow } from 'lucide-react';
-import { TEAL, ALERTA, EstadoPill } from '@/lib/toolColors';
+import { TEAL, EstadoPill } from '@/lib/toolColors';
 import { PAISES } from '@/lib/formularios/paises';
 import { PLANTILLAS } from '@/lib/formularios/plantillas';
 import type { Definicion } from '@/lib/formularios/tipos';
-import { estructuraDeDefinicion } from '@/lib/formularios/generador';
+import { estructuraDeDefinicion, supuestosDe } from '@/lib/formularios/generador';
+import { chequeosListo } from '@/lib/formularios/listo';
+import { EXPLICA_ESTADO, EstadoFiltro } from './EstadoFiltro';
 import { AvisoRegla, PanelRespuestas, type Detalle } from './PanelRespuestas';
 import { useEditorFiltro } from './editor/useEditorFiltro';
 import { EditorFiltro, irAlDocumento, type VistaEditor } from './editor/EditorFiltro';
@@ -275,6 +277,16 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
   );
   const def = detalle.definicion;
   const hayReales = detalle.respuestas.some((r) => !r.esPrueba);
+  const chequeos = useMemo(() => {
+    const supuestos = gen.g ? supuestosDe(gen.g).length : 0;
+    return chequeosListo({
+      def: editor.def,
+      problemas: editor.problemas.length,
+      supuestosPorRevisar: gen.g ? (gen.g.supuestosRevisados ? 0 : supuestos) : undefined,
+      respuestasDePrueba: detalle.respuestas.filter((r) => r.esPrueba).length,
+      vinculado: !!detalle.tablero,
+    });
+  }, [editor.def, editor.problemas.length, gen.g, detalle.respuestas, detalle.tablero]);
 
   const irA = (id: { seccion?: string; pregunta?: string }) => {
     setVista('documento');
@@ -289,20 +301,14 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
           <button type="button" onClick={onVolver} className="mb-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-[#0F3D4D]">
             <ArrowLeft className="h-3.5 w-3.5" />Formularios
           </button>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold leading-tight" style={{ color: TEAL }}>{detalle.titulo}</h2>
-            <EstadoPill estado={detalle.estado} />
-          </div>
+          <h2 className="text-lg font-semibold leading-tight" style={{ color: TEAL }}>{detalle.titulo}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {PAISES[def.pais]?.nombre ?? def.pais}
             {def.nse && <> · NSE {def.nse.regla ?? 'propio'}<AvisoRegla def={def} /></>}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {detalle.estado === 'borrador' && <Button size="sm" onClick={() => onEstado('prueba')}>Abrir en modo prueba</Button>}
-          {detalle.estado === 'prueba' && <Button size="sm" variant="outline" onClick={() => onEstado('cerrado')}>Cerrar</Button>}
-          {detalle.estado === 'prueba' && <Button size="sm" variant="outline" onClick={() => onEstado('borrador')}>Volver a borrador</Button>}
-          {detalle.estado === 'cerrado' && <Button size="sm" variant="outline" onClick={() => onEstado('prueba')}>Reabrir en prueba</Button>}
+        <div className="flex items-start gap-1">
+          <EstadoFiltro estado={detalle.estado} chequeos={chequeos} onEstado={onEstado} />
           {!hayReales && <Button size="sm" variant="ghost" aria-label="Borrar formulario" onClick={onBorrarFormulario}><Trash2 className="h-4 w-4" /></Button>}
         </div>
       </div>
@@ -316,8 +322,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
         <Button size="sm" variant="outline" className="h-7" disabled={detalle.estado === 'borrador'} onClick={() => window.open(enlace(detalle.codigo), '_blank')}>
           <ExternalLink className="mr-1 h-3.5 w-3.5" />Abrir
         </Button>
-        {detalle.estado === 'borrador' && <span className="text-muted-foreground">En borrador nadie puede contestarlo.</span>}
-        {detalle.estado === 'prueba' && <span style={{ color: ALERTA }}>Modo prueba: todo lo que entre queda marcado como prueba; lo que guardes aquí lo ve ya quien lo contesta.</span>}
+        {EXPLICA_ESTADO[detalle.estado] && <span className="text-muted-foreground">{EXPLICA_ESTADO[detalle.estado]}</span>}
       </div>
 
       {enGenerador && (

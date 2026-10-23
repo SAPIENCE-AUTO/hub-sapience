@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
 import { evaluar, pantallas, definicionPublica, validarPantalla, describir, type Pantalla } from '../../src/lib/formularios/motor';
-import { columnas, type FilaRespuesta } from '../../src/lib/formularios/tabla';
+import { columnas, columnasPorRenombrar, nombreColumnaTablero, sinNombreCorto, type FilaRespuesta } from '../../src/lib/formularios/tabla';
 import { construirExcel } from '../../src/lib/formularios/excel';
 import { revisarDefinicion } from '../../src/lib/formularios/revisar';
 import { PLANTILLAS } from '../../src/lib/formularios/plantillas';
@@ -13,7 +13,7 @@ import { leerDefinicion, type Definicion, type Respuestas } from '../../src/lib/
 import { calcularNse, reglaNse, reglaVigente } from '../../src/lib/formularios/nse';
 import { condicionEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion } from '../../src/lib/formularios/palabras';
 import { mapaFlujo } from '../../src/lib/formularios/flujo';
-import { duracionEstimada } from '../../src/lib/formularios/duracion';
+import { duracionEstimada, duracionPorPerfil } from '../../src/lib/formularios/duracion';
 import {
   GRUPOS_TIPOS, agregarOpcion, agregarPregunta, agregarSeccion, cambiarOpcion, cambiarPregunta, cambiarTipo, comoSimple, diferencias, idNuevo,
   moverPregunta, moverSeccion, preguntasParaCondicion, quitarOpcion, quitarPregunta, usosDeOpcion, usosDePregunta, usosDeSeccion,
@@ -23,11 +23,12 @@ import {
   asentarEstructura, avanceEscritura, compararEstructuras, revisarEstructura, type Estructura, conservarSinCambio, definicionVacia, estructuraDeDefinicion, firmaSeccion, generadorNuevo,
   minutosDeEstructura, ponerSeccion, prepararParaEscribir, seccionNse,
 } from '../../src/lib/formularios/generador';
-import { definicionParaIA, promptCambio, promptEstructura, promptLogica, promptSeccion } from '../../src/serverUtils/formularios/prompts';
+import { definicionParaIA, promptCambio, promptEstructura, promptLogica, promptNombres, promptSeccion } from '../../src/serverUtils/formularios/prompts';
 import { EstructuraZ, RespuestaLogicaZ, RespuestaSeccionZ, sinVacios } from '../../src/serverUtils/formularios/esquemas';
 import Anthropic from '@anthropic-ai/sdk';
 import { errorDeLaIA, systemPrompt } from '../../src/serverUtils/formularios/claude';
-import { conservarLogica } from '../../src/serverUtils/formularios/generar';
+import { conservarLogica, revisarNombres } from '../../src/serverUtils/formularios/generar';
+import { chequeosListo } from '../../src/lib/formularios/listo';
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
 
 const NSE_CMAS: Respuestas = { nse_escolaridad: 'lic', nse_banos: '2', nse_autos: '1', nse_internet: 'si', nse_trabajan: '1', nse_cuartos: '2' }; // 59+47+22+32+15+16 = 191 → C+
@@ -77,7 +78,7 @@ caso('Lumerra termina el formulario', () => {
   assert.equal(r.califica, false);
 });
 
-caso('rechazar Air Wick deja fuera los frentes de Air Wick', () => {
+caso('rechazar Air Wick deja fuera los perfiles de Air Wick', () => {
   const r = evaluar(ALONG2, { ...base, ...NSE_CMAS, rechazo: ['airwick'], categorias: ['aromatizantes'], formatos_uso: ['aerosol'], formatos_compra: ['aerosol'], ...bloqueAerosol });
   assert.deepEqual(r.frentes, []);
   assert.deepEqual(r.gruposExcluidos, ['airwick']);
@@ -213,13 +214,13 @@ caso('México usa la AMAI 2022: mismos puntos que la 2018, cortes nuevos', () =>
 });
 
 // ── NSE: alerta, nunca descarte ──────────────────────────────────────────────
-caso('NSE C en un frente que pide C+: entra con alerta, no la saca', () => {
+caso('NSE C en un perfil que pide C+: entra con alerta, no la saca', () => {
   const r = evaluar(ALONG2, { ...base, ...NSE_C, categorias: ['aromatizantes'], formatos_uso: ['aerosol'], formatos_compra: ['aerosol'], ...bloqueAerosol });
   assert.equal(r.nse?.nivel, 'C');
   assert.deepEqual(r.frentes, ['aerosol']);
   assert.equal(r.califica, true);
   assert.deepEqual(r.nse?.fueraDe, ['aerosol']);
-  assert.ok(r.alertas.includes('NSE C, el frente Aerosoles / Pure pide C+'), r.alertas.join(' | '));
+  assert.ok(r.alertas.includes('NSE C, el perfil Aerosoles / Pure pide C+'), r.alertas.join(' | '));
 });
 
 caso('NSE que sí coincide: sin alerta', () => {
@@ -228,7 +229,7 @@ caso('NSE que sí coincide: sin alerta', () => {
   assert.deepEqual(r.alertas, []);
 });
 
-caso('en un frente con dos caminos, la alerta dice el NSE del camino por el que entró', () => {
+caso('en un perfil con dos caminos, la alerta dice el NSE del camino por el que entró', () => {
   const brasso = {
     ...base, edad: 50, categorias: ['limpiadores'], tipos: ['todo_proposito'],
     'marcas_l@todo_proposito': ['fabuloso'], 'favorita_l@todo_proposito': 'fabuloso', 'variante@todo_proposito': 'Lavanda',
@@ -237,7 +238,7 @@ caso('en un frente con dos caminos, la alerta dice el NSE del camino por el que 
   };
   const r = evaluar(ALONG2, { ...brasso, ...NSE_CMAS });
   assert.deepEqual(r.frentes, ['brasso']);
-  assert.ok(r.alertas.includes('NSE C+, el frente Brasso / limpiadores pide C, C- o D+'), r.alertas.join(' | '));
+  assert.ok(r.alertas.includes('NSE C+, el perfil Brasso / limpiadores pide C, C- o D+'), r.alertas.join(' | '));
   assert.deepEqual(evaluar(ALONG2, { ...brasso, ...NSE_C }).alertas, []);
 });
 
@@ -256,7 +257,7 @@ const tipos: Respuestas = {
 const pantalla = (r: Respuestas, id: string): Pantalla => pantallas(PRUEBA_TIPOS, r).find((p) => p.id === id)!;
 const errores = (r: Respuestas, id: string) => validarPantalla(pantalla(r, id), r, PRUEBA_TIPOS.pais);
 
-caso('con todos los tipos contestados califica en su frente', () => {
+caso('con todos los tipos contestados califica en su perfil', () => {
   const r = evaluar(PRUEBA_TIPOS, tipos);
   assert.equal(r.incompleto, false, JSON.stringify(r));
   assert.equal(r.nse?.nivel, 'C+');
@@ -327,11 +328,11 @@ caso('casilla: la obligatoria se marca para seguir; la opcional no', () => {
   assert.deepEqual(errores(tipos, 'cierre'), {});
 });
 
-caso('NSE en la plantilla de prueba: C en el frente de lata da alerta', () => {
+caso('NSE en la plantilla de prueba: C en el perfil de lata da alerta', () => {
   const r = evaluar(PRUEBA_TIPOS, { ...tipos, ...NSE_C });
   assert.deepEqual(r.frentes, ['lata']);
   assert.equal(r.califica, true);
-  assert.deepEqual(r.alertas, ['NSE C, el frente Prefiere lata pide A/B o C+']);
+  assert.deepEqual(r.alertas, ['NSE C, el perfil Prefiere lata pide A/B o C+']);
 });
 
 caso('describir lee cada tipo en palabras y se salta lo que no se contesta', () => {
@@ -390,9 +391,9 @@ caso('el Excel trae una columna por campo y por fila, con números donde va núm
     const encabezados = (ws.getRow(6).values as unknown[]).slice(1).map(String);
     const celda = (r: number, titulo: RegExp) => ws.getRow(r).getCell(encabezados.findIndex((t) => titulo.test(t)) + 1).value;
     assert.equal(celda(7, /Código postal/), '06000');
-    assert.equal(celda(7, /Dónde usas.*Aromatizante/), 'Casa, Auto');
-    assert.equal(celda(7, /te gusta/), 4);
-    assert.equal(celda(8, /^Alertas$/), 'NSE C, el frente Prefiere lata pide A/B o C+');
+    assert.equal(celda(7, /^Dónde usa cada producto · Aromatizante$/), 'Casa, Auto');
+    assert.equal(celda(7, /^Agrado$/), 4);
+    assert.equal(celda(8, /^Alertas$/), 'NSE C, el perfil Prefiere lata pide A/B o C+');
   } finally {
     globalThis.fetch = fetchOriginal;
   }
@@ -435,7 +436,7 @@ caso('la lógica en palabras de ALONG 2 se lee como la escribiría una persona',
   assert.equal(condicionEnPalabras({ pregunta: 'mascota', incluye: ['si'] }, PRUEBA_TIPOS), 'contestó Sí en «¿Tienes mascota?»');
 });
 
-caso('el mapa del flujo marca lo que se repite, lo que aparece si aplica, dónde termina y qué toca frentes', () => {
+caso('el mapa del flujo marca lo que se repite, lo que aparece si aplica, dónde termina y qué toca perfiles', () => {
   const mapa = mapaFlujo(ALONG2);
   const b = (id: string) => mapa.find((x) => x.id === id)!;
   assert.equal(mapa.length, ALONG2.secciones.length);
@@ -552,16 +553,16 @@ caso('la revisión no deja que la lógica dependa de algo que va después', () =
 });
 
 caso('antes de quitar algo se sabe dónde se usa', () => {
-  assert.ok(usosDePregunta(ALONG2, 'edad').includes('el frente Aerosoles / Pure'));
+  assert.ok(usosDePregunta(ALONG2, 'edad').includes('el perfil Aerosoles / Pure'));
   assert.ok(usosDePregunta(ALONG2, 'nombre').includes('el nombre que muestra el panel'));
   assert.deepEqual(usosDePregunta(ALONG2, 'sucursal'), []);
   const usos = usosDeOpcion(ALONG2, 'categorias', 'aromatizantes');
   assert.ok(usos.includes('cuándo aparece la sección «Aromatizantes»'));
   assert.ok(usos.some((u) => u.startsWith('cuándo termina el filtro en «¿Cuáles de estos productos')));
   assert.deepEqual(usosDeOpcion(ALONG2, 'categorias', 'cafe'), []);
-  assert.ok(usosDeOpcion(ALONG2, 'formatos_uso', 'aerosol').includes('el frente Aerosoles / Pure'));
+  assert.ok(usosDeOpcion(ALONG2, 'formatos_uso', 'aerosol').includes('el perfil Aerosoles / Pure'));
   assert.deepEqual(usosDeSeccion(ALONG2, 'participacion'), []);
-  assert.ok(usosDeSeccion(ALONG2, 'limp_bloque').includes('el frente Brasso / limpiadores'));
+  assert.ok(usosDeSeccion(ALONG2, 'limp_bloque').includes('el perfil Brasso / limpiadores'));
   const sinSucursal = quitarPregunta(ALONG2, 'sucursal');
   assert.deepEqual(revisarDefinicion(sinSucursal), []);
   assert.deepEqual(revisarDefinicion(quitarOpcion(ALONG2, 'categorias', 'cafe')), []);
@@ -652,7 +653,7 @@ caso('la estructura de la IA recibe ids nuevos y conserva los de la base', () =>
   assert.match(otra.secciones[0].preguntas[1].id, /^p_/);
   assert.equal(otra.frentes[0].id, e.frentes[0].id);
   // Lo mal armado se dice en palabras.
-  assert.ok(revisarEstructura({ ...propuesta, frentes: [] }).some((x) => x.startsWith('No hay frentes')));
+  assert.ok(revisarEstructura({ ...propuesta, frentes: [] }).some((x) => x.startsWith('No hay perfiles')));
   assert.ok(revisarEstructura({ ...propuesta, secciones: [propuesta.secciones[1], propuesta.secciones[0]] }).some((x) => x.includes('no va antes')));
 });
 
@@ -732,7 +733,7 @@ caso('una sección nueva de la IA: ids nuevos y su lógica apunta a ellos', () =
   assert.deepEqual(revisarDefinicion(d), []);
 });
 
-caso('una sección que se repite: los bloques y los frentes siguen a los ids nuevos', () => {
+caso('una sección que se repite: los bloques y los perfiles siguen a los ids nuevos', () => {
   const prop = {
     secciones: [
       { id: 'bebidas', titulo: 'Bebidas', preguntas: [{ id: 'cuales', tipo: 'multiple' as const, texto: '¿Cuáles tomas?', opciones: [{ id: 'cafe', label: 'Café', corto: 'café' }, { id: 'te', label: 'Té', corto: 'té' }] }] },
@@ -845,7 +846,7 @@ caso('lo que devuelve la IA se valida antes de usarlo', () => {
   assert.ok(EstructuraZ.safeParse(estructuraDeDefinicion(ALONG2)).success);
 });
 
-caso('al ajustar un filtro escrito, la lógica final conserva textos, alertas y frentes que siguen igual', () => {
+caso('al ajustar un filtro escrito, la lógica final conserva textos, alertas y perfiles que siguen igual', () => {
   const alerta = ALONG2.alertas![0];
   const parche = {
     alertas: [{ ...alerta, texto: 'Otro texto para la misma alerta' }, { texto: 'Alerta nueva', si: { pregunta: 'genero', incluye: ['otro'] } }],
@@ -880,6 +881,95 @@ caso('la skill completa va en el prompt del sistema', () => {
   assert.equal(marcasDelCliente.length, 2);
   assert.ok(marcasDelCliente.every((m) => !sistema.toLowerCase().includes(m.toLowerCase())));
   assert.ok(sistema.length < 250_000);
+});
+
+// ── nombres cortos y columnas del tablero ──
+caso('la columna lleva el nombre corto; sin él, el texto; el NSE trae el suyo; el participante no lo ve', () => {
+  const cols = columnas(ALONG2, [], { completas: true });
+  const titulo = (clave: string) => cols.find((c) => c.clave === clave)?.titulo;
+  assert.equal(titulo('edad'), 'Edad');
+  assert.equal(titulo('nse_banos'), 'NSE · Baños');
+  assert.equal(nombreColumnaTablero(cols.find((c) => c.clave === 'marcas@aerosol')!), 'Tu aerosol · Marcas que compra');
+  const sinNombre = structuredClone(ALONG2);
+  delete sinNombre.secciones[1].preguntas.find((p) => p.id === 'edad')!.nombre;
+  for (const s of sinNombre.secciones) for (const p of s.preguntas) if (p.id.startsWith('nse_')) delete p.nombre;
+  const otra = columnas(sinNombre, [], { completas: true });
+  assert.equal(otra.find((c) => c.clave === 'edad')?.titulo, '¿Cuántos años tienes?');
+  assert.equal(otra.find((c) => c.clave === 'nse_banos')?.titulo, 'NSE · Baños');
+  assert.deepEqual(sinNombreCorto(sinNombre).map((p) => p.id), ['edad']);
+  assert.ok(!JSON.stringify(definicionPublica(ALONG2)).includes('"nombre":"Edad"'));
+});
+
+caso('al ponerle nombre corto, se renombran solas las columnas que dejó el Hub y no las que cambió el equipo', () => {
+  const sinNombres = structuredClone(ALONG2);
+  for (const s of sinNombres.secciones) for (const p of s.preguntas) delete p.nombre;
+  const antes = columnas(sinNombres, [], { completas: true, comoAntes: true });
+  const cols = columnas(ALONG2, [], { completas: true });
+  const mapa = { edad: 'c1', genero: 'c2', cp: 'c3', 'marcas@aerosol': 'c4', hogar: 'c5', frente: 'c6' };
+  const vivas = [
+    { id: 'c1', nombre: '¿Cuántos años tienes?' },        // la dejó el Hub (antes de los nombres cortos)
+    { id: 'c2', nombre: 'Sexo' },                          // la renombró el equipo
+    { id: 'c3', nombre: 'Código postal de tu casa (2)' },  // la dejó el Hub con número
+    { id: 'c4', nombre: 'Tu aerosol · ¿Qué marcas de aerosol compras?' },
+    { id: 'c5', nombre: 'Tipo de hogar' },                 // ya se llama así
+    { id: 'x', nombre: 'Edad' },                           // columna propia del tablero
+    { id: 'c6', nombre: 'Filtro · Frente' },               // antes de llamarlos perfiles
+  ];
+  const r = columnasPorRenombrar({ vivas, mapa, puestos: {}, cols, antes });
+  assert.deepEqual(r.map((x) => [x.id, x.nombre]), [['c6', 'Filtro · Perfil'], ['c1', 'Edad (2)'], ['c3', 'Código postal'], ['c4', 'Tu aerosol · Marcas que compra']]);
+  // Con los nombres que puso el Hub guardados: si el equipo la cambió después, se respeta.
+  const otraVez = columnasPorRenombrar({ vivas: [{ id: 'c1', nombre: 'Edad real' }], mapa, puestos: { edad: 'Edad vieja' }, cols, antes });
+  assert.deepEqual(otraVez, []);
+  const corregido = columnasPorRenombrar({ vivas: [{ id: 'c1', nombre: 'Edad vieja' }], mapa, puestos: { edad: 'Edad vieja' }, cols, antes });
+  assert.deepEqual(corregido.map((x) => x.nombre), ['Edad']);
+});
+
+caso('los nombres de la IA: sin signos, sin repetirse (salvo en bloques que se repiten) y todos los pedidos', () => {
+  const d = structuredClone(ALONG2);
+  for (const s of d.secciones) for (const p of s.preguntas) if (['edad', 'genero', 'marcas', 'marcas_l'].includes(p.id)) delete p.nombre;
+  const ids = sinNombreCorto(d).map((p) => p.id);
+  assert.deepEqual(ids, ['genero', 'edad', 'marcas', 'marcas_l']);
+  const bien = revisarNombres({ genero: '¿Género?', edad: 'Edad', marcas: 'Marcas que compra', marcas_l: 'Marcas que compra', otra: 'X' }, d, ids);
+  assert.deepEqual(bien.problemas, []);
+  assert.deepEqual(bien.limpios, { genero: 'Género', edad: 'Edad', marcas: 'Marcas que compra', marcas_l: 'Marcas que compra' });
+  const mal = revisarNombres({ genero: 'Edad', edad: 'Edad', marcas: 'Marcas' }, d, ids);
+  assert.ok(mal.problemas.some((x) => x.includes('se repite')) && mal.problemas.some((x) => x.includes('marcas_l')), mal.problemas.join(' | '));
+  const prompt = promptNombres(d, ids);
+  assert.ok(prompt.includes('- edad: ¿Cuántos años tienes?') && prompt.includes('ya se llama «Código postal»') && prompt.includes('genero, edad, marcas, marcas_l'));
+});
+
+caso('la estructura de un filtro escrito trae los nombres cortos (y no cambian la firma de la sección)', () => {
+  const e = estructuraDeDefinicion(ALONG2);
+  const perfil = e.secciones.find((s) => s.id === 'perfil')!;
+  assert.equal(perfil.preguntas.find((p) => p.id === 'edad')?.nombre, 'Edad');
+  const sinNombre = { ...perfil, preguntas: perfil.preguntas.map(({ nombre: _n, ...p }) => p) };
+  assert.equal(firmaSeccion(perfil), firmaSeccion(sinNombre));
+});
+
+caso('tiempo por perfil: lo que pide el perfil sale seguro; pedir más bloques tarda más', () => {
+  const { tipico, maximo } = duracionEstimada(ALONG2);
+  const porPerfil = duracionPorPerfil(ALONG2);
+  assert.equal(porPerfil.length, ALONG2.frentes!.length);
+  for (const p of porPerfil) assert.ok(p.minutos >= tipico - 3 && p.minutos <= maximo, `${p.nombre}: ${p.minutos}`);
+  const d = structuredClone(ALONG2);
+  const aerosol = d.frentes!.find((f) => f.id === 'aerosol')!;
+  d.frentes = [
+    { ...aerosol, id: 'uno', nombre: 'Un formato' },
+    { ...aerosol, id: 'dos', nombre: 'Dos formatos', califica: { todas: [aerosol.califica, { bloque: 'aroma_bloque', opcion: 'varitas' }, { bloque: 'aroma_bloque', opcion: 'spray' }] } },
+  ];
+  const [uno, dos] = duracionPorPerfil(d);
+  assert.ok(dos.minutos > uno.minutos, `${uno.minutos} vs ${dos.minutos}`);
+});
+
+caso('«¿Está listo?» dice qué falta, en palabras', () => {
+  const faltan = (o: Parameters<typeof chequeosListo>[0]) => chequeosListo(o).filter((c) => !c.ok).map((c) => c.id);
+  assert.deepEqual(faltan({ def: ALONG2, problemas: 0, respuestasDePrueba: 2, vinculado: true }), []);
+  const sinPerfiles = { ...structuredClone(ALONG2), frentes: [] };
+  delete sinPerfiles.secciones[1].preguntas[0].nombre;
+  const r = chequeosListo({ def: sinPerfiles, problemas: 2, supuestosPorRevisar: 3, respuestasDePrueba: 0, vinculado: false });
+  assert.deepEqual(r.filter((c) => !c.ok).map((c) => c.id), ['problemas', 'perfiles', 'nombres', 'supuestos', 'probado', 'tablero']);
+  assert.equal(r.find((c) => c.id === 'problemas')?.falta, '2 cosas por corregir');
+  assert.equal(r.find((c) => c.id === 'nombres')?.falta, '1 pregunta sin nombre');
 });
 
 await Promise.all(pendientes);

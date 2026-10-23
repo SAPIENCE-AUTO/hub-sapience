@@ -14,8 +14,8 @@ function Rasgos({ b, compacto }: { b: BloqueFlujo; compacto: boolean }) {
   if (b.condicion) filas.push({ color: TEAL, pill: 'Solo si aplica', detalle: b.condicion });
   if (b.termina.length) filas.push({ color: PELIGRO, pill: compacto ? `Termina · ${b.termina.length}` : 'Puede terminar', detalle: b.termina.join(' · ') });
   if (b.descarta.length) filas.push({ color: ALERTA, pill: 'Descarta el bloque', detalle: b.descarta.join(' · ') });
-  if (b.excluye.length) filas.push({ color: INFO, pill: 'Fuera de frentes', detalle: b.excluye.join(', ') });
-  if (b.frentes.length) filas.push({ color: EXITO, pill: compacto ? `Frentes · ${b.frentes.length}` : 'Toca frentes', detalle: b.frentes.join(', ') });
+  if (b.excluye.length) filas.push({ color: INFO, pill: 'Fuera de perfiles', detalle: b.excluye.join(', ') });
+  if (b.frentes.length) filas.push({ color: EXITO, pill: compacto ? `Perfiles · ${b.frentes.length}` : 'Toca perfiles', detalle: b.frentes.join(', ') });
   if (b.alertas.length) filas.push({ color: ALERTA, pill: 'Alerta', detalle: b.alertas.join(' · ') });
   if (b.nse) filas.push({ color: GOLD, pill: 'NSE' });
   if (filas.length === 0) return null;
@@ -78,8 +78,8 @@ export function MapaFlujo({ def, compacto = false, onIr }: { def: Definicion; co
       <div className={`mt-4 rounded-lg border-l-4 bg-[#257E55]/[0.06] ${compacto ? 'px-2.5 py-2 text-[12px]' : 'px-4 py-3 text-[13px]'}`} style={{ borderColor: EXITO }}>
         <p className="flex items-center gap-1.5 font-semibold" style={{ color: EXITO }}><Flag className="h-3.5 w-3.5" />Al terminar</p>
         {frentes.length
-          ? <p className="mt-0.5 text-[#1F1F23]">Califica si entra a algún frente: {frentes.map((f) => `${f.nombre} (${f.meta})`).join(', ')}.</p>
-          : <p className="mt-0.5 text-muted-foreground">Sin frentes: nadie califica todavía.</p>}
+          ? <p className="mt-0.5 text-[#1F1F23]">Califica si entra a algún perfil: {frentes.map((f) => `${f.nombre} (${f.meta})`).join(', ')}.</p>
+          : <p className="mt-0.5 text-muted-foreground">Sin perfiles: nadie califica todavía.</p>}
         <p className="mt-0.5" style={{ color: NEUTRAL }}>Quien termina antes ve un mensaje neutral, sin saber por qué.</p>
       </div>
     </div>

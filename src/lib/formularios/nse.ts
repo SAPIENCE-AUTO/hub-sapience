@@ -80,9 +80,15 @@ export function reglaNse(pais: string): ReglaNse | undefined {
 /** Nombre de la regla vigente del país («AMAI 2022»), para avisar si un filtro trae una anterior. */
 export const reglaVigente = (pais: string) => reglaDelPais(pais)?.nombre;
 
+/** Nombre corto de cada pregunta del NSE (su columna); valen para todas las reglas y para los filtros guardados sin él. */
+export const NOMBRES_NSE: Record<string, string> = {
+  nse_escolaridad: 'NSE · Estudios del jefe', nse_banos: 'NSE · Baños', nse_autos: 'NSE · Autos',
+  nse_internet: 'NSE · Internet', nse_trabajan: 'NSE · Trabajan', nse_cuartos: 'NSE · Cuartos',
+};
+
 /** Preguntas estándar del NSE del país, listas para una sección del screener. */
 export function preguntasNse(pais: string): Pregunta[] {
-  return structuredClone(reglaDelPais(pais)?.preguntas ?? []);
+  return structuredClone(reglaDelPais(pais)?.preguntas ?? []).map((p) => (NOMBRES_NSE[p.id] ? { ...p, nombre: NOMBRES_NSE[p.id] } : p));
 }
 
 /** Puntos y nivel. `undefined` mientras falte alguna pregunta del NSE. */

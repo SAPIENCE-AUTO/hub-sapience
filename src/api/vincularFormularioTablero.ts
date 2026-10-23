@@ -26,11 +26,13 @@ export default createEndpoint({
     if (!f) throw new ZiteError({ code: 'NOT_FOUND', message: 'No se encontró el formulario.' });
 
     const anterior = f.vinculo as Vinculo | null;
+    const mismo = anterior && anterior.boardId === b.id ? anterior : null;
     const vinculo: Vinculo = {
       boardId: b.id, boardName: b.board_name ?? '', projectCode: b.project_code ?? '',
-      columnas: anterior?.boardId === b.id ? anterior.columnas : {},
+      columnas: mismo ? mismo.columnas : {},
+      nombres: mismo ? mismo.nombres : {},
     };
-    const { creadas } = await asegurarColumnas(input.formularioId, vinculo, columnasParaTablero(leerDefinicion(f.definicion)));
+    const { creadas } = await asegurarColumnas(input.formularioId, vinculo, columnasParaTablero(leerDefinicion(f.definicion)), leerDefinicion(f.definicion));
     return { ok: true, columnasCreadas: creadas };
   },
 });

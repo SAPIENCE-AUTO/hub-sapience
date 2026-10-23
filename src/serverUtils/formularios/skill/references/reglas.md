@@ -46,17 +46,17 @@ Van en todos los filtros, salvo que los insumos digan otra cosa:
 - **Estudios recientes**: quien participó en un estudio de la misma categoría en los últimos 6 meses termina; otros temas no.
 - **Aceptación de las condiciones** del estudio (visita, grabación, cámara, verificación): tiene que aceptarlas todas.
 
-## Frentes y cuotas
+## Perfiles y cuotas
 
-- Cada **frente** es un perfil con su cuota (de la propuesta o del kick-off): «Aerosoles 6, Reeds 6». Quién entra se escribe como condición sobre las respuestas.
-- Los frentes de una misma marca del cliente comparten **grupo**: así un rechazo a esa marca deja fuera de todos sus frentes (`excluyeGrupos`).
-- Criterios que solo reparten (mitad y mitad por edad, 70 % mujeres, variedad de hogares) no son condición del frente: van en una **nota** para quien recluta.
-- Si un criterio depende del frente (edad distinta para cada marca), va en la condición del frente, no como descarte general.
+- Cada **perfil** es un tipo de persona con su cuota (de la propuesta o del kick-off): «Aerosoles 6, Reeds 6». Quién entra se escribe como condición sobre las respuestas.
+- Los perfiles de una misma marca del cliente comparten **grupo**: así un rechazo a esa marca deja fuera de todos sus perfiles (`excluyeGrupos`).
+- Criterios que solo reparten (mitad y mitad por edad, 70 % mujeres, variedad de hogares) no son condición del perfil: van en una **nota** para quien recluta.
+- Si un criterio depende del perfil (edad distinta para cada marca), va en la condición del perfil, no como descarte general.
 
 ## NSE
 
 - Las preguntas las pone el Hub con el cuestionario oficial del país (en México, la regla AMAI vigente). En la estructura solo se marca la sección con `nse: true`.
-- **El NSE nunca descarta.** Lo que pide un frente («C+», «C a D+») va en su condición y, si no coincide, la persona entra con una alerta para que el equipo decida.
+- **El NSE nunca descarta.** Lo que pide un perfil («C+», «C a D+») va en su condición y, si no coincide, la persona entra con una alerta para que el equipo decida.
 - Si el país no tiene regla cargada en el Hub, no hay sección de NSE: dilo en `supuestos`.
 
 ## País

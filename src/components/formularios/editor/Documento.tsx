@@ -147,18 +147,18 @@ function Frentes({ ctx }: { ctx: ContextoDoc }) {
   return (
     <section className="border-t border-[#E4E4E7] pt-6">
       <div className="flex items-start gap-2">
-        <h2 className="min-w-0 flex-1 text-[18px] font-bold text-[#1F1F23]">Frentes y cuotas</h2>
-        {ia && <BotonIcono titulo="Comentar los frentes y cuotas a la IA" onClick={() => setComentar((x) => !x)}><MessageSquareText className="h-4 w-4" /></BotonIcono>}
+        <h2 className="min-w-0 flex-1 text-[18px] font-bold text-[#1F1F23]">Perfiles y cuotas</h2>
+        {ia && <BotonIcono titulo="Comentar los perfiles y cuotas a la IA" onClick={() => setComentar((x) => !x)}><MessageSquareText className="h-4 w-4" /></BotonIcono>}
       </div>
-      <p className="mt-0.5 text-[12.5px] text-muted-foreground">{ia ? 'El nombre y la cuota se corrigen a mano; quién entra a cada frente, comentándolo a la IA.' : 'Quién entra a cada frente se lee aquí en palabras; el nombre y la cuota se corrigen a mano.'}</p>
+      <p className="mt-0.5 text-[12.5px] text-muted-foreground">{ia ? 'El nombre y la cuota se corrigen a mano; quién entra a cada perfil, comentándolo a la IA.' : 'Quién entra a cada perfil se lee aquí en palabras; el nombre y la cuota se corrigen a mano.'}</p>
       {comentar && <PropuestaIA alcance={{ frentes: true }} onCerrar={() => setComentar(false)} />}
-      {frentes.length === 0 && <p className="mt-2 text-[13px] text-muted-foreground">Este filtro no tiene frentes.</p>}
+      {frentes.length === 0 && <p className="mt-2 text-[13px] text-muted-foreground">Este filtro no tiene perfiles.</p>}
       <ul className="mt-3 space-y-3">
         {frentes.map((f) => (
           <li key={f.id} className="text-[14px]">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="font-semibold text-[#1F1F23]">
-                <TextoEditable valor={f.nombre} linea obligatorio etiqueta="Nombre del frente" onGuardar={(v) => aplicar((d) => cambiarFrente(d, f.id, { nombre: v }))} />
+                <TextoEditable valor={f.nombre} linea obligatorio etiqueta="Nombre del perfil" onGuardar={(v) => aplicar((d) => cambiarFrente(d, f.id, { nombre: v }))} />
               </span>
               <label className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
                 Cuota

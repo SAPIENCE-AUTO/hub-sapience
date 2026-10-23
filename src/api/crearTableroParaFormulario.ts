@@ -39,7 +39,7 @@ export default createEndpoint({
       record: { boardName: nombre, projectCode: f.project_code, boardOrder: vivos.length, boardType: 'recruitment' },
     });
     const vinculo: Vinculo = { boardId: tablero.id, boardName: nombre, projectCode: f.project_code, columnas: {} };
-    const { creadas } = await asegurarColumnas(f.id, vinculo, columnasParaTablero(leerDefinicion(f.definicion)));
+    const { creadas } = await asegurarColumnas(f.id, vinculo, columnasParaTablero(leerDefinicion(f.definicion)), leerDefinicion(f.definicion));
     return { id: tablero.id, nombre, columnasCreadas: creadas };
   },
 });

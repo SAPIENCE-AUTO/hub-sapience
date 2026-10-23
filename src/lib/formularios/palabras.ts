@@ -141,12 +141,12 @@ function nombreInstanciaDeSeccion(def: Definicion, instancia: string): string {
 
 const frase = (texto: string) => `${texto.charAt(0).toUpperCase()}${texto.slice(1)}${/[.!?…]$/.test(texto) ? '' : '.'}`;
 
-/** Frentes de un grupo de cuota, por su nombre («Aerosoles / Pure y Reeds», o «los 6 frentes de airwick»). */
+/** Perfiles de un grupo de cuota, por su nombre («Aerosoles / Pure y Reeds», o «los 6 perfiles de airwick»). */
 function frentesDelGrupo(def: Definicion, grupo: string): string {
   const nombres = (def.frentes ?? []).filter((f) => f.grupo === grupo).map((f) => f.nombre);
   if (nombres.length === 0) return `del grupo ${grupo}`;
   if (nombres.length <= 3) return `de ${unirY(nombres)}`;
-  return `de los ${nombres.length} frentes de ${grupo}`;
+  return `de los ${nombres.length} perfiles de ${grupo}`;
 }
 
 /**

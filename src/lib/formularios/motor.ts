@@ -350,7 +350,7 @@ export function evaluar(def: Definicion, resp: Respuestas): Resultado {
       const pide = nivelesPedidos(f.califica, ctx);
       if (pide?.length && !pide.includes(nse.nivel)) {
         fueraDe.push(f.id);
-        alertasNse.push(`NSE ${nse.nivel}, el frente ${f.nombre} pide ${unirO(pide)}`);
+        alertasNse.push(`NSE ${nse.nivel}, el perfil ${f.nombre} pide ${unirO(pide)}`);
       }
     }
   }
@@ -382,12 +382,12 @@ export function explicarResultado(res: Resultado): string | undefined {
     ...res.descartes.map((d) => d.motivo),
     ...res.gruposExcluidos.map((g) => `Fuera de ${g} (rechazo de marca o no se encarga)`),
   ];
-  return motivos.join(' · ') || 'No entra a ningún frente (edad, formato u otra condición del frente)';
+  return motivos.join(' · ') || 'No entra a ningún perfil (edad, formato u otra condición del perfil)';
 }
 
 // ── lo que puede ver el navegador del participante ───────────────────────────
 /**
- * Quita lo interno: frentes, NSE, alertas, notas y los motivos de descarte
+ * Quita lo interno: perfiles, NSE, alertas, notas, nombres cortos y los motivos de descarte
  * (quedan como «1» para que la página sepa cortar a tiempo sin decir por qué).
  */
 export function definicionPublica(def: Definicion): Definicion {
@@ -402,6 +402,7 @@ export function definicionPublica(def: Definicion): Definicion {
       ...s,
       preguntas: s.preguntas.map((p) => ({
         ...p,
+        nombre: undefined,
         nota: undefined,
         opciones: p.opciones?.map(limpiarOpcion),
         opcionesExtra: p.opcionesExtra?.map(limpiarOpcion),

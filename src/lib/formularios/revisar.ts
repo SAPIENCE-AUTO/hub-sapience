@@ -113,9 +113,9 @@ export function revisarConLugar(def: Definicion): Problema[] {
 
   const frentes = new Set<string>();
   for (const fr of def.frentes ?? []) {
-    if (frentes.has(fr.id)) mal(`El frente «${fr.id}» está dos veces.`);
+    if (frentes.has(fr.id)) mal(`El perfil «${fr.id}» está dos veces.`);
     frentes.add(fr.id);
-    revisarCondicion(fr.califica, `el frente «${fr.nombre}»`);
+    revisarCondicion(fr.califica, `el perfil «${fr.nombre}»`);
   }
   for (const a of def.alertas ?? []) {
     if (a.si) revisarCondicion(a.si, `la alerta «${a.texto}»`);

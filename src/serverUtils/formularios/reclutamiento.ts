@@ -1,6 +1,6 @@
 import { BoardColumns, CellValues, RecruitmentRows, pool } from '../../../server/compat';
 import { publishEvent } from '../../lib/ably';
-import { columnas, type Columna, type FilaRespuesta } from '../../lib/formularios/tabla';
+import { columnas, columnasPorRenombrar, nombreColumnaTablero, nombreLibre, type Columna, type FilaRespuesta } from '../../lib/formularios/tabla';
 import type { Definicion } from '../../lib/formularios/tipos';
 
 /**
@@ -22,6 +22,8 @@ export interface Vinculo {
   boardName: string;
   projectCode: string;
   columnas: Record<string, string>;
+  /** Clave → nombre que el Hub le puso a la columna la última vez (para renombrar solo las que nadie cambió). */
+  nombres?: Record<string, string>;
 }
 
 const PREFIJO_ORIGEN = 'Formulario Hub · ';
@@ -54,48 +56,83 @@ export async function vinculoVigente(vinculo: Vinculo | null): Promise<Vinculo |
   return b ? { ...vinculo, boardName: b.board_name ?? vinculo.boardName, projectCode: b.project_code ?? vinculo.projectCode } : null;
 }
 
-// Las de resultado llevan «Filtro ·» para no confundirse con columnas del equipo; las de un bloque
-// repetido, el nombre del bloque («Tu aerosol · ¿Dónde lo compras?»), porque la pregunta se repite.
-function nombreColumna(c: Columna): string {
-  if (c.seccion === 'Resultado') return `Filtro · ${c.titulo}`;
-  return c.clave.includes('@') ? `${c.seccion} · ${c.titulo}` : c.titulo;
-}
-
 /** Todas las columnas que el screener puede tener en un tablero (nombre y celular van en las columnas base). */
 export function columnasParaTablero(def: Definicion): Columna[] {
   return columnas(def, [], { completas: true }).filter((c) => c.clave !== 'nombre' && c.clave !== 'celular');
 }
 
 /**
- * Crea en el tablero las columnas que falten, en el orden del screener, y
- * guarda el mapa clave → columna en el vínculo. Las que ya existen (aunque las
- * hayan renombrado) se reusan.
+ * Crea en el tablero las columnas que falten (`crear`), en el orden del
+ * screener, y renombra las que el Hub dejó con un nombre que ya no es el de su
+ * pregunta (columnasPorRenombrar: las que renombró el equipo se respetan).
+ * Guarda en el vínculo el mapa clave → columna y los nombres puestos. Las que
+ * ya existen (aunque las hayan renombrado) se reusan.
  */
-export async function asegurarColumnas(
-  formularioId: string, vinculo: Vinculo, cols: Columna[],
-): Promise<{ mapa: Record<string, string>; creadas: number }> {
+async function ajustarColumnas(
+  formularioId: string, vinculo: Vinculo, cols: Columna[], def: Definicion, crear: boolean,
+): Promise<{ mapa: Record<string, string>; creadas: number; renombradas: number }> {
   const { records: existentes } = await BoardColumns.findAll({
     filters: { boardId: vinculo.boardId }, limit: 1000, fields: ['id', 'columnName', 'columnType', 'deletedAt'],
   });
   const vivas = existentes.filter((c) => !c.deletedAt);
   const vivasIds = new Set(vivas.map((c) => c.id));
-  const nombres = new Set(vivas.map((c) => (c.columnName ?? '').toLowerCase()));
   const mapa: Record<string, string> = { ...vinculo.columnas };
-  const porCrear = cols.filter((c) => !mapa[c.clave] || !vivasIds.has(mapa[c.clave]));
+  const puestos: Record<string, string> = { ...vinculo.nombres };
+
+  const renombres = columnasPorRenombrar({
+    vivas: vivas.map((c) => ({ id: c.id, nombre: c.columnName ?? '' })), mapa, puestos, cols,
+    antes: columnas(def, [], { completas: true, comoAntes: true }),
+  });
+  for (const r of renombres) {
+    await BoardColumns.update({ id: r.id, record: { columnName: r.nombre } });
+    puestos[r.clave] = r.nombre;
+  }
+
+  const usados = new Set(vivas.map((c) => {
+    const r = renombres.find((x) => x.id === c.id);
+    return (r ? r.nombre : c.columnName ?? '').toLowerCase();
+  }));
+  const porCrear = crear ? cols.filter((c) => !mapa[c.clave] || !vivasIds.has(mapa[c.clave])) : [];
   let orden = vivas.filter((c) => !(c.columnType ?? '').startsWith('__')).length;
   const registros = porCrear.map((c) => {
-    const base = nombreColumna(c);
-    let nombre = base;
-    for (let n = 2; nombres.has(nombre.toLowerCase()); n++) nombre = `${base} (${n})`;
-    nombres.add(nombre.toLowerCase());
+    const nombre = nombreLibre(nombreColumnaTablero(c), usados);
+    usados.add(nombre.toLowerCase());
+    puestos[c.clave] = nombre;
     return { columnName: nombre, boardId: vinculo.boardId, columnType: c.tipo, columnOrder: orden++ };
   });
   for (let i = 0; i < registros.length; i += 100) {
     const { records } = await BoardColumns.bulkCreate({ records: registros.slice(i, i + 100) });
     records.forEach((r, j) => { mapa[porCrear[i + j].clave] = r.id; });
   }
-  await pool.query(`update formularios set vinculo = $2, updated_at = now() where id = $1`, [formularioId, JSON.stringify({ ...vinculo, columnas: mapa })]);
-  return { mapa, creadas: registros.length };
+  if (crear) {
+    await pool.query(
+      `update formularios set vinculo = $2, updated_at = now() where id = $1`,
+      [formularioId, JSON.stringify({ ...vinculo, columnas: mapa, nombres: puestos })],
+    );
+  } else if (renombres.length) {
+    // Al guardar solo cambian los nombres: no se pisa el mapa de columnas, que otro paso puede estar ampliando.
+    await pool.query(
+      `update formularios set vinculo = jsonb_set(vinculo, '{nombres}', coalesce(vinculo->'nombres', '{}'::jsonb) || $2::jsonb)
+       where id = $1 and vinculo->>'boardId' = $3`,
+      [formularioId, JSON.stringify(Object.fromEntries(renombres.map((r) => [r.clave, r.nombre]))), vinculo.boardId],
+    );
+  }
+  return { mapa, creadas: registros.length, renombradas: renombres.length };
+}
+
+export const asegurarColumnas = (formularioId: string, vinculo: Vinculo, cols: Columna[], def: Definicion) =>
+  ajustarColumnas(formularioId, vinculo, cols, def, true);
+
+/**
+ * Al guardar el screener: las columnas que ya están en el tablero toman el
+ * nombre nuevo de su pregunta. No crea columnas (una pregunta a medio escribir
+ * no llega al tablero hasta que se pasan respuestas).
+ */
+export async function renombrarColumnas(formularioId: string, vinculo: Vinculo | null, def: Definicion): Promise<number> {
+  const vigente = await vinculoVigente(vinculo);
+  if (!vigente) return 0;
+  const { renombradas } = await ajustarColumnas(formularioId, vigente, columnasParaTablero(def), def, false);
+  return renombradas;
 }
 
 export async function pasarAlReclutamiento(
@@ -114,7 +151,7 @@ export async function pasarAlReclutamiento(
   const colNombre = todas.find((c) => c.clave === 'nombre');
   const colCelular = todas.find((c) => c.clave === 'celular');
   const cols = todas.filter((c) => c !== colNombre && c !== colCelular);
-  const { mapa, creadas } = await asegurarColumnas(formulario.id, vinculo, cols);
+  const { mapa, creadas } = await asegurarColumnas(formulario.id, vinculo, cols, formulario.definicion);
 
   // ── una fila por persona ──
   for (const f of nuevas) {

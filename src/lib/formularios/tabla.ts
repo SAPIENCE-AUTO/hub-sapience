@@ -1,4 +1,5 @@
 import { explicarResultado, seleccion, textoRespuesta } from './motor';
+import { NOMBRES_NSE } from './nse';
 import { nombreCampoDireccion } from './paises';
 import {
   CAMPOS_DIRECCION, esMatriz, forma,
@@ -65,6 +66,13 @@ function puedeAparecer(c: Condicion | undefined, instancia?: string): boolean {
 
 const conOpcion = (texto: string, o?: Opcion) => (o ? texto.split('{opcion}').join(o.corto ?? o.label) : texto);
 
+/** El encabezado de la columna de una pregunta: su nombre corto o, si no tiene, su texto. */
+export const nombreDePregunta = (p: Pregunta): string => p.nombre?.trim() || NOMBRES_NSE[p.id] || p.texto;
+
+/** Preguntas que dan columna y no tienen nombre corto (el NSE trae el suyo). */
+export const sinNombreCorto = (def: Definicion): Pregunta[] =>
+  def.secciones.flatMap((s) => s.preguntas).filter((p) => forma(p.tipo) !== 'ninguna' && !p.nombre?.trim() && !NOMBRES_NSE[p.id]);
+
 function celda(def: Definicion, p: Pregunta, clave: string, resp: Respuestas): Celda {
   const v = resp[clave];
   if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) return undefined;
@@ -76,7 +84,12 @@ function celda(def: Definicion, p: Pregunta, clave: string, resp: Respuestas): C
   return textoRespuesta(p, opcionesDe(def, p), clave, resp);
 }
 
-export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = false }: { completas?: boolean } = {}): Columna[] {
+/**
+ * `comoAntes`: los títulos como se llamaban las columnas antes de los nombres
+ * cortos (el texto de cada pregunta, y «Frente» en vez de «Perfil»), para
+ * reconocerlas al renombrarlas en el tablero.
+ */
+export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = false, comoAntes = false }: { completas?: boolean; comoAntes?: boolean } = {}): Columna[] {
   const nombreFrente = (id: string) => def.frentes?.find((f) => f.id === id)?.nombre ?? id;
   const fijas: Columna[] = [
     { clave: 'nombre', tipo: 'Texto', seccion: 'Persona', titulo: 'Nombre', valor: (f) => (def.claves?.nombre ? celda(def, buscar(def, def.claves.nombre)!, def.claves.nombre, f.respuestas) : undefined) },
@@ -85,7 +98,7 @@ export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = 
       clave: 'resultado', tipo: 'Texto', seccion: 'Resultado', titulo: 'Resultado',
       valor: (f) => (f.resultado.califica ? 'Califica' : f.resultado.incompleto ? 'Incompleta' : 'No califica'),
     },
-    { clave: 'frente', tipo: 'Texto', seccion: 'Resultado', titulo: 'Frente', valor: (f) => f.resultado.frentes.map(nombreFrente).join(', ') || undefined },
+    { clave: 'frente', tipo: 'Texto', seccion: 'Resultado', titulo: comoAntes ? 'Frente' : 'Perfil', valor: (f) => f.resultado.frentes.map(nombreFrente).join(', ') || undefined },
     { clave: 'motivo', tipo: 'Texto', seccion: 'Resultado', titulo: 'Por qué no califica', valor: (f) => explicarResultado(f.resultado) },
     { clave: 'nse', tipo: 'Texto', seccion: 'Resultado', titulo: 'NSE', valor: (f) => f.resultado.nse?.nivel },
     { clave: 'nse_puntos', tipo: 'Número', seccion: 'Resultado', titulo: 'Puntos NSE', valor: (f) => f.resultado.nse?.puntos },
@@ -110,7 +123,7 @@ export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = 
       for (const p of s.preguntas) {
         if (yaFijas.has(p.id) || !puedeAparecer(p.mostrarSi, inst?.id)) continue;
         const clave = inst ? `${p.id}@${inst.id}` : p.id;
-        const titulo = conOpcion(p.texto, inst);
+        const titulo = conOpcion(comoAntes ? p.texto : nombreDePregunta(p), inst);
         if (forma(p.tipo) === 'ninguna') continue;
         if (esMatriz(p.tipo)) {
           for (const fila of p.filas ?? []) {
@@ -138,4 +151,56 @@ export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = 
 
   // Sin `completas`, fuera las columnas que nadie contestó (preguntas de un formato que no salió).
   return [...fijas, ...(completas ? deSecciones : deSecciones.filter((c) => filas.some((f) => c.valor(f) !== undefined)))];
+}
+
+// ── las columnas en un tablero de Reclutamiento ──────────────────────────────
+// Las de resultado llevan «Filtro ·» para no confundirse con columnas del equipo; las de un bloque
+// repetido, el nombre del bloque («Tu aerosol · Dónde compra»), porque la pregunta se repite.
+export function nombreColumnaTablero(c: Columna): string {
+  if (c.seccion === 'Resultado') return `Filtro · ${c.titulo}`;
+  return c.clave.includes('@') ? `${c.seccion} · ${c.titulo}` : c.titulo;
+}
+
+/** Un nombre que no se repita en el tablero: «Edad», si ya hay una, «Edad (2)». */
+export function nombreLibre(base: string, usados: Set<string>): string {
+  let nombre = base;
+  for (let n = 2; usados.has(nombre.toLowerCase()); n++) nombre = `${base} (${n})`;
+  return nombre;
+}
+
+/**
+ * Columnas del tablero que hay que renombrar porque su pregunta ahora se llama
+ * distinto (le pusieron nombre corto o lo corrigieron). Solo las que dejó así
+ * el Hub: si el equipo renombró una desde el tablero, se respeta. `puestos`
+ * son los nombres que el Hub les dio la última vez; las que se crearon antes
+ * de guardarlos se reconocen porque se llaman como su pregunta (`antes`), con
+ * o sin «(2)».
+ */
+export function columnasPorRenombrar(o: {
+  vivas: { id: string; nombre: string }[];
+  mapa: Record<string, string>;
+  puestos: Record<string, string>;
+  cols: Columna[];
+  antes: Columna[];
+}): { id: string; clave: string; nombre: string }[] {
+  const porId = new Map(o.vivas.map((c) => [c.id, c.nombre]));
+  const usados = new Set(o.vivas.map((c) => c.nombre.toLowerCase()));
+  const antes = new Map(o.antes.map((c) => [c.clave, nombreColumnaTablero(c)]));
+  const sinNumero = (n: string) => n.replace(/ \(\d+\)$/, '');
+  const out: { id: string; clave: string; nombre: string }[] = [];
+  for (const c of o.cols) {
+    const id = o.mapa[c.clave];
+    const actual = id ? porId.get(id) : undefined;
+    if (actual === undefined) continue;
+    const delHub = o.puestos[c.clave] !== undefined
+      ? actual === o.puestos[c.clave]
+      : sinNumero(actual).toLowerCase() === (antes.get(c.clave) ?? '').toLowerCase();
+    const base = nombreColumnaTablero(c);
+    if (!delHub || sinNumero(actual) === base) continue;
+    usados.delete(actual.toLowerCase());
+    const nombre = nombreLibre(base, usados);
+    usados.add(nombre.toLowerCase());
+    if (nombre !== actual) out.push({ id, clave: c.clave, nombre });
+  }
+  return out;
 }

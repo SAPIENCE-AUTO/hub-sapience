@@ -139,6 +139,7 @@ export const getFormularioVersion = (input?: any): Promise<any> => call('getForm
 export const getFormularioVersiones = (input?: any): Promise<any> => call('getFormularioVersiones', input);
 // Filtros fase 3: generador con IA (los de la IA, con avance)
 export const generateFormularioCambio = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioCambio', input);
+export const generateFormularioNombres = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioNombres', input);
 export const generateFormularioEstructura = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioEstructura', input);
 export const generateFormularioLogica = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioLogica', input);
 export const generateFormularioSeccion = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioSeccion', input);

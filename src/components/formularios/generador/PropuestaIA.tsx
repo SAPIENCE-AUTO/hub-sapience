@@ -76,10 +76,10 @@ export function PropuestaIA({ alcance, onCerrar }: { alcance: AlcanceIA; onCerra
     onCerrar();
   };
 
-  const titulo = esPregunta ? 'Pedir un cambio a la IA' : 'frentes' in alcance ? 'Comentar los frentes y cuotas' : 'Comentar la lógica de esta sección';
+  const titulo = esPregunta ? 'Pedir un cambio a la IA' : 'frentes' in alcance ? 'Comentar los perfiles y cuotas' : 'Comentar la lógica de esta sección';
   const ayuda = esPregunta
     ? 'Por ejemplo: «agrega Costco y quita Farmacia», «que termine si contesta Nunca», «hazla de opción única».'
-    : 'El orden, qué aparece según qué, los descartes, las cuotas o quién entra a cada frente. Por ejemplo: «los de 18 a 24 no deben ver la sección de hijos».';
+    : 'El orden, qué aparece según qué, los descartes, las cuotas o quién entra a cada perfil. Por ejemplo: «los de 18 a 24 no deben ver la sección de hijos».';
 
   return (
     <div className="mt-2 rounded-lg border border-[#0F3D4D]/25 bg-[#0F3D4D]/[0.03] p-3 text-sm" onClick={(e) => e.stopPropagation()}>

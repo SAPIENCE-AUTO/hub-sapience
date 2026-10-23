@@ -24,7 +24,7 @@ export function AvanceEscritura({ gen, def }: { gen: GeneradorUI; def: Definicio
   const errores = ids.filter((id) => estado(id) === 'error');
   const problemas = [
     ...e.secciones.flatMap((s) => (gen.secciones[s.id]?.problemas ?? []).map((p) => ({ donde: s.titulo, texto: p }))),
-    ...gen.problemasLogica.map((p) => ({ donde: 'Frentes y alertas', texto: p })),
+    ...gen.problemasLogica.map((p) => ({ donde: 'Perfiles y alertas', texto: p })),
   ];
   const terminado = listas === ids.length && gen.logica === 'lista';
   if (terminado && (!problemas.length || oculto)) return null;
@@ -37,7 +37,7 @@ export function AvanceEscritura({ gen, def }: { gen: GeneradorUI; def: Definicio
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <MarcaIA />
             <span className="text-sm font-semibold" style={{ color: TEAL }}>
-              {gen.logica === 'armando' ? 'Armando quién entra a cada frente…' : errores.length && !gen.escribiendo ? 'Faltan secciones por escribir' : `Escribiendo las preguntas: ${listas} de ${ids.length} secciones`}
+              {gen.logica === 'armando' ? 'Armando quién entra a cada perfil…' : errores.length && !gen.escribiendo ? 'Faltan secciones por escribir' : `Escribiendo las preguntas: ${listas} de ${ids.length} secciones`}
             </span>
             {(errores.length > 0 || gen.logica === 'error') && !gen.escribiendo && (
               <button type="button" onClick={gen.reintentar} className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:bg-muted" style={{ color: TEAL }}>
@@ -63,14 +63,14 @@ export function AvanceEscritura({ gen, def }: { gen: GeneradorUI; def: Definicio
             })}
             <li className="flex items-center gap-1 text-xs text-muted-foreground">
               {gen.logica === 'lista' ? <Check className="h-3.5 w-3.5" style={{ color: EXITO }} /> : gen.logica === 'armando' ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: TEAL }} /> : gen.logica === 'error' ? <AlertTriangle className="h-3.5 w-3.5" style={{ color: PELIGRO }} /> : <span className="h-2 w-2 rounded-full border border-muted-foreground/50" />}
-              Frentes y alertas
+              Perfiles y alertas
             </li>
           </ul>
           {/* Si todas fallaron por lo mismo (sin saldo, tope…), se dice una vez. */}
           {new Set(errores.map((id) => gen.secciones[id]?.error)).size === 1 && errores.length > 1
             ? <p className="mt-1 text-xs" style={{ color: PELIGRO }}>{gen.secciones[errores[0]]?.error}</p>
             : errores.map((id) => <p key={id} className="mt-1 text-xs" style={{ color: PELIGRO }}>{e.secciones.find((s) => s.id === id)?.titulo.split('{opcion}').join('…')}: {gen.secciones[id]?.error}</p>)}
-          {gen.logica === 'error' && <p className="mt-1 text-xs" style={{ color: PELIGRO }}>Frentes y alertas: {gen.errorLogica}</p>}
+          {gen.logica === 'error' && <p className="mt-1 text-xs" style={{ color: PELIGRO }}>Perfiles y alertas: {gen.errorLogica}</p>}
         </>
       )}
       {problemas.length > 0 && (

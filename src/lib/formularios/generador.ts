@@ -46,6 +46,8 @@ export interface PreguntaPlan {
   id: string;
   tipo: TipoPregunta;
   texto: string;
+  /** Nombre corto: el de su columna en el tablero («Edad»). No entra en la firma: cambiarlo no reescribe la sección. */
+  nombre?: string;
   /** De opciones, matriz u ordenar. Sus ids se conservan al escribir la sección: la lógica de otras secciones los usa. */
   opciones?: { id: string; label: string; corto?: string }[];
   filas?: { id: string; label: string }[];
@@ -193,6 +195,7 @@ const planOpcion = (o: Opcion) => ({ id: o.id, label: o.label, ...(o.corto ? { c
 
 export function planDePregunta(def: Definicion, p: Pregunta): PreguntaPlan {
   const plan: PreguntaPlan = { id: p.id, tipo: p.tipo, texto: p.texto };
+  if (p.nombre) plan.nombre = p.nombre;
   if (usaOpciones(p.tipo)) {
     const propias = p.opcionesDe ? p.opcionesExtra ?? [] : p.opciones ?? [];
     if (propias.length) plan.opciones = propias.map(planOpcion);
@@ -366,7 +369,7 @@ export function revisarEstructura(e: Estructura): string[] {
       if (p.opcionesDe && !preguntas.has(p.opcionesDe)) out.push(`Las opciones de «${p.texto}» salen de «${p.opcionesDe}», que no existe.`);
     }
   });
-  if (!e.frentes.length) out.push('No hay frentes: sin al menos uno, nadie califica. Si el estudio tiene un solo perfil, es un frente con la cuota total.');
+  if (!e.frentes.length) out.push('No hay perfiles: sin al menos uno, nadie califica. Si el estudio busca un solo tipo de persona, es un perfil con la cuota total.');
   return out;
 }
 
@@ -387,7 +390,7 @@ export function bocetoDeEstructura(e: Estructura): Definicion {
     tituloPublico: e.tituloPublico,
     secciones: e.secciones.map((s): Seccion => {
       const preguntas: Pregunta[] = s.nse && preguntasNse(e.pais).length ? preguntasNse(e.pais) : s.preguntas.map((p) => {
-        const q: Pregunta = { id: p.id, tipo: p.tipo, texto: p.texto };
+        const q: Pregunta = { id: p.id, tipo: p.tipo, texto: p.texto, ...(p.nombre ? { nombre: p.nombre } : {}) };
         if (usaOpciones(p.tipo)) {
           if (p.opcionesDe) { q.opcionesDe = p.opcionesDe; q.opcionesExtra = p.opciones; } else q.opciones = p.opciones?.length ? p.opciones : opcionesDeRelleno(4);
         }

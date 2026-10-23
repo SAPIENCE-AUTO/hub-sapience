@@ -57,5 +57,5 @@ Filtro de reclutamiento real del equipo, autoaplicado (Fillout), para sesiones c
 
 - Frecuencias por categoría y por lugar van en **matriz**, no en una pregunta por fila.
 - Las frases de actitud van en pares (positiva y contraria) para atrapar a quien contesta todo igual.
-- Reglas como «al menos dos de cuatro» o «tres o más de seis actividades» no tienen una forma directa en el contrato: se escriben como frente o alerta con «alguna» de las combinaciones cuando son pocas, o como **alerta y nota** para revisar a mano cuando son muchas; y se dice en los supuestos.
+- Reglas como «al menos dos de cuatro» o «tres o más de seis actividades» no tienen una forma directa en el contrato: se escriben como perfil o alerta con «alguna» de las combinaciones cuando son pocas, o como **alerta y nota** para revisar a mano cuando son muchas; y se dice en los supuestos.
 - Las abiertas de validación («menciona tus 3 lugares favoritos») las revisa una persona: van con nota para el equipo, no con descarte automático.

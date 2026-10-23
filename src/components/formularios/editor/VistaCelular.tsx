@@ -42,7 +42,7 @@ export function VistaCelular({ def, conProblemas }: { def: Definicion; conProble
             <p className="font-semibold" style={{ color: resultado.califica ? EXITO : PELIGRO }}>
               {resultado.califica ? 'Calificaría' : resultado.incompleto ? 'Quedó incompleta' : 'No calificaría'}
             </p>
-            {resultado.frentes.length > 0 && <p className="mt-1">Frentes: {resultado.frentes.map(nombreFrente).join(', ')}</p>}
+            {resultado.frentes.length > 0 && <p className="mt-1">Perfiles: {resultado.frentes.map(nombreFrente).join(', ')}</p>}
             {!resultado.califica && explicarResultado(resultado) && <p className="mt-1 text-muted-foreground">{explicarResultado(resultado)}</p>}
             {resultado.nse && <p className="mt-1 text-muted-foreground">NSE {resultado.nse.nivel} ({resultado.nse.puntos} puntos)</p>}
             {resultado.alertas.map((a) => <p key={a} className="mt-1" style={{ color: ALERTA }}>⚠ {a}</p>)}

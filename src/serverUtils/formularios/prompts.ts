@@ -3,7 +3,7 @@
 // Funciones puras: las prueba server/scripts/test-formularios.ts sin llamar a la IA.
 import { minutosDeEstructura, type Estructura, type OrigenGenerador, type SeccionPlan } from '../../lib/formularios/generador';
 import { TOPE_MINUTOS } from '../../lib/formularios/duracion';
-import type { Definicion, Seccion } from '../../lib/formularios/tipos';
+import { forma, type Definicion, type Seccion } from '../../lib/formularios/tipos';
 
 export interface DatosEstudio { titulo: string; proyecto?: string; cliente?: string }
 
@@ -60,10 +60,10 @@ export function promptEstructura(o: { origen: OrigenGenerador; estudio: DatosEst
       'Adáptalo a este estudio con los insumos de arriba. Conserva cada id que sigue, lo nuevo con id que empiece con nuevo_, "cambia": false en las secciones que se quedan igual y "cambia": true en las que cambian o son nuevas. En "supuestos", lo que cambiaste y por qué, y lo que conviene confirmar.',
     );
   } else if (o.origen === 'word') {
-    partes.push('Los insumos traen un screener que ya existe (en Word o PDF). Conviértelo a la estructura **sin rediseñarlo**: mismo orden, las mismas preguntas con todas sus opciones, la misma lógica y los mismos frentes y cuotas. Si es para encuestador, vuélvelo autoaplicado. En "supuestos", todo lo que tuviste que interpretar: preguntas de una sola respuesta que venían con casillas (van como "unica"), reglas que no se pueden expresar igual, instrucciones de encuestador, datos que faltan. Si se pasa de 10 minutos, no recortes: dilo en supuestos.');
+    partes.push('Los insumos traen un screener que ya existe (en Word o PDF). Conviértelo a la estructura **sin rediseñarlo**: mismo orden, las mismas preguntas con todas sus opciones, la misma lógica y los mismos perfiles y cuotas. Si es para encuestador, vuélvelo autoaplicado. En "supuestos", todo lo que tuviste que interpretar: preguntas de una sola respuesta que venían con casillas (van como "unica"), reglas que no se pueden expresar igual, instrucciones de encuestador, datos que faltan. Si se pasa de 10 minutos, no recortes: dilo en supuestos.');
     if (o.pedido?.trim()) partes.push(`Además, el equipo pide:\n"${o.pedido.trim()}"`);
   } else {
-    partes.push('Propón la estructura del filtro a partir de los insumos de arriba, con las reglas de references/reglas.md y el formato de references/estructura.md: país, perfil, frentes con su cuota y quién entra a cada uno, y las secciones en orden de embudo con sus preguntas en una línea (las de opciones con todas sus opciones). Apunta a 10 minutos o menos por el camino común. En "supuestos", lo que decidiste sin que los insumos lo dijeran, de dónde salió cada dato importante y las reglas que no aplican a este estudio.');
+    partes.push('Propón la estructura del filtro a partir de los insumos de arriba, con las reglas de references/reglas.md y el formato de references/estructura.md: país, perfil, perfiles (en "frentes") con su cuota y quién entra a cada uno, y las secciones en orden de embudo con sus preguntas en una línea (las de opciones con todas sus opciones). Apunta a 10 minutos o menos por el camino común. En "supuestos", lo que decidiste sin que los insumos lo dijeran, de dónde salió cada dato importante y las reglas que no aplican a este estudio.');
     if (o.pedido?.trim()) partes.push(`Además, el equipo pide:\n"${o.pedido.trim()}"`);
   }
   partes.push(FORMATO_ESTRUCTURA);
@@ -83,11 +83,12 @@ export function promptSeccion(o: {
     `Escribe la sección «${o.plan.titulo}» (id ${o.plan.id})${porSeccion ? `, que la estructura estima en ≈ ${porSeccion.tipico} min` : ''}: la redacción final de cada pregunta, todas sus opciones y su lógica (mostrar si, terminar, descartar el bloque, dejar fuera de un grupo, opciones exclusivas, «Otra, ¿cuál?», orden aleatorio, rangos, notas para el equipo).`,
     [
       'Reglas de esta llamada:',
-      `- La sección lleva el id ${o.plan.id} y sus preguntas y opciones los ids que trae la estructura, tal cual: otras secciones y los frentes los usan. Puedes agregar opciones o preguntas que falten, con id que empiece con nuevo_.`,
+      `- La sección lleva el id ${o.plan.id} y sus preguntas y opciones los ids que trae la estructura, tal cual: otras secciones y los perfiles los usan. Puedes agregar opciones o preguntas que falten, con id que empiece con nuevo_.`,
       '- Conserva las preguntas y las opciones de la estructura; si alguna sobra o falta algo, dilo en "supuestos".',
+      '- Cada pregunta lleva su "nombre" corto (el de la estructura si lo trae; si no, ponle uno con la regla de references/contrato.md).',
       o.plan.aparece ? `- La sección solo aparece en este caso: «${o.plan.aparece}». Escríbelo como "mostrarSi" de la sección, con ids de preguntas de secciones anteriores.` : '',
       o.plan.repetirPor ? `- La sección se repite por cada opción marcada en ${o.plan.repetirPor}${o.plan.repetirSolo ? ` (solo ${o.plan.repetirSolo.join(', ')})` : ''}: lleva "repetirPor"${o.plan.repetirSolo ? ' y "repetirSolo"' : ''}, usa «{opcion}» donde va el nombre y "descarta" en las opciones que hacen que ese bloque no cuente.` : '',
-      '- La lógica solo usa preguntas de esta sección o de secciones anteriores. No escribas frentes ni alertas: van en la etapa final.',
+      '- La lógica solo usa preguntas de esta sección o de secciones anteriores. No escribas perfiles ni alertas: van en la etapa final.',
       '- No uses selectores con imágenes ni pongas direcciones de imágenes.',
     ].filter(Boolean).join('\n'),
   ];
@@ -99,21 +100,21 @@ export function promptSeccion(o: {
   return partes.join('\n\n');
 }
 
-/** Lógica final: frentes, alertas, claves y textos, con todas las secciones escritas. */
+/** Lógica final: perfiles, alertas, claves y textos, con todas las secciones escritas. */
 export function promptLogica(o: { estudio: DatosEstudio; estructura: Estructura; definicion: Definicion; ajuste?: boolean }): string {
   return [
     datos(o.estudio),
     `Perfil que se busca: ${o.estructura.perfil || '(ver insumos)'}`,
-    `Frentes de la estructura aprobada (quién entra, en palabras):\n${JSON.stringify(o.estructura.frentes)}`,
+    `Perfiles de la estructura aprobada (quién entra, en palabras):\n${JSON.stringify(o.estructura.frentes)}`,
     `El filtro ya escrito, en JSON:\n${definicionParaIA(o.definicion)}`,
     [
       'Arma la lógica final del filtro:',
-      '- "frentes": cada frente de la estructura, con su mismo id, nombre, grupo y cuota, y "califica" como condición sobre las preguntas del filtro (references/contrato.md). Lo que pide de NSE va con {"nse": [...]} y nunca descarta. Lo que solo reparte (mitad y mitad, porcentajes de género, variedad) no va en la condición.',
+      '- "frentes" (los perfiles): cada perfil de la estructura, con su mismo id, nombre, grupo y cuota, y "califica" como condición sobre las preguntas del filtro (references/contrato.md). Lo que pide de NSE va con {"nse": [...]} y nunca descarta. Lo que solo reparte (mitad y mitad, porcentajes de género, variedad) no va en la condición.',
       '- "alertas": las que pidan los insumos o las reglas (sobredeclarantes, combinaciones raras). Pueden ir vacías.',
       '- "claves": el id de la pregunta del nombre, del celular, de la edad y del género.',
       '- "textos": título público, bienvenida, despedida y mensaje de no califica, con references/redaccion.md (sin el cliente; la bienvenida dice cuánto tarda y si pedirá fotos).',
       '- Usa solo ids que existen en el filtro. En "supuestos", lo que decidiste aquí (un criterio que no se pudo expresar igual, por ejemplo).',
-      o.ajuste ? '- Este filtro ya estaba escrito y solo cambió parte de su estructura: conserva tal cual (mismo texto y misma condición) los frentes y las alertas que siguen sirviendo, y cambia o agrega solo lo que obliga lo nuevo. Los textos de bienvenida y despedida no se tocan.' : '',
+      o.ajuste ? '- Este filtro ya estaba escrito y solo cambió parte de su estructura: conserva tal cual (mismo texto y misma condición) los perfiles y las alertas que siguen sirviendo, y cambia o agrega solo lo que obliga lo nuevo. Los textos de bienvenida y despedida no se tocan.' : '',
     ].filter(Boolean).join('\n'),
     'Responde solo con el JSON: {"frentes": [..], "alertas": [..], "claves": {..}, "textos": {"tituloPublico", "bienvenida", "despedida", "noCalifica"}, "supuestos": [..]}.',
   ].join('\n\n');
@@ -121,7 +122,7 @@ export function promptLogica(o: { estudio: DatosEstudio; estructura: Estructura;
 
 export type Alcance = { pregunta: string } | { seccion: string } | { frentes: true };
 
-/** Un cambio pedido con palabras, sobre una pregunta, una sección o los frentes. */
+/** Un cambio pedido con palabras, sobre una pregunta, una sección o los perfiles. */
 export function promptCambio(o: { definicion: Definicion; alcance: Alcance; pedido: string; perfil?: string }): string {
   const partes = [
     o.perfil ? `Perfil que se busca en el estudio: ${o.perfil}` : '',
@@ -130,19 +131,19 @@ export function promptCambio(o: { definicion: Definicion; alcance: Alcance; pedi
   if ('pregunta' in o.alcance) {
     partes.push(
       `La persona pide este cambio en la pregunta ${o.alcance.pregunta}:\n"${o.pedido}"`,
-      'Devuelve esa pregunta completa con el cambio aplicado y nada más. Conserva su id y el id de cada opción que sigue; las opciones nuevas con id que empiece con nuevo_. No cambies lo que no se pidió. Si el pedido necesita tocar otras preguntas, frentes o la sección, no lo hagas aquí: dilo en "explicacion" (se pide comentando la sección). Las reglas de la skill siguen vigentes: si el pedido choca con una, aplícalo de la forma que menos la rompa y dilo en "explicacion".',
+      'Devuelve esa pregunta completa con el cambio aplicado y nada más. Conserva su id y el id de cada opción que sigue; las opciones nuevas con id que empiece con nuevo_. No cambies lo que no se pidió. Si el pedido necesita tocar otras preguntas, perfiles o la sección, no lo hagas aquí: dilo en "explicacion" (se pide comentando la sección). Las reglas de la skill siguen vigentes: si el pedido choca con una, aplícalo de la forma que menos la rompa y dilo en "explicacion".',
       'Responde solo con el JSON: {"pregunta": {..}, "explicacion": "una o dos frases de lo que cambiaste"}.',
     );
   } else {
-    const donde = 'seccion' in o.alcance ? `la sección ${o.alcance.seccion}` : 'los frentes y cuotas';
+    const donde = 'seccion' in o.alcance ? `la sección ${o.alcance.seccion}` : 'los perfiles y cuotas';
     partes.push(
-      `La persona comenta esto sobre la lógica de ${donde} (el orden, qué aparece según qué, los descartes, las cuotas o quién entra a cada frente):\n"${o.pedido}"`,
+      `La persona comenta esto sobre la lógica de ${donde} (el orden, qué aparece según qué, los descartes, las cuotas o quién entra a cada perfil):\n"${o.pedido}"`,
       [
         'Propón el cambio:',
         '- "secciones": cada sección que cambia, completa (con todas sus preguntas). Las que no cambian no van.',
         '- "orden": los ids de todas las secciones en el orden nuevo, solo si cambia el orden o agregas una sección.',
         '- "quitarSecciones": ids de las secciones que se quitan, si alguna.',
-        '- "frentes" y "alertas": la lista completa, solo si cambian.',
+        '- "frentes" (los perfiles) y "alertas": la lista completa, solo si cambian.',
         '- Conserva el id de cada sección, pregunta y opción que sigue; lo nuevo con id que empiece con nuevo_. Una pregunta que ya existe no se mueve a una sección que se repite distinto (cambiaría su columna en el tablero).',
         '- La lógica solo usa preguntas que van antes. Las preguntas del NSE no se tocan. Cambia solo lo que pide el comentario y lo que eso obliga a cambiar.',
       ].join('\n'),
@@ -150,4 +151,22 @@ export function promptCambio(o: { definicion: Definicion; alcance: Alcance; pedi
     );
   }
   return partes.join('\n\n');
+}
+
+/** Nombres cortos (los de las columnas) para las preguntas que no tienen. */
+export function promptNombres(def: Definicion, ids: string[]): string {
+  const opciones = (labels: string[]) => (labels.length ? ` [${labels.slice(0, 6).join(' / ')}${labels.length > 6 ? ' / …' : ''}]` : '');
+  const lineas = def.secciones.flatMap((s) => [
+    `Sección «${s.titulo ?? s.id}»${s.repetirPor ? ' (se repite: su columna ya lleva el nombre de cada bloque)' : ''}`,
+    ...s.preguntas.filter((p) => forma(p.tipo) !== 'ninguna').map((p) =>
+      `- ${p.id}: ${p.texto}${opciones([...(p.opciones ?? []), ...(p.opcionesExtra ?? [])].map((o) => o.label))}${p.nombre ? ` → ya se llama «${p.nombre}»` : ''}`),
+  ]);
+  return [
+    `Las preguntas del filtro, en orden:\n${lineas.join('\n')}`,
+    [
+      `Ponle nombre corto a estas preguntas: ${ids.join(', ')}.`,
+      'El nombre corto es el encabezado de su columna en el tablero de Reclutamiento y en el Excel; el participante no lo ve. Sigue la regla de `nombre` en references/contrato.md: de 1 a 3 palabras, sin signos de interrogación, distinto de los demás nombres del filtro, y en secciones que se repiten sin el nombre de la opción.',
+    ].join('\n'),
+    'Responde solo con el JSON: {"nombres": {"idPregunta": "Nombre corto", …}}.',
+  ].join('\n\n');
 }

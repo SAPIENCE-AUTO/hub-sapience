@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
+import { renombrarColumnas, type Vinculo } from '../serverUtils/formularios/reclutamiento';
 import { revisarDefinicion } from '../lib/formularios/revisar';
 import { leerDefinicion } from '../lib/formularios/tipos';
 
@@ -13,7 +14,9 @@ const MINUTOS_ENTRE_AUTOMATICAS = 30;
  * en prueba la gente lo está contestando con esto. `revision` es la que tenía
  * el editor al cargar: si otra persona (u otra ventana) guardó mientras tanto,
  * no se pisa y se avisa. Los ids no los toca el servidor: el editor nunca los
- * cambia y son la clave de las columnas del tablero.
+ * cambia y son la clave de las columnas del tablero. Si el filtro está
+ * vinculado a un tablero, las columnas que ya existen toman el nombre corto
+ * nuevo de su pregunta (renombrarColumnas).
  */
 export default createEndpoint({
   authenticated: true,
@@ -42,7 +45,7 @@ export default createEndpoint({
     const client = await pool.connect();
     try {
       await client.query('begin');
-      const { rows: [f] } = await client.query(`select revision from formularios where id = $1 for update`, [input.formularioId]);
+      const { rows: [f] } = await client.query(`select revision, vinculo from formularios where id = $1 for update`, [input.formularioId]);
       if (!f) throw new ZiteError({ code: 'NOT_FOUND', message: 'No se encontró el formulario.' });
       if (f.revision !== input.revision) {
         await client.query('rollback');
@@ -68,6 +71,11 @@ export default createEndpoint({
         );
       }
       await client.query('commit');
+      // Si ya está vinculado a un tablero, sus columnas toman el nombre nuevo de cada pregunta (sin hacer esperar al guardado).
+      if (f.vinculo) {
+        renombrarColumnas(input.formularioId, f.vinculo as Vinculo, def)
+          .catch((err) => console.error('[filtros] no se pudieron renombrar las columnas del tablero', err));
+      }
       return { ok: true, revision: n.revision as number };
     } catch (err) {
       try { await client.query('rollback'); } catch { /* la conexión ya murió */ }

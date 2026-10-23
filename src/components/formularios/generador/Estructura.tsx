@@ -35,7 +35,7 @@ function FilaFrente({ f, editable, onGuardar }: { f: FrentePlan; editable: boole
   return (
     <li className="grid gap-x-3 gap-y-0.5 border-b border-[#E4E4E7] py-2 last:border-0 sm:grid-cols-[minmax(12rem,19rem)_4.5rem_1fr]">
       {editable
-        ? <input aria-label="Nombre del frente" value={nombre} onChange={(e) => setNombre(e.target.value)} onBlur={guardarNombre} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} className="rounded-md border bg-white px-2 py-1 text-sm font-semibold text-[#1F1F23]" />
+        ? <input aria-label="Nombre del perfil" value={nombre} onChange={(e) => setNombre(e.target.value)} onBlur={guardarNombre} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} className="rounded-md border bg-white px-2 py-1 text-sm font-semibold text-[#1F1F23]" />
         : <span className="text-sm font-semibold text-[#1F1F23]">{f.nombre}</span>}
       <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
         {editable
@@ -103,15 +103,15 @@ export function EstructuraPanel({ gen, actual, regla, onCerrar }: {
           <div><Etiqueta>País</Etiqueta><p className="text-sm">{pais?.nombre ?? e.pais}{reglaNse ? ` · NSE ${reglaNse}` : ' · sin regla de NSE'}</p></div>
           <div><Etiqueta>Título que ve el participante</Etiqueta><p className="text-sm">{e.tituloPublico}</p></div>
         </div>
-        <div><Etiqueta>Perfil que se busca</Etiqueta><p className="whitespace-pre-line text-sm leading-relaxed text-[#45454D]">{e.perfil || '—'}</p></div>
+        <div><Etiqueta>A quién se busca</Etiqueta><p className="whitespace-pre-line text-sm leading-relaxed text-[#45454D]">{e.perfil || '—'}</p></div>
       </div>
 
       <section className="rounded-xl border bg-white px-4 py-3 shadow-sm">
         <div className="flex items-baseline justify-between gap-2">
-          <Etiqueta>Frentes y cuotas</Etiqueta>
+          <Etiqueta>Perfiles y cuotas</Etiqueta>
           <span className="text-xs text-muted-foreground">Total {e.frentes.reduce((n, f) => n + f.meta, 0)}</span>
         </div>
-        {e.frentes.length === 0 && <p className="py-2 text-sm" style={{ color: PELIGRO }}>Sin frentes: nadie calificaría.</p>}
+        {e.frentes.length === 0 && <p className="py-2 text-sm" style={{ color: PELIGRO }}>Sin perfiles: nadie calificaría.</p>}
         <ul>{e.frentes.map((f) => <FilaFrente key={f.id} f={f} editable={!!propuesta} onGuardar={(c) => gen.editarFrente(f.id, c).catch((err) => toast.error((err as Error).message))} />)}</ul>
       </section>
 
@@ -141,6 +141,7 @@ export function EstructuraPanel({ gen, actual, regla, onCerrar }: {
                   <ul className="mt-1 space-y-0.5">
                     {s.preguntas.map((p) => (
                       <li key={p.id} className="text-[13px] leading-snug text-[#1F1F23]">
+                        {p.nombre && <span className="mr-1.5 font-semibold" style={{ color: TEAL }}>{sinMarca(p.nombre)}</span>}
                         {sinMarca(p.texto)}
                         <span className="ml-1.5 text-[10.5px] uppercase tracking-wide text-muted-foreground">{TIPOS[p.tipo]?.nombre ?? p.tipo}{p.opciones?.length ? ` · ${p.opciones.length} opciones` : ''}</span>
                         {p.soloSi && <span className="block text-[12px]" style={{ color: TEAL }}>↳ {p.soloSi}</span>}
@@ -175,7 +176,7 @@ export function EstructuraPanel({ gen, actual, regla, onCerrar }: {
               onChange={(ev) => setPedido(ev.target.value)}
               onKeyDown={(ev) => { if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); void pedirCambio(); } }}
               rows={2}
-              placeholder="Por ejemplo: «quita la sección de marcas», «el frente B es de 8», «agrega una pregunta de lugar de compra en cada bloque»."
+              placeholder="Por ejemplo: «quita la sección de marcas», «el perfil B es de 8», «agrega una pregunta de lugar de compra en cada bloque»."
               className="w-full resize-y rounded-md border bg-white px-3 py-2 text-sm outline-none focus:border-[#0F3D4D]/50"
             />
             <div className="flex flex-wrap items-center gap-2">

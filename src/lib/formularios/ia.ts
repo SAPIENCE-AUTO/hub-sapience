@@ -263,7 +263,7 @@ function referencias(def: Definicion): Referencia[] {
       if (p.terminaSi) out.push({ donde: `cuándo termina el filtro en ${citar(def, p.id, 40)}`, condicion: p.terminaSi.si, seccion: s });
     }
   }
-  for (const f of def.frentes ?? []) out.push({ donde: `el frente ${f.nombre}`, condicion: f.califica });
+  for (const f of def.frentes ?? []) out.push({ donde: `el perfil ${f.nombre}`, condicion: f.califica });
   for (const a of def.alertas ?? []) if (a.si) out.push({ donde: `la alerta «${a.texto}»`, condicion: a.si });
   return out;
 }
@@ -409,14 +409,14 @@ export function cambiosEnPalabras(antes: Definicion, despues: Definicion): strin
   const frentesD = new Map((despues.frentes ?? []).map((f) => [f.id, f]));
   for (const f of despues.frentes ?? []) {
     const a = frentesA.get(f.id);
-    if (!a) { out.push(`Frente nuevo: ${f.nombre}, cuota ${f.meta}. ${frenteEnPalabras(despues, f)}`); continue; }
-    if (a.nombre !== f.nombre) out.push(`El frente ${a.nombre} se llama ahora ${f.nombre}.`);
+    if (!a) { out.push(`Perfil nuevo: ${f.nombre}, cuota ${f.meta}. ${frenteEnPalabras(despues, f)}`); continue; }
+    if (a.nombre !== f.nombre) out.push(`El perfil ${a.nombre} se llama ahora ${f.nombre}.`);
     if (a.meta !== f.meta) out.push(`La cuota de ${f.nombre} pasa de ${a.meta} a ${f.meta}.`);
     const qa = frenteEnPalabras(antes, a);
     const qd = frenteEnPalabras(despues, f);
     if (qa !== qd) out.push(`Quién entra a ${f.nombre}: ${qd}`);
   }
-  for (const f of antes.frentes ?? []) if (!frentesD.has(f.id)) out.push(`Quita el frente ${f.nombre}.`);
+  for (const f of antes.frentes ?? []) if (!frentesD.has(f.id)) out.push(`Quita el perfil ${f.nombre}.`);
   const alertasA = (antes.alertas ?? []).map((a) => alertaEnPalabras(antes, a));
   const alertasD = (despues.alertas ?? []).map((a) => alertaEnPalabras(despues, a));
   for (const a of alertasD) if (!alertasA.includes(a)) out.push(`Alerta nueva: ${a}`);

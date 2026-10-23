@@ -30,7 +30,7 @@ Una sección es una pantalla en el celular. En una sección que se repite, «{op
 
 ## Preguntas
 
-Campos comunes: `id`, `tipo`, `texto`; opcionales `ayuda` (bajo la pregunta), `opcional: true` (se puede dejar sin contestar; por defecto todas son obligatorias), `mostrarSi`, `nota` (lógica para el equipo, nunca la ve el participante).
+Campos comunes: `id`, `tipo`, `texto`, `nombre`; opcionales `ayuda` (bajo la pregunta), `opcional: true` (se puede dejar sin contestar; por defecto todas son obligatorias), `mostrarSi`, `nota` (lógica para el equipo, nunca la ve el participante).
 
 | tipo | para qué | lleva |
 |---|---|---|
@@ -55,6 +55,7 @@ Campos comunes: `id`, `tipo`, `texto`; opcionales `ayuda` (bajo la pregunta), `o
 | `foto` | fotos desde el celular (hasta 3) | |
 | `contenido` | texto sin pregunta (instrucciones) | |
 
+- **`nombre`** es el nombre corto de la pregunta: el encabezado de su columna en el tablero de Reclutamiento y en el Excel (el participante no lo ve). De 1 a 3 palabras, sin signos de interrogación, como lo escribiría el equipo: «Edad», «Género», «Hijos», «Código postal», «Marcas que compra», «Marca favorita», «Rechazo de marcas», «Aviso de privacidad». Distinto de los demás nombres del filtro; en una sección que se repite, distinto dentro de la sección y sin el nombre de la opción (la columna ya lleva el del bloque: «Tu aerosol · Marcas que compra»). Lo lleva toda pregunta menos `contenido`.
 - **No uses `imagen_unica` ni `imagen_multiple`**: las imágenes las pone una persona después. Si mostrar fotos ayudaría (formatos, empaques), usa `unica` o `multiple` y dilo en `supuestos`.
 - **Una o varias lo dice el tipo**: `unica`, `lista` y `matriz` son de una; `multiple`, `lista_multiple` y `matriz_multiple` son de varias.
 - `casilla` e `interruptor` guardan `"si"` o `"no"`: en la lógica se usan como opciones con esos ids.
@@ -74,7 +75,7 @@ Más campos:
   "corto": "nombre corto para {opcion}",   // opcional
   "termina": "motivo interno",             // si la marca, termina el filtro
   "descarta": "motivo interno",            // solo en secciones que se repiten: no cuenta ese bloque, el filtro sigue
-  "excluyeGrupos": ["grupo"],              // queda fuera de los frentes de ese grupo (rechazo a la marca)
+  "excluyeGrupos": ["grupo"],              // queda fuera de los perfiles de ese grupo (rechazo a la marca)
   "otra": true,                            // pide escribir cuál («Otra, ¿cuál?»)
   "exclusiva": true,                       // «Ninguno»: al marcarla se quitan las demás (solo en las de varias)
   "fija": true }                           // no se mueve con el orden aleatorio
@@ -89,7 +90,7 @@ Los motivos (`termina`, `descarta`) son internos: los lee el equipo en el panel,
 { "pregunta": "id", "noIncluye": ["idOpcion", …] }      // no marcó ninguna de esas
 { "pregunta": "id", "incluyeTodas": ["idOpcion", …] }   // marcó todas esas
 { "numero": "id", "entre": [25, 55] }                   // número o escala entre esos dos (incluidos)
-{ "nse": ["C+", "C"] }                                  // solo en frentes: su NSE es uno de esos (si no, alerta)
+{ "nse": ["C+", "C"] }                                  // solo en perfiles: su NSE es uno de esos (si no, alerta)
 { "todas": [Condicion, …] }                             // y
 { "alguna": [Condicion, …] }                            // o
 { "no": Condicion }                                     // no
@@ -101,9 +102,11 @@ En secciones que se repiten:
 - `{ "bloque": "idSeccion", "opcion": "idOpcion" }`: tiene ese bloque y no lo descartó.
 - `{ "instanciaEs": ["idOpcion"] }`: dentro de la sección que se repite, la pregunta solo sale en ese bloque («solo especializado»).
 
-Una condición solo puede usar preguntas que van **antes** de donde se usa. Los frentes y las alertas se evalúan al final y pueden usar cualquiera.
+Una condición solo puede usar preguntas que van **antes** de donde se usa. Los perfiles y las alertas se evalúan al final y pueden usar cualquiera.
 
-## Frentes, alertas y claves
+## Perfiles, alertas y claves
+
+En el JSON, los perfiles van en la lista `"frentes"` (es su nombre interno); a la persona siempre se le dice «perfiles».
 
 ```
 "frentes": [{ "id": "…", "nombre": "Aerosoles", "grupo": "marca_a", "meta": 6,
@@ -112,8 +115,8 @@ Una condición solo puede usar preguntas que van **antes** de donde se usa. Los 
             { "texto": "…", "si": Condicion }]
 ```
 
-- Quien termina no entra a ningún frente. Quien no termina entra a todos los frentes cuya condición cumple, menos los de grupos que excluyó.
-- **Califica quien no termina, contesta todo y entra a al menos un frente.** Por eso todo filtro lleva al menos un frente; si el estudio tiene un solo perfil, es un frente con la cuota total.
+- Quien termina no entra a ningún perfil. Quien no termina entra a todos los perfiles cuya condición cumple, menos los de grupos que excluyó.
+- **Califica quien no termina, contesta todo y entra a al menos un perfil.** Por eso todo filtro lleva al menos un perfil; si el estudio tiene un solo perfil, es un perfil con la cuota total.
 - Las alertas no descartan: marcan la respuesta para revisarla.
 
 ## Ids

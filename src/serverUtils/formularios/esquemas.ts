@@ -32,6 +32,7 @@ export const PreguntaZ = z.object({
   id: z.string().min(1),
   tipo: TIPO,
   texto: z.string().default(''),
+  nombre: texto,
   ayuda: texto, imagen: texto, opcional: si,
   opciones: z.array(OpcionZ).nullish(),
   opcionesDe: texto,
@@ -78,6 +79,7 @@ const PreguntaPlanZ = z.object({
   id: z.string().min(1),
   tipo: TIPO,
   texto: z.string(),
+  nombre: texto,
   opciones: z.array(z.object({ id: z.string().min(1), label: z.string(), corto: texto })).nullish(),
   filas: z.array(z.object({ id: z.string().min(1), label: z.string() })).nullish(),
   opcionesDe: texto, soloSi: texto, logica: texto,
@@ -111,6 +113,9 @@ export const RespuestaLogicaZ = z.object({
   textos: z.object({ tituloPublico: texto, bienvenida: texto, despedida: texto, noCalifica: texto }).default({}),
   supuestos,
 });
+
+// ── nombres cortos de las preguntas que no tienen ──
+export const RespuestaNombresZ = z.object({ nombres: z.record(z.string(), z.string()) });
 
 // ── cambios pedidos con palabras ──
 export const RespuestaCambioPreguntaZ = z.object({ pregunta: PreguntaZ, explicacion: z.string().default('') });

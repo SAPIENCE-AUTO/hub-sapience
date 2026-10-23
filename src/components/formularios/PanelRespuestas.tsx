@@ -46,7 +46,7 @@ function PillResultado({ r }: { r: RespuestaRow }) {
 
 function Nse({ r }: { r: RespuestaRow }) {
   return (
-    <span className="whitespace-nowrap" style={{ color: r.nseFueraDe.length ? ALERTA : undefined }} title={r.nseFueraDe.length ? 'No es el NSE que pide su frente (no descarta)' : undefined}>
+    <span className="whitespace-nowrap" style={{ color: r.nseFueraDe.length ? ALERTA : undefined }} title={r.nseFueraDe.length ? 'No es el NSE que pide su perfil (no descarta)' : undefined}>
       {r.nse ?? '—'}{r.nseFueraDe.length > 0 && <TriangleAlert className="ml-1 inline h-3 w-3" />}
     </span>
   );
@@ -102,7 +102,7 @@ export function PanelRespuestas({ detalle, proyectoId, onRecargar, onBorrarPrueb
           <div className="hidden overflow-hidden rounded-lg border sm:block">
             <table className="w-full text-sm">
               <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
-                <tr><th className="px-3 py-2">Frente</th><th className="px-3 py-2">Califican / meta</th><th className="px-3 py-2">Con NSE distinto</th><th className="px-3 py-2">Mujeres · hombres</th></tr>
+                <tr><th className="px-3 py-2">Perfil</th><th className="px-3 py-2">Califican / meta</th><th className="px-3 py-2">Con NSE distinto</th><th className="px-3 py-2">Mujeres · hombres</th></tr>
               </thead>
               <tbody>
                 {cuotas.map((c) => (
@@ -153,7 +153,7 @@ export function PanelRespuestas({ detalle, proyectoId, onRecargar, onBorrarPrueb
                   <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2">Fecha</th><th className="px-3 py-2">Nombre</th><th className="px-3 py-2">Edad</th>
-                      <th className="px-3 py-2">NSE</th><th className="px-3 py-2">Resultado</th><th className="px-3 py-2">Frente o motivo</th><th className="px-3 py-2" />
+                      <th className="px-3 py-2">NSE</th><th className="px-3 py-2">Resultado</th><th className="px-3 py-2">Perfil o motivo</th><th className="px-3 py-2" />
                     </tr>
                   </thead>
                   <tbody>

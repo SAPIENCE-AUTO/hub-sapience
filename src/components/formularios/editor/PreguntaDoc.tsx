@@ -8,6 +8,8 @@ import { logicaDePregunta } from '@/lib/formularios/palabras';
 import { GRUPOS_TIPOS, cambiarPregunta, cambiarTipo, esDelNse, moverPregunta, quitarPregunta, sePuedeMover, usosDePregunta } from '@/lib/formularios/editar';
 import { rango } from '@/lib/formularios/motor';
 import { nombreCampoDireccion } from '@/lib/formularios/paises';
+import { nombreDePregunta } from '@/lib/formularios/tabla';
+import { TEAL } from '@/lib/toolColors';
 import { CAMPOS_DIRECCION, TIPOS, esDeOpciones, esMatriz, forma, type Pregunta, type Seccion } from '@/lib/formularios/tipos';
 import { BotonIcono, Logica, useAlCerrarMenu, useDoc } from './comun';
 import { EditorCondicion, EditorMaximo, EditorRango } from './Ajustes';
@@ -89,6 +91,17 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
       {input}
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
+          {f !== 'ninguna' && (
+            <p className="mb-0.5 text-[12px] font-semibold leading-snug" style={{ color: TEAL }} title="Nombre corto: el de su columna en el tablero y en el Excel. El participante no lo ve.">
+              {bloqueada ? nombreDePregunta(p) : (
+                <TextoEditable
+                  valor={p.nombre ?? ''} linea etiqueta="Nombre corto" placeholder="Sin nombre corto"
+                  className={p.nombre?.trim() ? '' : '!text-[#8a4b00]'}
+                  onGuardar={(v) => cambiar({ nombre: v || undefined })}
+                />
+              )}
+            </p>
+          )}
           <p className={`text-[15px] leading-snug text-[#1F1F23] ${p.tipo === 'contenido' ? 'whitespace-pre-line' : 'font-semibold'}`}>
             {bloqueada ? p.texto : (
               <TextoEditable
