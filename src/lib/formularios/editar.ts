@@ -16,7 +16,7 @@ import {
  */
 
 // ── ids ──────────────────────────────────────────────────────────────────────
-export function idNuevo(prefijo: 'p' | 'o' | 'f' | 's', usados: Iterable<string>, azar: () => number = Math.random): string {
+export function idNuevo(prefijo: 'p' | 'o' | 'f' | 's' | 'fr', usados: Iterable<string>, azar: () => number = Math.random): string {
   const ya = new Set(usados);
   for (;;) {
     const id = `${prefijo}_${Array.from({ length: 6 }, () => '0123456789abcdefghijklmnopqrstuvwxyz'[Math.floor(azar() * 36)]).join('')}`;

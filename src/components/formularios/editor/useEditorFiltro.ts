@@ -75,6 +75,8 @@ export function useEditorFiltro({ formularioId, inicial, revisionInicial, onGuar
   const sesion = useMemo(() => sesionDeVentana(formularioId), [formularioId]);
   const onGuardadoRef = useRef(onGuardado);
   onGuardadoRef.current = onGuardado;
+  /** Secciones que puso el generador con IA y se marcan como puestas con el próximo guardado (fase 3). */
+  const porMarcar = useRef<Record<string, string>>({});
 
   const problemas = useMemo(() => revisarConLugar(h.def), [h.def]);
 
@@ -94,11 +96,13 @@ export function useEditorFiltro({ formularioId, inicial, revisionInicial, onGuar
     enVueloRef.current = true;
     setEnVuelo(true);
     setEstado('guardando');
+    const aplicadas = { ...porMarcar.current };
     try {
-      const r = await saveFormularioDefinicion({ formularioId, definicion: def, revision: guardada.current.revision });
+      const r = await saveFormularioDefinicion({ formularioId, definicion: def, revision: guardada.current.revision, aplicadas });
       if (!r.ok) {
         setConflicto(true);
       } else {
+        for (const id of Object.keys(aplicadas)) if (porMarcar.current[id] === aplicadas[id]) delete porMarcar.current[id];
         guardada.current = { def, revision: r.revision };
         setErrorDe(null);
         onGuardadoRef.current?.(def);
@@ -167,7 +171,11 @@ export function useEditorFiltro({ formularioId, inicial, revisionInicial, onGuar
 
   return {
     def: h.def,
+    /** Lo más reciente, aunque todavía no se haya vuelto a pintar (lo usa el generador entre llamadas). */
+    leer: useCallback(() => actual.current, []),
     aplicar,
+    /** Lo que guarde el siguiente guardado deja estas secciones del generador como puestas (id → firma de su plan). */
+    marcarAlGuardar: useCallback((marcas: Record<string, string>) => { Object.assign(porMarcar.current, marcas); }, []),
     deshacer: useCallback(() => dispatch({ tipo: 'deshacer' }), []),
     rehacer: useCallback(() => dispatch({ tipo: 'rehacer' }), []),
     puedeDeshacer: h.pasado.length > 0,

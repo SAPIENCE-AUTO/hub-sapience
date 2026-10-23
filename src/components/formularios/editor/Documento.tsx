@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowDown, ArrowUp, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Loader2, MessageSquareText, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -24,6 +24,7 @@ import { PreguntaDoc } from './PreguntaDoc';
 import { MapaFlujo } from './MapaFlujo';
 import { TextoEditable } from './TextoEditable';
 import { esCampoDeTexto, imagenesDe, subirImagenFiltro, traeArchivos } from './imagenes';
+import { PropuestaIA } from '../generador/PropuestaIA';
 
 function MenuTipos({ onElegir, children }: { onElegir: (t: TipoPregunta) => void; children: React.ReactNode }) {
   const { despues, alCerrar } = useAlCerrarMenu();
@@ -43,12 +44,38 @@ function MenuTipos({ onElegir, children }: { onElegir: (t: TipoPregunta) => void
   );
 }
 
+/** Las secciones del documento con un hueco en el lugar de las que la IA todavía escribe. */
+function conHuecos(def: Definicion, pendientes?: { orden: string[]; titulos: Record<string, string>; escribiendo: Set<string> }) {
+  const escritas = def.secciones.map((seccion) => ({ seccion, id: seccion.id, titulo: '', escribiendo: false }));
+  if (!pendientes) return escritas;
+  const huecos = pendientes.orden.filter((id) => !def.secciones.some((s) => s.id === id));
+  if (!huecos.length) return escritas;
+  const lugar = new Map(pendientes.orden.map((id, i) => [id, i]));
+  const todas = [...escritas, ...huecos.map((id) => ({ seccion: undefined, id, titulo: pendientes.titulos[id] ?? '', escribiendo: pendientes.escribiendo.has(id) }))];
+  return todas.sort((a, b) => (lugar.get(a.id) ?? Infinity) - (lugar.get(b.id) ?? Infinity));
+}
+
+function HuecoSeccion({ titulo, escribiendo }: { titulo: string; escribiendo: boolean }) {
+  return (
+    <section className="border-t border-[#E4E4E7] pt-6">
+      <div className="rounded-lg border border-dashed border-[#0F3D4D]/25 bg-[#0F3D4D]/[0.02] px-4 py-5">
+        <p className="text-[16px] font-bold text-[#1F1F23]/50">{titulo.split('{opcion}').join('…')}</p>
+        <p className="mt-1 flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+          {escribiendo ? <><Loader2 className="h-3.5 w-3.5 animate-spin text-[#0F3D4D]" />La IA está escribiendo esta sección…</> : 'En fila para escribirse'}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 const botonAgregar = 'flex items-center gap-1 rounded-md px-2 py-1 text-[13px] font-medium text-[#0F3D4D]/80 hover:bg-[#0F3D4D]/5 hover:text-[#0F3D4D]';
 
 function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number; ctx: ContextoDoc }) {
-  const { def, aplicar, quitar, nuevo, setNuevo } = ctx;
+  const { def, aplicar, quitar, nuevo, setNuevo, ia } = ctx;
   const [condicion, setCondicion] = useState(false);
   const [intro, setIntro] = useState(false);
+  const [comentar, setComentar] = useState(false);
+  const delNse = s.preguntas.some((p) => !!def.nse?.puntos[p.id]);
   const { despues, alCerrar } = useAlCerrarMenu();
 
   const agregar = (tipo: TipoPregunta) => {
@@ -73,6 +100,7 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
           />
         </h2>
         <div className="flex flex-shrink-0 items-center sm:opacity-40 sm:group-hover/s:opacity-100 sm:focus-within:opacity-100">
+          {ia && !delNse && <BotonIcono titulo="Comentar la lógica de esta sección a la IA" onClick={() => setComentar((x) => !x)}><MessageSquareText className="h-4 w-4" /></BotonIcono>}
           <BotonIcono titulo="Subir sección" disabled={i === 0} onClick={() => aplicar((d) => moverSeccion(d, s.id, -1))}><ArrowUp className="h-4 w-4" /></BotonIcono>
           <BotonIcono titulo="Bajar sección" disabled={i === total - 1} onClick={() => aplicar((d) => moverSeccion(d, s.id, 1))}><ArrowDown className="h-4 w-4" /></BotonIcono>
           <DropdownMenu modal={false}>
@@ -96,6 +124,7 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
         </p>
       )}
       <Logica lineas={logicaDeSeccion(def, s)} className="mt-1.5" />
+      {comentar && <PropuestaIA alcance={{ seccion: s.id }} onCerrar={() => setComentar(false)} />}
       {condicion && (
         <EditorCondicion lugar={{ seccion: s.id }} actual={s.mostrarSi} onCerrar={() => setCondicion(false)} onGuardar={(c) => aplicar((d) => cambiarSeccion(d, s.id, { mostrarSi: c }))} />
       )}
@@ -110,14 +139,19 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
 }
 
 function Frentes({ ctx }: { ctx: ContextoDoc }) {
-  const { def, aplicar } = ctx;
+  const { def, aplicar, ia } = ctx;
+  const [comentar, setComentar] = useState(false);
   const frentes = def.frentes ?? [];
   const pais = PAISES[def.pais];
   const vigente = reglaVigente(def.pais);
   return (
     <section className="border-t border-[#E4E4E7] pt-6">
-      <h2 className="text-[18px] font-bold text-[#1F1F23]">Frentes y cuotas</h2>
-      <p className="mt-0.5 text-[12.5px] text-muted-foreground">Quién entra a cada frente se lee aquí en palabras; el nombre y la cuota se corrigen a mano.</p>
+      <div className="flex items-start gap-2">
+        <h2 className="min-w-0 flex-1 text-[18px] font-bold text-[#1F1F23]">Frentes y cuotas</h2>
+        {ia && <BotonIcono titulo="Comentar los frentes y cuotas a la IA" onClick={() => setComentar((x) => !x)}><MessageSquareText className="h-4 w-4" /></BotonIcono>}
+      </div>
+      <p className="mt-0.5 text-[12.5px] text-muted-foreground">{ia ? 'El nombre y la cuota se corrigen a mano; quién entra a cada frente, comentándolo a la IA.' : 'Quién entra a cada frente se lee aquí en palabras; el nombre y la cuota se corrigen a mano.'}</p>
+      {comentar && <PropuestaIA alcance={{ frentes: true }} onCerrar={() => setComentar(false)} />}
       {frentes.length === 0 && <p className="mt-2 text-[13px] text-muted-foreground">Este filtro no tiene frentes.</p>}
       <ul className="mt-3 space-y-3">
         {frentes.map((f) => (
@@ -177,7 +211,13 @@ function CuotaFrente({ valor, onGuardar }: { valor: number; onGuardar: (n: numbe
  * lado en pantallas anchas. Todo texto se corrige con un clic; las imágenes
  * se arrastran o se pegan sobre la opción o la pregunta.
  */
-export function Documento({ editor, onIr }: { editor: Editor; onIr: (seccionId: string) => void }) {
+export function Documento({ editor, onIr, ia, pendientes }: {
+  editor: Editor;
+  onIr: (seccionId: string) => void;
+  ia?: ContextoDoc['ia'];
+  /** Fase 3: secciones de la estructura que la IA todavía está escribiendo, en su orden. Se ven como un hueco en su lugar. */
+  pendientes?: { orden: string[]; titulos: Record<string, string>; escribiendo: Set<string> };
+}) {
   const { def, aplicar } = editor;
   const [subiendo, setSubiendo] = useState<Set<string>>(new Set());
   const [nuevo, setNuevo] = useState<string | null>(null);
@@ -232,7 +272,8 @@ export function Documento({ editor, onIr }: { editor: Editor; onIr: (seccionId: 
     ponerImagen: (d, a) => { void ponerImagen(d, a); },
     apuntar: (d) => { apuntado.current = d; },
     quitar: (q) => (q.usos.length || q.confirmar ? setPorQuitar(q) : q.hacer()),
-  }), [def, aplicar, subiendo, nuevo]); // eslint-disable-line react-hooks/exhaustive-deps
+    ia,
+  }), [def, aplicar, subiendo, nuevo, ia]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const agregarSeccionAl = (indice: number) => {
     let id = '';
@@ -259,11 +300,9 @@ export function Documento({ editor, onIr }: { editor: Editor; onIr: (seccionId: 
             <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-[#45454D]">{textos('bienvenida', 'Bienvenida', '')}</p>
           </header>
 
-          {def.secciones.map((s, i) => (
-            <div key={s.id}>
-              <SeccionDoc s={s} i={i} total={def.secciones.length} ctx={ctx} />
-            </div>
-          ))}
+          {conHuecos(def, pendientes).map((x, i) => (x.seccion
+            ? <div key={x.seccion.id}><SeccionDoc s={x.seccion} i={def.secciones.indexOf(x.seccion)} total={def.secciones.length} ctx={ctx} /></div>
+            : <HuecoSeccion key={`hueco-${x.id}-${i}`} titulo={x.titulo} escribiendo={x.escribiendo} />))}
           <button type="button" className={botonAgregar} onClick={() => agregarSeccionAl(def.secciones.length)}><Plus className="h-3.5 w-3.5" />Sección</button>
 
           <section className="border-t border-[#E4E4E7] pt-6">

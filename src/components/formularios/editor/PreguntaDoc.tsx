@@ -13,8 +13,10 @@ import { BotonIcono, Logica, useAlCerrarMenu, useDoc } from './comun';
 import { EditorCondicion, EditorMaximo, EditorRango } from './Ajustes';
 import { ListaFilas, ListaOpciones, useElegirImagen, useZonaImagen } from './Opciones';
 import { TextoEditable } from './TextoEditable';
+import { PropuestaIA } from '../generador/PropuestaIA';
+import { MarcaIA } from '../generador/comun';
 
-type Abierto = 'condicion' | 'rango' | 'maximo' | 'ayuda' | 'nota' | null;
+type Abierto = 'condicion' | 'rango' | 'maximo' | 'ayuda' | 'nota' | 'ia' | null;
 
 /** Cómo se ve la respuesta en el documento cuando no es de opciones (como en el Word: una línea, los campos…). */
 function Respuesta({ p }: { p: Pregunta }) {
@@ -54,7 +56,7 @@ function Respuesta({ p }: { p: Pregunta }) {
 }
 
 export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
-  const { def, aplicar, quitar, nuevo, setNuevo } = useDoc();
+  const { def, aplicar, quitar, nuevo, setNuevo, ia } = useDoc();
   const [abierto, setAbierto] = useState<Abierto>(null);
   const { despues, alCerrar } = useAlCerrarMenu();
   const abrirAl = (a: Abierto) => () => despues(() => setAbierto(a));
@@ -109,6 +111,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
         </div>
         {!bloqueada && (
           <div className="flex flex-shrink-0 items-center opacity-100 transition-opacity sm:opacity-40 sm:group-hover/p:opacity-100 sm:focus-within:opacity-100">
+            {ia && <BotonIcono titulo="Pedir un cambio a la IA" onClick={() => setAbierto(abierto === 'ia' ? null : 'ia')}><MarcaIA className="h-4 w-4" /></BotonIcono>}
             <BotonIcono titulo="Subir pregunta" disabled={!sePuedeMover(def, p.id, -1)} onClick={() => aplicar((d) => moverPregunta(d, p.id, -1))}><ArrowUp className="h-4 w-4" /></BotonIcono>
             <BotonIcono titulo="Bajar pregunta" disabled={!sePuedeMover(def, p.id, 1)} onClick={() => aplicar((d) => moverPregunta(d, p.id, 1))}><ArrowDown className="h-4 w-4" /></BotonIcono>
             <DropdownMenu modal={false}>
@@ -186,6 +189,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
       )}
       {abierto === 'rango' && <EditorRango p={p} onCerrar={() => setAbierto(null)} onGuardar={cambiar} />}
       {abierto === 'maximo' && <EditorMaximo p={p} onCerrar={() => setAbierto(null)} onGuardar={(n) => cambiar({ maxOpciones: n })} />}
+      {abierto === 'ia' && <PropuestaIA alcance={{ pregunta: p.id }} onCerrar={() => setAbierto(null)} />}
     </div>
   );
 }

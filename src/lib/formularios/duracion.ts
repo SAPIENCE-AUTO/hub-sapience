@@ -65,16 +65,16 @@ function veces(def: Definicion, s: Seccion, maximo: boolean): number {
   return Math.min(maximo ? 3 : 1.5, posibles);
 }
 
-function segundos(def: Definicion, maximo: boolean): number {
+function segundosSeccion(def: Definicion, s: Seccion, maximo: boolean): number {
   const peso = (condicional: boolean) => (condicional && !maximo ? 0.5 : 1);
-  let total = palabras(def.bienvenida) * SEG_POR_PALABRA;
-  for (const s of def.secciones) {
-    const una = (palabras(s.titulo) + palabras(s.intro)) * SEG_POR_PALABRA
-      + s.preguntas.reduce((n, p) => n + segundosPregunta(def, p) * peso(!!p.mostrarSi), 0)
-      + 3; // pasar de pantalla
-    total += una * veces(def, s, maximo) * peso(!!s.mostrarSi);
-  }
-  return total;
+  const una = (palabras(s.titulo) + palabras(s.intro)) * SEG_POR_PALABRA
+    + s.preguntas.reduce((n, p) => n + segundosPregunta(def, p) * peso(!!p.mostrarSi), 0)
+    + 3; // pasar de pantalla
+  return una * veces(def, s, maximo) * peso(!!s.mostrarSi);
+}
+
+function segundos(def: Definicion, maximo: boolean): number {
+  return def.secciones.reduce((n, s) => n + segundosSeccion(def, s, maximo), palabras(def.bienvenida) * SEG_POR_PALABRA);
 }
 
 export interface Duracion { tipico: number; maximo: number }
@@ -82,4 +82,10 @@ export interface Duracion { tipico: number; maximo: number }
 /** Minutos, redondeados hacia arriba. */
 export function duracionEstimada(def: Definicion): Duracion {
   return { tipico: Math.ceil(segundos(def, false) / 60), maximo: Math.ceil(segundos(def, true) / 60) };
+}
+
+/** Minutos de cada sección, con un decimal (la estructura del generador los muestra junto a cada una). */
+export function duracionPorSeccion(def: Definicion): Record<string, Duracion> {
+  const min = (seg: number) => Math.round(seg / 6) / 10;
+  return Object.fromEntries(def.secciones.map((s) => [s.id, { tipico: min(segundosSeccion(def, s, false)), maximo: min(segundosSeccion(def, s, true)) }]));
 }

@@ -25,6 +25,8 @@ export interface ContextoDoc {
   setNuevo: (id: string | null) => void;
   /** Pide confirmación antes de quitar algo que se usa en otra parte. */
   quitar: (q: Quitar) => void;
+  /** Fase 3: pedir cambios a la IA (botón IA en cada pregunta, Comentar en cada sección). */
+  ia?: { formularioId: string; contarUso: () => void };
 }
 
 export const Contexto = createContext<ContextoDoc | null>(null);

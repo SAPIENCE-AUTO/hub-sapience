@@ -18,7 +18,16 @@ import {
   GRUPOS_TIPOS, agregarOpcion, agregarPregunta, agregarSeccion, cambiarOpcion, cambiarPregunta, cambiarTipo, comoSimple, diferencias, idNuevo,
   moverPregunta, moverSeccion, preguntasParaCondicion, quitarOpcion, quitarPregunta, usosDeOpcion, usosDePregunta, usosDeSeccion,
 } from '../../src/lib/formularios/editar';
-import { TIPOS, forma } from '../../src/lib/formularios/tipos';
+import { TIPOS, forma, type Pregunta, type Seccion } from '../../src/lib/formularios/tipos';
+import {
+  asentarEstructura, avanceEscritura, compararEstructuras, revisarEstructura, type Estructura, conservarSinCambio, definicionVacia, estructuraDeDefinicion, firmaSeccion, generadorNuevo,
+  minutosDeEstructura, ponerSeccion, prepararParaEscribir, seccionNse,
+} from '../../src/lib/formularios/generador';
+import { definicionParaIA, promptCambio, promptEstructura, promptLogica, promptSeccion } from '../../src/serverUtils/formularios/prompts';
+import { EstructuraZ, RespuestaLogicaZ, RespuestaSeccionZ, sinVacios } from '../../src/serverUtils/formularios/esquemas';
+import { systemPrompt } from '../../src/serverUtils/formularios/claude';
+import { conservarLogica } from '../../src/serverUtils/formularios/generar';
+import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
 
 const NSE_CMAS: Respuestas = { nse_escolaridad: 'lic', nse_banos: '2', nse_autos: '1', nse_internet: 'si', nse_trabajan: '1', nse_cuartos: '2' }; // 59+47+22+32+15+16 = 191 → C+
 const NSE_C: Respuestas = { nse_escolaridad: 'prepa', nse_banos: '1', nse_autos: '1', nse_internet: 'si', nse_trabajan: '2', nse_cuartos: '1' }; // 27+24+22+32+31+8 = 144 → C
@@ -577,6 +586,288 @@ caso('comparar una versión con lo de ahora, en palabras', () => {
   assert.deepEqual(diferencias(ahora, ALONG2), ['Le falta 1 pregunta de hoy', '1 texto distinto']);
   assert.deepEqual(diferencias(ALONG2, quitarOpcion(ALONG2, 'categorias', 'cafe')), ['Le falta 1 opción de hoy']);
   assert.deepEqual(diferencias(ALONG2, cambiarTipo(ALONG2, 'giros', 'unica')), ['1 pregunta con otra lógica, tipo u orden de opciones']);
+});
+
+// ── fase 3: generador con IA (lógica pura; la IA no se llama aquí) ──────────
+caso('la estructura de un filtro escrito se lee completa y da casi los mismos minutos', () => {
+  const e = estructuraDeDefinicion(ALONG2);
+  assert.equal(e.secciones.length, ALONG2.secciones.length);
+  assert.equal(e.secciones.find((s) => s.id === 'nse')?.nse, true);
+  assert.equal(e.secciones.find((s) => s.id === 'aroma_bloque')?.repetirPor, 'formatos_compra');
+  assert.match(e.secciones.find((s) => s.id === 'aroma_formatos')?.aparece ?? '', /marcó Aromatizantes/);
+  assert.match(e.frentes.find((f) => f.id === 'brasso')?.quien ?? '', /^Entra si/);
+  const giros = e.secciones.find((s) => s.id === 'filtros')!.preguntas.find((p) => p.id === 'giros')!;
+  assert.match(giros.logica ?? '', /«Publicidad o marketing»: Si la marca, termina el filtro/);
+  // El boceto de la estructura da casi los mismos minutos que el screener escrito (no lleva la bienvenida ni las ayudas).
+  const m = minutosDeEstructura(e).total;
+  const real = duracionEstimada(ALONG2);
+  assert.ok(Math.abs(m.tipico - real.tipico) <= 1 && Math.abs(m.maximo - real.maximo) <= 1, JSON.stringify({ m, real }));
+  const porSeccion = minutosDeEstructura(e).porSeccion;
+  assert.ok(porSeccion.aroma_bloque.maximo > porSeccion.aroma_bloque.tipico);
+});
+
+caso('comparar estructuras: qué se conserva, qué se reescribe y qué sale', () => {
+  const base = estructuraDeDefinicion(ALONG2);
+  const nueva = structuredClone(base);
+  nueva.secciones = nueva.secciones.filter((s) => s.id !== 'rechazo');
+  nueva.secciones.find((s) => s.id === 'perfil')!.preguntas[0].texto = 'Tu nombre completo';
+  nueva.secciones.push({ id: 'extra', titulo: 'Extra', para: 'probar', preguntas: [{ id: 'nueva', tipo: 'texto', texto: '¿Algo más?' }] });
+  const r = compararEstructuras(base, nueva);
+  assert.equal(r.secciones.perfil, 'cambia');
+  assert.equal(r.secciones.compras, 'igual');
+  assert.equal(r.secciones.extra, 'nueva');
+  assert.deepEqual(r.salen, ['rechazo']);
+  // «cambia: false» deja la sección de la base tal cual, aunque la IA haya cambiado la redacción.
+  const conservada = conservarSinCambio(base, { ...nueva, secciones: nueva.secciones.map((s) => (s.id === 'perfil' ? { ...s, cambia: false } : s)) });
+  assert.equal(compararEstructuras(base, conservada).secciones.perfil, 'igual');
+  assert.ok(!('cambia' in conservada.secciones[0]));
+});
+
+caso('la estructura de la IA recibe ids nuevos y conserva los de la base', () => {
+  const propuesta: Estructura = {
+    pais: 'MX', tituloPublico: 'Estudio sobre bebidas', perfil: 'Toman café frío.',
+    frentes: [{ id: 'cafeteros', nombre: 'Cafeteros', grupo: 'cliente', meta: 8, quien: 'Toma café frío cada semana.' }],
+    secciones: [
+      { id: 'bebidas', titulo: 'Bebidas', para: 'qué toma', preguntas: [{ id: 'cuales', tipo: 'multiple', texto: '¿Cuáles tomas?', opciones: [{ id: 'cafe', label: 'Café frío', corto: 'café frío' }, { id: 'te', label: 'Té' }] }] },
+      { id: 'bloque', titulo: 'Tu {opcion}', para: 'detalle', repetirPor: 'cuales', repetirSolo: ['cafe'], preguntas: [{ id: 'frec', tipo: 'unica', texto: '¿Cada cuánto?', opciones: [{ id: 'diario', label: 'Diario' }] }] },
+      { id: 'nse', titulo: 'Tu hogar', para: 'NSE', nse: true, preguntas: [] },
+    ],
+    supuestos: ['Tomé la edad de la propuesta.'],
+  };
+  assert.deepEqual(revisarEstructura(propuesta), []);
+  const e = asentarEstructura(propuesta, undefined);
+  const [bebidas, bloque] = e.secciones;
+  assert.match(bebidas.id, /^s_/);
+  assert.match(bebidas.preguntas[0].id, /^p_/);
+  assert.equal(bloque.repetirPor, bebidas.preguntas[0].id);
+  assert.deepEqual(bloque.repetirSolo, [bebidas.preguntas[0].opciones![0].id]);
+  assert.match(e.frentes[0].id, /^fr_/);
+  // Al ajustar, lo que ya existía conserva su id.
+  const ajustada = structuredClone(e);
+  ajustada.secciones[0].preguntas.push({ id: 'nuevo_lugar', tipo: 'unica', texto: '¿Dónde lo compras?', opciones: [{ id: 'nuevo_a', label: 'Cafetería' }] });
+  const otra = asentarEstructura(ajustada, e);
+  assert.equal(otra.secciones[0].id, bebidas.id);
+  assert.equal(otra.secciones[0].preguntas[0].id, bebidas.preguntas[0].id);
+  assert.match(otra.secciones[0].preguntas[1].id, /^p_/);
+  assert.equal(otra.frentes[0].id, e.frentes[0].id);
+  // Lo mal armado se dice en palabras.
+  assert.ok(revisarEstructura({ ...propuesta, frentes: [] }).some((x) => x.startsWith('No hay frentes')));
+  assert.ok(revisarEstructura({ ...propuesta, secciones: [propuesta.secciones[1], propuesta.secciones[0]] }).some((x) => x.includes('no va antes')));
+});
+
+caso('al escribir, cada sección cae en su lugar y se sabe qué falta', () => {
+  const e = estructuraDeDefinicion(ALONG2);
+  const vacia = { ...definicionVacia(), secciones: [] };
+  let d = ponerSeccion(vacia, ALONG2.secciones[3], e);
+  d = ponerSeccion(d, ALONG2.secciones[0], e);
+  d = ponerSeccion(d, ALONG2.secciones[1], e);
+  assert.deepEqual(d.secciones.map((s) => s.id), ['aviso', 'perfil', 'compras']);
+  d = ponerSeccion(d, { ...ALONG2.secciones[1], titulo: 'Sobre ti (nueva)' }, e);
+  assert.deepEqual(d.secciones.map((s) => s.titulo), ['Antes de empezar', 'Sobre ti (nueva)', 'Lo que compras para tu casa']);
+  const nse = seccionNse(e.secciones.find((s) => s.id === 'nse')!, 'MX')!;
+  assert.equal(nse.preguntas.length, 6);
+  assert.equal(ponerSeccion(d, nse, e).nse?.regla, 'AMAI 2022');
+  assert.equal(seccionNse(e.secciones.find((s) => s.id === 'nse')!, 'PE'), undefined); // Perú aún no tiene regla cargada
+
+  const g = generadorNuevo('insumos');
+  g.estructura = e;
+  g.aplicadas = { aviso: firmaSeccion(e.secciones[0]) };
+  g.escritas = { perfil: { seccion: ALONG2.secciones[1], firma: firmaSeccion(e.secciones[1]) }, filtros: { seccion: ALONG2.secciones[2], firma: 'vieja' } };
+  const a = avanceEscritura(g);
+  assert.equal(a.listas, 1);
+  assert.ok(a.porPoner.includes('perfil') && a.porPoner.includes('nse'));
+  assert.ok(a.porEscribir.includes('filtros') && !a.porEscribir.includes('aviso'));
+
+  const lista = prepararParaEscribir(ALONG2, { ...e, pais: 'MX', tituloPublico: 'Otro título', frentes: e.frentes.filter((f) => f.id !== 'brasso') }, ['rechazo']);
+  assert.ok(!lista.secciones.some((s) => s.id === 'rechazo'));
+  assert.equal(lista.tituloPublico, 'Otro título');
+  assert.ok(!lista.frentes!.some((f) => f.id === 'brasso'));
+});
+
+caso('lo que propone la IA nunca cambia los ids que ya existen y lo nuevo lleva id nuevo', () => {
+  const giros = pregunta(ALONG2, 'giros');
+  const propuesta: Pregunta = {
+    ...giros,
+    id: 'giros',
+    opciones: [
+      ...giros.opciones!.filter((o) => o.id !== 'gobierno'),
+      { id: 'comercio', label: 'Comercio' },
+      { id: 'bancos', label: 'Bancos, seguros o afores' },
+    ],
+  };
+  const r = asentarIds({ preguntas: [propuesta] }, conocidosDe(ALONG2, ['giros']), ALONG2);
+  const q = r.preguntas![0];
+  assert.equal(q.id, 'giros');
+  assert.ok(q.opciones!.some((o) => o.id === 'publicidad' && o.termina));
+  const comercio = q.opciones!.find((o) => o.label === 'Comercio')!;
+  assert.match(comercio.id, /^o_[a-z0-9]{6}$/);
+  assert.equal(q.opciones!.filter((o) => o.id === 'bancos').length, 1); // la segunda «bancos» ya existía: no se repite el id
+  const d = aplicarParche(ALONG2, r);
+  assert.deepEqual(revisarDefinicion(d), []);
+  const cambios = cambiosEnPalabras(ALONG2, d);
+  assert.ok(cambios.some((c) => c.includes('agrega «Comercio»')), cambios.join(' | '));
+  assert.ok(cambios.some((c) => c.includes('quita «Gobierno»')), cambios.join(' | '));
+});
+
+caso('una sección nueva de la IA: ids nuevos y su lógica apunta a ellos', () => {
+  const nueva: Seccion = {
+    id: 'mascotas', titulo: 'Tus mascotas',
+    mostrarSi: { pregunta: 'categorias', incluye: ['mascota'] },
+    preguntas: [
+      { id: 'nuevo_tipo', tipo: 'multiple', texto: '¿Qué mascotas tienes?', opciones: [{ id: 'perro', label: 'Perro' }, { id: 'gato', label: 'Gato' }] },
+      { id: 'nuevo_raza', tipo: 'texto', texto: '¿De qué raza es tu perro?', mostrarSi: { pregunta: 'nuevo_tipo', incluye: ['perro'] } },
+    ],
+  };
+  const r = asentarIds({ secciones: [nueva], orden: [...ALONG2.secciones.map((s) => s.id).slice(0, 4), 'mascotas', ...ALONG2.secciones.map((s) => s.id).slice(4)] }, conocidosDe(ALONG2), ALONG2);
+  const s = r.secciones![0];
+  assert.match(s.id, /^s_/);
+  assert.deepEqual(s.mostrarSi, { pregunta: 'categorias', incluye: ['mascota'] }); // lo que ya existía no se toca
+  const [tipo, raza] = s.preguntas;
+  assert.match(tipo.id, /^p_/);
+  const perro = tipo.opciones!.find((o) => o.label === 'Perro')!;
+  assert.deepEqual(raza.mostrarSi, { pregunta: tipo.id, incluye: [perro.id] });
+  const d = aplicarParche(ALONG2, r);
+  assert.equal(d.secciones[4].id, s.id);
+  assert.deepEqual(revisarDefinicion(d), []);
+});
+
+caso('una sección que se repite: los bloques y los frentes siguen a los ids nuevos', () => {
+  const prop = {
+    secciones: [
+      { id: 'bebidas', titulo: 'Bebidas', preguntas: [{ id: 'cuales', tipo: 'multiple' as const, texto: '¿Cuáles tomas?', opciones: [{ id: 'cafe', label: 'Café', corto: 'café' }, { id: 'te', label: 'Té', corto: 'té' }] }] },
+      {
+        id: 'bloque', titulo: 'Tu {opcion}', repetirPor: 'cuales', repetirSolo: ['cafe', 'te'],
+        preguntas: [
+          { id: 'frec', tipo: 'unica' as const, texto: '¿Cada cuánto?', opciones: [{ id: 'diario', label: 'Diario' }, { id: 'nunca', label: 'Casi nunca', descarta: 'Casi no lo toma' }] },
+          { id: 'solo_cafe', tipo: 'texto' as const, texto: '¿Cómo lo preparas?', mostrarSi: { instanciaEs: ['cafe'] } },
+        ],
+      },
+    ],
+    frentes: [{ id: 'cafeteros', nombre: 'Cafeteros', grupo: 'cafe', meta: 6, califica: { todas: [{ bloque: 'bloque', opcion: 'cafe' }, { pregunta: 'frec', instancia: 'cafe', incluye: ['diario'] }] } }],
+  };
+  const vacia: Definicion = { ...definicionVacia(), secciones: [] };
+  const r = asentarIds(prop, conocidosDe(vacia), vacia);
+  const [bebidas, bloque] = r.secciones!;
+  const cuales = bebidas.preguntas[0];
+  const cafe = cuales.opciones!.find((o) => o.label === 'Café')!.id;
+  assert.equal(bloque.repetirPor, cuales.id);
+  assert.ok(bloque.repetirSolo!.includes(cafe));
+  assert.deepEqual(bloque.preguntas[1].mostrarSi, { instanciaEs: [cafe] });
+  const diario = bloque.preguntas[0].opciones!.find((o) => o.label === 'Diario')!.id;
+  assert.deepEqual(r.frentes![0].califica, { todas: [{ bloque: bloque.id, opcion: cafe }, { pregunta: bloque.preguntas[0].id, instancia: cafe, incluye: [diario] }] });
+  assert.match(r.frentes![0].id, /^fr_/);
+  const d = aplicarParche(vacia, r);
+  assert.deepEqual(revisarDefinicion(d), []);
+  const res = evaluar(d, { [cuales.id]: [cafe], [`${bloque.preguntas[0].id}@${cafe}`]: diario, [`${bloque.preguntas[1].id}@${cafe}`]: 'Con leche' });
+  assert.deepEqual(res.frentes, [r.frentes![0].id]);
+});
+
+caso('la IA no toca el NSE y se avisa lo que una propuesta rompe', () => {
+  const nse = pregunta(ALONG2, 'nse_banos');
+  const protegida = protegerNse({ preguntas: [{ ...nse, texto: 'Baños' }] }, ALONG2);
+  assert.equal(protegida.preguntas![0].texto, nse.texto);
+  // Quitar «Aromatizantes» rompe la lógica que la usa.
+  const sinAroma = aplicarParche(ALONG2, { preguntas: [{ ...pregunta(ALONG2, 'categorias'), opciones: pregunta(ALONG2, 'categorias').opciones!.filter((o) => o.id !== 'aromatizantes') }] });
+  const avisos = avisosDeLogica(ALONG2, sinAroma);
+  assert.ok(avisos.some((a) => a.startsWith('Cuándo aparece la sección «Aromatizantes» usa una opción de «¿Cuáles de estos productos')), avisos.join(' | '));
+  assert.deepEqual(avisosDeLogica(ALONG2, ALONG2), []);
+  // Mover una pregunta de un bloque que se repite a una sección normal cambiaría su columna.
+  const aromas = pregunta(ALONG2, 'aromas');
+  const movida = aplicarParche(ALONG2, {
+    secciones: [
+      { ...ALONG2.secciones.find((s) => s.id === 'aroma_bloque')!, preguntas: ALONG2.secciones.find((s) => s.id === 'aroma_bloque')!.preguntas.filter((p) => p.id !== 'aromas') },
+      { ...ALONG2.secciones.find((s) => s.id === 'perfil')!, preguntas: [...ALONG2.secciones.find((s) => s.id === 'perfil')!.preguntas, aromas] },
+    ],
+  });
+  assert.ok(columnasQueCambian(ALONG2, movida).some((a) => a.includes('cambiaría su columna')));
+  // Quitar una sección y reordenar con el parche.
+  const sinRechazo = aplicarParche(ALONG2, { quitarSecciones: ['rechazo'] });
+  assert.ok(!sinRechazo.secciones.some((s) => s.id === 'rechazo'));
+  assert.ok(cambiosEnPalabras(ALONG2, sinRechazo).includes('Quita la sección «Marcas» y sus 1 pregunta.') || cambiosEnPalabras(ALONG2, sinRechazo).some((c) => c.startsWith('Quita la sección «Marcas»')));
+});
+
+caso('los cambios de lógica se cuentan en palabras', () => {
+  const d = aplicarParche(ALONG2, {
+    preguntas: [{ ...pregunta(ALONG2, 'hogar'), opciones: pregunta(ALONG2, 'hogar').opciones!.map((o) => (o.id === 'roomies' ? { ...o, termina: 'Vive con roomies' } : o)) }],
+    frentes: ALONG2.frentes!.map((f) => (f.id === 'reeds' ? { ...f, meta: 8 } : f)),
+  });
+  const cambios = cambiosEnPalabras(ALONG2, d);
+  assert.ok(cambios.includes('En «¿Cómo es tu hogar?»: «Vivo con roomies»: Si contesta esta, termina el filtro: Vive con roomies.'), cambios.join(' | '));
+  assert.ok(cambios.includes('La cuota de Reeds pasa de 6 a 8.'), cambios.join(' | '));
+  assert.equal(cambios.length, 2);
+  const perfil = ALONG2.secciones.find((s) => s.id === 'perfil')!;
+  const reordenado = aplicarParche(ALONG2, { secciones: [{ ...perfil, preguntas: [...perfil.preguntas].reverse() }] });
+  assert.deepEqual(cambiosEnPalabras(ALONG2, reordenado), ['Cambia el orden de las preguntas de «Sobre ti».']);
+  // Cambiar la etiqueta de una opción con lógica no cuenta como regla quitada y agregada.
+  const lugar = pregunta(ALONG2, 'lugar');
+  const otra = aplicarParche(ALONG2, { preguntas: [{ ...lugar, opciones: lugar.opciones!.map((o) => (o.id === 'otra' ? { ...o, label: 'Otra, ¿cuál?' } : o)) }] });
+  assert.deepEqual(cambiosEnPalabras(ALONG2, otra), ['En «¿Dónde lo compras normalmente?» cambia «Otra» por «Otra, ¿cuál?».']);
+});
+
+caso('lo que se le pide a la IA lleva lo necesario y el formato que se espera', () => {
+  const e = estructuraDeDefinicion(ALONG2);
+  const json = definicionParaIA(ALONG2);
+  assert.ok(json.includes('"id":"giros"') && json.includes('Regla de NSE: AMAI 2022'));
+  assert.ok(!json.includes('"puntos"')); // los puntos del NSE no le sirven a la IA
+  JSON.parse(json.slice(0, json.indexOf('\nRegla de NSE')));
+  const estudio = { titulo: 'Filtro de prueba', proyecto: 'PRUEBA · Proyecto de prueba', cliente: 'Cliente Prueba' };
+  const nuevo = promptEstructura({ origen: 'insumos', estudio });
+  assert.match(nuevo, /Propón la estructura/);
+  assert.match(nuevo, /no se menciona nunca al participante/);
+  assert.match(promptEstructura({ origen: 'word', estudio }), /sin rediseñarlo/);
+  const ajuste = promptEstructura({ origen: 'insumos', estudio, base: e, pedido: 'Quita la sección de marcas', ajuste: true });
+  assert.ok(ajuste.includes('"cambia": false') && ajuste.includes('Quita la sección de marcas') && ajuste.includes('"id":"aroma_bloque"'));
+  assert.match(promptEstructura({ origen: 'filtro', estudio, base: e, pedido: 'Ahora en Monterrey' }), /Se parte de un filtro anterior/);
+  const plan = e.secciones.find((s) => s.id === 'aroma_bloque')!;
+  const seccion = promptSeccion({ origen: 'insumos', estudio, estructura: e, plan, anterior: ALONG2.secciones.find((s) => s.id === 'aroma_bloque') });
+  assert.ok(seccion.includes('id aroma_bloque') && seccion.includes('repetirPor') && seccion.includes('ya estaba escrita'));
+  assert.ok(promptSeccion({ origen: 'insumos', estudio, estructura: e, plan: e.secciones.find((s) => s.id === 'aroma_formatos')! }).includes('solo aparece en este caso: «marcó Aromatizantes'));
+  assert.ok(promptLogica({ estudio, estructura: e, definicion: ALONG2 }).includes('"frentes"'));
+  assert.match(promptCambio({ definicion: ALONG2, alcance: { pregunta: 'giros' }, pedido: 'Agrega comercio' }), /Devuelve esa pregunta completa/);
+  assert.match(promptCambio({ definicion: ALONG2, alcance: { seccion: 'compras' }, pedido: 'El orden' }), /"quitarSecciones"/);
+});
+
+caso('lo que devuelve la IA se valida antes de usarlo', () => {
+  const seccion = ALONG2.secciones.find((s) => s.id === 'aroma_bloque')!;
+  assert.ok(RespuestaSeccionZ.safeParse({ seccion, supuestos: [] }).success);
+  // La IA a veces manda null en lo opcional: se acepta y se quita.
+  const conNull = { seccion: { ...seccion, intro: null, preguntas: seccion.preguntas.map((p) => ({ ...p, ayuda: null, mostrarSi: p.mostrarSi ?? null })) } };
+  const r = RespuestaSeccionZ.safeParse(conNull);
+  assert.ok(r.success, JSON.stringify(!r.success && r.error.issues.slice(0, 2)));
+  const limpia = sinVacios(r.data!.seccion);
+  assert.ok(!('intro' in limpia) && !('ayuda' in limpia.preguntas[0]));
+  assert.deepEqual(r.data!.supuestos, []);
+  assert.ok(!RespuestaSeccionZ.safeParse({ seccion: { ...seccion, preguntas: [{ id: 'x', tipo: 'casillas', texto: 'mal' }] } }).success);
+  assert.ok(!RespuestaSeccionZ.safeParse({ seccion: { ...seccion, preguntas: [] } }).success);
+  assert.ok(RespuestaLogicaZ.safeParse({ frentes: ALONG2.frentes, alertas: ALONG2.alertas, claves: ALONG2.claves, textos: {} }).success);
+  assert.ok(!RespuestaLogicaZ.safeParse({ frentes: [], textos: {} }).success); // sin frentes nadie califica
+  assert.ok(EstructuraZ.safeParse(estructuraDeDefinicion(ALONG2)).success);
+});
+
+caso('al ajustar un filtro escrito, la lógica final conserva textos, alertas y frentes que siguen igual', () => {
+  const alerta = ALONG2.alertas![0];
+  const parche = {
+    alertas: [{ ...alerta, texto: 'Otro texto para la misma alerta' }, { texto: 'Alerta nueva', si: { pregunta: 'genero', incluye: ['otro'] } }],
+    frentes: ALONG2.frentes!.map((f) => ({ ...f, nombre: f.id === 'reeds' ? 'Varitas' : f.nombre })),
+    textos: { bienvenida: 'Otra bienvenida' },
+  };
+  const r = conservarLogica(parche, ALONG2);
+  assert.equal(r.alertas![0].texto, alerta.texto);
+  assert.equal(r.alertas![1].texto, 'Alerta nueva');
+  assert.equal(r.frentes!.find((f) => f.id === 'reeds')!.nombre, 'Varitas'); // el nombre viene de la estructura
+  assert.ok(!('textos' in r));
+});
+
+caso('la skill completa va en el prompt del sistema', () => {
+  const sistema = systemPrompt();
+  for (const parte of ['references/reglas.md', 'references/redaccion.md', 'references/contrato.md', 'references/estructura.md', 'assets/ejemplos/hogar.json', 'assets/ejemplos/refrescos_cr.md', 'MODO HUB']) {
+    assert.ok(sistema.includes(parte), parte);
+  }
+  // Los ejemplos van sin marcas de clientes: las de la plantilla de ALONG 2 (las que tienen grupo de frentes) no aparecen.
+  const marcasDelCliente = pregunta(ALONG2, 'rechazo').opciones!.filter((o) => o.excluyeGrupos).map((o) => o.label);
+  assert.equal(marcasDelCliente.length, 2);
+  assert.ok(marcasDelCliente.every((m) => !sistema.toLowerCase().includes(m.toLowerCase())));
+  assert.ok(sistema.length < 250_000);
 });
 
 await Promise.all(pendientes);

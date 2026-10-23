@@ -137,6 +137,14 @@ function callStreaming<T = any>(name: string, input?: unknown): Promise<T> & Asy
 export const createFormularioVersion = (input?: any): Promise<any> => call('createFormularioVersion', input);
 export const getFormularioVersion = (input?: any): Promise<any> => call('getFormularioVersion', input);
 export const getFormularioVersiones = (input?: any): Promise<any> => call('getFormularioVersiones', input);
+// Filtros fase 3: generador con IA (los de la IA, con avance)
+export const generateFormularioCambio = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioCambio', input);
+export const generateFormularioEstructura = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioEstructura', input);
+export const generateFormularioLogica = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioLogica', input);
+export const generateFormularioSeccion = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('generateFormularioSeccion', input);
+export const getFormularioReuniones = (input?: any): Promise<any> => call('getFormularioReuniones', input);
+export const saveFormularioGenerador = (input?: any): Promise<any> => call('saveFormularioGenerador', input);
+export const saveFormularioInsumos = (input?: any): Promise<any> => call('saveFormularioInsumos', input);
 export const getMe = (input?: any): Promise<any> => call('getMe', input);
 
 export const addExpenseComment = (input?: any): Promise<any> => call('addExpenseComment', input);

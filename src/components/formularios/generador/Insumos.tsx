@@ -1,0 +1,145 @@
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { FileText, Loader2, Mic, Paperclip, X } from 'lucide-react';
+import { getFormularioReuniones } from 'zite-endpoints-sdk';
+import { INFO, TEAL } from '@/lib/toolColors';
+import type { ReunionInsumo } from '@/lib/formularios/generador';
+import type { GeneradorUI } from './useGenerador';
+import { AvanceIA, Etiqueta, MarcaIA, archivoABase64, botonSecundario, botonTeal } from './comun';
+
+type Reunion = ReunionInsumo & { tipo?: string };
+
+const fecha = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const TIPO_ARCHIVO = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint' } as const;
+
+/**
+ * Paso 1 del generador: de dónde sale el filtro. Notas, la propuesta (PDF o
+ * PowerPoint) y la transcripción del kick-off de Notetaker; o el Word de un
+ * screener que ya existe; o qué cambia de un filtro anterior.
+ */
+export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId: string }) {
+  const g = gen.g!;
+  const origen = g.origen;
+  const [notas, setNotas] = useState(g.insumos.notas ?? '');
+  const [subiendo, setSubiendo] = useState<string[]>([]);
+  const [reuniones, setReuniones] = useState<Reunion[] | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const elegidas = new Set(g.insumos.reuniones.map((r) => r.id));
+
+  useEffect(() => {
+    if (origen === 'word') return;
+    getFormularioReuniones({ formularioId }).then((r) => setReuniones(r.reuniones ?? [])).catch(() => setReuniones([]));
+  }, [formularioId, origen]);
+
+  const guardarNotas = async () => {
+    if (notas === (g.insumos.notas ?? '')) return;
+    try { await gen.guardarInsumos({ notas }); } catch (err) { toast.error((err as Error).message); }
+  };
+
+  const subir = async (archivos: FileList | null) => {
+    for (const archivo of Array.from(archivos ?? [])) {
+      setSubiendo((s) => [...s, archivo.name]);
+      try {
+        await gen.guardarInsumos({ archivo: { nombre: archivo.name, mime: archivo.type, base64: await archivoABase64(archivo) } });
+      } catch (err) {
+        toast.error((err as Error).message || `No se pudo subir «${archivo.name}».`);
+      } finally {
+        setSubiendo((s) => s.filter((n) => n !== archivo.name));
+      }
+    }
+    if (input.current) input.current.value = '';
+  };
+
+  const alternarReunion = async (r: Reunion) => {
+    const lista = elegidas.has(r.id) ? g.insumos.reuniones.filter((x) => x.id !== r.id) : [...g.insumos.reuniones, { id: r.id, titulo: r.titulo, fecha: r.fecha }];
+    try { await gen.guardarInsumos({ reuniones: lista }); } catch (err) { toast.error((err as Error).message); }
+  };
+
+  const proponer = async () => {
+    await guardarNotas();
+    await gen.pedirEstructura(origen === 'filtro' ? notas.trim() || undefined : undefined);
+  };
+
+  const hayAlgo = !!(notas.trim() || g.insumos.archivos.length || g.insumos.reuniones.length);
+  const listo = origen === 'word' ? g.insumos.archivos.length > 0 : origen === 'filtro' ? true : hayAlgo;
+  const ocupado = gen.llamada.corriendo || subiendo.length > 0;
+
+  const titulo = origen === 'word' ? 'El screener que ya existe' : origen === 'filtro' ? `Partes de «${g.insumos.filtroBase?.titulo ?? 'un filtro anterior'}»` : 'De dónde sale el filtro';
+  const textoNotas = origen === 'filtro'
+    ? '¿Qué cambia para este estudio? Perfil, cuotas, ciudad, marcas, condiciones…'
+    : origen === 'word'
+      ? 'Algo que cambiar al convertirlo (opcional).'
+      : 'Lo que no dicen la propuesta ni el kick-off: cuotas, ciudad, edades, incentivo, lo que pidió el cliente…';
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-base font-semibold" style={{ color: TEAL }}>{titulo}</h3>
+        {origen === 'word' && <p className="text-xs text-muted-foreground">Se convierte en un filtro editable con su misma redacción. Lo que la IA tenga que interpretar queda en los supuestos.</p>}
+        {origen === 'filtro' && <p className="text-xs text-muted-foreground">Ya es una copia. Si no cambia nada, úsalo tal cual; si cambia algo, la IA lo adapta y lo que no cambia se queda igual.</p>}
+      </div>
+
+      <section className="space-y-1.5">
+        <Etiqueta>{origen === 'filtro' ? 'Qué cambia' : 'Notas'}</Etiqueta>
+        <textarea
+          value={notas}
+          onChange={(e) => setNotas(e.target.value)}
+          onBlur={guardarNotas}
+          disabled={gen.llamada.corriendo}
+          rows={origen === 'insumos' ? 5 : 3}
+          placeholder={textoNotas}
+          className="w-full resize-y rounded-md border bg-white px-3 py-2 text-sm outline-none focus:border-[#0F3D4D]/50"
+        />
+      </section>
+
+      <section className="space-y-1.5">
+        <Etiqueta>{origen === 'word' ? 'Word o PDF del screener' : 'Archivos: propuesta en PDF o PowerPoint, o un Word'}</Etiqueta>
+        <input ref={input} type="file" multiple={origen !== 'word'} accept={origen === 'word' ? '.docx,.pdf' : '.pdf,.pptx,.docx'} className="hidden" onChange={(e) => subir(e.target.files)} />
+        <ul className="space-y-1">
+          {g.insumos.archivos.map((a) => (
+            <li key={a.id} className="flex items-center gap-2 rounded-md border bg-white px-2.5 py-1.5 text-sm">
+              <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate">{a.nombre}</span>
+              <span className="text-[11px] text-muted-foreground">{TIPO_ARCHIVO[a.tipo]}{a.caracteres ? ` · ${a.caracteres >= 1000 ? `${Math.round(a.caracteres / 1000)} mil` : a.caracteres} caracteres` : ''}</span>
+              <button type="button" aria-label={`Quitar ${a.nombre}`} disabled={ocupado} onClick={() => gen.guardarInsumos({ quitarArchivo: a.id }).catch((err) => toast.error((err as Error).message))} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-[#D32222]"><X className="h-3.5 w-3.5" /></button>
+            </li>
+          ))}
+          {subiendo.map((n) => <li key={n} className="flex items-center gap-2 px-2.5 py-1 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{n}</li>)}
+        </ul>
+        <button type="button" className={botonSecundario} disabled={ocupado} onClick={() => input.current?.click()}><Paperclip className="h-3.5 w-3.5" />Subir archivo</button>
+      </section>
+
+      {origen !== 'word' && (
+        <section className="space-y-1.5">
+          <Etiqueta>Reuniones de Notetaker</Etiqueta>
+          {reuniones === null && <p className="text-xs text-muted-foreground">Buscando reuniones…</p>}
+          {reuniones?.length === 0 && <p className="text-xs text-muted-foreground">Este proyecto no tiene reuniones con transcripción. Si el kick-off no se grabó en Notetaker, pega lo importante en las notas.</p>}
+          <ul className="space-y-1">
+            {reuniones?.map((r) => (
+              <li key={r.id}>
+                <label className="flex cursor-pointer items-center gap-2 rounded-md border bg-white px-2.5 py-1.5 text-sm hover:bg-[#0F3D4D]/[0.02]">
+                  <input type="checkbox" checked={elegidas.has(r.id)} disabled={ocupado} onChange={() => alternarReunion(r)} className="h-4 w-4 accent-[#0F3D4D]" />
+                  <Mic className="h-4 w-4 flex-shrink-0" style={{ color: INFO }} />
+                  <span className="min-w-0 flex-1 truncate">{r.titulo}</span>
+                  <span className="whitespace-nowrap text-[11px] text-muted-foreground">{[r.tipo, fecha(r.fecha)].filter(Boolean).join(' · ')}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {gen.llamada.corriendo
+        ? <AvanceIA pasos={gen.llamada.pasos} segundos={gen.llamada.segundos} />
+        : (
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className={botonTeal} disabled={!listo || ocupado} onClick={proponer}>
+              <MarcaIA />{origen === 'word' ? 'Convertir el screener' : origen === 'filtro' ? 'Adaptar con la IA' : 'Proponer la estructura'}
+            </button>
+            {origen === 'filtro' && <button type="button" className={botonSecundario} disabled={ocupado} onClick={() => gen.usarTalCual().catch((err) => toast.error((err as Error).message))}>Usarlo tal cual</button>}
+            <span className="text-[11px] text-muted-foreground">Tarda uno o dos minutos. Primero verás la estructura para revisarla.</span>
+          </div>
+        )}
+    </div>
+  );
+}

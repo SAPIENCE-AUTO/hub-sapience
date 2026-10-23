@@ -21,7 +21,7 @@ Usuario: Sergio (`sergio@sapience.com.mx`). **Solo él lo ve hasta la fase 6** (
 
 ## Lo que ya existe
 
-Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octubre de 2026); fase 1 en `3d5bbfd`; fase 2 (editor) en `40d801f`.
+Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octubre de 2026); fase 1 en `3d5bbfd`; fase 2 (editor) en `40d801f`; fase 3 (generador con IA): sin subir todavía.
 
 **Base de datos** (fuera del pipeline de `generate.py`, como Swipe; los endpoints usan `pool.query`):
 
@@ -30,7 +30,8 @@ Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octub
 - `formulario_versiones` (fase 2): `formulario_id`, `revision`, `definicion jsonb`, `nota` (vacía = automática), `created_by`, `created_at`.
 - `formulario_respuestas`: `respuestas jsonb`, `resultado jsonb` (lo calcula el servidor), `califica`, `es_prueba`, `nombre`, `telefono`, `device_token`, `duracion_seg`.
 - Bucket **privado** `formularios` en Supabase Storage: fotos de participantes, carpeta por formulario; se ven con URL firmada.
-- Script: `server/scripts/add-formularios-tables.ts`. Es aditivo e idempotente, y **ya se corrió en producción** (lo de la fase 2, el 2026-10-22 con el OK de Sergio). Si una fase necesita columnas nuevas, se agregan ahí con `alter table … add column if not exists`, y **se pide el OK de Sergio antes de correrlo**.
+- Fase 3: `formularios.generador jsonb` (insumos, estructura, secciones escritas por la IA, cuáles ya están puestas y supuestos; forma en `src/lib/formularios/generador.ts`; null en los filtros hechos de plantilla) y la tabla `formulario_ia_uso` (una fila por llamada a la IA: quién, filtro, para qué, modelo, tokens y si salió bien; con ella se aplica el tope por hora). Los PDF de los insumos van al bucket privado `formularios`, carpeta `insumos/<id del filtro>/`, y se borran con el filtro.
+- Script: `server/scripts/add-formularios-tables.ts`. Es aditivo e idempotente, y **ya se corrió en producción** (lo de la fase 2 y lo de la fase 3, el 2026-10-22 con el OK de Sergio). Si una fase necesita columnas nuevas, se agregan ahí con `alter table … add column if not exists`, y **se pide el OK de Sergio antes de correrlo**.
 
 **Lógica compartida** (`src/lib/formularios/`, funciones puras que usan el navegador y el servidor):
 
@@ -52,6 +53,9 @@ Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octub
   - `flujo.ts`: `mapaFlujo`, un bloque por sección con lo que se repite, lo que aparece si aplica, dónde termina, qué descarta, qué frentes toca, alertas y NSE.
   - `duracion.ts`: `duracionEstimada` (típico y máximo, en minutos) contra `TOPE_MINUTOS = 10`; calibrada para que ALONG 2 dé 10.
   - `editar.ts`: los cambios a mano como funciones puras (texto, opciones, filas, preguntas, secciones, tipo, frentes, «mostrar solo si» simple), ids nuevos al azar (`idNuevo`), dónde se usa algo antes de quitarlo (`usosDePregunta`, `usosDeOpcion`, `usosDeSeccion`) y `diferencias` entre dos versiones.
+- Fase 3 (generador con IA):
+  - `generador.ts`: lo que guarda el generador, la estructura de la etapa 1 (`Estructura`, `SeccionPlan`, `PreguntaPlan`), sacarla de un filtro ya escrito (`estructuraDeDefinicion`), compararlas para conservar lo que no cambió (`firmaSeccion`, `compararEstructuras`, `conservarSinCambio`), ids definitivos para lo que propone la IA (`asentarEstructura`), revisarla (`revisarEstructura`), sus minutos con el mismo cálculo del editor (`minutosDeEstructura`), la sección del NSE (`seccionNse`) y poner las secciones en su lugar (`ponerSeccion`, `prepararParaEscribir`, `avanceEscritura`).
+  - `ia.ts`: lo que propone la IA antes de aplicarlo: ids definitivos sin tocar los que ya existen (`asentarIds`, `conocidosDe`), el cambio como parche (`aplicarParche`), el NSE intocable (`protegerNse`), qué cambia en palabras con nombres (`cambiosEnPalabras`) y qué lógica rompe (`avisosDeLogica`, `columnasQueCambian`).
 - `plantillas/along2.ts`: screener de ALONG 2 (primer ensayo). `plantillas/pruebaTipos.ts` (fase 1): «Prueba · todos los tipos de pregunta». `plantillas/index.ts`: lista de plantillas.
 
 **Servidor:**
@@ -60,11 +64,16 @@ Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octub
   - `acceso.ts`;
   - `storage.ts` (bucket privado);
   - `reclutamiento.ts`: vínculo con tablero, `asegurarColumnas` crea **todas** las columnas al vincular, `pasarAlReclutamiento` no duplica por tablero gracias a `source_form = «Formulario Hub · título|id»`, y `vinculoVigente` relee el nombre del tablero.
+  - Fase 3 (generador con IA):
+    - `skill/`: **las reglas en un solo lugar**, como Propuestas y la guía de tópicos. `SKILL.md`, `references/` (`reglas.md` con las de Sergio, `redaccion.md`, `contrato.md` con el JSON del filtro para la IA y `estructura.md`) y `assets/ejemplos/` (ALONG 2 en Word y en JSON, DOPAMINA y LORO, sin marcas). Es el prompt del sistema de todas las llamadas.
+    - `claude.ts`: un modelo por etapa (`MODELOS`), prompt del sistema con caché, respuesta validada con zod y un reintento con lo que encontró la revisión, error claro si se corta o si la IA se niega, respaldo automático de modelo si un filtro de seguridad se equivoca, y `conLatido`.
+    - `prompts.ts` (funciones puras: lo que se pide en cada llamada), `esquemas.ts` (zod de lo que devuelve), `insumos.ts` (leer Word y PowerPoint, guardar el PDF, reuniones de Notetaker, los insumos como contenido para la IA con caché), `uso.ts` (tope por persona y por hora con `formulario_ia_uso`) y `generar.ts` (cada paso: valida con la revisión del editor, pone ids definitivos y guarda en el generador).
 - Endpoints en `src/api/`:
   - de formularios: `getFormularios`, `createFormulario`, `getFormularioDetail`, `getFormularioRespuesta`, `setFormularioEstado`, `deleteFormulario`, `deleteFormularioRespuestas`, `exportFormularioRespuestas`;
   - públicos: `getFormularioPublico` y `submitFormularioRespuesta`;
   - de tableros: `getTablerosReclutamiento`, `vincularFormularioTablero`, `crearTableroParaFormulario`, `pasarFormularioAlReclutamiento`;
   - del editor (fase 2): `saveFormularioDefinicion` (revisa, no pisa otra revisión, guarda sola una versión automática), `getFormularioVersiones`, `getFormularioVersion`, `createFormularioVersion` y `pingFormularioEditor` (quién más lo tiene abierto).
+  - del generador (fase 3): `saveFormularioInsumos`, `getFormularioReuniones`, `saveFormularioGenerador` (aprobar la estructura, frentes a mano, supuestos revisados, usar tal cual, descartar) y, con avance (`streaming`), `generateFormularioEstructura`, `generateFormularioSeccion`, `generateFormularioLogica` y `generateFormularioCambio`. `createFormulario` recibe el punto de partida (`origen`); `saveFormularioDefinicion` marca en la misma transacción las secciones del generador que ese guardado deja puestas; `getFormularioDetail` trae el generador y el uso de IA de la hora; `deleteFormulario` borra también los PDF de los insumos.
 - Las fotos se suben por `server/upload.ts`, en la rama `formularioCodigo`: solo imágenes, 20 MB, bucket privado.
 - Las imágenes de las preguntas (fase 2) van al bucket público `zite-uploads`, carpeta `formularios-imagenes`, por la ruta normal de `server/upload.ts`. En local también se suben de verdad (excepción en `src/shims/zite-file-upload-sdk.ts`, como las fotos de participantes).
 
@@ -79,8 +88,14 @@ Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octub
   - `Documento.tsx`, `PreguntaDoc.tsx`, `Opciones.tsx` y `Ajustes.tsx`: el documento editable;
   - `MapaFlujo.tsx`, `VistaCelular.tsx` y `Versiones.tsx`;
   - `TextoEditable.tsx`, `comun.tsx` e `imagenes.ts` (achicar y subir, con lo de Swipe).
+- `src/components/formularios/generador/` (fase 3):
+  - `useGenerador.ts`: el estado del generador; escribe las secciones de tres en tres y pone cada una en el documento con `editor.aplicar` en cuanto llega; al reabrir un filtro a medias, sigue.
+  - `GeneradorFiltro.tsx`, `Insumos.tsx` y `Estructura.tsx`: los pasos Insumos y Estructura;
+  - `AvanceEscritura.tsx` y `Supuestos.tsx`: sobre el documento;
+  - `PropuestaIA.tsx`: el botón IA de cada pregunta y Comentar de cada sección y de los frentes;
+  - `comun.tsx`: botón teal, avance de la IA, uso de la hora.
 
-**Pruebas:** `cd server && npx tsx scripts/test-formularios.ts` (50 pruebas: el motor, la revisión, las reglas de NSE, las columnas y el Excel; desde la fase 2, también la lógica en palabras, el mapa, la duración y los cambios del editor; datos inventados, no toca la base).
+**Pruebas:** `cd server && npx tsx scripts/test-formularios.ts` (el motor, la revisión, las reglas de NSE, las columnas y el Excel; desde la fase 2, también la lógica en palabras, el mapa, la duración y los cambios del editor; desde la fase 3, la estructura, los ids de lo que propone la IA, los parches, los cambios en palabras, lo que se le pide y la validación de lo que devuelve; datos inventados, no toca la base ni llama a la IA).
 
 ## El contrato del screener (`src/lib/formularios/tipos.ts`)
 
@@ -165,7 +180,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 |---|---|---|
 | 1 | Base: tipos de pregunta, lógica, opción única/múltiple, NSE por país como alerta | **Hecha** (`3d5bbfd`, 2026-10-22) |
 | 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | **Hecha** (`40d801f`, 2026-10-22) |
-| 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | Pendiente |
+| 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | **Construida y probada en local** (2026-10-22); falta el OK de Sergio para subirla |
 | 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | Pendiente (necesita decisiones) |
 | 5 | Operación: en vivo, paso solo al tablero, base de participantes con historial, cerrar cuotas | Pendiente (necesita decisiones) |
 | 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | Pendiente |
@@ -346,6 +361,116 @@ Sale del documento de diseño («Lo primero que se ve y cómo se corrige» y la 
 - La lógica combinada (frentes, condiciones con «y», «o» y «no») se lee en palabras; corregirla es de la fase 3.
 - Con filtros **en vivo** (fase 5), editar algo que ya tiene respuestas reales merecerá un aviso antes de guardar.
 
+### Fase 3 · Generador con IA
+
+Sale del documento de diseño («Cómo se arma un screener», «Lo primero que se ve y cómo se corrige» y la tabla de fases). Al terminarla se pasa del kick-off a un filtro listo para revisar en minutos, y se corrige pidiéndole cambios a la IA además de a mano.
+
+**Qué entra:**
+
+- **Tres puntos de partida** al crear un filtro, junto a «Desde una plantilla», que sigue igual:
+  - **Tengo insumos:** notas pegadas, la propuesta (PDF o PowerPoint; también Word) y la transcripción del kick-off, que se elige de las reuniones de Notetaker del proyecto o de su deal. Se puede usar uno solo o varios.
+  - **Tengo un screener:** se sube un Word (o un PDF) que ya existe y se vuelve un filtro editable con su misma redacción. Lo que la IA tuvo que interpretar va en los supuestos; por ejemplo, una pregunta de una sola respuesta que en el Word venía con casillas por la costumbre de Fillout.
+  - **Parto de un filtro anterior:** se elige uno de los filtros ya hechos, de cualquier proyecto, y se dice qué cambia. Lo que no cambia se copia tal cual. La biblioteca con búsqueda es de la fase 6; aquí es una lista.
+- **Etapa 1 · Estructura**, para revisarla rápido antes de que se escriban las preguntas:
+  - país, perfil que se busca y frentes con su cuota, con quién entra a cada uno en palabras;
+  - las secciones en orden de embudo, de lo general a lo particular. De cada una se lee lo que pregunta (una línea por pregunta), si se repite por algo y si aparece solo en ciertos casos;
+  - los minutos estimados contra el tope de 10, con el mismo cálculo de la barra del editor;
+  - los **supuestos**: lo que la IA tuvo que decidir y de dónde lo sacó («tomé la edad de 25 a 55 de la lámina de target»), y las reglas de la guía que no aplican a este estudio.
+  - Se corrige con un comentario a la IA («quita la sección de marcas», «el frente B es de 8») o se vuelve a proponer. El nombre y la cuota de los frentes también se cambian a mano.
+- **Etapa 2 · Preguntas:** con la estructura aprobada, la IA escribe sección por sección, con sus opciones y su lógica, y cada sección aparece en el Documento en cuanto está lista.
+  - Al final arma quién entra a cada frente y las alertas, y lo revisa todo con la misma revisión del editor. Si algo quedó mal armado, lo corrige una vez antes de entregarlo.
+  - Las preguntas de NSE no las escribe la IA: entran del cuestionario oficial del país, como hoy.
+  - Si después se cambia la estructura, se conservan las secciones que no cambiaron. En las que cambiaron se respeta lo ya escrito de las preguntas que siguen.
+  - Si se cierra la ventana a medias, lo ya escrito no se pierde y se puede seguir.
+- **Reglas en un solo lugar:** una skill, como la de Propuestas y la de las guías de tópicos. Lleva las reglas de Sergio para diseñar screeners, cómo se le escribe al participante y 2 o 3 screeners reales del equipo como ejemplo, anonimizados (sin marcas de clientes ni datos de personas). Si una regla no aplica al estudio, la IA lo dice en los supuestos.
+- **Supuestos al inicio del Documento**, en un recuadro con «Ya lo revisé». Si la IA vuelve a decidir algo (otra estructura, una sección reescrita), el recuadro se abre otra vez con lo nuevo.
+- **Botón IA en cada pregunta:** pides el cambio con tus palabras («agrega Costco y quita Farmacia», «que termine si contesta Nunca») y la IA muestra su propuesta antes de aplicarla:
+  - la pregunta como quedaría;
+  - qué agrega y qué quita;
+  - si rompe la lógica de otra pregunta o de un frente.
+  - «Aplicar» la deja como un cambio más, que se deshace con Cmd+Z. «Descartar» no toca nada.
+- **Comentar una sección para la lógica:** el orden, qué aparece según qué, los descartes, las cuotas y quién entra a cada frente (también en «Frentes y cuotas»). Así se cierra el pendiente de la fase 2: la lógica con «y», «o» y «no» se corrige con la IA. La propuesta se ve antes de aplicarla, igual que en una pregunta.
+- **Lo que aplica la IA sigue las reglas del editor:** pasa por deshacer y por la misma revisión, nunca cambia el id de una pregunta u opción que ya existe (es la clave de su columna en el tablero), lo nuevo lleva un id nuevo y las preguntas del NSE no las toca.
+- **Tope de uso de IA** por persona y por hora: 60 llamadas, ajustable. Un filtro completo son unas 12. Al llegar al tope se dice en cuánto tiempo se puede volver a usar.
+- **Base de datos**, con el OK de Sergio y en `server/scripts/add-formularios-tables.ts`:
+  - una columna en `formularios` para lo del generador: insumos, estructura y supuestos;
+  - una tabla con cada uso de la IA (quién, cuándo, para qué y cuánto gastó), que sirve para el tope y para saber cuánto cuesta un filtro.
+  - Los PDF que se suben van a la carpeta privada `formularios`.
+- **Pruebas** de lo que es lógica pura: lo que se le manda a la IA, la validación de lo que devuelve (ids que se conservan, ids nuevos, nada en las preguntas de NSE), conservar lo escrito al cambiar la estructura, los minutos de la estructura y los cambios en palabras. Con la IA se prueba la validación y el armado de lo que se le pide, no sus respuestas.
+
+**Qué NO entra** (es de otras fases o queda para después):
+
+- el Word y el PDF para el cliente (fase 4);
+- la biblioteca con búsqueda y relanzar a otro proyecto (fase 6);
+- imágenes: la IA no las genera ni las saca de la propuesta. Si propone un selector con imágenes, se ponen a mano como hoy;
+- comentarios que se quedan guardados como conversación: el comentario va a la IA, se ve la propuesta y se aplica o se descarta;
+- reuniones que no están en Notetaker, y audios o videos: su transcripción se pega como notas;
+- abrirlo al equipo: sigue solo para Sergio.
+
+**Listo cuando:**
+
+- en local, en «3 MAYO PRUEBA 3», se genera un filtro de punta a punta desde insumos de prueba (notas, un PDF y una transcripción): estructura con supuestos y minutos, preguntas sección por sección, frentes y alertas, sin nada por corregir;
+- el Word de ALONG 2 se vuelve un filtro editable que se lee como el Word;
+- se parte de `lv4los` pidiendo un cambio y lo que no cambia queda idéntico;
+- al cambiar la estructura de un filtro ya escrito, las secciones que no cambiaron quedan igual;
+- el botón IA y los comentarios de sección muestran su propuesta, se aplican y se deshacen, y nunca cambian el id de lo que ya existía: el tablero de `lv4los` conserva sus columnas;
+- el tope de uso frena y avisa;
+- todo se lee bien en una pantalla angosta;
+- las pruebas pasan y la revisión de tipos no da errores en los archivos del feature;
+- Sergio da el OK para commit y push, con solo los archivos de Filtros.
+
+**Alcance aprobado por Sergio el 2026-10-22** tal como está arriba, con ALONG 2 (v4), DOPAMINA (filtro de reclutamiento V1) y LORO (filtro de reclutamiento) como ejemplos, y su OK para agregar a la base la columna del generador y la tabla de uso de la IA.
+
+**Qué se construyó (2026-10-22):**
+
+- **Nuevo filtro** con cuatro puntos de partida: con IA desde los insumos, con IA desde un screener en Word, desde un filtro anterior (de cualquier proyecto) y desde una plantilla. Con la IA el filtro abre en el generador, con los pasos Insumos, Estructura y Preguntas arriba.
+- **Insumos:** notas, archivos (el PDF va a la carpeta privada y la IA lo lee completo; del Word y del PowerPoint se guarda el texto, con las tablas en renglones) y las reuniones de Notetaker con transcripción del proyecto o de su deal, con casillas. En «desde un filtro anterior» es una copia: se dice qué cambia y «Adaptar con la IA», o «Usarlo tal cual».
+- **Estructura:** país y regla de NSE, título que ve el participante, perfil, frentes con su cuota (nombre y cuota se corrigen ahí mismo) y quién entra en palabras, y las secciones en orden con sus preguntas en una línea, lo que aparece solo si aplica, lo que se repite y los minutos de cada una y del total contra el tope de 10. Abajo, los supuestos con «Ya lo revisé» y lo que la estructura tenga mal armado (no se aprueba hasta corregirlo). Se corrige con un comentario («¿Qué le cambiarías?») o se vuelve a proponer.
+- **Preguntas:** al aprobar, la IA escribe de tres en tres secciones; cada una aparece en el documento en cuanto llega y las que faltan se ven como un hueco con «La IA está escribiendo esta sección…». Arriba, una barra con cada sección y su estado, «Reintentar lo que falta» si alguna falla, y lo que la IA haya dejado por corregir. Al final arma quién entra a cada frente, las alertas, las claves del panel y los textos de bienvenida y despedida. La sección del NSE la pone el Hub con el cuestionario oficial, sin la IA.
+- **Botón «Estructura»** en la barra del editor, también en filtros hechos a mano o de plantilla: muestra la estructura de lo escrito y se cambia con un comentario. La propuesta dice qué secciones cambian, cuáles son nuevas y cuáles salen; al aprobarla solo se reescribe lo que cambia, y lo demás (incluidos los frentes, las alertas y los textos) se queda igual. También se puede descartar.
+- **Botón IA** (chispa dorada) en cada pregunta, menos las del NSE: se pide el cambio con palabras y se ve la propuesta antes de aplicarla: la explicación, qué agrega, qué quita y qué cambia con nombres, si toca la lógica de otra parte, lo que quedaría mal armado y la pregunta como quedaría. «Aplicar» es un cambio más (⌘Z lo deshace); «Pedir otra cosa» y «Descartar».
+- **Comentar** en cada sección (menos la del NSE) y en «Frentes y cuotas», para la lógica: orden, qué aparece según qué, descartes, cuotas y quién entra a cada frente. La propuesta se ve igual que en una pregunta.
+- **Supuestos** arriba del documento, con de qué sección salen y «Ya lo revisé» (se pliega en una línea y se vuelve a abrir si la IA decide algo nuevo).
+- **Tope de uso:** 60 llamadas por persona y por hora (`FORMULARIOS_IA_LIMITE_HORA`), con «IA: 12 de 60 esta hora» junto a los botones. Al llegar al tope: «Llegaste al tope de uso de la IA (60 por hora). Se libera otra en 36 minutos.».
+- **Base:** la columna `formularios.generador` y la tabla `formulario_ia_uso` (corrido en producción con el OK de Sergio).
+- 63 pruebas (13 nuevas).
+
+**Decisiones de la fase 3:**
+
+- **Modelos:** la estructura con `claude-opus-5-5` (esfuerzo alto), las secciones con `claude-opus-5-5` (medio), la lógica final con `claude-opus-5-5` (alto), los comentarios de sección con `claude-opus-5-5` (medio) y el botón IA de una pregunta con `claude-sonnet-5-5` (medio), que es más rápido. Se cambian con `FORMULARIOS_MODELO_ESTRUCTURA`, `FORMULARIOS_MODELO_PREGUNTAS` y `FORMULARIOS_MODELO_CAMBIOS`.
+- **Respaldo automático:** si un filtro de seguridad de la IA rechaza algo por error, la API reintenta sola con otro modelo (`fallbacks: 'default'`). Si aun así se niega, se dice en palabras.
+- **Lo que pide la IA y lo que se le pide:** el prompt del sistema es la skill completa (unos 24 mil tokens) con caché; los insumos van con caché también, así que las secciones de una misma generación los leen casi gratis. La respuesta se valida con zod y con la misma revisión del editor; si algo queda mal, se le dice qué y se reintenta una vez. Si sigue mal, se entrega igual y se dice qué corregir.
+- **Ids:** la IA trabaja con los ids que se le dan; todo lo que agrega recibe un id de `idNuevo` aunque ella le haya puesto otro, y sus referencias cambian con él. Una opción nueva nunca reusa el id de una que se quitó. Lo comprobó la propia IA en una prueba: al cambiar «¿Tienes mascota?» por «¿Tienes auto propio?» dejó ids nuevos para que no cayeran en la columna de la mascota.
+- **La estructura ya trae las opciones con sus ids**, así cada sección se puede escribir aparte (de tres en tres) sin romper lo que otras usan de ella. Mientras se escribe, una sección puede usar otra que todavía no llega: el editor no guarda hasta que todo cuadra y lo dice («Se guarda en cuanto la IA termine»).
+- **Nada se pierde si se cierra la ventana:** el servidor guarda lo que la IA escribió y el guardado del editor marca, en la misma transacción, qué secciones ya quedaron puestas. Al volver a abrir se pone lo que faltaba y se sigue.
+- **Al ajustar, la IA marca qué secciones no tocó** (`cambia: false`) y esas se quedan exactamente como estaban; los supuestos nuevos se suman a los de antes.
+- **La lógica final de un filtro ajustado** no toca la bienvenida ni la despedida, y una alerta o un frente con la misma condición conserva su texto.
+- La IA no usa selectores con imágenes (las imágenes se ponen a mano) ni escribe preguntas del NSE; en sus explicaciones nombra las preguntas por su texto, no por su id.
+- «Comentar» no guarda conversación: el comentario va a la IA, se ve la propuesta y se aplica o se descarta (así quedó en el alcance).
+- Costo medido en las pruebas (`formulario_ia_uso`): un filtro completo de 8 secciones sale en alrededor de 1.10 dólares (estructura ~0.50, secciones ~0.50, lógica ~0.10); un cambio con el botón IA o un comentario, de 5 a 20 centavos de dólar.
+
+**Probado en local (2026-10-22):**
+
+- **Desde insumos** («Prueba fase 3 · café frío con IA», código `rmbdmkg`): notas, una propuesta en PDF y un PowerPoint inventados, y una reunión de Notetaker de prueba con transcripción. La estructura salió en unos 2 minutos: 2 frentes de 8, 8 secciones en embudo, ≈ 6 min, marca trampa, foto, NSE oficial y 18 supuestos con su fuente. Un comentario a la propuesta («quita la pregunta de horarios») quitó solo esa pregunta y conservó todos los ids. Al aprobarla se escribieron las 7 secciones y la lógica: guardado, sin nada por corregir. Contestado con un script con el mismo motor: quien compra más Marca Prueba entra a su frente; uno de la competencia con NSE C- entra al suyo con alerta de NSE.
+- **Botón IA** en «¿Dónde compras…?» («agrega Costco y quita farmacia»): la IA explicó que Costco ya estaba y solo quitó Farmacia; se aplicó, se guardó y ⌘Z lo deshizo.
+- **Comentar:** en «Frentes y cuotas» agregó al frente de la competencia «no marcó Marca Prueba entre las marcas que compra»; en «Si te seleccionamos» reordenó dos preguntas y dejó que una solo salga si aceptó todas las condiciones. Las dos se aplicaron y se guardaron con los mismos ids.
+- **Cambiar la estructura de lo escrito:** agregar una pregunta de presentación en «Tu café frío» reescribió solo esa sección; las otras 7, los frentes y las opciones de las preguntas que siguen quedaron idénticos. Agregar una sección nueva y **recargar la página a media escritura**: al volver se puso lo que el servidor ya tenía escrito, sin pedirlo otra vez a la IA, y terminó la lógica.
+- **Desde el Word de ALONG 2** («Prueba fase 3 · ALONG 2 desde Word», `lsyzh34`): la estructura y el filtro escrito quedaron iguales a la plantilla hecha a mano: las mismas 12 secciones, las mismas preguntas y tipos, los 7 frentes con las mismas cuotas (40), ≈ 10 min · hasta 16, sin nada por corregir.
+- **Desde un filtro anterior** (copia de `lv4los`, «Prueba fase 3 · desde lv4los»): se pidió cambiar las preguntas de mascota por unas de auto; solo cambió «En tu casa». Un segundo ajuste («quita la pregunta de comentarios») dejó idénticos los textos, los frentes y las alertas de antes.
+- **`lv4los`** con el botón IA («agrega Costco y que Otra pida cuál»): mismas preguntas e ids, la opción nueva con id nuevo, el tablero con sus 45 columnas, y el enlace público ya trae «Costco».
+- **Tope de uso:** con la hora llena (registros de prueba, ya borrados) el botón IA avisa en cuánto se libera otra.
+- **Subir archivo** desde la pantalla y **borrar el filtro**: el PDF se fue de la carpeta privada con él.
+- Ancho (1280–1440), angosto (800) y celular (375): diálogo «Nuevo», estructura, documento con supuestos, botón IA y su propuesta, sin desplazamiento a lo ancho. Sin errores en la consola en una carga limpia.
+- **Quedan en la base** (proyecto «3 MAYO PRUEBA 3»): los filtros `rmbdmkg` (café), `lsyzh34` (ALONG 2 desde Word, con marcas reales como el ensayo) y «Prueba fase 3 · desde lv4los», el PDF de prueba en `insumos/` de la carpeta privada, `lv4los` con «Costco» y «Otra, ¿cuál?» en «¿En qué tipo de tienda…?» (revisión 26) y los registros de uso de la IA de estas pruebas. La reunión de Notetaker de prueba ya se borró.
+
+**Pendientes de la fase 3:**
+
+- Una regla como «al menos 3 de estas 6» o «marcó X en tal fila de la matriz» no tiene forma directa en el contrato: la IA la resuelve con «alguna» de combinaciones, con alerta y nota, o lo dice en los supuestos. Si se vuelve común, agregar esas condiciones al contrato.
+- El texto de bienvenida dice los minutos al escribirse; si la estructura cambia mucho después, hay que corregirlo a mano.
+- La propuesta de un comentario de sección se describe en palabras; no se dibujan las secciones completas como en una pregunta.
+- Cada llamada con el modelo rápido escribe la skill a caché (unos centavos); si el botón IA se usa mucho, conviene caché de una hora.
+- Con filtros **en vivo** (fase 5), cambiar con la IA algo que ya tiene respuestas reales merecerá el mismo aviso que a mano.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
@@ -366,3 +491,4 @@ Sale del documento de diseño («Lo primero que se ve y cómo se corrige» y la 
 - **2026-10-21/22 · versión inicial:** formularios en Tools, página pública, motor, panel, Excel, vínculo con Reclutamiento (todas las columnas desde que se vincula) y el screener de ALONG 2 como plantilla. Se diseñó el feature completo (documento de diseño) y se escribió esta guía.
 - **2026-10-22 · fase 1 (base del screener):** contrato versión 2 con todos los tipos de la fase 1, una o varias dicho por el tipo, país y NSE por país como alerta, revisión de definiciones, formulario en neutros, panel con NSE distinto y plantilla de prueba con todos los tipos. Con el cuestionario oficial que pasó Sergio se cargó la AMAI 2022 (cortes nuevos, redacción oficial) como regla vigente de México; 36 pruebas. Probado en local de punta a punta. Subido a `main` con el OK de Sergio (`3d5bbfd`).
 - **2026-10-22 · fase 2 (editor):** el filtro abre como documento, con la lógica en palabras y el mapa del flujo al lado, y tiene la vista Celular para contestarlo sin guardar. Se corrige a mano: textos, opciones, imágenes arrastradas o pegadas (a una carpeta pública y achicadas), tipos, «mostrar solo si», qué termina o descarta, y nombre y cuota de los frentes. Tiene deshacer, versiones, aviso de otra ventana o persona sin pisar cambios, y los minutos contra el tope de 10. El panel quedó con «Ver» y en tarjetas en pantallas angostas. En la base, la tabla `formulario_versiones` y las columnas `revision` y `editando` (con el OK de Sergio). 50 pruebas. Probado en local y subido a `main` con el OK de Sergio (`40d801f`).
+- **2026-10-22 · fase 3 (generador con IA):** cuatro puntos de partida (insumos, Word, filtro anterior, plantilla); insumos con PDF, PowerPoint, Word, notas y reuniones de Notetaker; estructura con frentes, embudo, minutos y supuestos, que se ajusta con un comentario; preguntas escritas de tres en tres que aparecen en el documento al llegar; lógica final de frentes, alertas y textos; botón IA en cada pregunta y Comentar en cada sección y en los frentes, con la propuesta antes de aplicarla; cambiar la estructura de lo escrito conservando lo que no cambia; tope de uso por hora. Reglas en una skill con ALONG 2, DOPAMINA y LORO sin marcas. En la base, `formularios.generador` y `formulario_ia_uso` (con el OK de Sergio). 63 pruebas. Probado en local de punta a punta; sin subir todavía.

@@ -14,6 +14,7 @@ import { describir } from '@/lib/formularios/motor';
 import { reglaVigente } from '@/lib/formularios/nse';
 import { descargarExcel } from '@/lib/formularios/excel';
 import type { Definicion, Respuestas, Resultado } from '@/lib/formularios/tipos';
+import type { Generador } from '@/lib/formularios/generador';
 
 export interface RespuestaRow {
   id: string; createdAt: string; esPrueba: boolean; nombre?: string; telefono?: string; edad?: string; genero?: string; nse?: string;
@@ -25,6 +26,8 @@ export interface RespuestaRow {
 export interface Detalle {
   id: string; codigo: string; titulo: string; estado: string; definicion: Definicion; revision?: number;
   tablero?: { id: string; nombre: string }; respuestas: RespuestaRow[];
+  /** Fase 3: el generador con IA, si el filtro se hizo con él, y el uso de IA de la última hora. */
+  generador?: Generador; usoIA?: { usadas: number; limite: number };
 }
 
 const fecha = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });

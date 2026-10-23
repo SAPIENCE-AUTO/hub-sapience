@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getFormularios, createFormulario, getFormularioDetail,
@@ -16,11 +16,23 @@ import { TEAL, ALERTA, EstadoPill } from '@/lib/toolColors';
 import { PAISES } from '@/lib/formularios/paises';
 import { PLANTILLAS } from '@/lib/formularios/plantillas';
 import type { Definicion } from '@/lib/formularios/tipos';
+import { estructuraDeDefinicion } from '@/lib/formularios/generador';
 import { AvisoRegla, PanelRespuestas, type Detalle } from './PanelRespuestas';
 import { useEditorFiltro } from './editor/useEditorFiltro';
 import { EditorFiltro, irAlDocumento, type VistaEditor } from './editor/EditorFiltro';
+import { useGenerador } from './generador/useGenerador';
+import { GeneradorFiltro } from './generador/GeneradorFiltro';
+import { MarcaIA } from './generador/comun';
 
-interface FormularioRow { id: string; codigo: string; titulo: string; estado: string; respuestasPrueba: number; respuestasReales: number; califican: number }
+interface FormularioRow { id: string; codigo: string; titulo: string; estado: string; respuestasPrueba: number; respuestasReales: number; califican: number; proyecto?: string }
+
+type Origen = 'insumos' | 'word' | 'filtro' | 'plantilla';
+const ORIGENES: { id: Origen; nombre: string; detalle: string; ia?: boolean }[] = [
+  { id: 'insumos', nombre: 'Con IA, desde los insumos', detalle: 'Notas, la propuesta y el kick-off de Notetaker.', ia: true },
+  { id: 'word', nombre: 'Con IA, desde un screener en Word', detalle: 'Se vuelve un filtro editable con su misma redacción.', ia: true },
+  { id: 'filtro', nombre: 'Desde un filtro anterior', detalle: 'Se copia y, si cambia algo, la IA lo adapta.' },
+  { id: 'plantilla', nombre: 'Desde una plantilla', detalle: 'ALONG 2 o la de todos los tipos de pregunta.' },
+];
 
 const enlace = (codigo: string) => `${window.location.origin}/f/${codigo}`;
 
@@ -41,6 +53,9 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
   const [nuevoTitulo, setNuevoTitulo] = useState('');
   const [nuevaPlantilla, setNuevaPlantilla] = useState(Object.keys(PLANTILLAS)[0]);
+  const [origen, setOrigen] = useState<Origen>('insumos');
+  const [todos, setTodos] = useState<FormularioRow[] | null>(null);
+  const [filtroBase, setFiltroBase] = useState('');
   const [creando, setCreando] = useState(false);
   const [confirmar, setConfirmar] = useState<'pruebas' | 'formulario' | null>(null);
 
@@ -68,11 +83,21 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
   useEffect(() => { cargarLista(); }, [proyectoId]);
   useEffect(() => { if (seleccionado) cargarDetalle(seleccionado); else setDetalle(null); }, [seleccionado]);
 
+  // Para «Desde un filtro anterior»: los filtros de todos los proyectos.
+  useEffect(() => {
+    if (!nuevoAbierto || origen !== 'filtro' || todos) return;
+    getFormularios({}).then((r) => setTodos(r.formularios ?? [])).catch((err) => toast.error((err as Error).message));
+  }, [nuevoAbierto, origen, todos]);
+
   const crear = async () => {
-    if (!nuevoTitulo.trim()) return;
+    if (!nuevoTitulo.trim() || (origen === 'filtro' && !filtroBase)) return;
     setCreando(true);
     try {
-      const r = await createFormulario({ titulo: nuevoTitulo.trim(), plantilla: nuevaPlantilla, proyectoId });
+      const r = await createFormulario({
+        titulo: nuevoTitulo.trim(), origen, proyectoId,
+        ...(origen === 'plantilla' ? { plantilla: nuevaPlantilla } : {}),
+        ...(origen === 'filtro' ? { filtroBaseId: filtroBase } : {}),
+      });
       setNuevoAbierto(false);
       setNuevoTitulo('');
       await cargarLista();
@@ -156,19 +181,45 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
           <div className="space-y-3">
             <div>
               <label className="text-xs font-medium text-muted-foreground">Nombre interno</label>
-              <Input value={nuevoTitulo} onChange={(e) => setNuevoTitulo(e.target.value)} placeholder="Screener ALONG 2 · ensayo" />
-              <p className="mt-1 text-[11px] text-muted-foreground">El participante no lo ve: ve el título de la plantilla.</p>
+              <Input value={nuevoTitulo} onChange={(e) => setNuevoTitulo(e.target.value)} placeholder="Screener · consumidores de café frío" />
+              <p className="mt-1 text-[11px] text-muted-foreground">El participante no lo ve.</p>
             </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Plantilla</label>
-              <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" value={nuevaPlantilla} onChange={(e) => setNuevaPlantilla(e.target.value)}>
+            <div role="radiogroup" aria-label="Cómo empiezas" className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Cómo empiezas</label>
+              {ORIGENES.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={origen === o.id}
+                  onClick={() => setOrigen(o.id)}
+                  className={`flex w-full items-start gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${origen === o.id ? 'border-[#0F3D4D] bg-[#0F3D4D]/[0.04]' : 'hover:bg-muted/50'}`}
+                >
+                  <span className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border ${origen === o.id ? 'border-[#0F3D4D]' : 'border-muted-foreground/50'}`}>
+                    {origen === o.id && <span className="h-2 w-2 rounded-full bg-[#0F3D4D]" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-sm font-medium">{o.nombre}{o.ia && <MarcaIA />}</span>
+                    <span className="block text-xs text-muted-foreground">{o.detalle}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {origen === 'plantilla' && (
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={nuevaPlantilla} onChange={(e) => setNuevaPlantilla(e.target.value)}>
                 {Object.entries(PLANTILLAS).map(([id, p]) => <option key={id} value={id}>{p.nombre}</option>)}
               </select>
-            </div>
+            )}
+            {origen === 'filtro' && (
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={filtroBase} onChange={(e) => setFiltroBase(e.target.value)}>
+                <option value="">{todos ? 'Elige el filtro…' : 'Cargando filtros…'}</option>
+                {todos?.map((f) => <option key={f.id} value={f.id}>{f.titulo}{f.proyecto ? ` · ${f.proyecto}` : ''}</option>)}
+              </select>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNuevoAbierto(false)}>Cancelar</Button>
-            <Button onClick={crear} disabled={creando || !nuevoTitulo.trim()}>{creando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Crear</Button>
+            <Button onClick={crear} disabled={creando || !nuevoTitulo.trim() || (origen === 'filtro' && !filtroBase)}>{creando && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Crear</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -214,6 +265,14 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
 }) {
   const [vista, setVista] = useState<Vista>('documento');
   const editor = useEditorFiltro({ formularioId: detalle.id, inicial: detalle.definicion, revisionInicial: detalle.revision ?? 0, onGuardado });
+  const gen = useGenerador({ formularioId: detalle.id, editor, inicial: detalle.generador, usoInicial: detalle.usoIA });
+  // Fase 3: mientras no hay preguntas, el filtro abre en el generador (insumos y estructura).
+  const [verEstructura, setVerEstructura] = useState(false);
+  const enGenerador = verEstructura || gen.g?.etapa === 'insumos' || gen.g?.etapa === 'estructura';
+  const estructuraActual = useMemo(
+    () => (verEstructura && gen.g?.etapa !== 'estructura' ? estructuraDeDefinicion(editor.def, gen.g?.estructura) : undefined),
+    [verEstructura, gen.g?.etapa, gen.g?.estructura, editor.def],
+  );
   const def = detalle.definicion;
   const hayReales = detalle.respuestas.some((r) => !r.esPrueba);
 
@@ -261,7 +320,14 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
         {detalle.estado === 'prueba' && <span style={{ color: ALERTA }}>Modo prueba: todo lo que entre queda marcado como prueba; lo que guardes aquí lo ve ya quien lo contesta.</span>}
       </div>
 
-      <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+      {enGenerador && (
+        <GeneradorFiltro
+          gen={gen} formularioId={detalle.id} actual={estructuraActual} onCerrar={() => setVerEstructura(false)}
+          regla={editor.def.secciones.length ? editor.def.nse?.regla : undefined}
+        />
+      )}
+
+      {!enGenerador && <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
         <div role="tablist" className="inline-flex gap-1 rounded-lg bg-muted/60 p-1">
           {VISTAS.map((v) => {
             const activa = vista === v.id;
@@ -280,11 +346,11 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
             );
           })}
         </div>
-      </div>
+      </div>}
 
-      {vista === 'respuestas'
+      {!enGenerador && (vista === 'respuestas'
         ? <PanelRespuestas detalle={detalle} proyectoId={proyectoId} onRecargar={onRecargar} onBorrarPruebas={onBorrarPruebas} />
-        : <EditorFiltro editor={editor} vista={vista} formularioId={detalle.id} onIr={irA} />}
+        : <EditorFiltro editor={editor} vista={vista} formularioId={detalle.id} onIr={irA} gen={gen} onEstructura={() => { setVista('documento'); setVerEstructura(true); }} />)}
     </div>
   );
 }

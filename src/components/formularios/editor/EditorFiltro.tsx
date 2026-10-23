@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, Clock, History, Loader2, Redo2, Undo2, Users } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Check, Clock, History, LayoutList, Loader2, Redo2, Undo2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ALERTA, EXITO, PELIGRO } from '@/lib/toolColors';
@@ -11,6 +11,11 @@ import { Documento } from './Documento';
 import { MapaFlujo } from './MapaFlujo';
 import { VistaCelular } from './VistaCelular';
 import { Versiones } from './Versiones';
+import { supuestosDe } from '@/lib/formularios/generador';
+import type { GeneradorUI } from '../generador/useGenerador';
+import { AvanceEscritura } from '../generador/AvanceEscritura';
+import { Supuestos } from '../generador/Supuestos';
+import { UsoIA } from '../generador/comun';
 
 export type VistaEditor = 'documento' | 'flujo' | 'celular';
 
@@ -47,8 +52,12 @@ function legible(def: Editor['def'], texto: string): string {
   });
 }
 
-function EstadoGuardado({ editor, onIr }: { editor: Editor; onIr: (id: { seccion?: string; pregunta?: string }) => void }) {
+function EstadoGuardado({ editor, onIr, generando }: { editor: Editor; onIr: (id: { seccion?: string; pregunta?: string }) => void; generando?: boolean }) {
   const { estado, problemas } = editor;
+  // Mientras la IA escribe, una sección puede usar otra que todavía no llega: se guarda al completarse.
+  if (generando && estado === 'por_corregir') {
+    return <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Se guarda en cuanto la IA termine</span>;
+  }
   if (estado === 'guardando' || estado === 'pendiente') {
     return <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Guardando…</span>;
   }
@@ -97,13 +106,20 @@ function EstadoGuardado({ editor, onIr }: { editor: Editor; onIr: (id: { seccion
  * Celular). El estado vive en useEditorFiltro, que guarda el componente de
  * arriba para no perderlo al pasar a Respuestas.
  */
-export function EditorFiltro({ editor, vista, formularioId, onIr }: {
+export function EditorFiltro({ editor, vista, formularioId, onIr, gen, onEstructura }: {
   editor: Editor;
   vista: VistaEditor;
   formularioId: string;
   onIr: (id: { seccion?: string; pregunta?: string }) => void;
+  /** Fase 3: el generador con IA (supuestos, avance de la escritura, botón IA y comentarios). */
+  gen?: GeneradorUI;
+  /** Abre la estructura para cambiarla con la IA. */
+  onEstructura?: () => void;
 }) {
   const [versiones, setVersiones] = useState(false);
+  const contarUso = gen?.contarUso;
+  const hayIA = !!gen;
+  const ia = useMemo(() => (hayIA && contarUso ? { formularioId, contarUso: () => contarUso() } : undefined), [hayIA, contarUso, formularioId]);
 
   // ⌘Z deshace y ⌘⇧Z rehace, salvo mientras se escribe en un cuadro.
   useEffect(() => {
@@ -125,10 +141,15 @@ export function EditorFiltro({ editor, vista, formularioId, onIr }: {
           <Button size="sm" variant="ghost" className="h-8 px-2" disabled={!editor.puedeDeshacer} onClick={editor.deshacer} title="Deshacer (⌘Z)"><Undo2 className="h-4 w-4" /><span className="ml-1 hidden sm:inline">Deshacer</span></Button>
           <Button size="sm" variant="ghost" className="h-8 px-2" disabled={!editor.puedeRehacer} onClick={editor.rehacer} title="Rehacer (⌘⇧Z)"><Redo2 className="h-4 w-4" /></Button>
         </div>
-        <EstadoGuardado editor={editor} onIr={onIr} />
+        <EstadoGuardado editor={editor} onIr={onIr} generando={gen?.escribiendo} />
         <Duracion editor={editor} />
-        <Button size="sm" variant="outline" className="ml-auto h-8" onClick={() => setVersiones(true)}><History className="mr-1.5 h-3.5 w-3.5" />Versiones</Button>
+        <span className="ml-auto flex items-center gap-2">
+          {gen && <UsoIA uso={gen.uso} />}
+          {onEstructura && <Button size="sm" variant="outline" className="h-8" disabled={gen?.escribiendo} onClick={onEstructura} title="Ver la estructura y cambiarla con la IA"><LayoutList className="mr-1.5 h-3.5 w-3.5" />Estructura</Button>}
+          <Button size="sm" variant="outline" className="h-8" onClick={() => setVersiones(true)}><History className="mr-1.5 h-3.5 w-3.5" />Versiones</Button>
+        </span>
       </div>
+      {gen?.g?.estructura && <AvanceEscritura gen={gen} def={editor.def} />}
 
       {otros.length > 0 && (
         <p className="flex items-start gap-2 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: `${ALERTA}66`, color: '#8a4b00', backgroundColor: `${ALERTA}0f` }}>
@@ -152,7 +173,25 @@ export function EditorFiltro({ editor, vista, formularioId, onIr }: {
         </div>
       )}
 
-      {vista === 'documento' && <Documento editor={editor} onIr={(seccion) => onIr({ seccion })} />}
+      {vista === 'documento' && gen?.g && (
+        <Supuestos
+          items={supuestosDe(gen.g).map((x) => ({ texto: x.texto, donde: x.seccion === 'frentes' ? 'Frentes' : x.seccion ? gen.g!.estructura?.secciones.find((s) => s.id === x.seccion)?.titulo.split('{opcion}').join('…') : undefined }))}
+          revisado={gen.g.supuestosRevisados}
+          onRevisar={gen.marcarRevisados}
+        />
+      )}
+      {vista === 'documento' && (
+        <Documento
+          editor={editor}
+          onIr={(seccion) => onIr({ seccion })}
+          ia={ia}
+          pendientes={gen?.g?.etapa === 'preguntas' && gen.g.estructura ? {
+            orden: gen.g.estructura.secciones.map((s) => s.id),
+            titulos: Object.fromEntries(gen.g.estructura.secciones.map((s) => [s.id, s.titulo])),
+            escribiendo: new Set(Object.entries(gen.secciones).filter(([, v]) => v.estado === 'escribiendo').map(([id]) => id)),
+          } : undefined}
+        />
+      )}
       {vista === 'flujo' && (
         <div className="rounded-xl border bg-white px-4 py-5 sm:px-8">
           <p className="mx-auto mb-1 max-w-3xl text-xs text-muted-foreground">

@@ -4,6 +4,9 @@ import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { etiqueta, explicarResultado } from '../lib/formularios/motor';
 import { leerDefinicion, type Respuestas, type Resultado } from '../lib/formularios/tipos';
 import { respuestasYaPasadas, vinculoVigente, type Vinculo } from '../serverUtils/formularios/reclutamiento';
+import { generadorParaNavegador } from '../serverUtils/formularios/generar';
+import { LIMITE_POR_HORA, usoDeLaHora } from '../serverUtils/formularios/uso';
+import { leerGenerador } from '../lib/formularios/generador';
 
 /**
  * Detalle para el panel: la definición completa (es interna, aquí sí va todo)
@@ -24,6 +27,10 @@ export default createEndpoint({
     /** Sube con cada guardado del editor: con ella se evita pisar cambios de otra persona. */
     revision: z.number().optional(),
     tablero: z.object({ id: z.string(), nombre: z.string() }).optional(),
+    /** Fase 3: insumos, estructura y supuestos si el filtro se hizo con la IA (sin el texto de los archivos). */
+    generador: z.any().optional(),
+    /** Llamadas a la IA de esta persona en la última hora, contra el tope. */
+    usoIA: z.object({ usadas: z.number(), limite: z.number() }).optional(),
     respuestas: z.array(z.object({
       id: z.string(),
       createdAt: z.string(),
@@ -47,7 +54,7 @@ export default createEndpoint({
   }),
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
-    const { rows: [f] } = await pool.query(`select id, codigo, titulo, estado, definicion, revision, vinculo from formularios where id = $1`, [input.formularioId]);
+    const { rows: [f] } = await pool.query(`select id, codigo, titulo, estado, definicion, revision, vinculo, generador from formularios where id = $1`, [input.formularioId]);
     if (!f) return { found: false };
     const def = leerDefinicion(f.definicion);
 
@@ -69,6 +76,8 @@ export default createEndpoint({
     return {
       found: true, id: f.id, codigo: f.codigo, titulo: f.titulo, estado: f.estado, definicion: def, revision: f.revision,
       tablero: vinculo ? { id: vinculo.boardId, nombre: vinculo.boardName } : undefined,
+      generador: generadorParaNavegador(leerGenerador(f.generador)),
+      usoIA: { usadas: await usoDeLaHora(context.user!.email), limite: LIMITE_POR_HORA },
       respuestas: rows.map((r) => {
         const resp = r.respuestas as Respuestas;
         const res = r.resultado as Resultado;

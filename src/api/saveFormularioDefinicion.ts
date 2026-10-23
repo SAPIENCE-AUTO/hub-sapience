@@ -22,6 +22,12 @@ export default createEndpoint({
     formularioId: z.string(),
     definicion: z.any(),
     revision: z.number().int(),
+    /**
+     * Fase 3: secciones del generador que este guardado deja puestas en el
+     * screener (id → firma del plan). Se marcan en la misma transacción: si el
+     * guardado no entra, se vuelven a poner al abrir el filtro.
+     */
+    aplicadas: z.record(z.string(), z.string()).optional(),
   }),
   outputSchema: z.object({
     ok: z.boolean(),
@@ -54,6 +60,13 @@ export default createEndpoint({
         `update formularios set definicion = $2, revision = revision + 1, updated_at = now() where id = $1 returning revision`,
         [input.formularioId, JSON.stringify(def)],
       );
+      if (input.aplicadas && Object.keys(input.aplicadas).length) {
+        await client.query(
+          `update formularios set generador = jsonb_set(generador, '{aplicadas}', coalesce(generador->'aplicadas', '{}'::jsonb) || $2::jsonb)
+           where id = $1 and generador is not null`,
+          [input.formularioId, JSON.stringify(input.aplicadas)],
+        );
+      }
       await client.query('commit');
       return { ok: true, revision: n.revision as number };
     } catch (err) {
