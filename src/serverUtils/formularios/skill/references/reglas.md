@@ -9,6 +9,7 @@ Salen de las versiones del screener de ALONG 2 (ejemplo 1) y de cómo trabaja el
 
 ## Orden: un embudo
 
+0. **Nadie se corta por defecto.** Lo que antes «terminaba» el filtro ahora es «no califica»: se registra el motivo y la persona contesta todo, para no enseñarle dónde se corta. Usa `cortar` solo si el pedido lo dice.
 1. **«Antes de empezar» lo pone el Hub** en todos los filtros: el aviso de privacidad (con «No acepto» que termina), el nombre y la foto de una identificación oficial (quien no quiere darla termina). No los escribas ni los repitas: la estructura empieza en lo que sigue.
 2. **Datos de contacto y perfil básico**: celular, género, edad, código postal o ciudad, cómo es su hogar (el nombre ya lo pide el Hub). Van al inicio para poder recuperar a quien abandona y para cortar pronto por edad o zona.
 3. **Filtros de seguridad**: giros y estudios recientes.

@@ -33,7 +33,7 @@ function Detalle({ b }: { b: BloqueFlujo }) {
 /** Un paso del filtro. `adentro`: lo que termina va en la caja (en las ramas y en celular). */
 function Caja({ b, onIr, adentro, marcada }: { b: BloqueFlujo; onIr: (id: string) => void; adentro: 'siempre' | 'celular'; marcada?: boolean }) {
   const rama = !!b.condicion || !!b.repite;
-  const titulo = [b.termina.length ? `Termina si: ${b.termina.join(' · ')}` : '', b.descarta.length ? `No cuenta el bloque si: ${b.descarta.join(' · ')}` : ''].filter(Boolean).join('\n');
+  const titulo = [b.termina.length ? `No califica si: ${b.termina.join(' · ')}` : '', b.descarta.length ? `No cuenta el bloque si: ${b.descarta.join(' · ')}` : ''].filter(Boolean).join('\n');
   return (
     <button
       type="button"
@@ -45,7 +45,7 @@ function Caja({ b, onIr, adentro, marcada }: { b: BloqueFlujo; onIr: (id: string
       <Detalle b={b} />
       {b.termina.length > 0 && (
         <span className={`mt-1 text-[11.5px] leading-snug ${adentro === 'celular' ? 'block sm:hidden' : 'block'}`} style={{ color: PELIGRO }}>
-          <span className="line-clamp-1">Termina: {motivos(b.termina)}</span>
+          <span className="line-clamp-1">No califica: {motivos(b.termina)}</span>
         </span>
       )}
       {b.descarta.length > 0 && (
@@ -100,7 +100,7 @@ export function MapaFlujo({ def, filas: dadas, perfiles: dados, marcadas, ayuda 
                     className="ml-1 min-w-0 rounded-md border px-2 py-1 text-[11.5px] leading-snug"
                     style={{ borderColor: `${PELIGRO}55`, backgroundColor: `${PELIGRO}0a`, color: PELIGRO }}
                   >
-                    <span className="line-clamp-3">Termina: {motivos(f.bloque.termina)}</span>
+                    <span className="line-clamp-3">No califica: {motivos(f.bloque.termina)}</span>
                   </span>
                 </div>
               )}
@@ -140,7 +140,7 @@ export function MapaFlujo({ def, filas: dadas, perfiles: dados, marcadas, ayuda 
       </button>
 
       <p className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11.5px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm border" style={{ borderColor: `${PELIGRO}88`, backgroundColor: `${PELIGRO}14` }} />Termina el filtro</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm border" style={{ borderColor: `${PELIGRO}88`, backgroundColor: `${PELIGRO}14` }} />No califica (se registra)</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm border border-dashed border-[#0F3D4D]/50" />Solo si aplica</span>
         <span>↻ Se repite</span>
         {ayuda && <span>{ayuda}</span>}

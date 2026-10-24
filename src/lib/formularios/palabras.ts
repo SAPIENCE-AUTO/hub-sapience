@@ -151,8 +151,9 @@ function frentesDelGrupo(def: Definicion, grupo: string): string {
 
 /**
  * Una línea de lógica en palabras. `tipo` dice de qué color va en el editor;
- * si lleva `motivo`, el editor deja corregir ese pedazo («…termina el filtro:
- * <motivo>») y `campo` dice dónde vive.
+ * si lleva `motivo`, el editor deja corregir ese pedazo («…no califica:
+ * <motivo>») y `campo` dice dónde vive. `tipo: 'termina'` es un criterio de
+ * «no califica»; `corta`, que además corta el filtro ahí.
  */
 export interface LineaLogica {
   tipo: 'aparece' | 'termina' | 'descarta' | 'excluye' | 'opciones' | 'nse' | 'otro';
@@ -160,7 +161,11 @@ export interface LineaLogica {
   prefijo?: string;
   motivo?: string;
   campo?: 'termina' | 'descarta' | 'terminaFuera' | 'terminaSi';
+  corta?: boolean;
 }
+
+/** «no califica: » o, si el analista pidió cortar ahí, «no califica y se corta el filtro: ». */
+const noCalifica = (corta?: boolean) => (corta ? 'no califica y se corta el filtro: ' : 'no califica: ');
 
 const conMotivo = (tipo: LineaLogica['tipo'], prefijo: string, motivo: string, campo: LineaLogica['campo']): LineaLogica =>
   ({ tipo, texto: frase(`${prefijo}${motivo}`), prefijo, motivo, campo });
@@ -169,7 +174,10 @@ const conMotivo = (tipo: LineaLogica['tipo'], prefijo: string, motivo: string, c
 export function logicaDeOpcion(def: Definicion, p: Pregunta, o: Opcion): LineaLogica[] {
   const si = forma(p.tipo) === 'una' ? 'Si contesta esta' : 'Si la marca';
   const out: LineaLogica[] = [];
-  if (o.termina) out.push(conMotivo('termina', `${si}, termina el filtro: `, o.termina, 'termina'));
+  if (o.termina) {
+    const corta = !!o.cortar || p.id.startsWith('hub_');
+    out.push({ ...conMotivo('termina', `${si}, ${noCalifica(corta)}`, o.termina, 'termina'), corta });
+  }
   if (o.descarta) out.push(conMotivo('descarta', `${si}, no cuenta este bloque: `, o.descarta, 'descarta'));
   for (const g of o.excluyeGrupos ?? []) out.push({ tipo: 'excluye', texto: frase(`${si}, queda fuera ${frentesDelGrupo(def, g)}`) });
   if (o.exclusiva) out.push({ tipo: 'otro', texto: 'Al marcarla se quitan las demás.' });
@@ -193,12 +201,17 @@ export function logicaDePregunta(def: Definicion, p: Pregunta): LineaLogica[] {
   if (p.tipo === 'numero' && (p.min !== undefined || p.max !== undefined)) {
     otro(p.min !== undefined && p.max !== undefined ? `Acepta de ${p.min} a ${p.max}.` : p.min !== undefined ? `Acepta de ${p.min} en adelante.` : `Acepta hasta ${p.max}.`);
   }
-  if (p.terminaFuera) out.push(conMotivo('termina', `Si contesta menos de ${p.terminaFuera.min} o más de ${p.terminaFuera.max}, termina el filtro: `, p.terminaFuera.motivo, 'terminaFuera'));
-  if (p.terminaSi) out.push(conMotivo('termina', `Termina el filtro si ${condicionEnPalabras(p.terminaSi.si, def)}: `, p.terminaSi.motivo, 'terminaSi'));
+  if (p.terminaFuera) {
+    out.push({ ...conMotivo('termina', `Si contesta menos de ${p.terminaFuera.min} o más de ${p.terminaFuera.max}, ${noCalifica(p.terminaFuera.cortar)}`, p.terminaFuera.motivo, 'terminaFuera'), corta: !!p.terminaFuera.cortar });
+  }
+  if (p.terminaSi) {
+    const prefijo = `${p.terminaSi.cortar ? 'No califica y se corta el filtro' : 'No califica'} si ${condicionEnPalabras(p.terminaSi.si, def)}: `;
+    out.push({ ...conMotivo('termina', prefijo, p.terminaSi.motivo, 'terminaSi'), corta: !!p.terminaSi.cortar });
+  }
   for (const r of p.reglasMatriz ?? []) {
     const fila = p.filas?.find((x) => x.id === r.fila)?.label ?? r.fila;
     const cols = unirO(r.columnas.map((id) => p.opciones?.find((o) => o.id === id)?.label ?? id));
-    if (r.termina) out.push({ tipo: 'termina', texto: frase(`Si en «${fila}» marca ${cols}, termina el filtro: ${r.termina}`) });
+    if (r.termina) out.push({ tipo: 'termina', texto: frase(`Si en «${fila}» marca ${cols}, ${noCalifica(r.cortar)}${r.termina}`), corta: !!r.cortar });
     for (const g of r.excluyeGrupos ?? []) out.push({ tipo: 'excluye', texto: frase(`Si en «${fila}» marca ${cols}, queda fuera ${frentesDelGrupo(def, g)}`) });
   }
   if (p.patron && f === 'texto') otro(frase(`Se revisa el formato: ${p.patronMensaje ?? p.patron}`));

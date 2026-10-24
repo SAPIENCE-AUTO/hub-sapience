@@ -74,13 +74,14 @@ export function Logica({ lineas, onMotivo, className = '' }: {
   );
 }
 
-const ETIQUETA: Partial<Record<LineaLogica['tipo'], string>> = { termina: 'Termina', descarta: 'No cuenta', excluye: 'Fuera de perfil' };
+const ETIQUETA: Partial<Record<LineaLogica['tipo'], string>> = { termina: 'No califica', descarta: 'No cuenta', excluye: 'Fuera de perfil' };
 
 /** La lógica de una opción en etiquetas chicas (el detalle, al pasar el mouse); la línea completa sale al elegir la pregunta. */
 export function EtiquetasLogica({ lineas }: { lineas: LineaLogica[] }) {
   const etiquetas = lineas.map((l) => ({
     l,
-    texto: ETIQUETA[l.tipo] ?? (/se quitan las demás/.test(l.texto) ? 'Exclusiva' : /escribir cuál/.test(l.texto) ? 'Pide cuál' : undefined),
+    texto: l.tipo === 'termina' && l.corta ? 'No califica · corta'
+      : ETIQUETA[l.tipo] ?? (/se quitan las demás/.test(l.texto) ? 'Exclusiva' : /escribir cuál/.test(l.texto) ? 'Pide cuál' : undefined),
   })).filter((x): x is { l: LineaLogica; texto: string } => !!x.texto);
   if (!etiquetas.length) return null;
   return (

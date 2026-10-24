@@ -114,7 +114,7 @@ export function EditorCondicion({ lugar, actual, onGuardar, onCerrar }: {
   );
 }
 
-/** Rango de un número (y cuándo termina el filtro por estar fuera) o de una escala. */
+/** Rango de un número (y cuándo no califica por estar fuera) o de una escala. */
 export function EditorRango({ p, onGuardar, onCerrar }: { p: Pregunta; onGuardar: (cambio: Partial<Pregunta>) => void; onCerrar: () => void }) {
   const r = rango(p);
   const [min, setMin] = useState<number | undefined>(p.tipo === 'numero' ? p.min : r.min);
@@ -124,13 +124,14 @@ export function EditorRango({ p, onGuardar, onCerrar }: { p: Pregunta; onGuardar
   const [cMin, setCMin] = useState<number | undefined>(p.terminaFuera?.min);
   const [cMax, setCMax] = useState<number | undefined>(p.terminaFuera?.max);
   const motivo = p.terminaFuera?.motivo;
+  const [cortar, setCortar] = useState(!!p.terminaFuera?.cortar);
 
   const guardar = () => {
     const cambio: Partial<Pregunta> = p.tipo === 'estrellas' ? { max } : { min, max };
     if (p.tipo === 'deslizador') cambio.paso = paso;
     if (p.tipo === 'numero') {
       cambio.terminaFuera = corta && cMin !== undefined && cMax !== undefined
-        ? { min: cMin, max: cMax, motivo: motivo ?? `Fuera de ${cMin} a ${cMax}` }
+        ? { min: cMin, max: cMax, motivo: motivo ?? `Fuera de ${cMin} a ${cMax}`, ...(cortar ? { cortar: true } : {}) }
         : undefined;
     }
     onGuardar(cambio);
@@ -149,12 +150,18 @@ export function EditorRango({ p, onGuardar, onCerrar }: { p: Pregunta; onGuardar
         <div className="mt-3 space-y-2 text-[13px]">
           <label className="flex items-center gap-2">
             <input type="checkbox" className="accent-[#0F3D4D]" checked={corta} onChange={(e) => setCorta(e.target.checked)} />
-            Termina el filtro si contesta fuera de un rango
+            No califica si contesta fuera de un rango
           </label>
           {corta && (
-            <div className="flex flex-wrap items-center gap-2 pl-6">
-              Sigue solo de <CampoNumero etiqueta="Desde" valor={cMin} onChange={setCMin} /> a <CampoNumero etiqueta="Hasta" valor={cMax} onChange={setCMax} />
-            </div>
+            <>
+              <div className="flex flex-wrap items-center gap-2 pl-6">
+                Califica solo de <CampoNumero etiqueta="Desde" valor={cMin} onChange={setCMin} /> a <CampoNumero etiqueta="Hasta" valor={cMax} onChange={setCMax} />
+              </div>
+              <label className="flex items-center gap-2 pl-6 text-muted-foreground">
+                <input type="checkbox" className="accent-[#0F3D4D]" checked={cortar} onChange={(e) => setCortar(e.target.checked)} />
+                Y cortar el filtro ahí (si no, contesta todo y se registra)
+              </label>
+            </>
           )}
         </div>
       )}

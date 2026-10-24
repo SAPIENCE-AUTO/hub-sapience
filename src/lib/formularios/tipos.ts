@@ -73,8 +73,14 @@ export interface Opcion {
   corto?: string;
   /** URL de la imagen (selector con imágenes). Subirla arrastrando es de la fase 2. */
   imagen?: string;
-  /** Termina todo el formulario. El texto es el motivo interno. */
+  /**
+   * No califica: lo deja fuera de la muestra. El texto es el motivo interno. Por
+   * defecto NO corta el filtro (contesta todo y se registra; así nadie aprende
+   * dónde se corta y vuelve a llenarlo falseando). Con `cortar`, termina ahí.
+   */
   termina?: string;
+  /** Cortar el filtro en cuanto la marca (solo a criterio del analista; el aviso y la identificación siempre cortan). */
+  cortar?: boolean;
   /** Solo en una sección repetida: descarta esa repetición (ese formato), no el formulario. */
   descarta?: string;
   /** Deja fuera estos grupos de cuota (p. ej. rechazo a la marca del cliente). */
@@ -94,6 +100,7 @@ export interface ReglaMatriz {
   /** Si en esa fila marcó alguna de estas columnas. */
   columnas: string[];
   termina?: string;
+  cortar?: boolean;
   excluyeGrupos?: string[];
 }
 
@@ -144,12 +151,12 @@ export interface Pregunta {
   /** Escalas: lo que se lee en los extremos («Nada probable» · «Muy probable»). */
   etiquetas?: { min?: string; max?: string };
   /** Número o escala: fuera de este rango termina el formulario. */
-  terminaFuera?: { min: number; max: number; motivo: string };
+  terminaFuera?: { min: number; max: number; motivo: string; cortar?: boolean };
   /** Texto: expresión que debe cumplir (código postal, etc.). */
   patron?: string;
   patronMensaje?: string;
   /** Termina el formulario si se cumple, una vez contestada la pregunta. */
-  terminaSi?: { si: Condicion; motivo: string };
+  terminaSi?: { si: Condicion; motivo: string; cortar?: boolean };
   mostrarSi?: Condicion;
   /** Lógica para el equipo; nunca llega al participante. */
   nota?: string;
@@ -228,7 +235,10 @@ export type Respuestas = Record<string, Valor>;
 
 export interface Resultado {
   califica: boolean;
+  /** Se cortó el filtro (un criterio con `cortar`, o el aviso o la identificación). */
   terminado?: { motivo: string; clave: string };
+  /** Todos los motivos por los que no califica, aunque no hayan cortado el filtro. */
+  noCalifica?: string[];
   descartes: { seccion: string; opcion: string; motivo: string }[];
   gruposExcluidos: string[];
   /** NSE estimado. `fueraDe`: frentes donde entró aunque su NSE no es el que pide el frente (va también como alerta). */
@@ -236,6 +246,34 @@ export interface Resultado {
   frentes: string[];
   alertas: string[];
   incompleto: boolean;
+  // ── lo que se agrega después de recibirla (serverUtils/formularios/alRecibir.ts) ──
+  /** Califica, pero todos sus perfiles ya llenaron su cuota: se queda en Filtros de respaldo. */
+  perfilLleno?: boolean;
+  historial?: HistorialPersona;
+  ia?: ClasificacionIA;
+  /** Traída de un filtro anterior (no la contestó en este): de dónde y cuándo contestó. */
+  traida?: { formularioId: string; titulo: string; proyecto?: string; respuestaId: string; fecha: string };
+}
+
+/** Historial de duplicados de quien contestó (la misma búsqueda de los tableros de Reclutamiento). */
+export interface HistorialPersona {
+  nivel?: 'ya_participo' | 'duplicado' | 'mismo_proyecto' | 'repetido';
+  /** Como la nota de Fillout: «🔴 YA PARTICIPÓ: …». Vacía si es nuevo. */
+  nota: string;
+  entradas: {
+    tipo: 'tablero' | 'filtro'; proyecto: string; cliente?: string; donde?: string; estatus?: string; grupo?: string; fecha?: string;
+    participo: boolean; mismoCliente: boolean; reciente: boolean;
+  }[];
+  calculado: string;
+}
+
+/** Lo que dice la IA de un candidato: ayuda al analista, nunca decide. */
+export interface ClasificacionIA {
+  /** El mejor encaje entre sus perfiles. */
+  encaje: 'alto' | 'medio' | 'bajo';
+  perfiles: { id: string; encaje: 'alto' | 'medio' | 'bajo'; razon: string }[];
+  resumen: string;
+  alertas: string[];
 }
 
 // ── versiones guardadas ──────────────────────────────────────────────────────

@@ -81,7 +81,7 @@ Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octub
 **Pantallas:**
 
 - `src/pages/FormularioPublicoPage.tsx` (ruta pública `/f/:codigo` en `App.tsx`): carga el filtro, guarda el avance en el celular y envía. El formulario en sí es `src/components/formularios/Participante.tsx` (fase 2), el mismo que usa la vista Celular del editor. Cada tipo lo pinta `CampoPregunta.tsx`, que lo reparte a `src/components/formularios/campos/` (opciones, listas, imágenes y ordenar en `Opciones.tsx`; `Matriz`, `Escalas`, `Direccion`, `Foto`; colores en `estilo.ts`).
-- `src/components/formularios/FormulariosPanel.tsx`: pestaña Tools → Formularios del proyecto (`ProjectToolsTab.tsx`). La lista de filtros y el filtro abierto van uno tras otro; el filtro abre en su Documento y tiene las pestañas Documento, Flujo, Celular y Respuestas.
+- `src/components/formularios/FormulariosPanel.tsx`: pestaña **Filtros** del proyecto, junto a Reclutamiento (`ProjectHubPage.tsx`; hasta la fase 5 vivía en Tools). La lista de filtros y el filtro abierto van uno tras otro; el filtro abre en su Documento y tiene los modos Diseñar y Reclutar.
 - `src/components/formularios/PanelRespuestas.tsx`: la pestaña Respuestas (Reclutamiento, cuotas, respuestas con «Ver», detalle con fotos y Excel), en tarjetas en pantallas angostas.
 - `src/components/formularios/editor/` (fase 2):
   - `useEditorFiltro.ts`: el estado (deshacer y rehacer, guardado solo, conflicto con otra ventana, aviso de quién más lo tiene abierto);
@@ -119,7 +119,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
   - formas básicas: `pregunta` + `incluye` / `noIncluye` / `incluyeTodas` (con `instancia` opcional), `numero` + `entre` (también escalas y estrellas; `instancia` opcional), `bloque` (una repetición existe y no fue descartada), `instanciaEs`, `nse`;
   - combinaciones: `todas`, `alguna`, `no`.
   - En las opciones:
-    - `termina`: el filtro termina;
+    - `termina`: no califica (se registra el motivo y sigue contestando; desde la fase 5 solo **corta** el filtro con `cortar: true`, igual en `terminaFuera`, `terminaSi` y `reglasMatriz`);
     - `descarta`: solo esa repetición;
     - `excluyeGrupos`: fuera de los frentes de ese grupo;
     - `exclusiva`: tipo «Ninguno»;
@@ -185,7 +185,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 | 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | **Hecha** (`40d801f`, 2026-10-22) |
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | **Hecha** (`f450a2f`, 2026-10-22) |
 | 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`) y Word/PDF (`9b8e584`) hechos; faltan formulario neutro, dominio, captcha, fotos y videos |
-| 5 | Operación: en vivo, paso solo al tablero, base de participantes con historial, cerrar cuotas | **En curso:** «En vivo» hecho (`90cadec`); lo demás espera las decisiones de Sergio |
+| 5 | Operación: en vivo, nadie se corta por defecto, paso solo al tablero, historial y duplicados, traer respuestas de un filtro anterior, clasificación con IA, pestaña propia | **Hecha** («En vivo» `90cadec`; lo demás sin subir) |
 | 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | Pendiente |
 
 ### Fase 1 · Base del screener
@@ -617,7 +617,7 @@ Sergio preguntó si hoy podía lanzar un formulario. Se podía en «Prueba» (el
 
 **Probado en local (2026-10-24):** con el filtro de prueba `wnf1xq`: la confirmación (avisó que falta vincular el tablero), en vivo, el formulario público sin «Prueba», el menú solo con «Cerrar», cerrar y reabrir en prueba (no tenía respuestas reales); quedó en prueba como estaba. No se mandaron respuestas reales (con una, ese filtro ya no se podría borrar).
 
-**Falta de la fase 5** (espera las decisiones de Sergio): paso solo al tablero, base de participantes con historial y nota de «ya participó / duplicado», y cerrar cuotas llenas.
+El resto de la fase 5 está en «Fase 5 · operación», abajo.
 
 ### Rediseño del flujo: un solo camino, Diseñar y Reclutar, y publicar cambios en vivo (2026-10-24, `2d4c4d6`)
 
@@ -634,6 +634,24 @@ Sergio pidió ojo de diseñador UX y de usuario: lo sentía confuso en los pasos
 
 **Probado en local (2026-10-24):** la lista con el paso de cada filtro; un filtro con IA en Preguntas (camino, «Por revisar · 2» con supuestos y nombres, números, etiquetas, celular siguiendo la lectura, ir a Estructura y regresar); uno en Insumos (solo el paso 1, sin botones adelantados); con el de prueba `wnf1xq`: abrir en vivo (abre en Reclutar con enlace, tablero y cuotas), cambiar la bienvenida (franja con 1 cambio, el formulario público seguía con la anterior), publicar (el público cambió), cambiar y descartar (regresó a lo publicado), dejar el texto original publicado, cerrar y reabrir en prueba: quedó como estaba, sin cambios pendientes y con dos versiones «Antes de publicar cambios». En celular (375) el encabezado cabe sin desplazamiento. 81 pruebas.
 
+### Fase 5 · operación (2026-10-24)
+
+Sergio planteó tres dudas: si Filtros debía vivir en Tools o junto a Reclutamiento; que hoy el filtro «termina» en muchos puntos, cuando en general dejan contestar todo para no sesgar (si saben dónde se corta, lo vuelven a llenar falseando datos), aunque sí hay que registrar por qué alguien entra o no a la muestra, y quizá que la IA clasifique candidatos; y cómo se liga lo que contestan con los tableros, como hoy con Fillout. De ahí salieron: solo pasan al tablero quienes entran a un grupo; duplicados e historial en Filtros con la búsqueda de siempre; y al crear un filtro desde uno anterior, traer a quienes lo contestaron y medir su historial contra el cliente y las fechas del proyecto nuevo.
+
+**Qué se construyó:**
+
+- **Nadie se corta por defecto** (`motor.ts`): `criteriosCumplidos` junta **todos** los motivos de «no califica» (opciones, rangos, `terminaSi`, reglas de matriz) en `resultado.noCalifica`; `terminacion` solo corta con lo marcado `cortar: true`, y siempre con el aviso y la identificación (`inicio.ts`). `califica` = sin motivos, completa y con perfil. La despedida es la misma para todos. En el editor, el menú de cada opción dice «No califica (lo deja fuera)» y aparte «Y cortar el filtro aquí»; los rangos tienen la casilla «Y cortar el filtro ahí»; las etiquetas dicen «No califica» o «No califica · corta» (`palabras.ts`, `comun.tsx`, `Opciones.tsx`, `Ajustes.tsx`, `MapaFlujo.tsx`). El Word sigue poniendo TERMINAR en rojo. La skill (regla 0 de `reglas.md` y `contrato.md`) pide `cortar` solo si el analista lo pide.
+- **Al recibir una respuesta** (`alRecibir.ts`, sin hacer esperar al participante, uno tras otro): revisión de la identificación → **historial** → si está **en vivo**, califica y hay tablero, **pasa solo** al tablero si alguno de sus perfiles tiene lugar (si todos llenaron cuota queda «Perfil lleno», de respaldo) → **clasificación con IA**.
+- **Historial y duplicados** (`historial.ts`): la búsqueda de duplicados de Reclutamiento (`globalIdentityCache`, 2 de 3 iguales) contra todos los tableros, más los filtros que contestó (por celular), medida contra **el proyecto del filtro**: su cliente («mismo cliente») y su fecha de inicio (los proyectos posteriores no cuentan; «hace menos de 6 meses»). La nota usa las palabras de Fillout (🔴 YA PARTICIPÓ, 🟡 DUPLICADO EXTERNO, 🟠 MISMO PROYECTO, 🔵 ×N EN ESTE FILTRO) y va en `resultado.historial`; al pasar al tablero, en las notas de la fila. En Reclutar, columna **Historial**, el detalle con cada aparición y el botón **«Buscar duplicados»** (`actualizarHistorialFormulario`, vuelve a buscar para todas; la primera búsqueda tarda unos 20 s).
+- **Clasificación con IA** (`clasificar.ts`): por perfil, «alto / medio / bajo» con una razón, un resumen y hasta 3 alertas (respuestas que se contradicen, abiertas vagas, marcar todo). Ayuda a ordenar; **nunca decide ni cambia si califica**. Sonnet con el filtro en caché: unos 5 s y medio centavo de dólar por persona (`formulario_ia_uso`, acción `clasificacion`). Columna **IA** y sección «Lo que dice la IA» en el detalle. No clasifica a quien se cortó al principio.
+- **Traer a quienes contestaron antes** (`traer.ts`): en «Nuevo filtro» → «Desde un filtro anterior», la casilla «Traer también a quienes lo contestaron (N)». Llegan una vez por persona (la respuesta más reciente de cada celular), con su fecha original y la marca **TRAÍDA**, calificados con las reglas del filtro nuevo (sin pedirles otra vez el aviso ni la identificación: ya los dieron allá) y con su historial medido contra el proyecto nuevo. No se trae a quien no aceptó el aviso o no dio su identificación. **No cuentan en las cuotas ni pasan solos**: se pasan a mano. Si el filtro nuevo pregunta algo que el anterior no, salen «Incompleta».
+- **Pestaña Filtros** junto a Reclutamiento en el proyecto (fuera de Tools), y **«Vincular form» del tablero** ofrece también los filtros del Hub del proyecto (dice si ya está vinculado ahí o a qué tablero pasa hoy; `getFormularios` acepta `proyectoCodigo` y devuelve el tablero). Con un filtro, el diálogo explica que solo llegan quienes entran a un perfil con lugar.
+- En la lista, «No califica» gana a «Incompleta» cuando hay un motivo.
+
+**Probado en local (2026-10-24):** la pestaña Filtros en «3 MAYO PRUEBA 3»; en `lv4los`, Historial («Mismo proyecto»), IA («Bajo» con alertas), «Buscar duplicados» y el detalle; «Vincular form» desde el tablero «Prueba fase 1 · todos los tipos» (lista los filtros del proyecto; volver a vincular el mismo no cambia nada); «Nuevo filtro» desde `lv4los` trayendo sus 2 respuestas (filtro `yjgpzy0`, «Prueba fase 5 · traer respuestas», en prueba: **queda en la base para borrarse**). El paso automático al tablero solo corre en vivo con respuestas reales: está cubierto por la lógica pero **no se probó con una respuesta real** (habría dejado una respuesta real en un filtro de prueba). 83 pruebas.
+
+**Pendiente:** el tablero no muestra todavía qué filtro del Hub tiene vinculado (sigue diciendo «Vincular form»); «Buscar en la base» entre varios filtros (fase 6).
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
@@ -641,8 +659,9 @@ Sergio pidió ojo de diseñador UX y de usuario: lo sentía confuso en los pasos
 | Modelo de Word | **Resuelto (2026-10-24):** el formato de los filtros del equipo (MALETA D, SED R, LORO); el «ALONG 2 v4» no sirve de modelo porque es el que se armó con IA, con recuadros de colores | — |
 | Dominio de Sharpli | `encuestas.sharpli.ai`; quién administra el DNS; agregarlo en Render | Fase 4 |
 | Aviso de privacidad | Ya va el de AGC dentro del formulario; falta que legal agregue las fotos de identificación, su revisión con IA y el plazo | — |
-| Cómo reconocer a la misma persona | Celular obligatorio y correo opcional; buscar por los dos | Fase 5 |
-| Quién entra a la base | Todos los que aceptan el aviso y terminan; al tablero solo los que califican | Fase 5 |
+| Cómo reconocer a la misma persona | **Resuelto (2026-10-24):** la misma búsqueda de los tableros (2 de 3 iguales entre nombre, correo y celular) y, entre filtros, el celular | — |
+| Quién entra a la base | **Resuelto (2026-10-24):** todo el que contesta queda en Filtros; al tablero pasa en automático quien entra a un perfil con lugar; los demás, a mano | — |
+| Buscar gente en varios filtros anteriores | «Buscar en la base» con los atributos comunes (edad, NSE, ciudad, marcas…) y la biblioteca | Fase 6 |
 | Países del NSE para arrancar | México ya está (AMAI 2022, confirmada); falta el siguiente con estudio en puerta | — |
 | Columnas al tablero | Todas, con una vista de solo las clave | — |
 | Imágenes de conceptos confidenciales | Caso por caso | — |
@@ -670,3 +689,4 @@ Sergio pidió ojo de diseñador UX y de usuario: lo sentía confuso en los pasos
 - **2026-10-24 · matrices como tabla:** en el celular del participante la matriz se ve como tabla (círculos o cuadros en cada cruce), se desliza de lado con los renglones fijos si no cabe y marca en rojo el renglón que falta. Probado en local y subido a `main` con el OK de Sergio (`6c14519`).
 - **2026-10-24 · «En vivo»:** «Abrir en vivo» con confirmación; el formulario ya no dice «Prueba», lo que entra cuenta como real y «Borrar pruebas» no lo toca; con respuestas reales solo se cierra o se reabre en vivo. Probado en local y subido a `main` con el OK de Sergio (`90cadec`).
 - **2026-10-24 · rediseño del flujo:** con los bocetos aprobados por Sergio: un solo camino de 5 pasos con un botón por paso, «Por revisar» en un chip, modos Diseñar y Reclutar (enlace, tablero y cuotas con barras), preguntas numeradas y lógica en etiquetas, el celular sigue la lectura, «Filtros» en todo y la lista con el paso de cada filtro; en vivo se edita una copia y se publica con «Publicar cambios» (columna `formularios.cambios`, creada con su OK). 81 pruebas. Probado en local y subido a `main` con el OK de Sergio (`2d4c4d6`).
+- **2026-10-24 · fase 5 (operación):** nadie se corta por defecto (se registran todos los motivos; «cortar» a petición, y siempre el aviso y la identificación); al recibir una respuesta, historial y duplicados con la búsqueda de los tableros, paso solo al tablero en vivo para quien entra a un perfil con lugar (con su historial en notas) y clasificación con IA (medio centavo de dólar por persona); traer a quienes contestaron un filtro anterior; pestaña Filtros junto a Reclutamiento y filtros del Hub en «Vincular form». 83 pruebas. Probado en local, sin subir.

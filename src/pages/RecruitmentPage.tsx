@@ -4,7 +4,7 @@ import { useProject } from '../context/ProjectContext';
 import { useRealtimeBoardEvents, BoardFieldUpdatedPayload } from '../hooks/useRealtimeBoardEvents';
 import { useProjectPresence } from '../hooks/useProjectPresence';
 import { ProjectPresenceAvatars } from '../components/ProjectPresenceAvatars';
-import { getRecruitmentRows, saveRecruitmentRow, deleteRecruitmentRow, markNDASent, GetRecruitmentRowsOutputType, getFilloutForms, linkFilloutForm, GetFilloutFormsOutputType, searchParticipantHistory, SearchParticipantHistoryOutputType, syncFilloutResponses, checkNewSubmissions, countFilloutSubmissions, deleteBoard, saveBoard, saveInternalView, reorderRecruitmentRows, duplicateRows, duplicateGroup, getLinkedEventsInfo, linkGroupToEvent, saveCalendarEvent, getTasks, getBoardDuplicateBadges, GetBoardDuplicateBadgesOutputType, publishRecruitmentGroupsChanged, publishRecruitmentRowsChanged, renameBoard } from 'zite-endpoints-sdk';
+import { getRecruitmentRows, saveRecruitmentRow, deleteRecruitmentRow, markNDASent, GetRecruitmentRowsOutputType, getFilloutForms, linkFilloutForm, GetFilloutFormsOutputType, searchParticipantHistory, SearchParticipantHistoryOutputType, syncFilloutResponses, checkNewSubmissions, countFilloutSubmissions, deleteBoard, saveBoard, saveInternalView, getFormularios, vincularFormularioTablero, reorderRecruitmentRows, duplicateRows, duplicateGroup, getLinkedEventsInfo, linkGroupToEvent, saveCalendarEvent, getTasks, getBoardDuplicateBadges, GetBoardDuplicateBadgesOutputType, publishRecruitmentGroupsChanged, publishRecruitmentRowsChanged, renameBoard } from 'zite-endpoints-sdk';
 import { CreateEventDialog } from '../components/CreateEventDialog';
 import { TrashSheet } from '../components/TrashSheet';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ import RecruitmentStatusPanel from '../components/RecruitmentStatusPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
+import { puedeVerFormularios } from '../lib/formularios/acceso';
 import { SharedViewDialog } from '../components/SharedViewDialog';
 import { ExcelImportDialog } from '../components/ExcelImportDialog';
 import { InternalViewsBar, InternalViewsBarHandle } from '../components/InternalViewsBar';
@@ -1949,6 +1950,9 @@ function StepRow({ state, label, detail }: { state: 'done' | 'active' | 'pending
   );
 }
 
+/** Un filtro hecho en el Hub, para vincularlo al tablero. */
+interface FiltroHub { id: string; titulo: string; estado: string; respuestasReales: number; tableroId?: string; tableroNombre?: string }
+
 function FilloutLinkDialog({ open, onOpenChange, boardId, projectCode, boardName, onLinked, onImportDone, busyRef }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -1968,17 +1972,40 @@ function FilloutLinkDialog({ open, onOpenChange, boardId, projectCode, boardName
   const [importPhase, setImportPhase] = useState<ImportPhase>('idle');
   const [foundCount, setFoundCount] = useState(0);
   const [importedCount, setImportedCount] = useState(0);
+  // Filtros hechos en el Hub (fase 5 de Filtros): las que califican y entran a un perfil llegan solas al tablero.
+  const { user } = useAuth();
+  const verFiltros = puedeVerFormularios(user?.email);
+  const [filtros, setFiltros] = useState<FiltroHub[]>([]);
+  const [filtroElegido, setFiltroElegido] = useState<FiltroHub | null>(null);
 
   useEffect(() => {
     if (!open) {
-      setResult(null); setSelectedForm(null); setSearch('');
+      setResult(null); setSelectedForm(null); setSearch(''); setFiltroElegido(null);
       setImportPhase('idle'); setFoundCount(0); setImportedCount(0);
       return;
     }
     setLoadingForms(true);
     getFilloutForms({}).then(d => { setForms(d.forms); setLoadingForms(false); })
       .catch(() => { toast.error('No se pudieron cargar los formularios de Fillout'); setLoadingForms(false); });
-  }, [open]);
+    if (verFiltros && projectCode) {
+      getFormularios({ proyectoCodigo: projectCode }).then(d => setFiltros((d.formularios as FiltroHub[]).filter(f => f.estado !== 'borrador'))).catch(() => setFiltros([]));
+    }
+  }, [open, verFiltros, projectCode]);
+
+  const handleLinkFiltro = async () => {
+    if (!filtroElegido) return;
+    setLinking(true);
+    try {
+      const res = await vincularFormularioTablero({ formularioId: filtroElegido.id, boardId });
+      onLinked();
+      toast.success(`Filtro vinculado${res.columnasCreadas ? ` · ${res.columnasCreadas} columna${res.columnasCreadas === 1 ? '' : 's'} nueva${res.columnasCreadas === 1 ? '' : 's'}` : ''}. Quien entre a un perfil con lugar pasa en automático a este tablero; las demás se pasan desde Filtros.`);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error((err as Error).message || 'No se pudo vincular el filtro');
+    } finally {
+      setLinking(false);
+    }
+  };
 
   const suggestions = useMemo(() => {
     if (!search.trim()) return [];
@@ -2065,7 +2092,7 @@ function FilloutLinkDialog({ open, onOpenChange, boardId, projectCode, boardName
       <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Link2 className="w-4 h-4 text-primary" /> Vincular formulario de Fillout
+            <Link2 className="w-4 h-4 text-primary" /> {filtros.length ? 'Vincular formulario' : 'Vincular formulario de Fillout'}
           </DialogTitle>
         </DialogHeader>
 
@@ -2080,7 +2107,36 @@ function FilloutLinkDialog({ open, onOpenChange, boardId, projectCode, boardName
               </p>
             </div>
 
-            <div className="space-y-1.5">
+            {filtros.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-sm">Filtro del Hub</Label>
+                <div className="space-y-1">
+                  {filtros.map(f => {
+                    const elegido = filtroElegido?.id === f.id;
+                    const aqui = f.tableroId === boardId;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => { setFiltroElegido(elegido ? null : f); setSelectedForm(null); setSearch(''); }}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-md border text-left text-sm transition-colors ${elegido ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-muted'}`}
+                      >
+                        {elegido ? <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" /> : <ClipboardList className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+                        <span className="flex-1 min-w-0">
+                          <span className="block font-medium truncate">{f.titulo}</span>
+                          <span className="block text-xs text-muted-foreground truncate">
+                            {f.estado === 'en_vivo' ? 'En vivo' : f.estado === 'prueba' ? 'Prueba' : 'Cerrado'} · {f.respuestasReales} respuesta{f.respuestasReales === 1 ? '' : 's'}
+                            {aqui ? ' · ya vinculado aquí' : f.tableroNombre ? ` · hoy pasa a «${f.tableroNombre}»` : ''}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {!filtroElegido && <div className="space-y-1.5">
               <Label className="text-sm">Formulario de Fillout</Label>
               {loadingForms ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
@@ -2124,18 +2180,20 @@ function FilloutLinkDialog({ open, onOpenChange, boardId, projectCode, boardName
                   )}
                 </div>
               )}
-            </div>
+            </div>}
 
             <div className="rounded-lg bg-primary/5 border border-primary/20 px-3 py-2.5 text-xs text-muted-foreground space-y-1">
               <p className="font-medium text-foreground text-xs">Al vincular:</p>
               <p>✦ Se leerán las preguntas del formulario</p>
               <p>✦ Se crearán columnas dinámicas automáticamente</p>
-              <p>✦ Cada respuesta creará una fila en este tablero</p>
+              {filtroElegido
+                ? <p>✦ Solo llegan aquí quienes entran a un perfil con lugar; las demás se quedan en Filtros</p>
+                : <p>✦ Cada respuesta creará una fila en este tablero</p>}
             </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={handleLink} disabled={!selectedForm || linking} className="gap-2">
+              <Button onClick={filtroElegido ? handleLinkFiltro : handleLink} disabled={(!selectedForm && !filtroElegido) || linking} className="gap-2">
                 {linking ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
                 {linking ? 'Vinculando...' : 'Vincular'}
               </Button>

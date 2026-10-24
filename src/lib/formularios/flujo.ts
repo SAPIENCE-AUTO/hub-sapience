@@ -168,8 +168,8 @@ export function filasFlujoDeEstructura(e: Estructura): FilaFlujo[] {
       repiteDe: s.repetirPor ? nombreDe(s.repetirPor) : undefined,
       condicion: s.aparece, condicionales: s.preguntas.filter((p) => p.soloSi).length,
       // De «“No acepto”: Si contesta esta, termina el filtro: No aceptó el aviso» basta el motivo.
-      termina: logicas.filter((l) => /termina/i.test(l))
-        .map((l) => /termina el filtro:\s*(.+)$/i.exec(l)?.[1] ?? l.replace(/^termina(?: el filtro)?\s*/i, '').replace(/^./, (c) => c.toUpperCase())),
+      termina: logicas.filter((l) => /termina|no califica/i.test(l))
+        .map((l) => /(?:termina el filtro|no califica(?: y se corta el filtro)?):\s*(.+)$/i.exec(l)?.[1] ?? l.replace(/^termina(?: el filtro)?\s*/i, '').replace(/^./, (c) => c.toUpperCase())),
       descarta: logicas.filter((l) => /no cuenta|descarta/i.test(l)),
       frentes: [], excluye: [], alertas: [], nse: !!s.nse,
     };

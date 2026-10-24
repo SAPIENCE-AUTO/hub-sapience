@@ -1,4 +1,5 @@
 import { calcularNse } from './nse';
+import { esDelInicio } from './inicio';
 import { PAISES, nombreCampoDireccion, telefonoDe } from './paises';
 import {
   CAMPOS_DIRECCION, esDeOpciones, forma,
@@ -327,32 +328,48 @@ const marcoEnFila = (resp: Valor | undefined, fila: string, columnas: string[]) 
   seleccion((resp as Record<string, string | string[]> | undefined)?.[fila]).some((x) => columnas.includes(x));
 
 /** Primer motivo que termina el formulario, en el orden en que se contestó. */
-export function terminacion(def: Definicion, resp: Respuestas, lista = pantallas(def, resp)): Resultado['terminado'] {
+interface Criterio { motivo: string; clave: string; cortar: boolean }
+
+/**
+ * Los criterios de «no califica» que cumple, en orden. Por defecto no cortan
+ * el filtro (contesta todo y se registra); cortan solo los marcados `cortar`
+ * por el analista, y siempre el aviso y la identificación de «Antes de empezar».
+ */
+function criteriosCumplidos(def: Definicion, resp: Respuestas, lista: Pantalla[]): Criterio[] {
   const idx = indice(def);
+  const out: Criterio[] = [];
   for (const pantalla of lista) {
     for (const pv of pantalla.preguntas) {
       const v = resp[pv.clave];
       if (vacio(v)) continue;
       const p = pv.pregunta;
-      const opcion = opcionesMarcadas(pv, resp).find((o) => o.termina);
-      if (opcion) return { motivo: opcion.termina!, clave: pv.clave };
+      const siempre = esDelInicio(p.id);
+      for (const o of opcionesMarcadas(pv, resp)) if (o.termina) out.push({ motivo: o.termina, clave: pv.clave, cortar: siempre || !!o.cortar });
       if (p.terminaFuera && typeof v === 'number' && (v < p.terminaFuera.min || v > p.terminaFuera.max)) {
-        return { motivo: p.terminaFuera.motivo, clave: pv.clave };
+        out.push({ motivo: p.terminaFuera.motivo, clave: pv.clave, cortar: !!p.terminaFuera.cortar });
       }
-      const regla = (p.reglasMatriz ?? []).find((r) => r.termina && marcoEnFila(v, r.fila, r.columnas));
-      if (regla) return { motivo: regla.termina!, clave: pv.clave };
+      for (const r of p.reglasMatriz ?? []) if (r.termina && marcoEnFila(v, r.fila, r.columnas)) out.push({ motivo: r.termina, clave: pv.clave, cortar: !!r.cortar });
       if (p.terminaSi && cumple(p.terminaSi.si, { def, idx, resp, instancia: pantalla.instancia?.id })) {
-        return { motivo: p.terminaSi.motivo, clave: pv.clave };
+        out.push({ motivo: p.terminaSi.motivo, clave: pv.clave, cortar: !!p.terminaSi.cortar });
       }
     }
   }
-  return undefined;
+  return out;
+}
+
+/** Si el filtro se corta aquí: el primer criterio que corta. Los demás solo se registran (ver evaluar). */
+export function terminacion(def: Definicion, resp: Respuestas, lista = pantallas(def, resp)): Resultado['terminado'] {
+  const c = criteriosCumplidos(def, resp, lista).find((x) => x.cortar);
+  return c && { motivo: c.motivo, clave: c.clave };
 }
 
 export function evaluar(def: Definicion, resp: Respuestas): Resultado {
   const idx = indice(def);
   const lista = pantallas(def, resp);
-  const terminado = terminacion(def, resp, lista);
+  const criterios = criteriosCumplidos(def, resp, lista);
+  const corte = criterios.find((c) => c.cortar);
+  const terminado = corte && { motivo: corte.motivo, clave: corte.clave };
+  const noCalifica = [...new Set(criterios.map((c) => c.motivo))];
 
   const descartes: Resultado['descartes'] = [];
   const grupos = new Set<string>();
@@ -374,7 +391,7 @@ export function evaluar(def: Definicion, resp: Respuestas): Resultado {
   const ctx: Contexto = { def, idx, resp, descartes: new Set(descartes.map((d) => `${d.seccion}@${d.opcion}`)), nseNivel: nse?.nivel };
 
   // El NSE no saca a nadie de un frente: si no es el que pide, entra con alerta.
-  const enFrentes = terminado ? [] : (def.frentes ?? []).filter((f) => !grupos.has(f.grupo) && cumpleSinNse(f.califica, ctx));
+  const enFrentes = noCalifica.length ? [] : (def.frentes ?? []).filter((f) => !grupos.has(f.grupo) && cumpleSinNse(f.califica, ctx));
   const fueraDe: string[] = [];
   const alertasNse: string[] = [];
   if (nse) {
@@ -398,8 +415,8 @@ export function evaluar(def: Definicion, resp: Respuestas): Resultado {
   const frentes = enFrentes.map((f) => f.id);
 
   return {
-    califica: !terminado && !incompleto && frentes.length > 0,
-    terminado, descartes, gruposExcluidos: [...grupos],
+    califica: !noCalifica.length && !incompleto && frentes.length > 0,
+    terminado, ...(noCalifica.length ? { noCalifica } : {}), descartes, gruposExcluidos: [...grupos],
     nse: nse && (fueraDe.length ? { ...nse, fueraDe } : nse),
     frentes, alertas, incompleto,
   };
@@ -407,6 +424,7 @@ export function evaluar(def: Definicion, resp: Respuestas): Resultado {
 
 /** Por qué no califica, en palabras del panel y del Excel. */
 export function explicarResultado(res: Resultado): string | undefined {
+  if (res.noCalifica?.length) return res.noCalifica.join(' · ');
   if (res.terminado) return res.terminado.motivo;
   if (res.incompleto) return 'Incompleta';
   if (res.frentes.length > 0) return undefined;

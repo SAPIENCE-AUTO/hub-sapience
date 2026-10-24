@@ -7,6 +7,7 @@ import { revisarDefinicion } from '../lib/formularios/revisar';
 import { definicionVacia, generadorNuevo, type Generador } from '../lib/formularios/generador';
 import { leerDefinicion, type Definicion } from '../lib/formularios/tipos';
 import { conInicio } from '../lib/formularios/inicio';
+import { historialDeTraidas, traerRespuestas } from '../serverUtils/formularios/traer';
 
 /**
  * Crea un formulario. Arranca en borrador: nadie puede contestarlo hasta
@@ -16,6 +17,8 @@ import { conInicio } from '../lib/formularios/inicio';
  * Puntos de partida (fase 3): una plantilla (como hasta ahora), la IA con
  * insumos, la IA con un screener en Word, o un filtro anterior que se copia
  * y se adapta. Con la IA el screener arranca vacío y lo llena el generador.
+ * Desde un filtro anterior se puede traer también a quienes lo contestaron
+ * (`traerRespuestas`, fase 5): llegan como candidatos «traídos».
  */
 export default createEndpoint({
   authenticated: true,
@@ -26,8 +29,9 @@ export default createEndpoint({
     plantilla: z.string().optional(),
     filtroBaseId: z.string().optional(),
     proyectoId: z.string().optional(),
+    traerRespuestas: z.boolean().optional(),
   }),
-  outputSchema: z.object({ id: z.string(), codigo: z.string() }),
+  outputSchema: z.object({ id: z.string(), codigo: z.string(), traidas: z.number().optional() }),
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
     let definicion: Definicion;
@@ -66,7 +70,14 @@ export default createEndpoint({
          returning id`,
         [codigo, input.titulo.trim(), plantilla, JSON.stringify(definicion), input.proyectoId ?? null, context.user!.id, generador && JSON.stringify(generador)],
       );
-      if (rows[0]) return { id: rows[0].id as string, codigo };
+      if (!rows[0]) continue;
+      const id = rows[0].id as string;
+      if (input.origen === 'filtro' && input.traerRespuestas && input.filtroBaseId) {
+        const traidas = await traerRespuestas(input.filtroBaseId, id);
+        historialDeTraidas(traidas).catch(() => {});
+        return { id, codigo, traidas: traidas.length };
+      }
+      return { id, codigo };
     }
     throw new ZiteError({ code: 'INTERNAL_ERROR', message: 'No se pudo generar el enlace del formulario. Intenta otra vez.' });
   },

@@ -64,8 +64,9 @@ Más campos:
 
 - `aleatorio: true`: las opciones en orden aleatorio (las `fija: true` se quedan en su lugar).
 - `opcionesDe: "idPregunta"`: las opciones son las que marcó en esa pregunta (anterior); `opcionesExtra` agrega opciones al final («Ninguno en los últimos 3 meses»). Dentro de una repetición, toma lo marcado en la misma repetición. No lleva `opciones`.
-- `terminaFuera: { "min": 25, "max": 65, "motivo": "…" }`: en número o escala, fuera de ese rango termina el filtro.
-- `terminaSi: { "si": Condicion, "motivo": "…" }`: termina el filtro si se cumple, una vez contestada la pregunta (puede usar la misma pregunta).
+- `terminaFuera: { "min": 25, "max": 65, "motivo": "…" }`: en número o escala, fuera de ese rango no califica.
+- `terminaSi: { "si": Condicion, "motivo": "…" }`: no califica si se cumple, una vez contestada la pregunta (puede usar la misma pregunta).
+- **«No califica» no corta el filtro**: la persona contesta todo, el motivo se registra y al final ve el mismo mensaje que todos (así nadie aprende dónde se corta y vuelve a llenarlo falseando). Solo si el pedido lo dice explícitamente, agrega `"cortar": true` (en la opción, en `terminaFuera`, en `terminaSi` o en la regla de la matriz) para que el filtro termine ahí.
 - `reglasMatriz: [{ "fila": "idFila", "columnas": ["idOpcion"], "termina": "motivo" }]` o con `"excluyeGrupos": ["grupo"]`.
 
 ## Opciones
@@ -73,7 +74,7 @@ Más campos:
 ```
 { "id": "…", "label": "Lo que lee el participante",
   "corto": "nombre corto para {opcion}",   // opcional
-  "termina": "motivo interno",             // si la marca, termina el filtro
+  "termina": "motivo interno",             // si la marca, no califica (contesta todo; se registra)
   "descarta": "motivo interno",            // solo en secciones que se repiten: no cuenta ese bloque, el filtro sigue
   "excluyeGrupos": ["grupo"],              // queda fuera de los perfiles de ese grupo (rechazo a la marca)
   "otra": true,                            // pide escribir cuál («Otra, ¿cuál?»)
@@ -115,8 +116,8 @@ En el JSON, los perfiles van en la lista `"frentes"` (es su nombre interno); a l
             { "texto": "…", "si": Condicion }]
 ```
 
-- Quien termina no entra a ningún perfil. Quien no termina entra a todos los perfiles cuya condición cumple, menos los de grupos que excluyó.
-- **Califica quien no termina, contesta todo y entra a al menos un perfil.** Por eso todo filtro lleva al menos un perfil; si el estudio tiene un solo perfil, es un perfil con la cuota total.
+- Quien cumple algún «no califica» no entra a ningún perfil. Quien no cumple ninguno entra a todos los perfiles cuya condición cumple, menos los de grupos que excluyó.
+- **Califica quien no cumple ningún «no califica», contesta todo y entra a al menos un perfil.** Por eso todo filtro lleva al menos un perfil; si el estudio tiene un solo perfil, es un perfil con la cuota total.
 - Las alertas no descartan: marcan la respuesta para revisarla.
 
 ## Ids

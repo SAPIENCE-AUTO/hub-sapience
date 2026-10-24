@@ -5,7 +5,11 @@ import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 export default createEndpoint({
   authenticated: true,
   description: 'Lista los formularios (screeners) de un proyecto, con cuántas respuestas tiene cada uno',
-  inputSchema: z.object({ proyectoId: z.string().optional() }),
+  inputSchema: z.object({
+    proyectoId: z.string().optional(),
+    /** Desde un tablero de Reclutamiento, que solo conoce el código del proyecto. */
+    proyectoCodigo: z.string().optional(),
+  }),
   outputSchema: z.object({
     formularios: z.array(z.object({
       id: z.string(),
@@ -23,13 +27,16 @@ export default createEndpoint({
       cambiosPendientes: z.boolean(),
       /** Código del proyecto (para elegir un filtro anterior de otro proyecto). */
       proyecto: z.string().optional(),
+      /** El tablero al que pasan las respuestas, si ya se vinculó. */
+      tableroId: z.string().optional(),
+      tableroNombre: z.string().optional(),
     })),
   }),
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
     const { rows } = await pool.query(
       `select f.id, f.codigo, f.titulo, f.estado, f.created_at, max(p.project_code) as proyecto,
-              f.generador->>'etapa' as etapa, f.cambios is not null as cambios_pendientes,
+              f.generador->>'etapa' as etapa, f.vinculo->>'boardId' as tablero_id, f.vinculo->>'boardName' as tablero_nombre, f.cambios is not null as cambios_pendientes,
               (select coalesce(sum((fr->>'meta')::int), 0) from jsonb_array_elements(coalesce(f.definicion->'frentes', '[]'::jsonb)) fr)::int as meta,
               count(r.id) filter (where r.es_prueba)::int as prueba,
               count(r.id) filter (where not r.es_prueba)::int as reales,
@@ -39,9 +46,10 @@ export default createEndpoint({
        left join formulario_respuestas r on r.formulario_id = f.id
        left join projects p on p.id = f.proyecto_id
        where ($1::uuid is null or f.proyecto_id = $1::uuid)
+         and ($2::text is null or f.proyecto_id in (select id from projects where lower(trim(project_code)) = lower(trim($2))))
        group by f.id
        order by f.created_at desc`,
-      [input.proyectoId ?? null],
+      [input.proyectoId ?? null, input.proyectoCodigo ?? null],
     );
     return {
       formularios: rows.map((f) => ({
@@ -49,6 +57,7 @@ export default createEndpoint({
         createdAt: new Date(f.created_at).toISOString(),
         respuestasPrueba: f.prueba, respuestasReales: f.reales, califican: f.califican, proyecto: f.proyecto ?? undefined,
         etapa: f.etapa ?? undefined, meta: f.meta, calificanReales: f.califican_reales, cambiosPendientes: !!f.cambios_pendientes,
+        tableroId: f.tablero_id ?? undefined, tableroNombre: f.tablero_nombre ?? undefined,
       })),
     };
   },

@@ -25,7 +25,7 @@ export const CondicionZ: z.ZodType<Condicion> = z.lazy(() => z.union([
 
 const OpcionZ = z.object({
   id: z.string().min(1), label: z.string(), corto: texto, imagen: texto,
-  termina: texto, descarta: texto, excluyeGrupos: ids.nullish(), otra: si, exclusiva: si, fija: si,
+  termina: texto, cortar: si, descarta: texto, excluyeGrupos: ids.nullish(), otra: si, exclusiva: si, fija: si,
 });
 
 export const PreguntaZ = z.object({
@@ -38,13 +38,13 @@ export const PreguntaZ = z.object({
   opcionesDe: texto,
   opcionesExtra: z.array(OpcionZ).nullish(),
   filas: z.array(z.object({ id: z.string().min(1), label: z.string() })).nullish(),
-  reglasMatriz: z.array(z.object({ fila: z.string(), columnas: ids, termina: texto, excluyeGrupos: ids.nullish() })).nullish(),
+  reglasMatriz: z.array(z.object({ fila: z.string(), columnas: ids, termina: texto, cortar: si, excluyeGrupos: ids.nullish() })).nullish(),
   aleatorio: si,
   maxOpciones: numero, min: numero, max: numero, paso: numero,
   etiquetas: z.object({ min: texto, max: texto }).nullish(),
-  terminaFuera: z.object({ min: z.number(), max: z.number(), motivo: z.string() }).nullish(),
+  terminaFuera: z.object({ min: z.number(), max: z.number(), motivo: z.string(), cortar: si }).nullish(),
   patron: texto, patronMensaje: texto,
-  terminaSi: z.object({ si: CondicionZ, motivo: z.string() }).nullish(),
+  terminaSi: z.object({ si: CondicionZ, motivo: z.string(), cortar: si }).nullish(),
   mostrarSi: CondicionZ.nullish(),
   nota: texto,
 });

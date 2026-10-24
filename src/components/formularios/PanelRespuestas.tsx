@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getFormularioRespuesta, exportFormularioRespuestas,
-  getTablerosReclutamiento, vincularFormularioTablero, pasarFormularioAlReclutamiento, crearTableroParaFormulario,
+  getTablerosReclutamiento, vincularFormularioTablero, pasarFormularioAlReclutamiento, crearTableroParaFormulario, actualizarHistorialFormulario,
 } from 'zite-endpoints-sdk';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowRightLeft, Copy, Download, ExternalLink, Eye, Link2, Loader2, Plus, RefreshCw, Trash2, TriangleAlert, Users } from 'lucide-react';
+import { ArrowRightLeft, Copy, Download, ExternalLink, Eye, History, Link2, Loader2, Plus, RefreshCw, Sparkles, Trash2, TriangleAlert, Users } from 'lucide-react';
 import { TEAL, EXITO, PELIGRO, ALERTA, GRIS, INFO } from '@/lib/toolColors';
 import { describir } from '@/lib/formularios/motor';
 import { reglaVigente } from '@/lib/formularios/nse';
@@ -22,6 +22,11 @@ export interface RespuestaRow {
   nseFueraDe: string[];
   califica: boolean; frentes: string[]; motivo?: string; alertas: string[]; incompleto: boolean; duplicado: boolean; duracionSeg?: number;
   enReclutamiento: boolean;
+  /** Fase 5. */
+  historial?: { nivel?: string; nota: string };
+  ia?: { encaje: string; resumen: string; alertas: string[] };
+  perfilLleno: boolean;
+  traida?: { titulo: string; proyecto?: string; fecha: string };
 }
 export interface Detalle {
   id: string; codigo: string; titulo: string; estado: string; definicion: Definicion; revision?: number;
@@ -32,19 +37,56 @@ export interface Detalle {
   cambios?: Definicion;
 }
 
-const fecha = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const fecha = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleString('es-MX', { day: 'numeric', month: 'short', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined, hour: '2-digit', minute: '2-digit' });
+};
 
 function PillResultado({ r }: { r: RespuestaRow }) {
+  // Con un motivo de «no califica» se dice eso aunque haya dejado preguntas sin contestar.
+  const incompleta = !r.califica && r.incompleto && (!r.motivo || r.motivo === 'Incompleta');
   return (
     <>
-      <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase text-white" style={{ backgroundColor: r.califica ? EXITO : r.incompleto ? GRIS : PELIGRO }}>
-        {r.califica ? 'Califica' : r.incompleto ? 'Incompleta' : 'No califica'}
+      <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase whitespace-nowrap text-white" style={{ backgroundColor: r.califica ? EXITO : incompleta ? GRIS : PELIGRO }}>
+        {r.califica ? 'Califica' : incompleta ? 'Incompleta' : 'No califica'}
       </span>
       {r.alertas.length > 0 && <TriangleAlert className="ml-1.5 inline h-3.5 w-3.5" style={{ color: ALERTA }} />}
       {r.enReclutamiento && <span className="ml-1.5 whitespace-nowrap text-[10px] font-semibold" style={{ color: INFO }}>En reclutamiento</span>}
+      {r.perfilLleno && !r.enReclutamiento && <span className="ml-1.5 whitespace-nowrap text-[10px] font-semibold" style={{ color: ALERTA }} title="Califica, pero sus perfiles ya llenaron la cuota: se queda de respaldo">Perfil lleno</span>}
     </>
   );
 }
+
+/** El historial de duplicados, con los colores y las palabras de las notas de Fillout. */
+const HISTORIAL: Record<string, { texto: string; color: string }> = {
+  ya_participo: { texto: 'Ya participó', color: PELIGRO },
+  duplicado: { texto: 'Duplicado', color: '#B7791F' },
+  mismo_proyecto: { texto: 'Mismo proyecto', color: ALERTA },
+  repetido: { texto: 'Repetido', color: INFO },
+};
+function Historial({ r }: { r: RespuestaRow }) {
+  if (!r.historial) return <span className="text-xs text-muted-foreground">—</span>;
+  const h = r.historial.nivel ? HISTORIAL[r.historial.nivel] : undefined;
+  return h
+    ? <span title={r.historial.nota} className="whitespace-nowrap rounded-full border px-1.5 py-px text-[10.5px] font-semibold" style={{ color: h.color, borderColor: `${h.color}66`, backgroundColor: `${h.color}0f` }}>{h.texto}</span>
+    : <span className="text-xs" style={{ color: EXITO }}>Nuevo</span>;
+}
+
+/** Lo que dice la IA: un semáforo de qué tan buen candidato es (ayuda, no decide). */
+const ENCAJE: Record<string, { texto: string; color: string }> = { alto: { texto: 'Alto', color: EXITO }, medio: { texto: 'Medio', color: ALERTA }, bajo: { texto: 'Bajo', color: PELIGRO } };
+function EncajeIA({ r }: { r: RespuestaRow }) {
+  const e = r.ia ? ENCAJE[r.ia.encaje] : undefined;
+  if (!r.ia || !e) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <span title={[r.ia.resumen, ...r.ia.alertas.map((a) => `⚠ ${a}`)].join('\n')} className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold" style={{ color: e.color }}>
+      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: e.color }} />{e.texto}{r.ia.alertas.length > 0 && <TriangleAlert className="h-3 w-3" style={{ color: ALERTA }} />}
+    </span>
+  );
+}
+
+const Traida = ({ r }: { r: RespuestaRow }) => (r.traida
+  ? <span className="ml-1.5 rounded bg-[#1795D3]/10 px-1 text-[10px] font-semibold text-[#1795D3]" title={`Contestó «${r.traida.titulo}» el ${fecha(r.traida.fecha)}`}>TRAÍDA</span>
+  : null);
 
 function Nse({ r }: { r: RespuestaRow }) {
   return (
@@ -75,6 +117,20 @@ export function PanelRespuestas({ detalle, proyectoId, enlace, onRecargar, onBor
   const hayPruebas = detalle.respuestas.some((r) => r.esPrueba);
   const [descargando, setDescargando] = useState(false);
   const [ver, setVer] = useState<RespuestaRow | null>(null);
+  const [buscando, setBuscando] = useState(false);
+
+  const buscarHistorial = async () => {
+    setBuscando(true);
+    const aviso = toast.loading('Buscando en todos los tableros y filtros…');
+    try {
+      const r = await actualizarHistorialFormulario({ formularioId: detalle.id }) as { revisadas: number; conHistorial: number };
+      toast.success(r.conHistorial ? `${r.conHistorial} de ${r.revisadas} con historial` : 'Ninguna persona tiene historial', { id: aviso });
+      onRecargar();
+    } catch (err) {
+      toast.error((err as Error).message, { id: aviso });
+    }
+    setBuscando(false);
+  };
 
   const descargar = async () => {
     setDescargando(true);
@@ -88,7 +144,8 @@ export function PanelRespuestas({ detalle, proyectoId, enlace, onRecargar, onBor
   };
 
   const cuotas = useMemo(() => frentes.map((f) => {
-    const filas = detalle.respuestas.filter((r) => r.califica && r.frentes.includes(f.id));
+    // Las traídas de un filtro anterior cuentan hasta que se pasan al tablero.
+    const filas = detalle.respuestas.filter((r) => r.califica && r.frentes.includes(f.id) && (!r.traida || r.enReclutamiento));
     return {
       ...f, califican: filas.length, nseDistinto: filas.filter((r) => r.nseFueraDe.includes(f.id)).length,
       mujeres: filas.filter((r) => r.genero === 'Mujer').length, hombres: filas.filter((r) => r.genero === 'Hombre').length,
@@ -137,6 +194,9 @@ export function PanelRespuestas({ detalle, proyectoId, enlace, onRecargar, onBor
           <h3 className="text-sm font-semibold" style={{ color: TEAL }}>Respuestas ({detalle.respuestas.length})</h3>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="ghost" onClick={onRecargar}><RefreshCw className="mr-1 h-3.5 w-3.5" />Actualizar</Button>
+            <Button size="sm" variant="ghost" onClick={buscarHistorial} disabled={buscando || detalle.respuestas.length === 0} title="Vuelve a buscar en todos los tableros y filtros, con el cliente y las fechas de este proyecto">
+              {buscando ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <History className="mr-1 h-3.5 w-3.5" />}Buscar duplicados
+            </Button>
             <Button size="sm" variant="outline" onClick={descargar} disabled={descargando || detalle.respuestas.length === 0}>
               {descargando ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1 h-3.5 w-3.5" />}Excel
             </Button>
@@ -152,13 +212,14 @@ export function PanelRespuestas({ detalle, proyectoId, enlace, onRecargar, onBor
                   <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2">Fecha</th><th className="px-3 py-2">Nombre</th><th className="px-3 py-2">Edad</th>
-                      <th className="px-3 py-2">NSE</th><th className="px-3 py-2">Resultado</th><th className="px-3 py-2">Perfil o motivo</th><th className="px-3 py-2" />
+                      <th className="px-3 py-2">NSE</th><th className="px-3 py-2">Resultado</th><th className="px-3 py-2">Perfil o motivo</th>
+                      <th className="px-3 py-2">Historial</th><th className="px-3 py-2" title="Qué tan buen candidato es, según la IA (ayuda, no decide)">IA</th><th className="px-3 py-2" />
                     </tr>
                   </thead>
                   <tbody>
                     {detalle.respuestas.map((r) => (
                       <tr key={r.id} className="border-t hover:bg-muted/40">
-                        <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">{fecha(r.createdAt)}{r.esPrueba && <Prueba />}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">{fecha(r.traida?.fecha ?? r.createdAt)}{r.esPrueba && <Prueba />}<Traida r={r} /></td>
                         <td className="px-3 py-2">
                           {r.nombre ?? '—'}
                           {r.duplicado && <span className="ml-1.5 text-[10px] font-semibold" style={{ color: ALERTA }}>tel. repetido</span>}
@@ -167,6 +228,8 @@ export function PanelRespuestas({ detalle, proyectoId, enlace, onRecargar, onBor
                         <td className="px-3 py-2"><Nse r={r} /></td>
                         <td className="px-3 py-2"><PillResultado r={r} /></td>
                         <td className="px-3 py-2 text-xs">{r.califica ? r.frentes.map(nombreFrente).join(', ') : r.motivo}</td>
+                        <td className="px-3 py-2"><Historial r={r} /></td>
+                        <td className="px-3 py-2"><EncajeIA r={r} /></td>
                         <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" className="h-7" onClick={() => setVer(r)}><Eye className="mr-1 h-3.5 w-3.5" />Ver</Button></td>
                       </tr>
                     ))}
@@ -182,7 +245,7 @@ export function PanelRespuestas({ detalle, proyectoId, enlace, onRecargar, onBor
                           {r.nombre ?? 'Sin nombre'}
                           {r.duplicado && <span className="ml-1.5 text-[10px] font-semibold" style={{ color: ALERTA }}>tel. repetido</span>}
                         </p>
-                        <p className="text-xs text-muted-foreground">{fecha(r.createdAt)}{r.esPrueba && <Prueba />}</p>
+                        <p className="text-xs text-muted-foreground">{fecha(r.traida?.fecha ?? r.createdAt)}{r.esPrueba && <Prueba />}<Traida r={r} /></p>
                       </div>
                       <Button size="sm" variant="outline" className="h-7 flex-shrink-0" onClick={() => setVer(r)}><Eye className="mr-1 h-3.5 w-3.5" />Ver</Button>
                     </div>
@@ -191,6 +254,7 @@ export function PanelRespuestas({ detalle, proyectoId, enlace, onRecargar, onBor
                       <span className="text-muted-foreground">{r.edad ?? '—'}{r.genero ? ` · ${r.genero}` : ''} · NSE <Nse r={r} /></span>
                     </p>
                     <p className="mt-1 text-xs">{r.califica ? r.frentes.map(nombreFrente).join(', ') : r.motivo}</p>
+                    <p className="mt-1 flex flex-wrap items-center gap-2"><Historial r={r} /><EncajeIA r={r} /></p>
                   </li>
                 ))}
               </ul>
@@ -344,7 +408,7 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
             <Button size="sm" variant="ghost" onClick={() => { setTableros(null); setCambiando(true); }}>Cambiar tablero</Button>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">Quien pasa entra como «Pendiente», con todas las preguntas como columnas. Pasar dos veces no duplica.</p>
+        <p className="text-xs text-muted-foreground">En vivo, quien entra a un perfil con lugar pasa en automático al tablero, como «Pendiente», con su historial en las notas. Pasar dos veces no duplica.</p>
       </CardContent>
     </Card>
   );
@@ -406,7 +470,43 @@ function RespuestaDialog({ formularioId, definicion, tablero, fila, onClose, onP
               </p>
               {fila.motivo && <p className="mt-1 text-muted-foreground">{fila.motivo}</p>}
               {datos.resultado.alertas.map((a) => <p key={a} className="mt-1" style={{ color: ALERTA }}>⚠ {a}</p>)}
+              {datos.resultado.traida && <p className="mt-1" style={{ color: INFO }}>Traída de «{datos.resultado.traida.titulo}»{datos.resultado.traida.proyecto ? ` (${datos.resultado.traida.proyecto})` : ''}: contestó el {fecha(datos.resultado.traida.fecha)}. Conviene reconfirmar sus datos.</p>}
+              {datos.resultado.perfilLleno && <p className="mt-1" style={{ color: ALERTA }}>Califica, pero sus perfiles ya llenaron la cuota: se quedó de respaldo y no pasó sola al tablero.</p>}
             </div>
+            {datos.resultado.ia && (
+              <div className="rounded-lg border p-3">
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><Sparkles className="h-3.5 w-3.5" />Lo que dice la IA (ayuda, no decide)</p>
+                <p>{datos.resultado.ia.resumen}</p>
+                <ul className="mt-1.5 space-y-0.5">
+                  {datos.resultado.ia.perfiles.map((p) => (
+                    <li key={p.id}><span className="font-semibold" style={{ color: ENCAJE[p.encaje]?.color }}>{nombreFrente(p.id)}: {ENCAJE[p.encaje]?.texto ?? p.encaje}</span> · <span className="text-muted-foreground">{p.razon}</span></li>
+                  ))}
+                </ul>
+                {datos.resultado.ia.alertas.map((a) => <p key={a} className="mt-1" style={{ color: ALERTA }}>⚠ {a}</p>)}
+              </div>
+            )}
+            {datos.resultado.historial && (
+              <div className="rounded-lg border p-3">
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><History className="h-3.5 w-3.5" />Historial</p>
+                {datos.resultado.historial.entradas.length === 0
+                  ? <p className="text-muted-foreground">No aparece en ningún tablero ni en otro filtro.</p>
+                  : (
+                    <>
+                      <p className="mb-1.5">{datos.resultado.historial.nota}</p>
+                      <ul className="space-y-0.5 text-xs text-muted-foreground">
+                        {datos.resultado.historial.entradas.map((e, i) => (
+                          <li key={i}>
+                            <span className="font-medium text-[#1F1F23]">{e.proyecto || 'Sin proyecto'}</span>
+                            {e.cliente && ` · ${e.cliente}`}{e.donde && ` · ${e.tipo === 'filtro' ? 'filtro ' : ''}${e.donde}`}{e.estatus && ` · ${e.estatus}`}{e.grupo && ` · grupo ${e.grupo}`}
+                            {e.fecha && ` · ${new Date(e.fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                            {e.mismoCliente && <span style={{ color: PELIGRO }}> · mismo cliente</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+              </div>
+            )}
             {describir(definicion, datos.respuestas).map((s, i) => (
               <div key={`${s.titulo}-${i}`}>
                 <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{s.titulo}</h4>

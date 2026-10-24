@@ -26,14 +26,14 @@ export function seccionInicio(): Seccion {
         ayuda: 'Te invitamos a revisar nuestro aviso de privacidad, donde encontrarás cómo cuidamos tus datos personales.',
         opciones: [
           { id: 'acepto', label: 'He leído y acepto el aviso de privacidad' },
-          { id: 'no_acepto', label: 'No acepto', termina: 'No aceptó el aviso de privacidad' },
+          { id: 'no_acepto', label: 'No acepto', termina: 'No aceptó el aviso de privacidad', cortar: true },
         ],
       },
       { id: ID_NOMBRE, tipo: 'texto', nombre: 'Nombre', texto: 'Nombre', ayuda: 'Escribe tu nombre completo.', mostrarSi: acepto },
       {
         id: ID_ACEPTA_IDENTIFICACION, tipo: 'unica', nombre: 'Acepta dar identificación', texto: 'Identificación', mostrarSi: acepto,
         ayuda: 'Para llenar este cuestionario y poder participar necesitamos una foto de una identificación oficial vigente (INE, pasaporte, etc.). ¿Estás de acuerdo?',
-        opciones: [{ id: 'si', label: 'Sí' }, { id: 'no', label: 'No', termina: 'No quiso dar su identificación' }],
+        opciones: [{ id: 'si', label: 'Sí' }, { id: 'no', label: 'No', termina: 'No quiso dar su identificación', cortar: true }],
       },
       {
         id: ID_FOTO_IDENTIFICACION, tipo: 'foto', nombre: 'Identificación', texto: 'Sube una foto de tu identificación oficial',

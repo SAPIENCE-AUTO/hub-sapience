@@ -168,6 +168,8 @@ export async function pasarAlReclutamiento(
         status: 'Pendiente',
         sourceForm: origenRespuesta(formulario.titulo, f.id),
         level: 0,
+        // La nota de historial, la misma que pone Fillout («🔴 YA PARTICIPÓ: …»), si ya se calculó.
+        ...((f.resultado as { historial?: { nota?: string } }).historial?.nota ? { notes: (f.resultado as { historial?: { nota?: string } }).historial!.nota } : {}),
       },
     });
     const celdas = cols

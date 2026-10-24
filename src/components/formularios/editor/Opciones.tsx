@@ -130,8 +130,13 @@ function FilaOpcion({ s, p, o, i, total, bloqueada }: { s: Seccion; p: Pregunta;
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64" onCloseAutoFocus={(e) => e.preventDefault()}>
               {deOpciones && (
-                <DropdownMenuCheckboxItem checked={!!o.termina} onCheckedChange={(v) => cambiar({ termina: v ? `Marcó «${o.label}»` : undefined })}>
-                  Termina el filtro
+                <DropdownMenuCheckboxItem checked={!!o.termina} onCheckedChange={(v) => cambiar({ termina: v ? `Marcó «${o.label}»` : undefined, cortar: undefined })}>
+                  No califica (lo deja fuera)
+                </DropdownMenuCheckboxItem>
+              )}
+              {deOpciones && o.termina && (
+                <DropdownMenuCheckboxItem checked={!!o.cortar} onCheckedChange={(v) => cambiar({ cortar: v || undefined })}>
+                  Y cortar el filtro aquí
                 </DropdownMenuCheckboxItem>
               )}
               {deOpciones && s.repetirPor && (

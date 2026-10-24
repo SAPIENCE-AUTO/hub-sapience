@@ -2,13 +2,15 @@ import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { evaluar } from '../lib/formularios/motor';
 import { leerDefinicion, type FotoSubida, type Respuestas } from '../lib/formularios/tipos';
-import { ID_FOTO_IDENTIFICACION } from '../lib/formularios/inicio';
-import { revisarIdentificacion } from '../serverUtils/formularios/identificacion';
+import { alRecibirRespuesta } from '../serverUtils/formularios/alRecibir';
 
 /**
- * Público — guarda una respuesta, completa o cortada por un descarte. La
- * calificación la hace el servidor con la definición completa: lo que diga
- * el navegador no cuenta. Nunca se le dice al participante si calificó.
+ * Público — guarda una respuesta, completa o cortada (solo cortan los
+ * criterios marcados «cortar», el aviso y la identificación). La calificación
+ * la hace el servidor con la definición completa: lo que diga el navegador no
+ * cuenta. Nunca se le dice al participante si calificó. Lo demás (la
+ * identificación, el historial, el paso al tablero en vivo y la clasificación
+ * con la IA) corre después, sin hacerlo esperar (alRecibir.ts).
  */
 export default createEndpoint({
   authenticated: false,
@@ -53,10 +55,7 @@ export default createEndpoint({
         texto(def.claves?.nombre), texto(def.claves?.telefono), input.deviceToken ?? null, input.duracionSeg ?? null,
       ],
     );
-    // La identificación se revisa con la IA después de contestarle al participante (no lo hace esperar).
-    if (Array.isArray(respuestas[ID_FOTO_IDENTIFICACION]) && (respuestas[ID_FOTO_IDENTIFICACION] as FotoSubida[]).length) {
-      revisarIdentificacion(nueva.id as string).catch((err) => console.error('[filtros] revisión de identificación', err));
-    }
+    alRecibirRespuesta(nueva.id as string).catch((err) => console.error('[filtros] después de recibir una respuesta', err));
     return { ok: true };
   },
 });

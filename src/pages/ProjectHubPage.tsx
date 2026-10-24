@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, Save, ImagePlus, X, Loader2, DollarSign, Wrench, Landmark } from 'lucide-react';
+import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, ClipboardList, ListChecks, Save, ImagePlus, X, Loader2, DollarSign, Wrench, Landmark } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
 import { SharpliIcon } from '../components/SharpliIcon';
 import { ProjectHubLanding } from '../components/project-hub/ProjectHubLanding';
 import { ProjectToolsTab } from '../components/project-hub/ProjectToolsTab';
+import { FormulariosPanel } from '../components/formularios/FormulariosPanel';
 import { puedeVerFormularios } from '../lib/formularios/acceso';
 import SharpliEmbedTab from '../components/project-hub/SharpliEmbedTab';
 import RecruitmentPage from './RecruitmentPage';
@@ -28,11 +29,13 @@ import { uploadFile } from 'zite-file-upload-sdk';
 import { toast } from 'sonner';
 
 type Project = GetProjectsOutputType['projects'][0];
-type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos' | 'tools' | 'cobranza' | 'sharpli';
+type TabId = 'hub' | 'reclutamiento' | 'filtros' | 'actividades' | 'presupuesto' | 'chat' | 'documentos' | 'tools' | 'cobranza' | 'sharpli';
 type PmSection = 'timelines' | 'calendarios';
 
 const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'reclutamiento', label: 'Reclutamiento', icon: Users },
+  // Filtros (screeners) junto a Reclutamiento: de ahí sale la gente que llega a los tableros (antes vivía en Tools).
+  { id: 'filtros',       label: 'Filtros',       icon: ListChecks },
   { id: 'actividades',   label: 'Actividades',   icon: Activity },
   { id: 'presupuesto',   label: 'Presupuesto',   icon: DollarSign },
   { id: 'cobranza',      label: 'Cobranza',       icon: Landmark },
@@ -139,6 +142,7 @@ export default function ProjectHubPage() {
   const visibleTabs = ALL_TABS.filter(t =>
     (t.id !== 'presupuesto' || canSeeBudget) &&
     (t.id !== 'tools' || canSeeTools) &&
+    (t.id !== 'filtros' || puedeVerFormularios(user?.email)) &&
     (t.id !== 'cobranza' || canSeeCobranza),
   );
 
@@ -315,7 +319,8 @@ export default function ProjectHubPage() {
                 {project?.id && <ArchivedFilesSection projectId={project.id} />}
               </div>
             )}
-            {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} soloSwipe={!tieneTodoTools} verFormularios={puedeVerFormularios(user?.email)} />}
+            {activeTab === 'filtros'       && project && <FormulariosPanel proyectoId={project.id} />}
+            {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} soloSwipe={!tieneTodoTools} />}
             {activeTab === 'sharpli'       && (
               <SharpliEmbedTab
                 projectName={project?.fullName ?? project?.projectCode ?? ''}

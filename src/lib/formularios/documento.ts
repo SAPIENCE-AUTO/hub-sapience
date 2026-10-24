@@ -59,8 +59,10 @@ const nota = (texto: string): Linea => [{ texto: 'Nota: ', negrita: true, color:
 
 /** «Si contesta menos de 25 o más de 65, termina el filtro: Edad fuera» → «Si contesta menos de 25 o más de 65, TERMINAR». */
 function terminar(l: LineaLogica): Linea {
-  if (l.campo === 'terminaSi' && l.prefijo) return [{ texto: `${l.prefijo.replace(/^Termina el filtro si /, 'Si ').replace(/:\s*$/, '')}, ` }, rojo('TERMINAR')];
-  const corte = l.texto.search(/,? termina el filtro/);
+  if (l.campo === 'terminaSi' && l.prefijo) {
+    return [{ texto: `${l.prefijo.replace(/^(No califica(?: y se corta el filtro)?|Termina el filtro) si /, 'Si ').replace(/:\s*$/, '')}, ` }, rojo('TERMINAR')];
+  }
+  const corte = l.texto.search(/,? (no califica|termina el filtro)/);
   return corte > 0 ? [{ texto: `${l.texto.slice(0, corte)}, ` }, rojo('TERMINAR')] : [{ texto: l.texto }];
 }
 

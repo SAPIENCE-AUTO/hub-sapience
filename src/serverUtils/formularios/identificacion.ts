@@ -141,8 +141,9 @@ export async function revisarIdentificacion(respuestaId: string): Promise<void> 
 
   const resultado = r.resultado as Resultado & { identificacion?: RevisionIdentificacion };
   const alertas = [...resultado.alertas.filter((a) => !(resultado.identificacion?.alertas ?? []).includes(a)), ...revision.alertas];
+  // Solo sus campos: el historial y la clasificación se guardan aparte en el mismo resultado.
   await pool.query(
-    `update formulario_respuestas set resultado = $2 where id = $1`,
-    [respuestaId, JSON.stringify({ ...resultado, alertas, identificacion: revision })],
+    `update formulario_respuestas set resultado = resultado || jsonb_build_object('alertas', $2::jsonb, 'identificacion', $3::jsonb) where id = $1`,
+    [respuestaId, JSON.stringify(alertas), JSON.stringify(revision)],
   );
 }

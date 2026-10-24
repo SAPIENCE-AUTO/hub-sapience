@@ -52,6 +52,11 @@ export default createEndpoint({
       duplicado: z.boolean(),
       enReclutamiento: z.boolean(),
       duracionSeg: z.number().optional(),
+      /** Fase 5: historial de duplicados, lo que dice la IA, si su perfil ya está lleno y si se trajo de otro filtro. */
+      historial: z.object({ nivel: z.string().optional(), nota: z.string() }).optional(),
+      ia: z.object({ encaje: z.string(), resumen: z.string(), alertas: z.array(z.string()) }).optional(),
+      perfilLleno: z.boolean(),
+      traida: z.object({ titulo: z.string(), proyecto: z.string().optional(), fecha: z.string() }).optional(),
     })).optional(),
   }),
   execute: async ({ input, context }) => {
@@ -102,6 +107,10 @@ export default createEndpoint({
           duplicado: (porTelefono.get(String(r.telefono ?? '').replace(/\D/g, '')) ?? 0) > 1,
           duracionSeg: r.duracion_seg ?? undefined,
           enReclutamiento: pasadas.has(r.id),
+          historial: res.historial ? { nivel: res.historial.nivel, nota: res.historial.nota } : undefined,
+          ia: res.ia ? { encaje: res.ia.encaje, resumen: res.ia.resumen, alertas: res.ia.alertas } : undefined,
+          perfilLleno: !!res.perfilLleno,
+          traida: res.traida ? { titulo: res.traida.titulo, proyecto: res.traida.proyecto, fecha: res.traida.fecha } : undefined,
         };
       }),
     };

@@ -2,7 +2,7 @@
 // inventadas. No toca la base. Uso: cd server && npx tsx scripts/test-formularios.ts
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import { evaluar, pantallas, pantallaDeMuestra, definicionPublica, validarPantalla, describir, type Pantalla } from '../../src/lib/formularios/motor';
+import { evaluar, pantallas, pantallaDeMuestra, definicionPublica, validarPantalla, describir, terminacion, type Pantalla } from '../../src/lib/formularios/motor';
 import { columnas, columnasPorRenombrar, nombreColumnaTablero, sinNombreCorto, type FilaRespuesta } from '../../src/lib/formularios/tabla';
 import { construirExcel } from '../../src/lib/formularios/excel';
 import { imagenesQueFaltan, revisarDefinicion } from '../../src/lib/formularios/revisar';
@@ -36,6 +36,7 @@ import { wordDeDocumento } from '../../src/serverUtils/formularios/documento';
 import { compararIdentificacion, declaradoDe, edadDe } from '../../src/serverUtils/formularios/identificacion';
 import { agruparTelefono, limpiarTelefono, telefonoDe } from '../../src/lib/formularios/paises';
 import { sugerirCorreo } from '../../src/lib/formularios/correo';
+import { recalificar } from '../../src/serverUtils/formularios/traer';
 import { leerCatalogoSepomex } from '../../src/serverUtils/formularios/codigosPostales';
 import { direccionDeComponentes } from '../../src/serverUtils/formularios/direcciones';
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
@@ -81,10 +82,40 @@ caso('el bloque se repite por formato comprado y usa el nombre corto', () => {
   assert.equal(bloques[1].titulo, 'Tu difusor de varitas');
 });
 
-caso('Lumerra termina el formulario', () => {
+caso('Lumerra no califica, pero no corta el filtro (contesta todo y se registra)', () => {
   const r = evaluar(ALONG2, { ...base, ...NSE_CMAS, categorias: ['aromatizantes'], formatos_uso: ['aerosol'], formatos_compra: ['aerosol'], ...bloqueAerosol, 'marcas@aerosol': ['lumerra', 'glade'] });
-  assert.match(r.terminado?.motivo ?? '', /Lumerra/);
+  assert.match(r.noCalifica?.join() ?? '', /Lumerra/);
+  assert.equal(r.terminado, undefined);
   assert.equal(r.califica, false);
+});
+
+caso('todos los motivos se registran; solo corta lo marcado «cortar» (y el aviso y la identificación)', () => {
+  const r = evaluar(ALONG2, { ...base, edad: 70, giros: ['publicidad'] });
+  assert.ok((r.noCalifica ?? []).length >= 2, JSON.stringify(r.noCalifica));
+  assert.equal(r.terminado, undefined);
+  assert.equal(terminacion(ALONG2, { ...base, edad: 70 }), undefined);
+  // Con «cortar», ese criterio sí termina el filtro ahí.
+  const conCorte = { ...ALONG2, secciones: ALONG2.secciones.map((s) => ({ ...s, preguntas: s.preguntas.map((p) => (p.id === 'edad' ? { ...p, terminaFuera: { ...p.terminaFuera!, cortar: true } } : p)) })) };
+  assert.match(terminacion(conCorte, { ...base, edad: 70 })?.motivo ?? '', /Edad/);
+  const edad = conCorte.secciones.flatMap((x) => x.preguntas).find((x) => x.id === 'edad')!;
+  assert.match(logicaDePregunta(conCorte, edad).find((l) => l.campo === 'terminaFuera')!.texto, /no califica y se corta el filtro/);
+});
+
+caso('una persona traída de otro filtro no debe el aviso ni la identificación (ya los dio allá)', () => {
+  const resp: Respuestas = {
+    ...base, ...NSE_C, edad: 50, categorias: ['limpiadores'], tipos: ['todo_proposito'],
+    'marcas_l@todo_proposito': ['fabuloso', 'brasso'], 'favorita_l@todo_proposito': 'brasso', 'variante@todo_proposito': 'Lavanda',
+    'presentacion@todo_proposito': ['diluir'], 'tamano@todo_proposito': 'galon', 'lugar_l@todo_proposito': ['aurrera'],
+    'ultima_l@todo_proposito': '2a4sem', 'diluye@todo_proposito': 'cubeta',
+    foto_limpiadores: [{ ruta: 'prueba/l.jpg', nombre: 'l.jpg' }],
+  };
+  const def = conInicio(ALONG2);
+  assert.equal(evaluar(def, resp).incompleto, true); // contestando hoy, sí le faltarían
+  const traida = { formularioId: 'x', titulo: 'Filtro anterior', respuestaId: 'y', fecha: '2026-01-15T00:00:00.000Z' };
+  const r = recalificar(def, resp, { ...evaluar(ALONG2, resp), traida });
+  assert.equal(r.incompleto, false, JSON.stringify(r));
+  assert.deepEqual(r.frentes, ['brasso']);
+  assert.deepEqual(r.traida, traida);
 });
 
 caso('rechazar Air Wick deja fuera los perfiles de Air Wick', () => {
@@ -122,18 +153,18 @@ caso('42 años no entra a Brasso', () => {
   assert.deepEqual(r.frentes, []);
 });
 
-caso('sin aromatizantes ni limpiadores termina', () => {
+caso('sin aromatizantes ni limpiadores no califica', () => {
   const r = evaluar(ALONG2, { ...base, categorias: ['botanas', 'cafe'] });
-  assert.match(r.terminado?.motivo ?? '', /No compra/);
+  assert.match(r.noCalifica?.join() ?? '', /No compra/);
 });
 
-caso('no aceptar todas las condiciones termina', () => {
+caso('no aceptar todas las condiciones no califica', () => {
   const r = evaluar(ALONG2, { ...base, acuerdos: ['visita', 'tienda'] });
-  assert.match(r.terminado?.motivo ?? '', /condiciones/);
+  assert.match(r.noCalifica?.join() ?? '', /condiciones/);
 });
 
-caso('edad fuera de rango termina', () => {
-  assert.match(evaluar(ALONG2, { ...base, edad: 70 }).terminado?.motivo ?? '', /Edad/);
+caso('edad fuera de rango no califica', () => {
+  assert.match(evaluar(ALONG2, { ...base, edad: 70 }).noCalifica?.join() ?? '', /Edad/);
 });
 
 caso('faltan respuestas → incompleto y no califica', () => {
@@ -291,7 +322,7 @@ caso('dirección: pide cada campo y el código postal de México', () => {
 });
 
 caso('listas: la desplegable termina con su opción y la múltiple respeta el tope', () => {
-  assert.match(evaluar(PRUEBA_TIPOS, { ...tipos, tienda: 'nadie' }).terminado?.motivo ?? '', /No hace compras/);
+  assert.match(evaluar(PRUEBA_TIPOS, { ...tipos, tienda: 'nadie' }).noCalifica?.join() ?? '', /No hace compras/);
   assert.equal(errores({ ...tipos, frutas: ['mango', 'pera', 'uva', 'kiwi', 'lima', 'tuna'] }, 'compras').frutas, 'Marca máximo 5');
   assert.match(errores({ ...tipos, tienda: 'otra' }, 'compras').tienda, /cuál/);
 });
@@ -419,10 +450,10 @@ caso('la lógica en palabras dice lo que hace el motor: cada opción que termina
       for (const o of p.opciones ?? []) {
         if (!o.termina) continue;
         const r = evaluar(ALONG2, { ...base, [p.id]: forma(p.tipo) === 'una' ? o.id : [o.id] });
-        assert.equal(r.terminado?.motivo, o.termina, `${p.id}/${o.id}`);
+        assert.ok(r.noCalifica?.includes(o.termina), `${p.id}/${o.id}`);
         const linea = logicaDeOpcion(ALONG2, p, o).find((l) => l.tipo === 'termina')!;
         assert.equal(linea.motivo, o.termina);
-        assert.match(linea.texto, forma(p.tipo) === 'una' ? /^Si contesta esta, termina el filtro: / : /^Si la marca, termina el filtro: /);
+        assert.match(linea.texto, forma(p.tipo) === 'una' ? /^Si contesta esta, no califica: / : /^Si la marca, no califica: /);
         revisadas++;
       }
     }
@@ -438,7 +469,7 @@ caso('la lógica en palabras de ALONG 2 se lee como la escribiría una persona',
   assert.match(frenteEnPalabras(ALONG2, brasso), /^Entra si contestó de 25 a 40 o de 45 a 65 en «¿Cuántos años tienes\?» y alguna de estas: \(tiene el bloque «Tu limpiador especializado» sin descartarlo, /);
   assert.match(frenteEnPalabras(ALONG2, brasso), /El NSE no saca a nadie/);
   const acuerdos = logicaDePregunta(ALONG2, pregunta(ALONG2, 'acuerdos')).find((l) => l.campo === 'terminaSi')!;
-  assert.equal(acuerdos.prefijo, 'Termina el filtro si no marcó todas las opciones de «Marca todo con lo que estás de acuerdo»: ');
+  assert.equal(acuerdos.prefijo, 'No califica si no marcó todas las opciones de «Marca todo con lo que estás de acuerdo»: ');
   const antiguedad = pregunta(ALONG2, 'antiguedad').opciones!.find((o) => o.id === 'menos3m')!;
   assert.equal(logicaDeOpcion(ALONG2, pregunta(ALONG2, 'antiguedad'), antiguedad)[0].texto, 'Si contesta esta, no cuenta este bloque: Menos de 3 meses usándolo.');
   assert.equal(condicionEnPalabras({ pregunta: 'espacios', instancia: 'esfera', incluye: ['auto'] }, ALONG2), 'marcó Auto en «¿En qué lugares lo usas?» (en el bloque de adorno o esfera aromática)');
@@ -617,7 +648,7 @@ caso('la estructura de un filtro escrito se lee completa y da casi los mismos mi
   assert.match(e.secciones.find((s) => s.id === 'aroma_formatos')?.aparece ?? '', /marcó Aromatizantes/);
   assert.match(e.frentes.find((f) => f.id === 'brasso')?.quien ?? '', /^Entra si/);
   const giros = e.secciones.find((s) => s.id === 'filtros')!.preguntas.find((p) => p.id === 'giros')!;
-  assert.match(giros.logica ?? '', /«Publicidad o marketing»: Si la marca, termina el filtro/);
+  assert.match(giros.logica ?? '', /«Publicidad o marketing»: Si la marca, no califica/);
   // El boceto de la estructura da casi los mismos minutos que el screener escrito (no lleva la bienvenida ni las ayudas).
   const m = minutosDeEstructura(e).total;
   const real = duracionEstimada(ALONG2);
@@ -812,7 +843,7 @@ caso('los cambios de lógica se cuentan en palabras', () => {
     frentes: ALONG2.frentes!.map((f) => (f.id === 'reeds' ? { ...f, meta: 8 } : f)),
   });
   const cambios = cambiosEnPalabras(ALONG2, d);
-  assert.ok(cambios.includes('En «¿Cómo es tu hogar?»: «Vivo con roomies»: Si contesta esta, termina el filtro: Vive con roomies.'), cambios.join(' | '));
+  assert.ok(cambios.includes('En «¿Cómo es tu hogar?»: «Vivo con roomies»: Si contesta esta, no califica: Vive con roomies.'), cambios.join(' | '));
   assert.ok(cambios.includes('La cuota de Reeds pasa de 6 a 8.'), cambios.join(' | '));
   assert.equal(cambios.length, 2);
   const perfil = ALONG2.secciones.find((s) => s.id === 'perfil')!;

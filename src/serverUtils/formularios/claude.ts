@@ -167,14 +167,17 @@ export function conLatido<T>(stream: { write: (c: unknown) => void } | undefined
 }
 
 /**
- * Una llamada corta con una imagen y su propio system prompt (sin la skill de
- * Filtros): la revisión de la identificación. Sin reintento: si la respuesta no
- * es el JSON esperado, lanza el error.
+ * Una llamada corta con su propio system prompt (sin la skill de Filtros) y,
+ * si hace falta, una imagen: la revisión de la identificación y la
+ * clasificación de candidatos. `contexto` va en caché (lo que se repite entre
+ * llamadas, como el filtro). Sin reintento: si la respuesta no es el JSON
+ * esperado, lanza el error.
  */
 export async function llamarConImagen<S extends z.ZodTypeAny>(opts: {
   sistema: string;
+  contexto?: string;
   texto: string;
-  imagen: { datos: Buffer; tipo: 'image/jpeg' | 'image/png' | 'image/webp' };
+  imagen?: { datos: Buffer; tipo: 'image/jpeg' | 'image/png' | 'image/webp' };
   esquema: S;
   modelo: string;
   esfuerzo: Esfuerzo;
@@ -185,12 +188,14 @@ export async function llamarConImagen<S extends z.ZodTypeAny>(opts: {
     msg = await getClient().messages.create({
       model: opts.modelo,
       max_tokens: 4000,
-      system: opts.sistema,
+      system: opts.contexto
+        ? [{ type: 'text', text: opts.sistema }, { type: 'text', text: opts.contexto, cache_control: { type: 'ephemeral' } }]
+        : opts.sistema,
       output_config: { effort: opts.esfuerzo },
       messages: [{
         role: 'user',
         content: [
-          { type: 'image', source: { type: 'base64', media_type: opts.imagen.tipo, data: opts.imagen.datos.toString('base64') } },
+          ...(opts.imagen ? [{ type: 'image', source: { type: 'base64', media_type: opts.imagen.tipo, data: opts.imagen.datos.toString('base64') } }] : []),
           { type: 'text', text: opts.texto },
         ],
       }],
@@ -200,7 +205,7 @@ export async function llamarConImagen<S extends z.ZodTypeAny>(opts: {
   }
   const u = msg.usage;
   opts.onGasto?.({ modelo: msg.model, entrada: u.input_tokens, cacheLeidos: u.cache_read_input_tokens ?? 0, cacheEscritos: u.cache_creation_input_tokens ?? 0, salida: u.output_tokens });
-  if (msg.stop_reason === 'refusal') throw new ZiteError({ code: 'INTERNAL_ERROR', message: 'La IA no quiso revisar la imagen.' });
+  if (msg.stop_reason === 'refusal') throw new ZiteError({ code: 'INTERNAL_ERROR', message: 'La IA no quiso hacerlo.' });
   const texto = msg.content.filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text').map((b) => b.text).join('');
   const parsed = opts.esquema.safeParse(extraerJSON(texto));
   if (!parsed.success) throw new ZiteError({ code: 'INTERNAL_ERROR', message: 'La IA no respondió en el formato esperado.' });

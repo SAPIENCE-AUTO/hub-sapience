@@ -6,8 +6,9 @@ import { leerDefinicion } from '../lib/formularios/tipos';
 
 /**
  * Pasa respuestas al tablero vinculado. Sin `respuestaIds`: todas las que
- * califican y no se han pasado. Con ids: esas, califiquen o no (para pasar a
- * mano a alguien que el equipo quiere revisar).
+ * califican y no se han pasado (menos las traídas de un filtro anterior, que
+ * se pasan una por una). Con ids: esas, califiquen o no (para pasar a mano a
+ * alguien que el equipo quiere revisar).
  */
 export default createEndpoint({
   authenticated: true,
@@ -30,7 +31,7 @@ export default createEndpoint({
       )
       : await pool.query(
         `select id, created_at, es_prueba, respuestas, resultado, duracion_seg from formulario_respuestas
-         where formulario_id = $1 and califica order by created_at`,
+         where formulario_id = $1 and califica and not (resultado ? 'traida') order by created_at`,
         [f.id],
       );
 

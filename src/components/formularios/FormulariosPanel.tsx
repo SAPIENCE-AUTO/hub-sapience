@@ -81,6 +81,7 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
   const [origen, setOrigen] = useState<Origen>('insumos');
   const [todos, setTodos] = useState<FormularioRow[] | null>(null);
   const [filtroBase, setFiltroBase] = useState('');
+  const [traer, setTraer] = useState(false);
   const [creando, setCreando] = useState(false);
   const [confirmar, setConfirmar] = useState<{ que: 'pruebas' } | { que: 'formulario'; id: string; titulo: string } | null>(null);
 
@@ -121,8 +122,9 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
       const r = await createFormulario({
         titulo: nuevoTitulo.trim(), origen, proyectoId,
         ...(origen === 'plantilla' ? { plantilla: nuevaPlantilla } : {}),
-        ...(origen === 'filtro' ? { filtroBaseId: filtroBase } : {}),
-      });
+        ...(origen === 'filtro' ? { filtroBaseId: filtroBase, traerRespuestas: traer } : {}),
+      }) as { id: string; traidas?: number };
+      if (r.traidas !== undefined) toast.success(`${r.traidas === 1 ? 'Se trajo 1 persona' : `Se trajeron ${r.traidas} personas`} del filtro anterior. Su historial se busca en un momento.`);
       setNuevoAbierto(false);
       setNuevoTitulo('');
       await cargarLista();
@@ -276,6 +278,19 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
                 {todos?.map((f) => <option key={f.id} value={f.id}>{f.titulo}{f.proyecto ? ` · ${f.proyecto}` : ''}</option>)}
               </select>
             )}
+            {origen === 'filtro' && filtroBase && (() => {
+              const base = todos?.find((f) => f.id === filtroBase);
+              const n = base ? base.respuestasPrueba + base.respuestasReales : 0;
+              return (
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" className="mt-0.5 accent-[#0F3D4D]" checked={traer} disabled={!n} onChange={(e) => setTraer(e.target.checked)} />
+                  <span>
+                    Traer también a quienes lo contestaron{n ? ` (${n} ${n === 1 ? 'respuesta' : 'respuestas'})` : ' (no tiene respuestas)'}
+                    <span className="block text-xs text-muted-foreground">Llegan con su fecha y su historial, calificados con este filtro. No cuentan en las cuotas hasta pasarlos al tablero.</span>
+                  </span>
+                </label>
+              );
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNuevoAbierto(false)}>Cancelar</Button>
