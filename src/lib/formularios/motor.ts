@@ -1,5 +1,6 @@
 import { calcularNse } from './nse';
 import { esDelInicio } from './inicio';
+import { sinFormato } from './formato';
 import { PAISES, nombreCampoDireccion, telefonoDe } from './paises';
 import {
   CAMPOS_DIRECCION, esDeOpciones, forma,
@@ -514,8 +515,8 @@ export function describir(def: Definicion, resp: Respuestas): { titulo: string; 
   return pantallas(def, resp).map((pantalla) => ({
     titulo: pantalla.titulo ?? pantalla.seccion.id,
     lineas: pantalla.preguntas.filter((pv) => !vacio(resp[pv.clave]) && forma(pv.pregunta.tipo) !== 'ninguna').map((pv): Linea => {
-      if (pv.pregunta.tipo === 'foto') return { texto: pv.texto, valor: '', fotos: resp[pv.clave] as FotoSubida[] };
-      return { texto: pv.texto, valor: textoRespuesta(pv.pregunta, pv.opciones, pv.clave, resp) ?? '' };
+      if (pv.pregunta.tipo === 'foto') return { texto: sinFormato(pv.texto), valor: '', fotos: resp[pv.clave] as FotoSubida[] };
+      return { texto: sinFormato(pv.texto), valor: textoRespuesta(pv.pregunta, pv.opciones, pv.clave, resp) ?? '' };
     }),
   })).filter((s) => s.lineas.length > 0);
 }

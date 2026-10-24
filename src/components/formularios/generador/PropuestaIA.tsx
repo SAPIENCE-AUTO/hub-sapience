@@ -9,6 +9,7 @@ import { logicaDeOpcion, logicaDePregunta, ubicar } from '@/lib/formularios/pala
 import { opcionesDe } from '@/lib/formularios/tabla';
 import { TIPOS, type Definicion } from '@/lib/formularios/tipos';
 import { COLOR_LOGICA, useDoc } from '../editor/comun';
+import { TextoConFormato } from '../TextoConFormato';
 import { AvanceIA, MarcaIA, botonSecundario, botonTeal } from './comun';
 
 export type AlcanceIA = { pregunta: string } | { seccion: string } | { frentes: true };
@@ -22,8 +23,8 @@ function PreguntaPropuesta({ def, id }: { def: Definicion; id: string }) {
   const lineas = logicaDePregunta(def, p);
   return (
     <div className="rounded-md border bg-white px-3 py-2">
-      <p className="text-[14px] font-semibold leading-snug text-[#1F1F23]">{p.texto}</p>
-      {p.ayuda && <p className="text-[12.5px] text-muted-foreground">{p.ayuda}</p>}
+      <p className="text-[14px] font-semibold leading-snug text-[#1F1F23]"><TextoConFormato texto={p.texto} enNegrita /></p>
+      {p.ayuda && <p className="text-[12.5px] text-muted-foreground"><TextoConFormato texto={p.ayuda} /></p>}
       <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{TIPOS[p.tipo]?.nombre ?? p.tipo}</p>
       {p.filas?.length ? <p className="mt-1 text-[12.5px] text-[#45454D]">Filas: {p.filas.map((f) => f.label).join(' · ')}</p> : null}
       {opcionesDe(def, p).length > 0 && (

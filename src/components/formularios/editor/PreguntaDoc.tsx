@@ -122,7 +122,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
           <p className={`text-[15px] leading-snug text-[#1F1F23] ${p.tipo === 'contenido' ? 'whitespace-pre-line' : 'font-semibold'}`}>
             {bloqueada ? p.texto : (
               <TextoEditable
-                valor={p.texto} etiqueta={p.tipo === 'contenido' ? 'Texto' : 'Pregunta'} obligatorio={p.tipo !== 'contenido'}
+                valor={p.texto} etiqueta={p.tipo === 'contenido' ? 'Texto' : 'Pregunta'} obligatorio={p.tipo !== 'contenido'} formato enNegrita={p.tipo !== 'contenido'}
                 placeholder="Sin texto" abrir={nuevo === p.id} onCerrar={() => nuevo === p.id && setNuevo(null)}
                 onGuardar={(v) => cambiar({ texto: v })}
               />
@@ -130,7 +130,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
           </p>
           {(p.ayuda || abierto === 'ayuda') && (
             <p className="mt-0.5 text-[13px] text-muted-foreground">
-              <TextoEditable valor={p.ayuda ?? ''} etiqueta="Ayuda" placeholder="Ayuda bajo la pregunta" abrir={abierto === 'ayuda'} onCerrar={() => setAbierto(null)} onGuardar={(v) => cambiar({ ayuda: v || undefined })} />
+              <TextoEditable formato valor={p.ayuda ?? ''} etiqueta="Ayuda" placeholder="Ayuda bajo la pregunta" abrir={abierto === 'ayuda'} onCerrar={() => setAbierto(null)} onGuardar={(v) => cambiar({ ayuda: v || undefined })} />
             </p>
           )}
           <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">

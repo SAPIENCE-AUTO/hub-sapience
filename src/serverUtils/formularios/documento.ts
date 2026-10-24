@@ -3,7 +3,8 @@ import path from 'node:path';
 import JSZip from 'jszip';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
-import type { Bloque, Color, FilaOpcion, Linea, Matriz, PreguntaDoc, Tramo } from '../../lib/formularios/documento';
+import { esNota, tramosDe, type Bloque, type Color, type FilaOpcion, type Linea, type Matriz, type PreguntaDoc, type Tramo } from '../../lib/formularios/documento';
+import { COLOR_RESALTADO } from '../../lib/formularios/formato';
 import { descargarImagen, esImagenNuestra } from './imagenesEnlace';
 
 // Dibuja el documento del filtro (lib/formularios/documento.ts) en Word y en
@@ -15,7 +16,7 @@ import { descargarImagen, esImagenNuestra } from './imagenesEnlace';
 const MARCA = path.join(import.meta.dirname, 'marca');
 const leerMarca = (archivo: string) => fs.readFileSync(path.join(MARCA, archivo));
 
-const COLORES: Record<Color, string> = { verde: '00B050', rojo: 'FF0000', azul: '0070C0', gris: '7F7F7F' };
+const COLORES: Record<Color, string> = { verde: '00B050', rojo: 'FF0000', azul: '0070C0', gris: '7F7F7F', resaltado: COLOR_RESALTADO.slice(1) };
 const OSCURO = '262626';
 const MEDIO = '595959';
 const CLARO = 'F2F2F2';
@@ -69,7 +70,7 @@ interface FormatoRun {
 function run(t: Tramo, o: FormatoRun = {}): string {
   const color = t.color ? COLORES[t.color] : o.color;
   const espaciado = o.espaciado ?? (o.etiqueta && t.negrita ? 10 : undefined);
-  const rPr = `${t.negrita || o.negrita ? '<w:b/>' : ''}${t.cursiva ? '<w:i/>' : ''}${o.mayusculas ? '<w:caps/>' : ''}${color ? `<w:color w:val="${color}"/>` : ''}`
+  const rPr = `${t.negrita || o.negrita ? '<w:b/>' : ''}${t.cursiva ? '<w:i/>' : ''}${t.subrayado ? '<w:u w:val="single"/>' : ''}${o.mayusculas ? '<w:caps/>' : ''}${color ? `<w:color w:val="${color}"/>` : ''}`
     + `${espaciado ? `<w:spacing w:val="${espaciado}"/>` : ''}${o.tam ? `<w:sz w:val="${o.tam}"/><w:szCs w:val="${o.tam}"/>` : ''}`;
   return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}<w:t xml:space="preserve">${esc(t.texto)}</w:t></w:r>`;
 }
@@ -164,10 +165,10 @@ function preguntaWord(w: Word, b: PreguntaDoc): string {
   const resto = ANCHO - 620;
   const todo = anchos.length;
   // La ayuda (lo que lee el participante) un punto más grande que las notas para el equipo.
-  const lineas = (ls: Linea[], seguir: boolean) => ls.map((l) => parrafo(runs(l, { tam: l.some((t) => t.color) ? 15 : 16, color: SUAVE }), { despues: 30, seguir })).join('');
+  const lineas = (ls: Linea[], seguir: boolean) => ls.map((l) => parrafo(runs(l, { tam: esNota(l) ? 15 : 16, color: SUAVE }), { despues: 30, seguir })).join('');
   const filas: Celda[][] = [[
     { ancho: 620, fondo: OSCURO, centro: true, margen: 70, contenido: parrafo(run({ texto: String(b.numero), negrita: true }, { color: 'FFFFFF', tam: 21 }), { despues: 0, centro: true, seguir: true }) },
-    { ancho: resto, abarca: todo - 1, fondo: CLARO, margen: 70, contenido: parrafo(run({ texto: b.texto, negrita: true }, { tam: 20, color: OSCURO }), { despues: 0, seguir: true }) },
+    { ancho: resto, abarca: todo - 1, fondo: CLARO, margen: 70, contenido: parrafo(runs(tramosDe(b.texto, { negrita: true }), { tam: 20, color: OSCURO }), { despues: 0, seguir: true }) },
   ]];
   const entera = (contenido: string): Celda[] => [{ ancho: ANCHO, abarca: todo, contenido }];
   if (b.antes.length) filas.push(entera(lineas(b.antes, true)));
@@ -189,7 +190,7 @@ function preguntaWord(w: Word, b: PreguntaDoc): string {
 function cuerpoWord(w: Word, bloques: Bloque[]): string {
   const dosColumnas = (filas: [string, string][], etiqueta = 2300) => tabla([etiqueta, ANCHO - etiqueta], filas.map(([k, v]) => [
     { ancho: etiqueta, contenido: parrafo(run({ texto: k, negrita: true }, { color: MEDIO, tam: 14, mayusculas: true, espaciado: 10 }), { despues: 0 }) },
-    { ancho: ANCHO - etiqueta, contenido: parrafo(run({ texto: v }, { tam: 18 }), { despues: 0 }) },
+    { ancho: ANCHO - etiqueta, contenido: parrafo(runs(tramosDe(v), { tam: 18 }), { despues: 0 }) },
   ]), 'renglones');
   return bloques.map((b) => {
     switch (b.tipo) {
@@ -215,15 +216,15 @@ function cuerpoWord(w: Word, bloques: Bloque[]): string {
       case 'bienvenida':
         return tabla([ANCHO], [[{ ancho: ANCHO, fondo: CLARO, margen: 90, contenido:
           parrafo(run({ texto: 'Lo que lee al entrar', negrita: true }, { color: MEDIO, mayusculas: true, espaciado: 10, tam: 14 }), { despues: 40 })
-          + parrafo(run({ texto: b.texto, cursiva: true }, { tam: 17 }), { despues: 0 }) }]]) + respiro(240);
+          + parrafo(runs(tramosDe(b.texto, { cursiva: true }), { tam: 17 }), { despues: 0 }) }]]) + respiro(240);
       case 'seccion':
         return franja(b.titulo)
           + b.notas.map((n) => parrafo(run({ texto: n, color: 'azul', cursiva: true }, { tam: 15 }), { antes: 60, despues: 0, seguir: true })).join('')
-          + (b.intro ? parrafo(run({ texto: b.intro, cursiva: true }), { antes: 60, despues: 0, seguir: true }) : '')
+          + (b.intro ? parrafo(runs(tramosDe(b.intro, { cursiva: true })), { antes: 60, despues: 0, seguir: true }) : '')
           + respiro(140);
       case 'pregunta': return preguntaWord(w, b);
       case 'contenido':
-        return (b.texto ? parrafo(run({ texto: b.texto, cursiva: true }), { despues: 80 }) : '')
+        return (b.texto ? parrafo(runs(tramosDe(b.texto, { cursiva: true })), { despues: 80 }) : '')
           + (b.imagen && w.imagenes.has(b.imagen) ? parrafo(w.imagen(b.imagen, 3.4), { despues: 160 }) : '');
       case 'final':
         return franja('Al terminar') + respiro(80) + dosColumnas([['Si califica', b.califica], ['Si no califica', b.noCalifica]]);
@@ -274,7 +275,7 @@ export async function wordDeDocumento(bloques: Bloque[], pie: string): Promise<B
 
 // ── PDF ──────────────────────────────────────────────────────────────────────
 const tramoHtml = (t: Tramo) => {
-  const estilo = [t.negrita && 'font-weight:700', t.cursiva && 'font-style:italic', t.color && `color:#${COLORES[t.color]}`].filter(Boolean).join(';');
+  const estilo = [t.negrita && 'font-weight:700', t.cursiva && 'font-style:italic', t.subrayado && 'text-decoration:underline', t.color && `color:#${COLORES[t.color]}`].filter(Boolean).join(';');
   return estilo ? `<span style="${estilo}">${esc(t.texto)}</span>` : esc(t.texto);
 };
 const lineaHtml = (l: Linea) => l.map(tramoHtml).join('');
@@ -287,19 +288,19 @@ const fuentesCss = () => (fuentes ??= ([['Regular', 400, 'normal'], ['Italic', 4
 
 function htmlDeDocumento(bloques: Bloque[], imagenes: Map<string, Imagen>): string {
   const src = (url?: string) => { const i = url ? imagenes.get(url) : undefined; return i ? `data:image/jpeg;base64,${i.datos.toString('base64')}` : ''; };
-  const dosColumnas = (filas: [string, string][]) => `<table class="ficha">${filas.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</table>`;
+  const dosColumnas = (filas: [string, string][]) => `<table class="ficha">${filas.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${lineaHtml(tramosDe(v))}</td></tr>`).join('')}</table>`;
   const opcion = (f: FilaOpcion, conImagen: boolean) => `<tr><td class="cod">${esc(f.codigo)}</td>${conImagen ? `<td class="img">${src(f.imagen) ? `<img src="${src(f.imagen)}">` : ''}</td>` : ''}<td>${esc(f.texto)}</td><td class="ins">${lineaHtml(f.instruccion)}</td></tr>`;
   const matriz = (m: Matriz) => `<table class="matriz"><tr><th></th>${m.columnas.map((c) => `<th><span class="letra">${c.letra}</span>${esc(c.texto)}</th>`).join('')}</tr>`
     + m.filas.map((f) => `<tr><td><span class="letra2">${f.codigo}</span>${esc(f.texto)}</td>${f.celdas.map((c) => `<td class="c">${lineaHtml(c)}</td>`).join('')}</tr>`).join('') + '</table>';
   const pregunta = (b: PreguntaDoc) => {
     const conImagen = !!b.opciones?.some((f) => src(f.imagen));
-    return `<div class="tarjeta"><div class="cabeza"><span class="num">${b.numero}</span><span class="texto">${esc(b.texto)}</span></div><div class="cuerpo">`
-      + b.antes.map((l) => `<p${l.some((t) => t.color) ? ' class="nota"' : ''}>${lineaHtml(l)}</p>`).join('')
+    return `<div class="tarjeta"><div class="cabeza"><span class="num">${b.numero}</span><span class="texto">${lineaHtml(tramosDe(b.texto, { negrita: true }))}</span></div><div class="cuerpo">`
+      + b.antes.map((l) => `<p${esNota(l) ? ' class="nota"' : ''}>${lineaHtml(l)}</p>`).join('')
       + (src(b.imagen) ? `<p><img class="grande" src="${src(b.imagen)}"></p>` : '')
       + (b.opciones ? `<table class="opciones">${b.opciones.map((f) => opcion(f, conImagen)).join('')}</table>` : '')
       + (b.matriz ? matriz(b.matriz) : '')
       + (b.abierta ? `<p class="abierta">${esc(b.abierta)}</p>` : '')
-      + b.despues.map((l) => `<p${l.some((t) => t.color) ? ' class="nota"' : ''}>${lineaHtml(l)}</p>`).join('')
+      + b.despues.map((l) => `<p${esNota(l) ? ' class="nota"' : ''}>${lineaHtml(l)}</p>`).join('')
       + '</div></div>';
   };
   const cuerpo = bloques.map((b) => {
@@ -308,10 +309,10 @@ function htmlDeDocumento(bloques: Bloque[], imagenes: Map<string, Imagen>): stri
       case 'muestra': return '<div class="seccion"><div class="franja">Muestra</div></div><table class="muestra"><tr><th>Perfil</th><th class="c">Cuota</th><th>Quién entra</th></tr>'
         + b.perfiles.map((p, i) => `<tr><td><b><span class="gris">${i + 1}.</span> ${esc(p.nombre)}</b></td><td class="c"><b>${p.cuota}</b></td><td class="chico">${esc(p.quien)}</td></tr>`).join('')
         + '</table>' + b.alertas.map((a) => `<p class="alerta"><b>Alerta:</b> ${esc(a)}</p>`).join('');
-      case 'bienvenida': return `<div class="bienvenida"><p class="sobre">Lo que lee al entrar</p><p><i>${esc(b.texto)}</i></p></div>`;
-      case 'seccion': return `<div class="seccion"><div class="franja">${esc(b.titulo)}</div>${b.notas.map((n) => `<p class="nota-seccion">${esc(n)}</p>`).join('')}${b.intro ? `<p><i>${esc(b.intro)}</i></p>` : ''}</div>`;
+      case 'bienvenida': return `<div class="bienvenida"><p class="sobre">Lo que lee al entrar</p><p><i>${lineaHtml(tramosDe(b.texto))}</i></p></div>`;
+      case 'seccion': return `<div class="seccion"><div class="franja">${esc(b.titulo)}</div>${b.notas.map((n) => `<p class="nota-seccion">${esc(n)}</p>`).join('')}${b.intro ? `<p><i>${lineaHtml(tramosDe(b.intro))}</i></p>` : ''}</div>`;
       case 'pregunta': return pregunta(b);
-      case 'contenido': return `${b.texto ? `<p><i>${esc(b.texto)}</i></p>` : ''}${src(b.imagen) ? `<p><img class="grande" src="${src(b.imagen)}"></p>` : ''}`;
+      case 'contenido': return `${b.texto ? `<p><i>${lineaHtml(tramosDe(b.texto))}</i></p>` : ''}${src(b.imagen) ? `<p><img class="grande" src="${src(b.imagen)}"></p>` : ''}`;
       case 'final': return `<div class="seccion"><div class="franja">Al terminar</div></div>${dosColumnas([['Si califica', b.califica], ['Si no califica', b.noCalifica]])}`;
     }
   }).join('\n');

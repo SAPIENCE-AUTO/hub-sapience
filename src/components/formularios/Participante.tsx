@@ -4,6 +4,7 @@ import { pantallas, terminacion, validarPantalla, type Pantalla } from '@/lib/fo
 import type { Definicion, Respuestas, Valor } from '@/lib/formularios/tipos';
 import { CampoPregunta } from './CampoPregunta';
 import { EnlaceAviso } from './AvisoPrivacidad';
+import { TextoConFormato } from './TextoConFormato';
 
 // Mismo logo que SwipePage.tsx — página pública sin login. Quitarlo es de la fase 4 (formulario neutro en el dominio de Sharpli).
 const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png';
@@ -152,7 +153,7 @@ export function Bienvenida({ def, continuar, onEmpezar }: { def: Definicion; con
   return (
     <div className="flex flex-1 flex-col justify-center px-6 py-10">
       <h1 className="text-[26px] font-bold leading-tight text-[#1F1F23]">{def.tituloPublico}</h1>
-      <p className="mt-4 text-[16px] leading-relaxed text-[#45454D]">{def.bienvenida}</p>
+      <p className="mt-4 text-[16px] leading-relaxed text-[#45454D]"><TextoConFormato texto={def.bienvenida} /></p>
       <button onClick={onEmpezar} className="mt-10 w-full rounded-xl bg-[#1F1F23] py-4 text-[16px] font-semibold text-white">
         {continuar ? 'Continuar' : 'Empezar'}
       </button>
@@ -164,7 +165,7 @@ export function Bienvenida({ def, continuar, onEmpezar }: { def: Definicion; con
 export function Despedida({ texto, onOtraVez }: { texto: string; onOtraVez?: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-      <p className="max-w-sm text-[17px] leading-relaxed text-[#1F1F23]">{texto}</p>
+      <p className="max-w-sm text-[17px] leading-relaxed text-[#1F1F23]"><TextoConFormato texto={texto} /></p>
       {onOtraVez && (
         <button onClick={onOtraVez} className="mt-8 rounded-full border-[1.5px] border-[#1F1F23] px-6 py-2.5 text-[14px] font-semibold text-[#1F1F23]">
           Contestar otra vez (prueba)
@@ -179,7 +180,7 @@ export function CuerpoPantalla({ pantalla, enMarco, children }: { pantalla?: Pan
   return (
     <div className={`flex-1 px-5 pt-6 ${enMarco ? 'pb-8' : 'pb-32'}`}>
       {pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#1F1F23]">{pantalla.titulo}</h2>}
-      {pantalla?.intro && <p className="mt-2 text-[15px] leading-relaxed text-[#45454D]">{pantalla.intro}</p>}
+      {pantalla?.intro && <p className="mt-2 text-[15px] leading-relaxed text-[#45454D]"><TextoConFormato texto={pantalla.intro} /></p>}
       <div className="mt-6 space-y-9">{children}</div>
     </div>
   );

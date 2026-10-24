@@ -32,6 +32,8 @@ Una sección es una pantalla en el celular. En una sección que se repite, «{op
 
 Campos comunes: `id`, `tipo`, `texto`, `nombre`; opcionales `ayuda` (bajo la pregunta), `opcional: true` (se puede dejar sin contestar; por defecto todas son obligatorias), `mostrarSi`, `nota` (lógica para el equipo, nunca la ve el participante).
 
+Formato en `texto`, `ayuda`, `intro`, la bienvenida y las despedidas: `**así**` es negrita y `==así==` va en color. Lo pone el analista: **consérvalo tal cual** al reescribir esos textos y no lo agregues por tu cuenta. Las opciones, filas, títulos y nombres cortos no llevan formato.
+
 | tipo | para qué | lleva |
 |---|---|---|
 | `texto` | abierta corta (nombre, aroma, sucursal) | opcional `patron` (expresión regular) y `patronMensaje` |

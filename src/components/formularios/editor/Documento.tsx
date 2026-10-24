@@ -129,7 +129,7 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
       </div>
       {(s.intro || intro) && (
         <p className="mt-1 whitespace-pre-line text-[14px] leading-relaxed text-[#45454D]">
-          <TextoEditable valor={s.intro ?? ''} etiqueta="Texto de entrada" placeholder="Texto que se lee al entrar a la sección" abrir={intro} onCerrar={() => setIntro(false)} onGuardar={(v) => aplicar((d) => cambiarSeccion(d, s.id, { intro: v || undefined }))} />
+          <TextoEditable formato valor={s.intro ?? ''} etiqueta="Texto de entrada" placeholder="Texto que se lee al entrar a la sección" abrir={intro} onCerrar={() => setIntro(false)} onGuardar={(v) => aplicar((d) => cambiarSeccion(d, s.id, { intro: v || undefined }))} />
         </p>
       )}
       <Logica lineas={logicaDeSeccion(def, s)} className="mt-1.5" />
@@ -346,8 +346,9 @@ export function Documento({ editor, ia, pendientes }: {
     setNuevo(id);
   };
 
+  // El título se lee tal cual; la bienvenida y las despedidas llevan negritas y color.
   const textos = (campo: 'tituloPublico' | 'bienvenida' | 'despedida' | 'noCalifica', etiqueta: string, clase: string) => (
-    <TextoEditable valor={def[campo]} etiqueta={etiqueta} obligatorio className={clase} onGuardar={(v) => aplicar((d) => cambiarTextos(d, { [campo]: v }))} />
+    <TextoEditable valor={def[campo]} etiqueta={etiqueta} obligatorio formato={campo !== 'tituloPublico'} className={clase} onGuardar={(v) => aplicar((d) => cambiarTextos(d, { [campo]: v }))} />
   );
 
   return (

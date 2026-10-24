@@ -37,6 +37,8 @@ import { compararIdentificacion, declaradoDe, edadDe } from '../../src/serverUti
 import { agruparTelefono, limpiarTelefono, telefonoDe } from '../../src/lib/formularios/paises';
 import { sugerirCorreo } from '../../src/lib/formularios/correo';
 import { recalificar } from '../../src/serverUtils/formularios/traer';
+import { alternarMarca, leerFormato, sinFormato } from '../../src/lib/formularios/formato';
+import { tramosDe } from '../../src/lib/formularios/documento';
 import { leerCatalogoSepomex } from '../../src/serverUtils/formularios/codigosPostales';
 import { direccionDeComponentes } from '../../src/serverUtils/formularios/direcciones';
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
@@ -1172,6 +1174,44 @@ caso('el Word y el PDF del cliente salen con el formato de los filtros del equip
   const xml = await zip.file('word/document.xml')!.async('string');
   assert.ok(xml.includes('Filtro de reclutamiento') && xml.includes('TERMINAR') && xml.includes('rIdEncabezado'));
   assert.ok(zip.file('word/media/logo.emf'), 'el encabezado de Sapience lleva su logo');
+});
+
+caso('negritas y color: se leen, se ponen y se quitan, y no llegan a las columnas', async () => {
+  assert.deepEqual(leerFormato('¿Compraste **en los últimos 3 meses**?'), [{ texto: '¿Compraste ' }, { texto: 'en los últimos 3 meses', negrita: true }, { texto: '?' }]);
+  assert.deepEqual(leerFormato('**NO** ==leer== **a ==b== c**'), [
+    { texto: 'NO', negrita: true }, { texto: ' ' }, { texto: 'leer', resaltado: true }, { texto: ' ' },
+    { texto: 'a ', negrita: true }, { texto: 'b', negrita: true, resaltado: true }, { texto: ' c', negrita: true },
+  ]);
+  // Una marca sola o vacía se lee como texto.
+  assert.equal(sinFormato('2 ** 3 = 6 ** 1 y ****'), '2 ** 3 = 6 ** 1 y ****');
+  assert.equal(sinFormato('a == b'), 'a == b');
+  assert.equal(sinFormato('**NO** compro ==nunca=='), 'NO compro nunca');
+  // Con el cursor en una palabra la marca entera; otra vez la quita; los espacios quedan fuera.
+  const r = alternarMarca('Compras NO cada mes', 9, 9, 'negrita');
+  assert.deepEqual(r, { valor: 'Compras **NO** cada mes', inicio: 10, fin: 12 });
+  assert.equal(alternarMarca(r.valor, r.inicio, r.fin, 'negrita').valor, 'Compras NO cada mes');
+  assert.equal(alternarMarca('Compras NO cada mes', 7, 11, 'resaltado').valor, 'Compras ==NO== cada mes');
+  assert.equal(alternarMarca('a **NO** b', 2, 8, 'negrita').valor, 'a NO b');
+
+  const d = conInicio(ALONG2);
+  const edad = d.secciones.flatMap((x) => x.preguntas).find((x) => x.id === 'edad')!;
+  const conFormato: Definicion = {
+    ...d,
+    bienvenida: 'Gracias por **tu tiempo**.',
+    secciones: d.secciones.map((x) => ({ ...x, preguntas: x.preguntas.map((q) => (q.id === 'edad' ? { ...q, texto: '¿Cuántos **años** ==cumplidos== tienes?', nombre: undefined, ayuda: 'Solo **el número**' } : q)) })),
+  };
+  // La columna del tablero y el Excel, sin marcas.
+  const col = columnas(conFormato, [], { completas: true }).find((c) => c.clave === 'edad');
+  assert.equal(col?.titulo, '¿Cuántos años cumplidos tienes?');
+  assert.ok(edad);
+  // En el Word: dentro de la pregunta (ya en negritas) lo marcado se subraya; el color, morado.
+  assert.deepEqual(tramosDe('Hola **tú**', { negrita: true }), [{ negrita: true, texto: 'Hola ' }, { negrita: true, texto: 'tú', subrayado: true }]);
+  const bloques = documentoDeFiltro(conFormato, 'Estudio de prueba');
+  assert.ok(textoDeBloques(bloques).includes('. ¿Cuántos años cumplidos tienes?\nSolo el número'));
+  const xml = await (await JSZip.loadAsync(await wordDeDocumento(bloques, 'Prueba'))).file('word/document.xml')!.async('string');
+  assert.match(xml, /<w:u w:val="single"\/>.*?<w:t xml:space="preserve">años<\/w:t>/);
+  assert.match(xml, /<w:color w:val="7030A0"\/>.*?<w:t xml:space="preserve">cumplidos<\/w:t>/);
+  assert.ok(!xml.includes('**') && !xml.includes('=='));
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {

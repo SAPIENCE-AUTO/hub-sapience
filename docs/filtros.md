@@ -652,6 +652,22 @@ Sergio planteó tres dudas: si Filtros debía vivir en Tools o junto a Reclutami
 
 **Pendiente:** el tablero no muestra todavía qué filtro del Hub tiene vinculado (sigue diciendo «Vincular form»); «Buscar en la base» entre varios filtros (fase 6).
 
+### Negritas y color en los textos (2026-10-24)
+
+Sergio preguntó qué pasaba si quería cambiar de color un texto del filtro: no se podía, todo era texto simple. Pidió negritas y un color para resaltar, que se vean igual en el formulario y en el Word.
+
+**Qué se construyó:**
+
+- **Marcas dentro del texto** (`lib/formularios/formato.ts`): `**así**` es negrita y `==así==` va en el color de resaltar (`COLOR_RESALTADO`, el morado de Word `#7030A0`: no se confunde con el rojo de error ni con el azul de las notas). Así el contrato no cambia. La marca va pegada a las palabras; una suelta («2 ** 3») se lee como texto. `leerFormato` da los tramos, `sinFormato` quita las marcas y `alternarMarca` las pone o quita sobre lo seleccionado.
+- **Dónde va:** la pregunta, su ayuda, el texto de contenido, la entrada de la sección, la bienvenida y las dos despedidas. No en opciones, filas, títulos ni nombres cortos.
+- **Editor** (`TextoEditable` con `formato`): al corregir uno de esos textos salen los botones **B** (también ⌘B) y **Color**; con el cursor en una palabra la marca entera, y otra vez la quita. En el cuadro se ven las marcas; afuera, ya con formato.
+- **Formulario, celular de muestra y propuesta de la IA** (`TextoConFormato.tsx`): negritas y color. En la pregunta, que ya va en negritas, lo marcado en negritas además se **subraya** (igual en el Word).
+- **Word y PDF** (`tramosDe` en `lib/formularios/documento.ts`): las mismas negritas, subrayado y color; los títulos de sección (franja oscura) van sin formato.
+- **Texto simple** en las columnas del tablero y el Excel (`nombreDePregunta`), la lógica en palabras y el flujo (`sinMarcador`), el detalle de una respuesta (`describir`) y los avisos de la IA. Ponerle formato a una pregunta sin nombre corto no renombra su columna.
+- La skill (`contrato.md`) le pide a la IA conservar las marcas al reescribir y no ponerlas por su cuenta.
+
+**Probado en local (2026-10-24):** en el filtro de prueba `yjgpzy0`, «frutas» en color y «este mes» en negritas en una pregunta, y «probar» y «5 minutos» en la bienvenida: el editor, el celular de al lado, el formulario en `/f/yjgpzy0` a 375 y el Word y el PDF salen igual. 84 pruebas.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
@@ -690,3 +706,4 @@ Sergio planteó tres dudas: si Filtros debía vivir en Tools o junto a Reclutami
 - **2026-10-24 · «En vivo»:** «Abrir en vivo» con confirmación; el formulario ya no dice «Prueba», lo que entra cuenta como real y «Borrar pruebas» no lo toca; con respuestas reales solo se cierra o se reabre en vivo. Probado en local y subido a `main` con el OK de Sergio (`90cadec`).
 - **2026-10-24 · rediseño del flujo:** con los bocetos aprobados por Sergio: un solo camino de 5 pasos con un botón por paso, «Por revisar» en un chip, modos Diseñar y Reclutar (enlace, tablero y cuotas con barras), preguntas numeradas y lógica en etiquetas, el celular sigue la lectura, «Filtros» en todo y la lista con el paso de cada filtro; en vivo se edita una copia y se publica con «Publicar cambios» (columna `formularios.cambios`, creada con su OK). 81 pruebas. Probado en local y subido a `main` con el OK de Sergio (`2d4c4d6`).
 - **2026-10-24 · fase 5 (operación):** nadie se corta por defecto (se registran todos los motivos; «cortar» a petición, y siempre el aviso y la identificación); al recibir una respuesta, historial y duplicados con la búsqueda de los tableros, paso solo al tablero en vivo para quien entra a un perfil con lugar (con su historial en notas) y clasificación con IA (medio centavo de dólar por persona); traer a quienes contestaron un filtro anterior; pestaña Filtros junto a Reclutamiento y filtros del Hub en «Vincular form». 83 pruebas. Probado en local y subido a `main` con el OK de Sergio (`0bd0d7d`).
+- **2026-10-24 · negritas y color:** a pedido de Sergio, los textos que lee el participante (pregunta, ayuda, contenido, entrada de sección, bienvenida y despedidas) llevan negritas y un color para resaltar, con botones en el editor; se ven igual en el formulario, el celular y el Word/PDF, y salen sin formato en el tablero, el Excel y el flujo. 84 pruebas. Probado en local, sin subir.

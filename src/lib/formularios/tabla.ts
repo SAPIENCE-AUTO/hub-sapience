@@ -1,6 +1,7 @@
 import { explicarResultado, seleccion, textoRespuesta } from './motor';
 import { NOMBRES_NSE } from './nse';
 import { nombreCampoDireccion } from './paises';
+import { sinFormato } from './formato';
 import {
   CAMPOS_DIRECCION, esMatriz, forma,
   type Condicion, type Definicion, type FotoSubida, type Opcion, type Pregunta, type Respuestas, type Resultado,
@@ -67,7 +68,7 @@ function puedeAparecer(c: Condicion | undefined, instancia?: string): boolean {
 const conOpcion = (texto: string, o?: Opcion) => (o ? texto.split('{opcion}').join(o.corto ?? o.label) : texto);
 
 /** El encabezado de la columna de una pregunta: su nombre corto o, si no tiene, su texto. */
-export const nombreDePregunta = (p: Pregunta): string => p.nombre?.trim() || NOMBRES_NSE[p.id] || p.texto;
+export const nombreDePregunta = (p: Pregunta): string => p.nombre?.trim() || NOMBRES_NSE[p.id] || sinFormato(p.texto);
 
 /** Preguntas que dan columna y no tienen nombre corto (el NSE trae el suyo). */
 export const sinNombreCorto = (def: Definicion): Pregunta[] =>
@@ -123,7 +124,7 @@ export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = 
       for (const p of s.preguntas) {
         if (yaFijas.has(p.id) || !puedeAparecer(p.mostrarSi, inst?.id)) continue;
         const clave = inst ? `${p.id}@${inst.id}` : p.id;
-        const titulo = conOpcion(comoAntes ? p.texto : nombreDePregunta(p), inst);
+        const titulo = conOpcion(comoAntes ? sinFormato(p.texto) : nombreDePregunta(p), inst);
         if (forma(p.tipo) === 'ninguna') continue;
         if (esMatriz(p.tipo)) {
           for (const fila of p.filas ?? []) {

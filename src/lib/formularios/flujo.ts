@@ -1,4 +1,5 @@
 import { condicionEnPalabras, citar, ubicar } from './palabras';
+import { sinFormato } from './formato';
 import type { Estructura, SeccionPlan } from './generador';
 import { forma, type Condicion, type Definicion, type Seccion } from './tipos';
 
@@ -157,7 +158,10 @@ export function filasFlujo(def: Definicion): FilaFlujo[] {
  */
 export function filasFlujoDeEstructura(e: Estructura): FilaFlujo[] {
   const nombreDe = (id: string) => {
-    for (const s of e.secciones) for (const p of s.preguntas) if (p.id === id) return p.nombre?.trim() || `«${p.texto.length > 32 ? `${p.texto.slice(0, 32).replace(/\s+\S*$/, '')}…` : p.texto}»`;
+    for (const s of e.secciones) for (const p of s.preguntas) if (p.id === id) {
+      const texto = sinFormato(p.texto);
+      return p.nombre?.trim() || `«${texto.length > 32 ? `${texto.slice(0, 32).replace(/\s+\S*$/, '')}…` : texto}»`;
+    }
     return undefined;
   };
   const bloque = (s: SeccionPlan): BloqueFlujo => {

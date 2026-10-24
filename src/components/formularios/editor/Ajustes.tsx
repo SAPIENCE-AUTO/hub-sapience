@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { condicionEnPalabras } from '@/lib/formularios/palabras';
+import { condicionEnPalabras, sinMarcador } from '@/lib/formularios/palabras';
 import { comoSimple, preguntasParaCondicion } from '@/lib/formularios/editar';
 import { opcionesDe } from '@/lib/formularios/tabla';
 import { forma, type Condicion, type Pregunta } from '@/lib/formularios/tipos';
@@ -88,7 +88,7 @@ export function EditorCondicion({ lugar, actual, onGuardar, onCerrar }: {
         value={preguntaId}
         onChange={(e) => { setPreguntaId(e.target.value); setMarcadas([]); }}
       >
-        {candidatas.map((p) => <option key={p.id} value={p.id}>{p.texto.split('{opcion}').join('…')}</option>)}
+        {candidatas.map((p) => <option key={p.id} value={p.id}>{sinMarcador(p.texto)}</option>)}
       </select>
       <p className="mt-3 text-xs text-muted-foreground">{origen && forma(origen.tipo) === 'una' ? 'contestó alguna de estas' : 'marcó alguna de estas'}</p>
       <div className="mt-1 grid gap-1 sm:grid-cols-2">

@@ -1,4 +1,5 @@
 import { opcionesDe } from './tabla';
+import { sinFormato } from './formato';
 import {
   forma,
   type Alerta, type Condicion, type Definicion, type Frente, type Opcion, type Pregunta, type Seccion,
@@ -19,7 +20,7 @@ export function ubicar(def: Definicion, id: string): Ubicada | undefined {
 }
 
 /** «{opcion}» se lee como «…» fuera de la repetición. */
-export const sinMarcador = (texto: string) => texto.split('{opcion}').join('…');
+export const sinMarcador = (texto: string) => sinFormato(texto).split('{opcion}').join('…');
 
 /** La pregunta entre comillas, cortada en una palabra si es larga. */
 export function citar(def: Definicion, id: string, largo = 60): string {

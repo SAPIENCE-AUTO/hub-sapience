@@ -11,6 +11,7 @@ import { Telefono } from './campos/Telefono';
 import { Correo } from './campos/Correo';
 import { Foto } from './campos/Foto';
 import { EnlaceAviso } from './AvisoPrivacidad';
+import { TextoConFormato } from './TextoConFormato';
 
 interface Props {
   pv: PreguntaVisible;
@@ -47,8 +48,8 @@ export function CampoPregunta({ pv, resp, error, codigo, pais, simular, onChange
     return (
       <div className="space-y-3">
         {p.imagen && <img src={p.imagen} alt="" className="w-full rounded-xl border border-[#E4E4E7] bg-white" />}
-        {pv.texto && <p className="whitespace-pre-line text-[16px] leading-relaxed text-[#1F1F23]">{pv.texto}</p>}
-        {pv.ayuda && <p className="text-[13px] text-[#62626B]">{pv.ayuda}</p>}
+        {pv.texto && <p className="whitespace-pre-line text-[16px] leading-relaxed text-[#1F1F23]"><TextoConFormato texto={pv.texto} /></p>}
+        {pv.ayuda && <p className="text-[13px] text-[#62626B]"><TextoConFormato texto={pv.ayuda} /></p>}
       </div>
     );
   }
@@ -69,8 +70,8 @@ export function CampoPregunta({ pv, resp, error, codigo, pais, simular, onChange
   return (
     <div className="space-y-3">
       <div>
-        <p className="text-[16px] font-semibold leading-snug text-[#1F1F23]">{pv.texto}</p>
-        {pv.ayuda && <p className="mt-1 text-[13px] text-[#62626B]">{pv.ayuda}</p>}
+        <p className="text-[16px] font-semibold leading-snug text-[#1F1F23]"><TextoConFormato texto={pv.texto} enNegrita /></p>
+        {pv.ayuda && <p className="mt-1 text-[13px] text-[#62626B]"><TextoConFormato texto={pv.ayuda} /></p>}
         {p.enlaceAviso && <EnlaceAviso className="mt-2" />}
         {nota && <p className="mt-1 text-[12px] text-[#62626B]">{nota}</p>}
       </div>
@@ -133,8 +134,8 @@ function Casilla({ texto, ayuda, activa, onChange }: { texto: string; ayuda?: st
         {activa && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
       </span>
       <span>
-        <span className="block text-[15px] font-medium leading-snug text-[#1F1F23]">{texto}</span>
-        {ayuda && <span className="mt-1 block text-[13px] text-[#62626B]">{ayuda}</span>}
+        <span className="block text-[15px] font-medium leading-snug text-[#1F1F23]"><TextoConFormato texto={texto} /></span>
+        {ayuda && <span className="mt-1 block text-[13px] text-[#62626B]"><TextoConFormato texto={ayuda} /></span>}
       </span>
     </button>
   );
@@ -153,8 +154,8 @@ function Interruptor({ texto, ayuda, valor, onChange }: { texto: string; ayuda?:
       className="flex w-full items-center justify-between gap-4 rounded-xl border-[1.5px] border-[#D9D9DE] bg-white px-4 py-3.5 text-left"
     >
       <span>
-        <span className="block text-[15px] font-semibold leading-snug text-[#1F1F23]">{texto}</span>
-        {ayuda && <span className="mt-1 block text-[13px] text-[#62626B]">{ayuda}</span>}
+        <span className="block text-[15px] font-semibold leading-snug text-[#1F1F23]"><TextoConFormato texto={texto} enNegrita /></span>
+        {ayuda && <span className="mt-1 block text-[13px] text-[#62626B]"><TextoConFormato texto={ayuda} /></span>}
       </span>
       <span className="flex flex-shrink-0 items-center gap-2">
         <span className="w-5 text-right text-[13px] font-medium text-[#62626B]">{si ? 'Sí' : 'No'}</span>

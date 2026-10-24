@@ -1,7 +1,8 @@
 import { duracionEstimada } from './duracion';
 import { rango } from './motor';
 import { nombreCampoDireccion, PAISES, telefonoDe } from './paises';
-import { alertaEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion, sinMarcador, type LineaLogica } from './palabras';
+import { leerFormato, sinFormato } from './formato';
+import { alertaEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion, type LineaLogica } from './palabras';
 import { opcionesDe } from './tabla';
 import { CAMPOS_DIRECCION, forma, type Definicion, type Opcion, type Pregunta } from './tipos';
 
@@ -13,8 +14,8 @@ import { CAMPOS_DIRECCION, forma, type Definicion, type Opcion, type Pregunta } 
  * con el encabezado de Sapience (serverUtils/formularios/documento.ts).
  */
 
-export type Color = 'verde' | 'rojo' | 'azul' | 'gris';
-export interface Tramo { texto: string; negrita?: boolean; cursiva?: boolean; color?: Color }
+export type Color = 'verde' | 'rojo' | 'azul' | 'gris' | 'resaltado';
+export interface Tramo { texto: string; negrita?: boolean; cursiva?: boolean; subrayado?: boolean; color?: Color }
 /** Un renglón de texto con formato. */
 export type Linea = Tramo[];
 
@@ -56,6 +57,22 @@ const verde = (texto: string): Tramo => ({ texto, negrita: true, color: 'verde' 
 const rojo = (texto: string): Tramo => ({ texto, negrita: true, color: 'rojo' });
 const azul = (texto: string): Tramo => ({ texto, color: 'azul' });
 const nota = (texto: string): Linea => [{ texto: 'Nota: ', negrita: true, color: 'azul' }, azul(texto)];
+
+/**
+ * Un texto del participante con sus negritas y su resaltado (formato.ts) en
+ * tramos, sobre el formato de base. Donde la base ya es negrita (la pregunta),
+ * lo que va en negritas se subraya para que se note, igual que en el formulario.
+ */
+export function tramosDe(texto: string, base: Omit<Tramo, 'texto'> = {}): Linea {
+  return leerFormato(texto).map((t) => ({
+    ...base,
+    texto: t.texto,
+    ...(t.negrita ? (base.negrita ? { subrayado: true } : { negrita: true }) : {}),
+    ...(t.resaltado ? { color: 'resaltado' as const } : {}),
+  }));
+}
+/** Las notas para el equipo (y lo que termina) van más chicas que lo que lee el participante. */
+export const esNota = (l: Linea) => l.some((t) => t.color && t.color !== 'resaltado');
 
 /** «Si contesta menos de 25 o más de 65, termina el filtro: Edad fuera» → «Si contesta menos de 25 o más de 65, TERMINAR». */
 function terminar(l: LineaLogica): Linea {
@@ -110,7 +127,7 @@ function pregunta(def: Definicion, p: Pregunta, numero: number, t: (x: string) =
   const logica = logicaDePregunta(def, p);
   const antes: Linea[] = [];
   const despues: Linea[] = [];
-  if (p.ayuda) antes.push([{ texto: t(p.ayuda) }]);
+  if (p.ayuda) antes.push(tramosDe(t(p.ayuda)));
   for (const l of logica.filter((x) => x.tipo === 'aparece')) antes.push(nota(l.texto));
   const ind = indicacion(p);
   if (ind) antes.push([azul(ind)]);
@@ -177,10 +194,10 @@ export function documentoDeFiltro(def: Definicion, titulo: string): Bloque[] {
   let n = 0;
   for (const s of def.secciones) {
     // En una sección que se repite, «{opcion}» se escribe [OPCIÓN], como en los filtros del equipo.
-    const t = (texto: string) => (s.repetirPor ? texto.split('{opcion}').join('[OPCIÓN]') : sinMarcador(texto));
+    const t = (texto: string) => texto.split('{opcion}').join(s.repetirPor ? '[OPCIÓN]' : '…');
     out.push({
       tipo: 'seccion',
-      titulo: s.titulo ? t(s.titulo) : 'Sin título',
+      titulo: s.titulo ? sinFormato(t(s.titulo)) : 'Sin título',
       notas: logicaDeSeccion(def, s).map((l) => (l.tipo === 'opciones' ? `${l.texto} [OPCIÓN] es el nombre de cada una.` : l.texto)),
       intro: s.intro ? t(s.intro) : undefined,
     });
@@ -206,12 +223,12 @@ export const textoDeBloques = (bloques: Bloque[]) => bloques.map((b) => {
   switch (b.tipo) {
     case 'portada': return [b.titulo, ...b.ficha.map(([k, v]) => `${k}: ${v}`)].join('\n');
     case 'muestra': return ['Muestra', ...b.perfiles.map((p, i) => `PERFIL ${i + 1}: ${p.nombre} · ${p.cuota} · ${p.quien}`), ...b.alertas.map((a) => `Alerta: ${a}`)].join('\n');
-    case 'bienvenida': return b.texto;
-    case 'seccion': return [b.titulo, ...b.notas, ...(b.intro ? [b.intro] : [])].join('\n');
-    case 'contenido': return [b.texto, b.imagen && '[imagen]'].filter(Boolean).join('\n');
-    case 'final': return `Si califica: ${b.califica}\nSi no califica: ${b.noCalifica}`;
+    case 'bienvenida': return sinFormato(b.texto);
+    case 'seccion': return [b.titulo, ...b.notas, ...(b.intro ? [sinFormato(b.intro)] : [])].join('\n');
+    case 'contenido': return [b.texto && sinFormato(b.texto), b.imagen && '[imagen]'].filter(Boolean).join('\n');
+    case 'final': return `Si califica: ${sinFormato(b.califica)}\nSi no califica: ${sinFormato(b.noCalifica)}`;
     case 'pregunta': return [
-      `${b.numero}. ${b.texto}`,
+      `${b.numero}. ${sinFormato(b.texto)}`,
       ...b.antes.map(linea),
       ...(b.opciones ?? []).map((f) => `${f.codigo} ${f.texto} ${linea(f.instruccion)}`),
       ...(b.matriz ? [`[${b.matriz.filas.map((f) => f.texto).join(' / ')}] × [${b.matriz.columnas.map((c) => `${c.letra} ${c.texto}`).join(' / ')}]`] : []),
