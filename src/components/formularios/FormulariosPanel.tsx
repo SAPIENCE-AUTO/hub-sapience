@@ -18,7 +18,7 @@ import { PLANTILLAS } from '@/lib/formularios/plantillas';
 import type { Definicion } from '@/lib/formularios/tipos';
 import { estructuraDeDefinicion, supuestosDe } from '@/lib/formularios/generador';
 import { chequeosListo } from '@/lib/formularios/listo';
-import { LineaEstado, PasosEstado } from './EstadoFiltro';
+import { LineaEstado, PasosEstado, type EstadoEditable } from './EstadoFiltro';
 import { MenuFiltro } from './MenuFiltro';
 import { Versiones } from './editor/Versiones';
 import { AvisoRegla, PanelRespuestas, type Detalle } from './PanelRespuestas';
@@ -112,10 +112,11 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
     setCreando(false);
   };
 
-  const cambiarEstado = async (estado: 'borrador' | 'prueba' | 'cerrado') => {
+  const cambiarEstado = async (estado: EstadoEditable) => {
     if (!detalle) return;
     try {
       await setFormularioEstado({ formularioId: detalle.id, estado });
+      if (estado === 'en_vivo') toast.success('Ya está en vivo: el enlace recibe respuestas reales.');
       await Promise.all([cargarDetalle(detalle.id), cargarLista()]);
     } catch (err) {
       toast.error((err as Error).message);
@@ -294,7 +295,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
   detalle: Detalle;
   proyectoId?: string;
   onVolver: () => void;
-  onEstado: (e: 'borrador' | 'prueba' | 'cerrado') => void;
+  onEstado: (e: EstadoEditable) => void;
   onRecargar: () => void;
   onGuardado: (def: Definicion) => void;
   onBorrarPruebas: () => void;
@@ -365,7 +366,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
           <PasosEstado estado={detalle.estado} />
         </div>
         <LineaEstado
-          estado={detalle.estado} chequeos={chequeos} onEstado={onEstado}
+          estado={detalle.estado} chequeos={chequeos} hayReales={hayReales} onEstado={onEstado}
           extra={aviso && <span>NSE {def.nse?.regla}{aviso}</span>}
         />
       </div>

@@ -33,7 +33,7 @@ export function EstadoPill({ estado }: { estado: string }) {
       style={{ backgroundColor: ESTADO_COLOR[estado] ?? GRIS }}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
-      {estado}
+      {estado.replace(/_/g, ' ')}
     </span>
   );
 }

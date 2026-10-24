@@ -25,7 +25,7 @@ Commits en `main`: `890cb77`, `255381b`, `a91f52e` y `c8431ca` (21 y 22 de octub
 
 **Base de datos** (fuera del pipeline de `generate.py`, como Swipe; los endpoints usan `pool.query`):
 
-- `formularios`: `id`, `proyecto_id` (→ `projects.id`), `codigo` (va en el enlace `/f/:codigo`, al azar), `titulo` (interno), `plantilla`, `definicion jsonb` (el screener; el editor lo corrige), `estado` (`borrador` | `prueba` | `en_vivo` | `cerrado`; «en vivo» aún no se ofrece), `vinculo jsonb` (tablero de Reclutamiento), `created_by`, fechas.
+- `formularios`: `id`, `proyecto_id` (→ `projects.id`), `codigo` (va en el enlace `/f/:codigo`, al azar), `titulo` (interno), `plantilla`, `definicion jsonb` (el screener; el editor lo corrige), `estado` (`borrador` | `prueba` | `en_vivo` | `cerrado`; «en vivo» desde el 2026-10-24), `vinculo jsonb` (tablero de Reclutamiento), `created_by`, fechas.
   - Fase 2: `revision int` (sube con cada guardado del editor; con ella no se pisan cambios de otra persona) y `editando jsonb` (quién tiene abierto el editor: `{ sesion: { nombre, email, hasta } }`).
 - `formulario_versiones` (fase 2): `formulario_id`, `revision`, `definicion jsonb`, `nota` (vacía = automática), `created_by`, `created_at`.
 - `formulario_respuestas`: `respuestas jsonb`, `resultado jsonb` (lo calcula el servidor), `califica`, `es_prueba`, `nombre`, `telefono`, `device_token`, `duracion_seg`.
@@ -184,7 +184,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 | 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | **Hecha** (`40d801f`, 2026-10-22) |
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | **Hecha** (`f450a2f`, 2026-10-22) |
 | 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`) y Word/PDF (`9b8e584`) hechos; faltan formulario neutro, dominio, captcha, fotos y videos |
-| 5 | Operación: en vivo, paso solo al tablero, base de participantes con historial, cerrar cuotas | Pendiente (necesita decisiones) |
+| 5 | Operación: en vivo, paso solo al tablero, base de participantes con historial, cerrar cuotas | **En curso:** «En vivo» hecho (2026-10-24); lo demás espera las decisiones de Sergio |
 | 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | Pendiente |
 
 ### Fase 1 · Base del screener
@@ -603,6 +603,21 @@ Sergio vio las matrices del participante (una tarjeta por renglón con botones) 
 
 **Probado en local (2026-10-24):** en `/f/wnf1xq` («En tu casa», dos matrices de 4 columnas) a 375 (cabe completa) y a 320 (se desliza con los renglones fijos); marcar, desmarcar y renglones en rojo al seguir sin contestar. El celular junto al documento y la pestaña Celular usan el mismo campo.
 
+### Fase 5 · «En vivo» (2026-10-24)
+
+Sergio preguntó si hoy podía lanzar un formulario. Se podía en «Prueba» (el enlace funciona, se guarda y califica, y se pasa al tablero a mano), pero el participante veía «PRUEBA», todo contaba como prueba y «Borrar pruebas» lo habría borrado. Pidió activar «En vivo» ya, antes del resto de la fase 5.
+
+**Qué se construyó:**
+
+- **«Abrir en vivo»** en la línea de estado cuando el filtro está en prueba, con confirmación: qué cambia (sin «Prueba», lo que entra cuenta como real, «Borrar pruebas» no lo toca, los cambios al filtro los ven al momento, el paso al tablero sigue a mano) y lo que falte del «¿Está listo?», como aviso (no bloquea).
+- En vivo, el formulario público ya no lleva la etiqueta (eso ya lo hacía `FormularioPublicoPage` con el estado) y las respuestas se guardan con `es_prueba = false` (`submitFormularioRespuesta` ya lo hacía). `deleteFormularioRespuestas` («Borrar pruebas») solo borra `es_prueba`, y «Borrar filtro» solo aparece sin respuestas reales: las reales no se pueden borrar desde el Hub.
+- En vivo, el menú «⋯» solo ofrece «Cerrar». **Con respuestas reales no regresa a borrador ni a prueba** (`setFormularioEstado` lo rechaza en el servidor: lo nuevo quedaría como prueba); cerrado, se reabre en vivo. Sin respuestas reales, «Reabrir en prueba» como antes.
+- La línea de estado dice «Lo contestan participantes reales. Lo que cambies en el filtro lo ven al momento.»; en la lista, el estado se lee «EN VIVO» (antes salía el nombre interno).
+
+**Probado en local (2026-10-24):** con el filtro de prueba `wnf1xq`: la confirmación (avisó que falta vincular el tablero), en vivo, el formulario público sin «Prueba», el menú solo con «Cerrar», cerrar y reabrir en prueba (no tenía respuestas reales); quedó en prueba como estaba. No se mandaron respuestas reales (con una, ese filtro ya no se podría borrar).
+
+**Falta de la fase 5** (espera las decisiones de Sergio): paso solo al tablero, base de participantes con historial y nota de «ya participó / duplicado», y cerrar cuotas llenas.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
@@ -637,3 +652,4 @@ Sergio vio las matrices del participante (una tarjeta por renglón con botones) 
 - **2026-10-24 · el celular junto al documento:** a pedido de Sergio, en pantallas anchas la vista Documento lleva al lado un celular con la parte donde se hizo clic (bienvenida, sección o final), con todas sus preguntas aunque dependan de respuestas anteriores, y marca la pregunta elegida. 80 pruebas. Probado en local y subido a `main` con el OK de Sergio (`aa3dec3`).
 - **2026-10-24 · fase 4: Word y PDF para el cliente:** con el encabezado de Sapience, la muestra en tabla, una franja por sección y cada pregunta en un recuadro (CONTINUAR / TERMINAR, notas en azul), desde el menú «⋯» del filtro; cada descarga queda en Versiones. Todo en Montserrat, opciones en 8 pt. 81 pruebas. Probado en local y subido a `main` con el OK de Sergio (`9b8e584`).
 - **2026-10-24 · matrices como tabla:** en el celular del participante la matriz se ve como tabla (círculos o cuadros en cada cruce), se desliza de lado con los renglones fijos si no cabe y marca en rojo el renglón que falta. Probado en local y subido a `main` con el OK de Sergio (`6c14519`).
+- **2026-10-24 · «En vivo»:** «Abrir en vivo» con confirmación; el formulario ya no dice «Prueba», lo que entra cuenta como real y «Borrar pruebas» no lo toca; con respuestas reales solo se cierra o se reabre en vivo. Probado en local.

@@ -1,11 +1,14 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { Check, ChevronRight, CircleDashed } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ALERTA, EXITO, GRIS, INFO, TEAL } from '@/lib/toolColors';
 import type { Chequeo } from '@/lib/formularios/listo';
 import { botonTeal } from './generador/comun';
 
-export type EstadoEditable = 'borrador' | 'prueba' | 'cerrado';
+export type EstadoEditable = 'borrador' | 'prueba' | 'en_vivo' | 'cerrado';
 
 const PASOS = [
   { id: 'borrador', nombre: 'Borrador' },
@@ -17,7 +20,7 @@ const PASOS = [
 export const EXPLICA_ESTADO: Record<string, string> = {
   borrador: 'Nadie lo puede contestar todavía.',
   prueba: 'El enlace ya funciona para probarlo: lo que entra queda marcado como prueba.',
-  en_vivo: 'Lo contestan participantes reales.',
+  en_vivo: 'Lo contestan participantes reales. Lo que cambies en el filtro lo ven al momento.',
   cerrado: 'Ya no recibe respuestas; lo que entró se queda.',
 };
 
@@ -34,7 +37,6 @@ export function PasosEstado({ estado }: { estado: string }) {
             {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />}
             <li
               aria-current={aqui ? 'step' : undefined}
-              title={p.id === 'en_vivo' ? 'Llega con la fase 5' : undefined}
               className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${aqui ? 'text-white' : ''}`}
               style={aqui ? { backgroundColor: TEAL } : { color: hecho ? TEAL : GRIS }}
             >
@@ -77,7 +79,7 @@ function EstaListo({ chequeos }: { chequeos: Chequeo[] }) {
             </li>
           ))}
         </ul>
-        <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">«En vivo» llega con la fase 5.</p>
+        <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">Lo que falte no impide abrirlo en vivo.</p>
       </PopoverContent>
     </Popover>
   );
@@ -87,20 +89,51 @@ function EstaListo({ chequeos }: { chequeos: Chequeo[] }) {
  * La línea bajo el título: qué significa el estado, «¿Está listo?» y el paso
  * que sigue. Lo demás (volver a borrador, cerrar, el enlace) va en el menú «⋯».
  */
-export function LineaEstado({ estado, chequeos, onEstado, extra }: {
+export function LineaEstado({ estado, chequeos, hayReales, onEstado, extra }: {
   estado: string;
   chequeos: Chequeo[];
+  /** Con respuestas reales, al reabrir vuelve en vivo (no en prueba). */
+  hayReales: boolean;
   onEstado: (e: EstadoEditable) => void;
   /** Lo que se agrega al final de la línea (el enlace en prueba, un aviso del NSE). */
   extra?: ReactNode;
 }) {
+  const [confirmar, setConfirmar] = useState(false);
+  const boton = `${botonTeal} !px-2.5 !py-1 !text-xs`;
+  const faltan = chequeos.filter((c) => !c.ok);
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
       <span>{EXPLICA_ESTADO[estado]}</span>
-      {estado !== 'cerrado' && <EstaListo chequeos={chequeos} />}
-      {estado === 'borrador' && <button type="button" className={`${botonTeal} !px-2.5 !py-1 !text-xs`} onClick={() => onEstado('prueba')}>Pasar a prueba</button>}
-      {estado === 'cerrado' && <button type="button" className={`${botonTeal} !px-2.5 !py-1 !text-xs`} onClick={() => onEstado('prueba')}>Reabrir en prueba</button>}
+      {estado !== 'cerrado' && estado !== 'en_vivo' && <EstaListo chequeos={chequeos} />}
+      {estado === 'borrador' && <button type="button" className={boton} onClick={() => onEstado('prueba')}>Pasar a prueba</button>}
+      {estado === 'prueba' && <button type="button" className={boton} onClick={() => setConfirmar(true)}>Abrir en vivo</button>}
+      {estado === 'cerrado' && <button type="button" className={boton} onClick={() => onEstado(hayReales ? 'en_vivo' : 'prueba')}>{hayReales ? 'Reabrir en vivo' : 'Reabrir en prueba'}</button>}
       {extra}
+
+      <AlertDialog open={confirmar} onOpenChange={setConfirmar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Abrirlo a participantes reales?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>El formulario ya no dice «Prueba» y lo que entre cuenta como real.</li>
+                  <li>«Borrar pruebas» nunca toca las respuestas reales.</li>
+                  <li>Lo que cambies en el filtro lo ven los participantes al momento.</li>
+                  <li>Las que califican se pasan al tablero desde Respuestas, como ahora.</li>
+                </ul>
+                {faltan.length > 0 && (
+                  <p style={{ color: ALERTA }}>Del «¿Está listo?» falta{faltan.length === 1 ? '' : 'n'}: {faltan.map((c) => c.texto.toLowerCase()).join(', ')}.</p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Todavía no</AlertDialogCancel>
+            <AlertDialogAction onClick={() => onEstado('en_vivo')}>Abrir en vivo</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

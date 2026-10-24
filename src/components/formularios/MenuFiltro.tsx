@@ -53,6 +53,12 @@ export function MenuFiltro({ editor, estado, enlace, uso, escribiendo, onEstado,
             <DropdownMenuItem onSelect={() => onEstado('cerrado')}>Cerrar (ya no recibe respuestas)</DropdownMenuItem>
           </>
         )}
+        {estado === 'en_vivo' && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onEstado('cerrado')}>Cerrar (ya no recibe respuestas)</DropdownMenuItem>
+          </>
+        )}
         {onBorrar && (
           <>
             <DropdownMenuSeparator />
