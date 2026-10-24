@@ -5,6 +5,7 @@ import { ALERTA, EXITO, PELIGRO, TEAL } from '@/lib/toolColors';
 import { evaluar, explicarResultado } from '@/lib/formularios/motor';
 import type { Definicion, Resultado } from '@/lib/formularios/tipos';
 import { Participante } from '../Participante';
+import { marcoTelefono } from './MuestraCelular';
 
 /**
  * Vista Celular: el formulario tal cual lo contesta un participante, con lo
@@ -21,7 +22,7 @@ export function VistaCelular({ def, conProblemas }: { def: Definicion; conProble
 
   return (
     <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
-      <div className="h-[min(780px,calc(100vh-11rem))] min-h-[560px] w-[390px] max-w-full flex-shrink-0 overflow-hidden rounded-[38px] border-[9px] border-[#1F1F23] bg-[#F6F6F7] shadow-xl">
+      <div className={`h-[min(780px,calc(100vh-11rem))] min-h-[560px] w-[390px] max-w-full flex-shrink-0 ${marcoTelefono}`}>
         <Participante
           key={vuelta}
           def={def}

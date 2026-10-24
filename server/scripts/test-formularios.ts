@@ -2,7 +2,7 @@
 // inventadas. No toca la base. Uso: cd server && npx tsx scripts/test-formularios.ts
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import { evaluar, pantallas, definicionPublica, validarPantalla, describir, type Pantalla } from '../../src/lib/formularios/motor';
+import { evaluar, pantallas, pantallaDeMuestra, definicionPublica, validarPantalla, describir, type Pantalla } from '../../src/lib/formularios/motor';
 import { columnas, columnasPorRenombrar, nombreColumnaTablero, sinNombreCorto, type FilaRespuesta } from '../../src/lib/formularios/tabla';
 import { construirExcel } from '../../src/lib/formularios/excel';
 import { imagenesQueFaltan, revisarDefinicion } from '../../src/lib/formularios/revisar';
@@ -1097,6 +1097,21 @@ caso('todo filtro arranca con «Antes de empezar»: aviso, nombre e identificaci
   const protegido = protegerNse({ quitarSecciones: [SECCION_INICIO], orden: [d.secciones[1].id, SECCION_INICIO] }, d);
   assert.deepEqual(protegido.quitarSecciones, []);
   assert.equal(protegido.orden?.[0], SECCION_INICIO);
+});
+
+caso('el celular junto al documento muestra cualquier sección sin contestar lo de antes', () => {
+  // Las preguntas que solo salen si aplica también se ven; las opciones que salen de otra pregunta, todas las de esa.
+  const formatos = pantallaDeMuestra(ALONG2, 'aroma_formatos')!;
+  assert.deepEqual(formatos.preguntas.map((p) => p.clave), ['formatos_uso', 'formatos_compra']);
+  assert.equal(formatos.preguntas[1].opciones.length, 13); // 12 formatos (sin «Ninguno de estos») + «Ninguno en los últimos 3 meses»
+  // Un bloque que se repite se ve con su primera repetición.
+  const bloque = pantallaDeMuestra(ALONG2, 'aroma_bloque')!;
+  assert.equal(bloque.titulo, 'Tu aerosol');
+  assert.equal(bloque.preguntas.find((p) => p.pregunta.id === 'favorita')!.opciones.length, 8);
+  assert.equal(pantallaDeMuestra(ALONG2, 'no_existe'), undefined);
+  // Con lo contestado, la pantalla real es la misma.
+  const real = pantallas(ALONG2, { categorias: ['aromatizantes'], formatos_uso: ['aerosol'], formatos_compra: ['aerosol'], marcas: ['airwick', 'glade', 'wiese', 'febreze', 'bbw', 'lumerra', 'propia', 'otra'] } as never).find((x) => x.seccion.id === 'aroma_bloque');
+  assert.equal(real?.titulo, bloque.titulo);
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {

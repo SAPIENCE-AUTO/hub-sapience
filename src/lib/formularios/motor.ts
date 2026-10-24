@@ -184,27 +184,56 @@ export function pantallas(def: Definicion, resp: Respuestas, semilla = ''): Pant
       const ctx = { ...base, instancia: instancia?.id };
       const preguntas = seccion.preguntas
         .filter((p) => !p.mostrarSi || cumple(p.mostrarSi, ctx))
-        .map((p): PreguntaVisible => {
-          const clave = claveDe({ pregunta: p, seccion }, p.id, instancia?.id);
-          const opciones = opcionesBase(ctx, p).map((o) => ({ ...o, label: reemplazar(o.label, instancia)! }));
-          return {
-            pregunta: p, clave,
-            texto: reemplazar(p.texto, instancia)!,
-            ayuda: reemplazar(p.ayuda, instancia),
-            opciones: mezclar(opciones, p.aleatorio, `${semilla}:${clave}`),
-          };
-        });
+        .map((p) => visible(seccion, p, instancia, opcionesBase(ctx, p), semilla));
       if (preguntas.length === 0) continue;
-      out.push({
-        id: instancia ? `${seccion.id}@${instancia.id}` : seccion.id,
-        seccion, instancia,
-        titulo: reemplazar(seccion.titulo, instancia),
-        intro: reemplazar(seccion.intro, instancia),
-        preguntas,
-      });
+      out.push(pantalla(seccion, instancia, preguntas));
     }
   }
   return out;
+}
+
+function visible(seccion: Seccion, p: Pregunta, instancia: Opcion | undefined, opciones: Opcion[], semilla: string): PreguntaVisible {
+  const clave = claveDe({ pregunta: p, seccion }, p.id, instancia?.id);
+  return {
+    pregunta: p, clave,
+    texto: reemplazar(p.texto, instancia)!,
+    ayuda: reemplazar(p.ayuda, instancia),
+    opciones: mezclar(opciones.map((o) => ({ ...o, label: reemplazar(o.label, instancia)! })), p.aleatorio, `${semilla}:${clave}`),
+  };
+}
+
+const pantalla = (seccion: Seccion, instancia: Opcion | undefined, preguntas: PreguntaVisible[]): Pantalla => ({
+  id: instancia ? `${seccion.id}@${instancia.id}` : seccion.id,
+  seccion, instancia,
+  titulo: reemplazar(seccion.titulo, instancia),
+  intro: reemplazar(seccion.intro, instancia),
+  preguntas,
+});
+
+/** Todas las opciones que puede llegar a tener: si salen de lo marcado en otra pregunta, todas las de esa. */
+function opcionesPosibles(idx: Map<string, Ubicacion>, p: Pregunta, vistas = new Set<string>()): Opcion[] {
+  if (!p.opcionesDe) return p.opciones ?? [];
+  const origen = idx.get(p.opcionesDe);
+  if (!origen || vistas.has(p.id)) return p.opcionesExtra ?? [];
+  vistas.add(p.id);
+  return [...opcionesPosibles(idx, origen.pregunta, vistas).filter((o) => !o.exclusiva), ...(p.opcionesExtra ?? [])];
+}
+
+/**
+ * Una sección como la ve el participante sin haber contestado lo de antes,
+ * para la vista previa junto al documento: salen todas sus preguntas (aunque
+ * algunas solo aparezcan si aplica), las opciones que salen de otra pregunta
+ * salen todas y, si la sección se repite, se ve la primera repetición.
+ */
+export function pantallaDeMuestra(def: Definicion, seccionId: string, semilla = ''): Pantalla | undefined {
+  const seccion = def.secciones.find((s) => s.id === seccionId);
+  if (!seccion) return undefined;
+  const idx = indice(def);
+  const origen = seccion.repetirPor ? idx.get(seccion.repetirPor) : undefined;
+  const instancia = origen
+    ? opcionesPosibles(idx, origen.pregunta).find((o) => !o.exclusiva && (!seccion.repetirSolo || seccion.repetirSolo.includes(o.id)))
+    : undefined;
+  return pantalla(seccion, instancia, seccion.preguntas.map((p) => visible(seccion, p, instancia, opcionesPosibles(idx, p), semilla)));
 }
 
 // ── validación ───────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { pantallas, terminacion, validarPantalla } from '@/lib/formularios/motor';
+import { pantallas, terminacion, validarPantalla, type Pantalla } from '@/lib/formularios/motor';
 import type { Definicion, Respuestas, Valor } from '@/lib/formularios/tipos';
 import { CampoPregunta } from './CampoPregunta';
 import { EnlaceAviso } from './AvisoPrivacidad';
@@ -124,69 +124,87 @@ export function Participante({ def, prueba, codigo, semilla, modo = 'pagina', in
   );
 
   if (fase === 'gracias' || fase === 'nocalifica') {
-    return marco(
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <p className="max-w-sm text-[17px] leading-relaxed text-[#1F1F23]">{fase === 'gracias' ? def.despedida : def.noCalifica}</p>
-        {prueba && (
-          <button onClick={otraVez} className="mt-8 rounded-full border-[1.5px] border-[#1F1F23] px-6 py-2.5 text-[14px] font-semibold text-[#1F1F23]">
-            Contestar otra vez (prueba)
-          </button>
-        )}
-      </div>,
-    );
+    return marco(<Despedida texto={fase === 'gracias' ? def.despedida : def.noCalifica} onOtraVez={prueba ? otraVez : undefined} />);
   }
 
   if (fase === 'bienvenida') {
-    return marco(
-      <div className="flex flex-1 flex-col justify-center px-6 py-10">
-        <h1 className="text-[26px] font-bold leading-tight text-[#1F1F23]">{def.tituloPublico}</h1>
-        <p className="mt-4 text-[16px] leading-relaxed text-[#45454D]">{def.bienvenida}</p>
-        <button
-          onClick={() => { setActualId(actualId ?? lista[0]?.id); setFase('preguntas'); }}
-          className="mt-10 w-full rounded-xl bg-[#1F1F23] py-4 text-[16px] font-semibold text-white"
-        >
-          {actualId ? 'Continuar' : 'Empezar'}
-        </button>
-        <EnlaceAviso className="mx-auto mt-5 block !text-[13px] !font-normal text-[#62626B]" texto="Aviso de privacidad" />
-      </div>,
-    );
+    return marco(<Bienvenida def={def} continuar={!!actualId} onEmpezar={() => { setActualId(actualId ?? lista[0]?.id); setFase('preguntas'); }} />);
   }
 
   const progreso = lista.length ? Math.round(((indice + 1) / lista.length) * 100) : 0;
-  const barra = (
-    <div className={`${enMarco ? 'sticky' : 'fixed inset-x-0'} bottom-0 border-t border-[#E4E4E7] bg-white/95 px-5 py-3 backdrop-blur`}>
-      <div className="mx-auto flex max-w-lg gap-3">
-        <button onClick={atras} disabled={fase === 'enviando'} className="rounded-xl border-[1.5px] border-[#D9D9DE] px-5 py-3.5 text-[15px] font-medium text-[#1F1F23]">
-          Atrás
-        </button>
-        <button onClick={siguiente} disabled={fase === 'enviando'} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#1F1F23] py-3.5 text-[15px] font-semibold text-white disabled:opacity-60">
-          {fase === 'enviando' && <Loader2 className="h-4 w-4 animate-spin" />}
-          {indice === lista.length - 1 ? 'Enviar' : 'Siguiente'}
-        </button>
-      </div>
-    </div>
-  );
-
   return marco(
     <>
-      <div className={`flex-1 px-5 pt-6 ${enMarco ? 'pb-8' : 'pb-32'}`}>
-        {pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#1F1F23]">{pantalla.titulo}</h2>}
-        {pantalla?.intro && <p className="mt-2 text-[15px] leading-relaxed text-[#45454D]">{pantalla.intro}</p>}
-        <div className="mt-6 space-y-9">
-          {pantalla?.preguntas.map((pv) => (
-            <CampoPregunta key={pv.clave} pv={pv} resp={resp} error={errores[pv.clave]} codigo={codigo} pais={def.pais} simular={enMarco} onChange={cambiar} />
-          ))}
-        </div>
+      <CuerpoPantalla pantalla={pantalla} enMarco={enMarco}>
+        {pantalla?.preguntas.map((pv) => (
+          <CampoPregunta key={pv.clave} pv={pv} resp={resp} error={errores[pv.clave]} codigo={codigo} pais={def.pais} simular={enMarco} onChange={cambiar} />
+        ))}
         {falla && <p className="mt-6 rounded-xl bg-[#FBEAEA] px-4 py-3 text-[14px] text-[#C2272D]">{falla}</p>}
-      </div>
-      {barra}
+      </CuerpoPantalla>
+      <BarraPantalla enMarco={enMarco} enviando={fase === 'enviando'} ultima={indice === lista.length - 1} onAtras={atras} onSiguiente={siguiente} />
     </>,
     progreso,
   );
 }
 
-function Marco({ children, prueba, progreso, enMarco, scroll }: {
-  children: React.ReactNode; prueba: boolean; progreso?: number; enMarco: boolean; scroll: React.RefObject<HTMLDivElement>;
+// Las piezas de cada pantalla, también para la vista previa junto al documento del editor (MuestraCelular).
+
+export function Bienvenida({ def, continuar, onEmpezar }: { def: Definicion; continuar?: boolean; onEmpezar?: () => void }) {
+  return (
+    <div className="flex flex-1 flex-col justify-center px-6 py-10">
+      <h1 className="text-[26px] font-bold leading-tight text-[#1F1F23]">{def.tituloPublico}</h1>
+      <p className="mt-4 text-[16px] leading-relaxed text-[#45454D]">{def.bienvenida}</p>
+      <button onClick={onEmpezar} className="mt-10 w-full rounded-xl bg-[#1F1F23] py-4 text-[16px] font-semibold text-white">
+        {continuar ? 'Continuar' : 'Empezar'}
+      </button>
+      <EnlaceAviso className="mx-auto mt-5 block !text-[13px] !font-normal text-[#62626B]" texto="Aviso de privacidad" />
+    </div>
+  );
+}
+
+export function Despedida({ texto, onOtraVez }: { texto: string; onOtraVez?: () => void }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+      <p className="max-w-sm text-[17px] leading-relaxed text-[#1F1F23]">{texto}</p>
+      {onOtraVez && (
+        <button onClick={onOtraVez} className="mt-8 rounded-full border-[1.5px] border-[#1F1F23] px-6 py-2.5 text-[14px] font-semibold text-[#1F1F23]">
+          Contestar otra vez (prueba)
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Título y texto de entrada de la sección, y sus preguntas (`children`). */
+export function CuerpoPantalla({ pantalla, enMarco, children }: { pantalla?: Pantalla; enMarco: boolean; children: React.ReactNode }) {
+  return (
+    <div className={`flex-1 px-5 pt-6 ${enMarco ? 'pb-8' : 'pb-32'}`}>
+      {pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#1F1F23]">{pantalla.titulo}</h2>}
+      {pantalla?.intro && <p className="mt-2 text-[15px] leading-relaxed text-[#45454D]">{pantalla.intro}</p>}
+      <div className="mt-6 space-y-9">{children}</div>
+    </div>
+  );
+}
+
+export function BarraPantalla({ enMarco, enviando, ultima, onAtras, onSiguiente }: {
+  enMarco: boolean; enviando?: boolean; ultima: boolean; onAtras: () => void; onSiguiente: () => void;
+}) {
+  return (
+    <div className={`${enMarco ? 'sticky' : 'fixed inset-x-0'} bottom-0 border-t border-[#E4E4E7] bg-white/95 px-5 py-3 backdrop-blur`}>
+      <div className="mx-auto flex max-w-lg gap-3">
+        <button onClick={onAtras} disabled={enviando} className="rounded-xl border-[1.5px] border-[#D9D9DE] px-5 py-3.5 text-[15px] font-medium text-[#1F1F23]">
+          Atrás
+        </button>
+        <button onClick={onSiguiente} disabled={enviando} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#1F1F23] py-3.5 text-[15px] font-semibold text-white disabled:opacity-60">
+          {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
+          {ultima ? 'Enviar' : 'Siguiente'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function Marco({ children, prueba, progreso, enMarco, scroll }: {
+  children: React.ReactNode; prueba: boolean; progreso?: number; enMarco: boolean; scroll: React.RefObject<HTMLDivElement | null>;
 }) {
   return (
     <div ref={scroll} className={`flex flex-col bg-[#F6F6F7] ${enMarco ? 'h-full overflow-y-auto' : 'min-h-dvh'}`}>

@@ -22,6 +22,7 @@ import type { Editor } from './useEditorFiltro';
 import { BotonIcono, Contexto, Logica, SECCION_PERFILES, claveDestino, useAlCerrarMenu, type ContextoDoc, type Destino, type Quitar } from './comun';
 import { EditorCondicion } from './Ajustes';
 import { conImagenEnOpcion, tipoConImagen } from './Opciones';
+import { MUESTRA_BIENVENIDA, MUESTRA_FINAL, MuestraCelular } from './MuestraCelular';
 import { PreguntaDoc } from './PreguntaDoc';
 import { TextoEditable } from './TextoEditable';
 import { esCampoDeTexto, imagenesDe, subirImagenFiltro, traeArchivos } from './imagenes';
@@ -94,7 +95,7 @@ function SeccionDoc({ s, i, total, ctx }: { s: Seccion; i: number; total: number
   };
 
   return (
-    <section id={`filtro-s-${s.id}`} className="scroll-mt-24 border-t border-[#E4E4E7] pt-6">
+    <section id={`filtro-s-${s.id}`} data-parte={s.id} className="scroll-mt-24 border-t border-[#E4E4E7] pt-6">
       <div className="group/s flex items-start gap-2">
         <h2 className="min-w-0 flex-1 text-[18px] font-bold leading-snug text-[#1F1F23]">
           {inicio ? s.titulo : (
@@ -228,6 +229,8 @@ export function Documento({ editor, ia, pendientes }: {
   const [nuevo, setNuevo] = useState<string | null>(null);
   const [porQuitar, setPorQuitar] = useState<Quitar | null>(null);
   const [elegida, setElegida] = useState<string | null>(null);
+  /** Lo que se ve en el celular de al lado: la parte del documento donde se hizo clic. */
+  const [enCelular, setEnCelular] = useState<string | null>(null);
   const apuntado = useRef<Destino | null>(null);
   const defRef = useRef<Definicion>(def);
   defRef.current = def;
@@ -306,6 +309,10 @@ export function Documento({ editor, ia, pendientes }: {
     elegir: setElegida,
   }), [def, aplicar, subiendo, nuevo, ia, elegida]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const muestra = enCelular && (enCelular === MUESTRA_BIENVENIDA || enCelular === MUESTRA_FINAL || def.secciones.some((x) => x.id === enCelular))
+    ? enCelular
+    : def.secciones[0]?.id ?? MUESTRA_BIENVENIDA;
+
   const agregarSeccionAl = (indice: number) => {
     let id = '';
     aplicar((d) => { const r = agregarSeccion(d, indice); id = r.id; return r.def; });
@@ -329,10 +336,13 @@ export function Documento({ editor, ia, pendientes }: {
           // Un clic fuera de toda pregunta la suelta. Lo que abre una pregunta en otra capa (menús, avisos) no cuenta.
           onPointerDown={(e) => {
             const t = e.target as HTMLElement;
-            if (e.currentTarget.contains(t) && !t.closest('[data-pregunta]')) setElegida(null);
+            if (!e.currentTarget.contains(t)) return;
+            if (!t.closest('[data-pregunta]')) setElegida(null);
+            const parte = t.closest('[data-parte]')?.getAttribute('data-parte');
+            if (parte) setEnCelular(parte);
           }}
         >
-          <header>
+          <header data-parte={MUESTRA_BIENVENIDA}>
             <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">Lo que ve el participante al entrar</p>
             <h1 className="mt-1 text-[24px] font-bold leading-tight text-[#1F1F23]">{textos('tituloPublico', 'Título', '')}</h1>
             <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-[#45454D]">{textos('bienvenida', 'Bienvenida', '')}</p>
@@ -343,7 +353,7 @@ export function Documento({ editor, ia, pendientes }: {
             : <HuecoSeccion key={`hueco-${x.id}-${i}`} titulo={x.titulo} escribiendo={x.escribiendo} />))}
           <button type="button" className={botonAgregar} onClick={() => agregarSeccionAl(def.secciones.length)}><Plus className="h-3.5 w-3.5" />Sección</button>
 
-          <section className="border-t border-[#E4E4E7] pt-6">
+          <section data-parte={MUESTRA_FINAL} className="border-t border-[#E4E4E7] pt-6">
             <h2 className="text-[18px] font-bold text-[#1F1F23]">Al terminar</h2>
             <p className="mt-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">Si llega al final</p>
             <p className="mt-0.5 whitespace-pre-line text-[14px] text-[#45454D]">{textos('despedida', 'Despedida', '')}</p>
@@ -354,6 +364,12 @@ export function Documento({ editor, ia, pendientes }: {
           <Frentes ctx={ctx} />
         </article>
 
+        {/* El celular al lado, solo donde cabe; en pantallas angostas está la pestaña Celular. */}
+        {def.secciones.length > 0 && (
+          <aside className="sticky top-4 hidden w-[340px] flex-shrink-0 xl:block">
+            <MuestraCelular def={def} seccion={muestra} pregunta={elegida} onSeccion={setEnCelular} />
+          </aside>
+        )}
       </div>
 
       <AlertDialog open={!!porQuitar} onOpenChange={(o) => !o && setPorQuitar(null)}>
