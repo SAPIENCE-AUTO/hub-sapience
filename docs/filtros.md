@@ -589,7 +589,7 @@ Sergio preguntó dónde se crea el Word o el PDF y pidió seguir con las fases q
 
 **Visto bueno de Sergio (2026-10-24):** el diseño, con encabezado, tablas, jerarquía y Montserrat. **Pendiente:** confirmar que el PDF sale en producción (Render tiene Chrome para los de órdenes de compra) y que el Word abre bien en Word.
 
-### Matrices como tabla en el celular (2026-10-24)
+### Matrices como tabla en el celular (2026-10-24, `6c14519`)
 
 Sergio vio las matrices del participante (una tarjeta por renglón con botones) y pidió que se vean como matrices.
 
@@ -636,4 +636,4 @@ Sergio vio las matrices del participante (una tarjeta por renglón con botones) 
 - **2026-10-23 · aviso, «Antes de empezar» e identificación:** el aviso de privacidad de AGC (de su Word, guardado en Storage) se lee dentro del formulario; todo filtro nuevo o duplicado arranca con «Antes de empezar» (aviso, nombre e identificación; quien no acepta o no da la foto termina), fija en el editor y fuera del alcance de la IA; y la foto de la identificación la lee la IA al recibir la respuesta y lo que no cuadra con el nombre, la edad o el lugar sale como alerta (unos 0.3 centavos de dólar por persona). 79 pruebas. Probado en local y subido a `main` con el OK de Sergio (`301e804`).
 - **2026-10-24 · el celular junto al documento:** a pedido de Sergio, en pantallas anchas la vista Documento lleva al lado un celular con la parte donde se hizo clic (bienvenida, sección o final), con todas sus preguntas aunque dependan de respuestas anteriores, y marca la pregunta elegida. 80 pruebas. Probado en local y subido a `main` con el OK de Sergio (`aa3dec3`).
 - **2026-10-24 · fase 4: Word y PDF para el cliente:** con el encabezado de Sapience, la muestra en tabla, una franja por sección y cada pregunta en un recuadro (CONTINUAR / TERMINAR, notas en azul), desde el menú «⋯» del filtro; cada descarga queda en Versiones. Todo en Montserrat, opciones en 8 pt. 81 pruebas. Probado en local y subido a `main` con el OK de Sergio (`9b8e584`).
-- **2026-10-24 · matrices como tabla:** en el celular del participante la matriz se ve como tabla (círculos o cuadros en cada cruce), se desliza de lado con los renglones fijos si no cabe y marca en rojo el renglón que falta. Probado en local.
+- **2026-10-24 · matrices como tabla:** en el celular del participante la matriz se ve como tabla (círculos o cuadros en cada cruce), se desliza de lado con los renglones fijos si no cabe y marca en rojo el renglón que falta. Probado en local y subido a `main` con el OK de Sergio (`6c14519`).
