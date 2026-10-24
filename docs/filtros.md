@@ -184,7 +184,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 | 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | **Hecha** (`40d801f`, 2026-10-22) |
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | **Hecha** (`f450a2f`, 2026-10-22) |
 | 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`) y Word/PDF (`9b8e584`) hechos; faltan formulario neutro, dominio, captcha, fotos y videos |
-| 5 | Operación: en vivo, paso solo al tablero, base de participantes con historial, cerrar cuotas | **En curso:** «En vivo» hecho (2026-10-24); lo demás espera las decisiones de Sergio |
+| 5 | Operación: en vivo, paso solo al tablero, base de participantes con historial, cerrar cuotas | **En curso:** «En vivo» hecho (`90cadec`); lo demás espera las decisiones de Sergio |
 | 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | Pendiente |
 
 ### Fase 1 · Base del screener
@@ -603,7 +603,7 @@ Sergio vio las matrices del participante (una tarjeta por renglón con botones) 
 
 **Probado en local (2026-10-24):** en `/f/wnf1xq` («En tu casa», dos matrices de 4 columnas) a 375 (cabe completa) y a 320 (se desliza con los renglones fijos); marcar, desmarcar y renglones en rojo al seguir sin contestar. El celular junto al documento y la pestaña Celular usan el mismo campo.
 
-### Fase 5 · «En vivo» (2026-10-24)
+### Fase 5 · «En vivo» (2026-10-24, `90cadec`)
 
 Sergio preguntó si hoy podía lanzar un formulario. Se podía en «Prueba» (el enlace funciona, se guarda y califica, y se pasa al tablero a mano), pero el participante veía «PRUEBA», todo contaba como prueba y «Borrar pruebas» lo habría borrado. Pidió activar «En vivo» ya, antes del resto de la fase 5.
 
@@ -652,4 +652,4 @@ Sergio preguntó si hoy podía lanzar un formulario. Se podía en «Prueba» (el
 - **2026-10-24 · el celular junto al documento:** a pedido de Sergio, en pantallas anchas la vista Documento lleva al lado un celular con la parte donde se hizo clic (bienvenida, sección o final), con todas sus preguntas aunque dependan de respuestas anteriores, y marca la pregunta elegida. 80 pruebas. Probado en local y subido a `main` con el OK de Sergio (`aa3dec3`).
 - **2026-10-24 · fase 4: Word y PDF para el cliente:** con el encabezado de Sapience, la muestra en tabla, una franja por sección y cada pregunta en un recuadro (CONTINUAR / TERMINAR, notas en azul), desde el menú «⋯» del filtro; cada descarga queda en Versiones. Todo en Montserrat, opciones en 8 pt. 81 pruebas. Probado en local y subido a `main` con el OK de Sergio (`9b8e584`).
 - **2026-10-24 · matrices como tabla:** en el celular del participante la matriz se ve como tabla (círculos o cuadros en cada cruce), se desliza de lado con los renglones fijos si no cabe y marca en rojo el renglón que falta. Probado en local y subido a `main` con el OK de Sergio (`6c14519`).
-- **2026-10-24 · «En vivo»:** «Abrir en vivo» con confirmación; el formulario ya no dice «Prueba», lo que entra cuenta como real y «Borrar pruebas» no lo toca; con respuestas reales solo se cierra o se reabre en vivo. Probado en local.
+- **2026-10-24 · «En vivo»:** «Abrir en vivo» con confirmación; el formulario ya no dice «Prueba», lo que entra cuenta como real y «Borrar pruebas» no lo toca; con respuestas reales solo se cierra o se reabre en vivo. Probado en local y subido a `main` con el OK de Sergio (`90cadec`).
