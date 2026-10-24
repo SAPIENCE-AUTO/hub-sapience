@@ -589,6 +589,20 @@ Sergio preguntó dónde se crea el Word o el PDF y pidió seguir con las fases q
 
 **Visto bueno de Sergio (2026-10-24):** el diseño, con encabezado, tablas, jerarquía y Montserrat. **Pendiente:** confirmar que el PDF sale en producción (Render tiene Chrome para los de órdenes de compra) y que el Word abre bien en Word.
 
+### Matrices como tabla en el celular (2026-10-24)
+
+Sergio vio las matrices del participante (una tarjeta por renglón con botones) y pidió que se vean como matrices.
+
+**Qué se construyó** (`campos/Matriz.tsx`):
+
+- Una tabla de verdad: los renglones a la izquierda, las columnas arriba (letra chica, en dos líneas si hace falta) y en cada cruce un **círculo** (una respuesta por renglón) o un **cuadro con palomita** (varias); se toca la celda completa. Renglones alternados en gris muy claro para seguir la línea.
+- **Si las columnas no caben**, la tabla se desliza de lado con la columna de los renglones fija, una sombra a la derecha mientras queda por ver y «Desliza para ver más opciones →» arriba. Columnas de 54 px si las etiquetas son cortas y de 84 px si alguna pasa de 14 letras; con 4 columnas cortas cabe completa en un celular de 375.
+- Si dejan un renglón vacío, además de «Contesta todas las filas», ese renglón se pone en rojo.
+- En las de varias respuestas sale solo «Puedes marcar varias en cada renglón», salvo que la ayuda ya lo diga.
+- De paso: la barra de «Atrás / Siguiente» quedaba debajo de la columna fija al bajar; ahora va encima.
+
+**Probado en local (2026-10-24):** en `/f/wnf1xq` («En tu casa», dos matrices de 4 columnas) a 375 (cabe completa) y a 320 (se desliza con los renglones fijos); marcar, desmarcar y renglones en rojo al seguir sin contestar. El celular junto al documento y la pestaña Celular usan el mismo campo.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
@@ -622,3 +636,4 @@ Sergio preguntó dónde se crea el Word o el PDF y pidió seguir con las fases q
 - **2026-10-23 · aviso, «Antes de empezar» e identificación:** el aviso de privacidad de AGC (de su Word, guardado en Storage) se lee dentro del formulario; todo filtro nuevo o duplicado arranca con «Antes de empezar» (aviso, nombre e identificación; quien no acepta o no da la foto termina), fija en el editor y fuera del alcance de la IA; y la foto de la identificación la lee la IA al recibir la respuesta y lo que no cuadra con el nombre, la edad o el lugar sale como alerta (unos 0.3 centavos de dólar por persona). 79 pruebas. Probado en local y subido a `main` con el OK de Sergio (`301e804`).
 - **2026-10-24 · el celular junto al documento:** a pedido de Sergio, en pantallas anchas la vista Documento lleva al lado un celular con la parte donde se hizo clic (bienvenida, sección o final), con todas sus preguntas aunque dependan de respuestas anteriores, y marca la pregunta elegida. 80 pruebas. Probado en local y subido a `main` con el OK de Sergio (`aa3dec3`).
 - **2026-10-24 · fase 4: Word y PDF para el cliente:** con el encabezado de Sapience, la muestra en tabla, una franja por sección y cada pregunta en un recuadro (CONTINUAR / TERMINAR, notas en azul), desde el menú «⋯» del filtro; cada descarga queda en Versiones. Todo en Montserrat, opciones en 8 pt. 81 pruebas. Probado en local y subido a `main` con el OK de Sergio (`9b8e584`).
+- **2026-10-24 · matrices como tabla:** en el celular del participante la matriz se ve como tabla (círculos o cuadros en cada cruce), se desliza de lado con los renglones fijos si no cabe y marca en rojo el renglón que falta. Probado en local.

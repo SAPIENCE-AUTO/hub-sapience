@@ -189,7 +189,7 @@ export function BarraPantalla({ enMarco, enviando, ultima, onAtras, onSiguiente 
   enMarco: boolean; enviando?: boolean; ultima: boolean; onAtras: () => void; onSiguiente: () => void;
 }) {
   return (
-    <div className={`${enMarco ? 'sticky' : 'fixed inset-x-0'} bottom-0 border-t border-[#E4E4E7] bg-white/95 px-5 py-3 backdrop-blur`}>
+    <div className={`${enMarco ? 'sticky' : 'fixed inset-x-0'} bottom-0 z-20 border-t border-[#E4E4E7] bg-white/95 px-5 py-3 backdrop-blur`}>
       <div className="mx-auto flex max-w-lg gap-3">
         <button onClick={onAtras} disabled={enviando} className="rounded-xl border-[1.5px] border-[#D9D9DE] px-5 py-3.5 text-[15px] font-medium text-[#1F1F23]">
           Atrás

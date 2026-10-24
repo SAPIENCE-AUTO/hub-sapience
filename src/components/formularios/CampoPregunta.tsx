@@ -27,6 +27,8 @@ interface Props {
 function indicacion(pv: PreguntaVisible): string | undefined {
   const p = pv.pregunta;
   if (forma(p.tipo) === 'varias') return p.maxOpciones ? `Marca hasta ${p.maxOpciones}` : 'Puedes marcar varias';
+  // Si la ayuda ya lo dice («Puedes marcar varios lugares»), no se repite.
+  if (forma(p.tipo) === 'matriz_varias') return /vari[oa]s/i.test(pv.ayuda ?? '') ? undefined : 'Puedes marcar varias en cada renglón';
   if (p.tipo === 'ordenar') {
     const n = porOrdenar(pv);
     return n === pv.opciones.length ? 'Toca las opciones en orden, empezando por la que más' : `Toca tus ${n} primeras en orden, empezando por la que más`;
@@ -105,7 +107,7 @@ export function CampoPregunta({ pv, resp, error, codigo, pais, simular, onChange
       {(p.tipo === 'imagen_unica' || p.tipo === 'imagen_multiple') && <Imagenes {...campo} />}
       {p.tipo === 'lista' && <ListaUna {...campo} />}
       {p.tipo === 'lista_multiple' && <ListaVarias {...campo} />}
-      {(p.tipo === 'matriz' || p.tipo === 'matriz_multiple') && <Matriz {...campo} />}
+      {(p.tipo === 'matriz' || p.tipo === 'matriz_multiple') && <Matriz {...campo} faltan={!!error} />}
       {p.tipo === 'ordenar' && <Ordenar {...campo} />}
 
       {p.tipo === 'escala' && <Escala {...campo} />}
