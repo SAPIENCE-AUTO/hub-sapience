@@ -30,6 +30,9 @@ import { errorDeLaIA, systemPrompt } from '../../src/serverUtils/formularios/cla
 import { conservarLogica, revisarNombres } from '../../src/serverUtils/formularios/generar';
 import { chequeosListo } from '../../src/lib/formularios/listo';
 import { conInicio, SECCION_INICIO } from '../../src/lib/formularios/inicio';
+import JSZip from 'jszip';
+import { documentoDeFiltro, nombreDocumento, textoDeBloques } from '../../src/lib/formularios/documento';
+import { wordDeDocumento } from '../../src/serverUtils/formularios/documento';
 import { compararIdentificacion, declaradoDe, edadDe } from '../../src/serverUtils/formularios/identificacion';
 import { agruparTelefono, limpiarTelefono, telefonoDe } from '../../src/lib/formularios/paises';
 import { sugerirCorreo } from '../../src/lib/formularios/correo';
@@ -1112,6 +1115,32 @@ caso('el celular junto al documento muestra cualquier sección sin contestar lo 
   // Con lo contestado, la pantalla real es la misma.
   const real = pantallas(ALONG2, { categorias: ['aromatizantes'], formatos_uso: ['aerosol'], formatos_compra: ['aerosol'], marcas: ['airwick', 'glade', 'wiese', 'febreze', 'bbw', 'lumerra', 'propia', 'otra'] } as never).find((x) => x.seccion.id === 'aroma_bloque');
   assert.equal(real?.titulo, bloque.titulo);
+});
+
+caso('el Word y el PDF del cliente salen con el formato de los filtros del equipo', async () => {
+  const d = conInicio(ALONG2);
+  const bloques = documentoDeFiltro(d, 'Estudio de prueba');
+  const texto = textoDeBloques(bloques);
+  // La portada con su ficha, la muestra con sus perfiles y las preguntas numeradas de corrido.
+  assert.ok(texto.startsWith('Estudio de prueba\nPaís: México\nDuración aproximada: '), texto.slice(0, 80));
+  assert.ok(texto.includes('Muestra\nPERFIL 1: Aerosoles / Pure · 6 · Tiene el bloque'));
+  const numeros = bloques.filter((b) => b.tipo === 'pregunta').map((b) => (b as { numero: number }).numero);
+  assert.deepEqual(numeros, numeros.map((_, i) => i + 1));
+  // Cada opción con CONTINUAR o TERMINAR; lo que solo descarta el bloque, dicho aparte.
+  assert.ok(texto.includes('2 No acepto TERMINAR'));
+  assert.ok(texto.includes('Lumerra TERMINAR'));
+  assert.ok(texto.includes('Menos de 3 meses NO CUENTA ESTE BLOQUE'));
+  assert.ok(texto.includes('Si contesta menos de 25 o más de 65, TERMINAR'));
+  // En las secciones que se repiten, [OPCIÓN] en vez de {opcion}; nada de ids ni marcadores sueltos.
+  assert.ok(texto.includes('¿Qué marcas de [OPCIÓN] compras?'));
+  assert.ok(!texto.includes('{opcion}') && !texto.includes('hub_'));
+  assert.ok(bloques.some((b) => b.tipo === 'pregunta' && !!b.matriz));
+  assert.equal(nombreDocumento('PRUEBA: AI / 2', 'docx'), 'PRUEBA AI 2 - Filtro de reclutamiento.docx');
+  // El Word es un .docx con el documento adentro.
+  const zip = await JSZip.loadAsync(await wordDeDocumento(bloques, 'Estudio de prueba · Filtro de reclutamiento'));
+  const xml = await zip.file('word/document.xml')!.async('string');
+  assert.ok(xml.includes('Filtro de reclutamiento') && xml.includes('TERMINAR') && xml.includes('rIdEncabezado'));
+  assert.ok(zip.file('word/media/logo.emf'), 'el encabezado de Sapience lleva su logo');
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getFormularios, createFormulario, getFormularioDetail,
-  setFormularioEstado, deleteFormularioRespuestas, deleteFormulario, duplicateFormulario,
+  setFormularioEstado, deleteFormularioRespuestas, deleteFormulario, duplicateFormulario, getFormularioDocumento,
 } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -325,6 +325,28 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
     });
   }, [editor.def, editor.problemas.length, gen.g, detalle.respuestas, detalle.tablero]);
 
+  /** El Word o el PDF para el cliente, con lo último guardado (si hay cambios en camino, se guardan antes). */
+  const descargar = async (formato: 'word' | 'pdf') => {
+    const nombre = formato === 'word' ? 'Word' : 'PDF';
+    if (editor.problemas.length) { toast.error(`Hay cosas por corregir en el filtro: corrígelas antes de bajar el ${nombre}.`); return; }
+    if (editor.estado === 'conflicto') { toast.error('Primero carga lo guardado desde la otra ventana.'); return; }
+    const aviso = toast.loading(`Armando el ${nombre}…`);
+    try {
+      if (editor.estado !== 'guardado') await editor.reintentar();
+      const r = await getFormularioDocumento({ formularioId: detalle.id, formato }) as { nombre: string; base64: string };
+      const bytes = Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: formato === 'word' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = r.nombre;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      toast.success(`${nombre} listo. Esta versión quedó guardada en Versiones.`, { id: aviso });
+    } catch (err) {
+      toast.error((err as Error).message || `No se pudo armar el ${nombre}.`, { id: aviso });
+    }
+  };
+
   const irA = (id: { seccion?: string; pregunta?: string }) => {
     setVista('documento');
     // Espera a que el Documento esté en pantalla.
@@ -383,6 +405,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
               onEstructura={gen.g ? () => { setVista('documento'); setVerEstructura(true); } : undefined}
               onVersiones={() => setVersiones(true)}
               onDuplicar={onDuplicar}
+              onDescargar={descargar}
               onBorrar={hayReales ? undefined : onBorrarFormulario}
             />
           </div>

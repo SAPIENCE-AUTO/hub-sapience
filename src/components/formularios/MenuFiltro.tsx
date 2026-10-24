@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import { Copy, CopyPlus, ExternalLink, History, LayoutList, MoreHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
+import { Copy, CopyPlus, ExternalLink, FileDown, FileText, History, LayoutList, MoreHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -8,9 +8,9 @@ import type { EstadoEditable } from './EstadoFiltro';
 
 /**
  * El menú «⋯» del filtro: lo que no se usa a cada rato, en un solo lugar
- * (deshacer, estructura, versiones, el enlace, cambiar de estado, borrar).
+ * (deshacer, estructura, versiones, el Word y el PDF, el enlace, cambiar de estado, borrar).
  */
-export function MenuFiltro({ editor, estado, enlace, uso, escribiendo, onEstado, onEstructura, onVersiones, onDuplicar, onBorrar }: {
+export function MenuFiltro({ editor, estado, enlace, uso, escribiendo, onEstado, onEstructura, onVersiones, onDuplicar, onDescargar, onBorrar }: {
   editor: Editor;
   estado: string;
   enlace: string;
@@ -21,6 +21,7 @@ export function MenuFiltro({ editor, estado, enlace, uso, escribiendo, onEstado,
   onEstructura?: () => void;
   onVersiones: () => void;
   onDuplicar: () => void;
+  onDescargar: (formato: 'word' | 'pdf') => void;
   /** Solo si no tiene respuestas reales. */
   onBorrar?: () => void;
 }) {
@@ -39,6 +40,9 @@ export function MenuFiltro({ editor, estado, enlace, uso, escribiendo, onEstado,
         {onEstructura && <DropdownMenuItem disabled={escribiendo} onSelect={onEstructura}><LayoutList className={icono} />Ver y ajustar la estructura</DropdownMenuItem>}
         <DropdownMenuItem onSelect={onVersiones}><History className={icono} />Versiones</DropdownMenuItem>
         <DropdownMenuItem onSelect={onDuplicar}><CopyPlus className={icono} />Duplicar</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={escribiendo} onSelect={() => onDescargar('word')}><FileText className={icono} />Descargar Word</DropdownMenuItem>
+        <DropdownMenuItem disabled={escribiendo} onSelect={() => onDescargar('pdf')}><FileDown className={icono} />Descargar PDF</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => { void navigator.clipboard.writeText(enlace); toast.success('Enlace copiado'); }}><Copy className={icono} />Copiar enlace</DropdownMenuItem>
         <DropdownMenuItem disabled={estado === 'borrador'} onSelect={() => window.open(enlace, '_blank')}><ExternalLink className={icono} />Abrir enlace</DropdownMenuItem>
