@@ -183,7 +183,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 | 1 | Base: tipos de pregunta, lógica, opción única/múltiple, NSE por país como alerta | **Hecha** (`3d5bbfd`, 2026-10-22) |
 | 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | **Hecha** (`40d801f`, 2026-10-22) |
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | **Hecha** (`f450a2f`, 2026-10-22) |
-| 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`) y Word/PDF (2026-10-24) hechos; faltan formulario neutro, dominio, captcha, fotos y videos |
+| 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`) y Word/PDF (`9b8e584`) hechos; faltan formulario neutro, dominio, captcha, fotos y videos |
 | 5 | Operación: en vivo, paso solo al tablero, base de participantes con historial, cerrar cuotas | Pendiente (necesita decisiones) |
 | 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | Pendiente |
 
@@ -575,7 +575,7 @@ Sergio pidió ver cómo queda cada sección mientras revisa el documento, sin ir
 
 **Probado en local (2026-10-24):** con «Prueba · inicio fijo e identificación» a 1440×900 y 1280×720: clic en «Empaques» (selector con imágenes), «En tu casa» (matrices), la bienvenida (con «Empezar» pasa a la primera sección) y «Al terminar»; elegir una pregunta la marca y la lleva a la vista; «Siguiente» cambia de sección. A 1100 de ancho no aparece. La pestaña Celular y el formulario público (`/f/wnf1xq`, en celular) siguen igual. 80 pruebas.
 
-### Fase 4 · Word y PDF para el cliente (2026-10-24)
+### Fase 4 · Word y PDF para el cliente (2026-10-24, `9b8e584`)
 
 Sergio preguntó dónde se crea el Word o el PDF y pidió seguir con las fases que faltan. El modelo salió de los filtros que el equipo hace a mano (MALETA D, SED R y LORO, en OneDrive), que comparten formato: la muestra con los perfiles arriba, «Filtro de reclutamiento» centrado y subrayado, preguntas numeradas en negritas, cada opción con su número y «CONTINUAR» en verde o «TERMINAR» en rojo, y las notas en azul. El «ALONG 2 v4» de Descargas no sirvió: es el que se armó con IA (recuadros de colores, la paleta del Hub).
 
@@ -587,7 +587,7 @@ Sergio preguntó dónde se crea el Word o el PDF y pidió seguir con las fases q
 
 **Probado en local (2026-10-24):** el Word y el PDF de ALONG 2 y de la plantilla de tipos (imágenes en las opciones, matrices, concepto con imagen); el Word está bien formado. Desde el menú del filtro de prueba `wnf1xq`: Word en 0.6 s y PDF en 1.8 s, con el encabezado; dos descargas del Word dejan una sola versión. 81 pruebas.
 
-**Pendiente:** que Sergio abra el Word en su Word y dé el visto bueno al diseño (la vista rápida de la Mac lo pinta burdo: ignora anchos y letra; Word lo dibuja como el PDF).
+**Visto bueno de Sergio (2026-10-24):** el diseño, con encabezado, tablas, jerarquía y Montserrat. **Pendiente:** confirmar que el PDF sale en producción (Render tiene Chrome para los de órdenes de compra) y que el Word abre bien en Word.
 
 ## Decisiones pendientes (las toma Sergio)
 
@@ -621,4 +621,4 @@ Sergio preguntó dónde se crea el Word o el PDF y pidió seguir con las fases q
 - **2026-10-23 · revisar la estructura sin subir y bajar:** a pedido de Sergio, la estructura (la propuesta después de leer los insumos, o la de un filtro escrito) tiene vista **Lista | Flujo**. El Flujo es el mismo diagrama del editor pero armado desde la estructura (`filasFlujoDeEstructura`: lo que aparece si aplica, en ramas según de qué depende —el nuevo campo `segun` de la estructura—; dónde termina, de la lógica en una línea). Cada sección y los perfiles tienen «Comentar»: el comentario se guarda en la pantalla (en el flujo, la caja se marca en ámbar; un clic en una caja lleva a su comentario) y abajo, en una barra fija, «Pedir los N cambios» los manda todos juntos a la IA en un solo ajuste (cada uno tarda minutos), con el comentario general si lo hay. Aprobar se desactiva mientras haya comentarios sin mandar. Probado en local con la copia del café (flujo, comentar desde el flujo, marca en ámbar, quitar; en celular sin desplazamiento a lo ancho). 77 pruebas. Subido a `main` con el OK de Sergio (`77c86c5`).
 - **2026-10-23 · aviso, «Antes de empezar» e identificación:** el aviso de privacidad de AGC (de su Word, guardado en Storage) se lee dentro del formulario; todo filtro nuevo o duplicado arranca con «Antes de empezar» (aviso, nombre e identificación; quien no acepta o no da la foto termina), fija en el editor y fuera del alcance de la IA; y la foto de la identificación la lee la IA al recibir la respuesta y lo que no cuadra con el nombre, la edad o el lugar sale como alerta (unos 0.3 centavos de dólar por persona). 79 pruebas. Probado en local y subido a `main` con el OK de Sergio (`301e804`).
 - **2026-10-24 · el celular junto al documento:** a pedido de Sergio, en pantallas anchas la vista Documento lleva al lado un celular con la parte donde se hizo clic (bienvenida, sección o final), con todas sus preguntas aunque dependan de respuestas anteriores, y marca la pregunta elegida. 80 pruebas. Probado en local y subido a `main` con el OK de Sergio (`aa3dec3`).
-- **2026-10-24 · fase 4: Word y PDF para el cliente:** con el encabezado de Sapience, la muestra en tabla, una franja por sección y cada pregunta en un recuadro (CONTINUAR / TERMINAR, notas en azul), desde el menú «⋯» del filtro; cada descarga queda en Versiones. 81 pruebas. Probado en local.
+- **2026-10-24 · fase 4: Word y PDF para el cliente:** con el encabezado de Sapience, la muestra en tabla, una franja por sección y cada pregunta en un recuadro (CONTINUAR / TERMINAR, notas en azul), desde el menú «⋯» del filtro; cada descarga queda en Versiones. Todo en Montserrat, opciones en 8 pt. 81 pruebas. Probado en local y subido a `main` con el OK de Sergio (`9b8e584`).
