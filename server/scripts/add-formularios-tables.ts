@@ -72,6 +72,10 @@ async function main() {
     -- hecho con la IA (forma en src/lib/formularios/generador.ts). Null en los filtros hechos de plantilla.
     alter table formularios add column if not exists generador jsonb;
 
+    -- Editar en vivo (2026-10-24). cambios: la copia de trabajo de un filtro en vivo; los participantes siguen
+    -- contestando \`definicion\` hasta que se publica (publishFormularioCambios). Null si no hay cambios pendientes.
+    alter table formularios add column if not exists cambios jsonb;
+
     -- Cada llamada a la IA de Filtros: con ella se aplica el tope por persona y por hora, y se sabe cuánto
     -- costó un filtro. Se conserva aunque se borre el filtro.
     create table if not exists formulario_ia_uso (

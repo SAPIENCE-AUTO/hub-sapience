@@ -10,12 +10,8 @@ import type { Editor } from './useEditorFiltro';
 import { Documento } from './Documento';
 import { MapaFlujo } from './MapaFlujo';
 import { VistaCelular } from './VistaCelular';
-import { supuestosDe } from '@/lib/formularios/generador';
 import type { GeneradorUI } from '../generador/useGenerador';
 import { AvanceEscritura } from '../generador/AvanceEscritura';
-import { Supuestos } from '../generador/Supuestos';
-import { NombresCortos } from '../generador/NombresCortos';
-import { cambiarPregunta } from '@/lib/formularios/editar';
 
 export type VistaEditor = 'documento' | 'flujo' | 'celular';
 
@@ -181,20 +177,7 @@ export function EditorFiltro({ editor, vista, formularioId, onIr, gen }: {
         </div>
       )}
 
-      {vista === 'documento' && ia && !gen?.escribiendo && gen?.g?.etapa !== 'preguntas' && (
-        <NombresCortos
-          def={editor.def}
-          ia={ia}
-          onPoner={(nombres) => editor.aplicar((d) => Object.entries(nombres).reduce((x, [id, nombre]) => cambiarPregunta(x, id, { nombre }), d))}
-        />
-      )}
-      {vista === 'documento' && gen?.g && (
-        <Supuestos
-          items={supuestosDe(gen.g).map((x) => ({ texto: x.texto, donde: x.seccion === 'frentes' ? 'Perfiles' : x.seccion ? gen.g!.estructura?.secciones.find((s) => s.id === x.seccion)?.titulo.split('{opcion}').join('…') : undefined }))}
-          revisado={gen.g.supuestosRevisados}
-          onRevisar={gen.marcarRevisados}
-        />
-      )}
+      {/* Los supuestos de la IA y los nombres cortos ahora van en «Por revisar», arriba. */}
       {vista === 'documento' && (
         <Documento
           editor={editor}

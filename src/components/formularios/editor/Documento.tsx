@@ -298,6 +298,32 @@ export function Documento({ editor, ia, pendientes }: {
     return () => window.removeEventListener('keydown', soltar);
   }, []);
 
+  // Número de cada pregunta, de corrido (las de contenido no cuentan), como en el Word.
+  const numeros = useMemo(() => {
+    const out: Record<string, number> = {};
+    let n = 0;
+    for (const s of def.secciones) for (const p of s.preguntas) if (p.tipo !== 'contenido') out[p.id] = ++n;
+    return out;
+  }, [def]);
+
+  // El celular de al lado sigue la parte que se está leyendo (la que cruza el 35 % de arriba de la pantalla).
+  useEffect(() => {
+    let cuadro = 0;
+    const seguir = () => {
+      cancelAnimationFrame(cuadro);
+      cuadro = requestAnimationFrame(() => {
+        const linea = window.innerHeight * 0.35;
+        let actual: string | null = null;
+        for (const el of document.querySelectorAll<HTMLElement>('article [data-parte]')) {
+          if (el.getBoundingClientRect().top <= linea) actual = el.dataset.parte ?? null; else break;
+        }
+        if (actual) setEnCelular(actual);
+      });
+    };
+    window.addEventListener('scroll', seguir, { passive: true, capture: true });
+    return () => { cancelAnimationFrame(cuadro); window.removeEventListener('scroll', seguir, { capture: true }); };
+  }, []);
+
   const ctx: ContextoDoc = useMemo(() => ({
     def, aplicar, subiendo, nuevo, setNuevo,
     ponerImagen: (d, a) => { void ponerImagen(d, a); },
@@ -307,7 +333,8 @@ export function Documento({ editor, ia, pendientes }: {
     ia,
     elegida,
     elegir: setElegida,
-  }), [def, aplicar, subiendo, nuevo, ia, elegida]); // eslint-disable-line react-hooks/exhaustive-deps
+    numeros,
+  }), [def, aplicar, subiendo, nuevo, ia, elegida, numeros]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const muestra = enCelular && (enCelular === MUESTRA_BIENVENIDA || enCelular === MUESTRA_FINAL || def.secciones.some((x) => x.id === enCelular))
     ? enCelular

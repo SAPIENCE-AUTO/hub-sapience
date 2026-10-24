@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowRightLeft, Download, Eye, Loader2, Plus, RefreshCw, Trash2, TriangleAlert, Users } from 'lucide-react';
+import { ArrowRightLeft, Copy, Download, ExternalLink, Eye, Link2, Loader2, Plus, RefreshCw, Trash2, TriangleAlert, Users } from 'lucide-react';
 import { TEAL, EXITO, PELIGRO, ALERTA, GRIS, INFO } from '@/lib/toolColors';
 import { describir } from '@/lib/formularios/motor';
 import { reglaVigente } from '@/lib/formularios/nse';
@@ -28,6 +28,8 @@ export interface Detalle {
   tablero?: { id: string; nombre: string }; respuestas: RespuestaRow[];
   /** Fase 3: el generador con IA, si el filtro se hizo con él, y el uso de IA de la última hora. */
   generador?: Generador; usoIA?: { usadas: number; limite: number };
+  /** En vivo: la copia de trabajo con los cambios sin publicar. */
+  cambios?: Definicion;
 }
 
 const fecha = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -55,13 +57,15 @@ function Nse({ r }: { r: RespuestaRow }) {
 const Prueba = () => <span className="ml-1.5 rounded bg-[#F4C025]/30 px-1 text-[10px] font-semibold text-[#7a5d00]">PRUEBA</span>;
 
 /**
- * Pestaña Respuestas de un filtro: Reclutamiento, cuotas y la lista de
- * respuestas, cada una con «Ver» para su detalle con fotos. En pantallas
- * angostas las cuotas y las respuestas van en tarjetas.
+ * Modo Reclutar de un filtro: el enlace y el tablero arriba, las cuotas con su
+ * avance y la lista de respuestas, cada una con «Ver» para su detalle con
+ * fotos. En pantallas angostas las respuestas van en tarjetas.
  */
-export function PanelRespuestas({ detalle, proyectoId, onRecargar, onBorrarPruebas }: {
+export function PanelRespuestas({ detalle, proyectoId, enlace, onRecargar, onBorrarPruebas }: {
   detalle: Detalle;
   proyectoId?: string;
+  /** El enlace que se comparte con los participantes. */
+  enlace: string;
   onRecargar: () => void;
   onBorrarPruebas: () => void;
 }) {
@@ -93,42 +97,37 @@ export function PanelRespuestas({ detalle, proyectoId, onRecargar, onBorrarPrueb
 
   return (
     <div className="space-y-5">
-      {/* key: al cambiar de formulario se reinicia (el nombre propuesto para un tablero nuevo es el del formulario). */}
-      <TarjetaReclutamiento key={detalle.id} detalle={detalle} proyectoId={proyectoId} onCambio={onRecargar} />
+      <div className="grid gap-3 md:grid-cols-2">
+        <TarjetaEnlace enlace={enlace} estado={detalle.estado} />
+        {/* key: al cambiar de formulario se reinicia (el nombre propuesto para un tablero nuevo es el del formulario). */}
+        <TarjetaReclutamiento key={detalle.id} detalle={detalle} proyectoId={proyectoId} onCambio={onRecargar} />
+      </div>
 
       {frentes.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-sm font-semibold" style={{ color: TEAL }}>Cuotas</h3>
-          <div className="hidden overflow-hidden rounded-lg border sm:block">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
-                <tr><th className="px-3 py-2">Perfil</th><th className="px-3 py-2">Califican / meta</th><th className="px-3 py-2">Con NSE distinto</th><th className="px-3 py-2">Mujeres · hombres</th></tr>
-              </thead>
-              <tbody>
-                {cuotas.map((c) => (
-                  <tr key={c.id} className="border-t">
-                    <td className="px-3 py-2">{c.nombre}</td>
-                    <td className="px-3 py-2 font-medium" style={{ color: c.califican >= c.meta ? EXITO : undefined }}>{c.califican} / {c.meta}</td>
-                    <td className="px-3 py-2" style={{ color: c.nseDistinto ? ALERTA : undefined }}>{c.nseDistinto || '—'}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{c.mujeres} · {c.hombres}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="rounded-xl border bg-white px-4 py-3">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-sm font-semibold" style={{ color: TEAL }}>Cuotas</h3>
+            <span className="text-xs text-muted-foreground">
+              {cuotas.reduce((a, c) => a + Math.min(c.califican, c.meta), 0)} de {cuotas.reduce((a, c) => a + c.meta, 0)} · {detalle.respuestas.length} {detalle.respuestas.length === 1 ? 'contestó' : 'contestaron'}
+            </span>
           </div>
-          <ul className="grid gap-2 sm:hidden">
-            {cuotas.map((c) => (
-              <li key={c.id} className="rounded-lg border px-3 py-2 text-sm">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-medium">{c.nombre}</span>
-                  <span className="font-semibold" style={{ color: c.califican >= c.meta ? EXITO : undefined }}>{c.califican} / {c.meta}</span>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {c.mujeres} {c.mujeres === 1 ? 'mujer' : 'mujeres'} · {c.hombres} {c.hombres === 1 ? 'hombre' : 'hombres'}
-                  {c.nseDistinto ? <span style={{ color: ALERTA }}> · {c.nseDistinto} con NSE distinto</span> : null}
-                </p>
-              </li>
-            ))}
+          <ul className="space-y-2.5">
+            {cuotas.map((c) => {
+              const lleno = c.califican >= c.meta;
+              return (
+                <li key={c.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 text-sm sm:grid-cols-[minmax(140px,220px)_minmax(0,1fr)_auto]">
+                  <span className="min-w-0 truncate font-medium" title={c.nombre}>{c.nombre}</span>
+                  <span className="order-3 col-span-2 h-2 rounded-full bg-[#EDEDF0] sm:order-none sm:col-span-1">
+                    <span className="block h-2 rounded-full" style={{ width: `${Math.min(100, c.meta ? (c.califican / c.meta) * 100 : 0)}%`, backgroundColor: lleno ? EXITO : TEAL }} />
+                  </span>
+                  <span className="whitespace-nowrap text-right text-xs">
+                    <span className="font-semibold" style={{ color: lleno ? EXITO : undefined }}>{c.califican} / {c.meta}{lleno ? ' ✓' : ''}</span>
+                    <span className="ml-2 text-muted-foreground">{c.mujeres} M · {c.hombres} H</span>
+                    {c.nseDistinto > 0 && <span className="ml-2" style={{ color: ALERTA }}>{c.nseDistinto} NSE distinto</span>}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -221,6 +220,26 @@ export function AvisoRegla({ def }: { def: Definicion }) {
   return texto ? <span style={{ color: ALERTA }}> ({texto})</span> : null;
 }
 
+function TarjetaEnlace({ enlace, estado }: { enlace: string; estado: string }) {
+  return (
+    <Card>
+      <CardContent className="space-y-2.5 p-4">
+        <div className="flex items-center gap-2">
+          <Link2 className="h-4 w-4" style={{ color: TEAL }} />
+          <span className="text-sm font-semibold" style={{ color: TEAL }}>Enlace para participantes</span>
+        </div>
+        <p className="truncate rounded-md bg-muted/60 px-2.5 py-1.5 font-mono text-[13px]" title={enlace}>{enlace.replace(/^https?:\/\//, '')}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={() => { void navigator.clipboard.writeText(enlace); toast.success('Enlace copiado'); }}><Copy className="mr-1 h-3.5 w-3.5" />Copiar</Button>
+          <Button size="sm" variant="outline" onClick={() => window.open(enlace, '_blank')}><ExternalLink className="mr-1 h-3.5 w-3.5" />Abrir</Button>
+          {estado === 'prueba' && <span className="text-xs text-muted-foreground">En prueba: lo que entra queda marcado como prueba.</span>}
+          {estado === 'cerrado' && <span className="text-xs text-muted-foreground">Cerrado: ya no recibe respuestas.</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Detalle; proyectoId?: string; onCambio: () => void }) {
   const [tableros, setTableros] = useState<{ id: string; nombre: string }[] | null>(null);
   const [elegido, setElegido] = useState('');
@@ -289,7 +308,7 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4" style={{ color: TEAL }} />
-          <span className="text-sm font-semibold" style={{ color: TEAL }}>Reclutamiento</span>
+          <span className="text-sm font-semibold" style={{ color: TEAL }}>Tablero de Reclutamiento</span>
         </div>
         {mostrarSelector && (creando || tableros?.length === 0) ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -325,9 +344,7 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
             <Button size="sm" variant="ghost" onClick={() => { setTableros(null); setCambiando(true); }}>Cambiar tablero</Button>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">
-          El tablero recibe todas las preguntas como columnas desde que se vincula, y cada persona que pasa queda como una fila «Pendiente», igual que con un formulario de Fillout. Pasar dos veces al mismo tablero no duplica; si cambias de tablero, el nuevo recibe a todas.
-        </p>
+        <p className="text-xs text-muted-foreground">Quien pasa entra como «Pendiente», con todas las preguntas como columnas. Pasar dos veces no duplica.</p>
       </CardContent>
     </Card>
   );

@@ -11,14 +11,20 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, CopyPlus, FileText, Loader2, MoreHorizontal, Plus, Smartphone, Trash2, Users, Workflow } from 'lucide-react';
+import { ArrowLeft, CopyPlus, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { TEAL, EstadoPill } from '@/lib/toolColors';
 import { PLANTILLAS } from '@/lib/formularios/plantillas';
 import type { Definicion } from '@/lib/formularios/tipos';
 import { estructuraDeDefinicion, supuestosDe } from '@/lib/formularios/generador';
 import { chequeosListo } from '@/lib/formularios/listo';
-import { LineaEstado, PasosEstado, type EstadoEditable } from './EstadoFiltro';
+import { AccionPaso, type EstadoEditable } from './EstadoFiltro';
+import { Recorrido, pasoActual, pasosDe, type PasoFiltro } from './Recorrido';
+import { PorRevisar } from './PorRevisar';
+import { CambiosEnVivo } from './CambiosEnVivo';
+import { Supuestos } from './generador/Supuestos';
+import { NombresCortos } from './generador/NombresCortos';
+import { cambiarPregunta } from '@/lib/formularios/editar';
 import { MenuFiltro } from './MenuFiltro';
 import { Versiones } from './editor/Versiones';
 import { AvisoRegla, PanelRespuestas, type Detalle } from './PanelRespuestas';
@@ -28,7 +34,22 @@ import { useGenerador } from './generador/useGenerador';
 import { GeneradorFiltro } from './generador/GeneradorFiltro';
 import { MarcaIA } from './generador/comun';
 
-interface FormularioRow { id: string; codigo: string; titulo: string; estado: string; respuestasPrueba: number; respuestasReales: number; califican: number; proyecto?: string }
+interface FormularioRow {
+  id: string; codigo: string; titulo: string; estado: string; respuestasPrueba: number; respuestasReales: number; califican: number; proyecto?: string;
+  etapa?: string; meta: number; calificanReales: number; cambiosPendientes: boolean;
+}
+
+/** En qué va un filtro, para la lista: el paso y, en vivo, cuántos van de la cuota. */
+function enQueVa(f: FormularioRow): string {
+  const respuestas = f.respuestasPrueba + f.respuestasReales;
+  if (f.estado === 'en_vivo') return `En vivo · ${f.calificanReales} de ${f.meta} en cuota${f.cambiosPendientes ? ' · cambios sin publicar' : ''}`;
+  if (f.estado === 'cerrado') return `Cerrado · ${f.calificanReales} de ${f.meta} en cuota`;
+  if (f.estado === 'prueba') return `Probando · ${respuestas} ${respuestas === 1 ? 'respuesta' : 'respuestas'} de prueba`;
+  if (f.etapa === 'insumos') return 'Por pedir la estructura';
+  if (f.etapa === 'estructura') return 'Estructura por aprobar';
+  if (f.etapa === 'preguntas') return 'Preguntas por escribir';
+  return 'Preguntas por revisar';
+}
 
 type Origen = 'insumos' | 'word' | 'filtro' | 'plantilla';
 const ORIGENES: { id: Origen; nombre: string; detalle: string; ia?: boolean }[] = [
@@ -159,11 +180,11 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
       {!seleccionado && (
         <div className="mx-auto max-w-4xl">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-base font-semibold" style={{ color: TEAL }}>Formularios</h3>
-            <Button size="sm" onClick={() => setNuevoAbierto(true)}><Plus className="mr-1 h-3.5 w-3.5" />Nuevo</Button>
+            <h3 className="text-base font-semibold" style={{ color: TEAL }}>Filtros</h3>
+            <Button size="sm" onClick={() => setNuevoAbierto(true)}><Plus className="mr-1 h-3.5 w-3.5" />Nuevo filtro</Button>
           </div>
           {cargando && <p className="text-xs text-muted-foreground">Cargando…</p>}
-          {!cargando && lista.length === 0 && <p className="text-sm text-muted-foreground">Todavía no hay formularios en este proyecto.</p>}
+          {!cargando && lista.length === 0 && <p className="text-sm text-muted-foreground">Todavía no hay filtros en este proyecto.</p>}
           <div className="grid gap-3 sm:grid-cols-2">
             {lista.map((f) => (
               <div key={f.id} className="relative rounded-lg border bg-white transition-colors hover:border-[#0F3D4D]/50 hover:bg-[#0F3D4D]/[0.03]">
@@ -172,7 +193,7 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
                     <span className="text-sm font-medium leading-snug">{f.titulo}</span>
                     <EstadoPill estado={f.estado} />
                   </div>
-                  <p className="mt-1.5 text-xs text-muted-foreground">{f.respuestasPrueba + f.respuestasReales} respuestas · {f.califican} califican</p>
+                  <p className="mt-1.5 text-xs text-muted-foreground">{enQueVa(f)}</p>
                 </button>
                 <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
@@ -206,7 +227,8 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
           onVolver={() => { setSeleccionado(null); cargarLista(); }}
           onEstado={cambiarEstado}
           onRecargar={() => Promise.all([cargarDetalle(detalle.id), cargarLista()])}
-          onGuardado={(definicion) => setDetalle((d) => (d ? { ...d, definicion } : d))}
+          onGuardado={(definicion) => setDetalle((d) => (d ? (d.estado === 'en_vivo' ? { ...d, cambios: definicion } : { ...d, definicion }) : d))}
+          onPublicado={(definicion) => setDetalle((d) => (d ? { ...d, definicion, cambios: undefined } : d))}
           onBorrarPruebas={() => setConfirmar({ que: 'pruebas' })}
           onBorrarFormulario={() => setConfirmar({ que: 'formulario', id: detalle.id, titulo: detalle.titulo })}
           onDuplicar={() => void duplicar(detalle.id)}
@@ -215,7 +237,7 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
 
       <Dialog open={nuevoAbierto} onOpenChange={setNuevoAbierto}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Nuevo formulario</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Nuevo filtro</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
               <label className="text-xs font-medium text-muted-foreground">Nombre interno</label>
@@ -282,29 +304,39 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
   );
 }
 
-type Vista = VistaEditor | 'respuestas';
+type Modo = 'disenar' | 'reclutar';
 
-const VISTAS: { id: Vista; nombre: string; icono: typeof FileText }[] = [
-  { id: 'documento', nombre: 'Documento', icono: FileText },
-  { id: 'flujo', nombre: 'Flujo', icono: Workflow },
-  { id: 'celular', nombre: 'Celular', icono: Smartphone },
-  { id: 'respuestas', nombre: 'Respuestas', icono: Users },
+const VISTAS: { id: VistaEditor; nombre: string }[] = [
+  { id: 'documento', nombre: 'Documento' },
+  { id: 'flujo', nombre: 'Flujo' },
+  { id: 'celular', nombre: 'Celular' },
 ];
 
-function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, onGuardado, onBorrarPruebas, onBorrarFormulario, onDuplicar }: {
+function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, onGuardado, onPublicado, onBorrarPruebas, onBorrarFormulario, onDuplicar }: {
   detalle: Detalle;
   proyectoId?: string;
   onVolver: () => void;
   onEstado: (e: EstadoEditable) => void;
   onRecargar: () => void;
   onGuardado: (def: Definicion) => void;
+  onPublicado: (def: Definicion) => void;
   onBorrarPruebas: () => void;
   onBorrarFormulario: () => void;
   onDuplicar: () => void;
 }) {
-  const [vista, setVista] = useState<Vista>('documento');
+  const enVivo = detalle.estado === 'en_vivo';
+  const puedeReclutar = detalle.estado !== 'borrador';
+  // En vivo o cerrado abre en Reclutar; antes, en Diseñar.
+  const [modo, setModo] = useState<Modo>(enVivo || detalle.estado === 'cerrado' ? 'reclutar' : 'disenar');
+  const [vista, setVista] = useState<VistaEditor>('documento');
   const [versiones, setVersiones] = useState(false);
-  const editor = useEditorFiltro({ formularioId: detalle.id, inicial: detalle.definicion, revisionInicial: detalle.revision ?? 0, onGuardado });
+  useEffect(() => { if (!puedeReclutar) setModo('disenar'); }, [puedeReclutar]);
+  useEffect(() => { if (enVivo) setModo('reclutar'); }, [enVivo]);
+
+  const editor = useEditorFiltro({
+    formularioId: detalle.id, inicial: detalle.cambios ?? detalle.definicion, revisionInicial: detalle.revision ?? 0, onGuardado,
+    publicada: enVivo ? detalle.definicion : undefined,
+  });
   const gen = useGenerador({ formularioId: detalle.id, editor, inicial: detalle.generador, usoInicial: detalle.usoIA });
   // Fase 3: mientras no hay preguntas, el filtro abre en el generador (insumos y estructura).
   const [verEstructura, setVerEstructura] = useState(false);
@@ -315,16 +347,59 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
   );
   const def = detalle.definicion;
   const hayReales = detalle.respuestas.some((r) => !r.esPrueba);
+
+  // Un solo camino: Insumos · Estructura · Preguntas · Probar · Reclutar.
+  const pasos = pasosDe(!!gen.g);
+  const paso = pasoActual(detalle.estado, gen.g?.etapa);
+  const puedeIr = (p: PasoFiltro) => {
+    if (p === 'insumos' || pasos.indexOf(p) > pasos.indexOf(paso)) return false;
+    if (p === 'estructura') return paso !== 'estructura' && !gen.escribiendo;
+    if (p === 'reclutar') return puedeReclutar;
+    return true;
+  };
+  const irPaso = (p: PasoFiltro) => {
+    if (p === 'estructura') { setVerEstructura(true); return; }
+    setVerEstructura(false);
+    if (p === 'reclutar') { setModo('reclutar'); return; }
+    setModo('disenar');
+    setVista(p === 'probar' ? 'celular' : 'documento');
+  };
+
+  // «Por revisar»: los supuestos de la IA, los nombres cortos y lo que falta para estar listo, juntos.
   const chequeos = useMemo(() => {
     const supuestos = gen.g ? supuestosDe(gen.g).length : 0;
-    return chequeosListo({
+    const todos = chequeosListo({
       def: editor.def,
       problemas: editor.problemas.length,
       supuestosPorRevisar: gen.g ? (gen.g.supuestosRevisados ? 0 : supuestos) : undefined,
       respuestasDePrueba: detalle.respuestas.filter((r) => r.esPrueba).length,
       vinculado: !!detalle.tablero,
     });
-  }, [editor.def, editor.problemas.length, gen.g, detalle.respuestas, detalle.tablero]);
+    // Probarlo y vincular el tablero son del paso Probar: antes no cuentan como pendientes.
+    return detalle.estado === 'borrador' ? todos.filter((c) => c.id !== 'probado' && c.id !== 'tablero') : todos;
+  }, [editor.def, editor.problemas.length, gen.g, detalle.respuestas, detalle.tablero, detalle.estado]);
+  const ia = useMemo(() => ({ formularioId: detalle.id, contarUso: () => gen.contarUso() }), [detalle.id, gen.contarUso]); // eslint-disable-line react-hooks/exhaustive-deps
+  const porRevisar = !enGenerador && (paso === 'preguntas' || paso === 'probar') && (
+    <PorRevisar
+      chequeos={chequeos}
+      detalle={{
+        supuestos: gen.g && (
+          <Supuestos
+            items={supuestosDe(gen.g).map((x) => ({ texto: x.texto, donde: x.seccion === 'frentes' ? 'Perfiles' : x.seccion ? gen.g!.estructura?.secciones.find((s) => s.id === x.seccion)?.titulo.split('{opcion}').join('…') : undefined }))}
+            revisado={gen.g.supuestosRevisados}
+            onRevisar={gen.marcarRevisados}
+          />
+        ),
+        nombres: !gen.escribiendo && (
+          <NombresCortos
+            def={editor.def}
+            ia={ia}
+            onPoner={(nombres) => editor.aplicar((d) => Object.entries(nombres).reduce((x, [id, nombre]) => cambiarPregunta(x, id, { nombre }), d))}
+          />
+        ),
+      }}
+    />
+  );
 
   /** El Word o el PDF para el cliente, con lo último guardado (si hay cambios en camino, se guardan antes). */
   const descargar = async (formato: 'word' | 'pdf') => {
@@ -349,6 +424,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
   };
 
   const irA = (id: { seccion?: string; pregunta?: string }) => {
+    setModo('disenar');
     setVista('documento');
     // Espera a que el Documento esté en pantalla.
     requestAnimationFrame(() => requestAnimationFrame(() => irAlDocumento(id)));
@@ -357,17 +433,34 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
   const aviso = AvisoRegla({ def });
   return (
     <div className="mx-auto max-w-[1180px] space-y-4">
-      <div className="space-y-1.5">
+      <div className="space-y-3 rounded-xl border border-[#E4E4E7] bg-white px-4 py-3 shadow-sm sm:px-5">
         <button type="button" onClick={onVolver} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-[#0F3D4D]">
-          <ArrowLeft className="h-3.5 w-3.5" />Formularios
+          <ArrowLeft className="h-3.5 w-3.5" />Filtros
         </button>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <h2 className="min-w-0 text-lg font-semibold leading-tight" style={{ color: TEAL }}>{detalle.titulo}</h2>
-          <PasosEstado estado={detalle.estado} />
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="min-w-0 text-lg font-semibold leading-tight" style={{ color: TEAL }}>{detalle.titulo}</h2>
+            <EstadoPill estado={detalle.estado} />
+          </div>
+          <div className="flex items-center gap-2">
+            {!enGenerador && <EstadoGuardado editor={editor} onIr={irA} generando={gen.escribiendo} />}
+            {!enGenerador && <Duracion editor={editor} />}
+            <MenuFiltro
+              editor={editor} estado={detalle.estado} enlace={enlace(detalle.codigo)} uso={gen.g ? gen.uso : undefined} escribiendo={gen.escribiendo}
+              onEstado={onEstado}
+              onEstructura={gen.g && !enGenerador ? () => setVerEstructura(true) : undefined}
+              onVersiones={() => setVersiones(true)}
+              onDuplicar={onDuplicar}
+              onDescargar={descargar}
+              onBorrar={hayReales ? undefined : onBorrarFormulario}
+            />
+          </div>
         </div>
-        <LineaEstado
-          estado={detalle.estado} chequeos={chequeos} hayReales={hayReales} onEstado={onEstado}
+        <Recorrido pasos={pasos} actual={paso} puedeIr={puedeIr} onIr={irPaso} />
+        <AccionPaso
+          paso={paso} estado={detalle.estado} escribiendo={gen.escribiendo} hayReales={hayReales} chequeos={chequeos} onEstado={onEstado}
           extra={aviso && <span>NSE {def.nse?.regla}{aviso}</span>}
+          derecha={porRevisar}
         />
       </div>
 
@@ -379,42 +472,49 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
       )}
 
       {!enGenerador && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#E4E4E7]">
-          <div role="tablist" className="-mb-px flex min-w-0 gap-4 overflow-x-auto">
-            {VISTAS.map((v) => {
-              const activa = vista === v.id;
-              return (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          {puedeReclutar && (
+            <div role="tablist" aria-label="Modo" className="inline-flex rounded-lg bg-[#F1F2F4] p-[3px]">
+              {(['disenar', 'reclutar'] as const).map((m) => (
                 <button
-                  key={v.id}
+                  key={m}
                   role="tab"
-                  aria-selected={activa}
-                  onClick={() => setVista(v.id)}
-                  className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-0.5 pb-2 pt-1 text-sm transition-colors ${activa ? 'border-[#0F3D4D] font-semibold text-[#0F3D4D]' : 'border-transparent text-muted-foreground hover:text-[#0F3D4D]'}`}
+                  aria-selected={modo === m}
+                  onClick={() => setModo(m)}
+                  className={`rounded-md px-3.5 py-1 text-sm transition-colors ${modo === m ? 'bg-[#0F3D4D] font-semibold text-white shadow-sm' : 'text-[#5B687B] hover:text-[#0F3D4D]'}`}
                 >
-                  {v.nombre}
-                  {v.id === 'respuestas' && <span className="text-xs font-normal text-muted-foreground">{detalle.respuestas.length}</span>}
+                  {m === 'disenar' ? 'Diseñar' : `Reclutar · ${detalle.respuestas.length}`}
                 </button>
-              );
-            })}
-          </div>
-          <div className="ml-auto flex items-center gap-2 pb-1">
-            <EstadoGuardado editor={editor} onIr={irA} generando={gen.escribiendo} />
-            <Duracion editor={editor} />
-            <MenuFiltro
-              editor={editor} estado={detalle.estado} enlace={enlace(detalle.codigo)} uso={gen.g ? gen.uso : undefined} escribiendo={gen.escribiendo}
-              onEstado={onEstado}
-              onEstructura={gen.g ? () => { setVista('documento'); setVerEstructura(true); } : undefined}
-              onVersiones={() => setVersiones(true)}
-              onDuplicar={onDuplicar}
-              onDescargar={descargar}
-              onBorrar={hayReales ? undefined : onBorrarFormulario}
-            />
-          </div>
+              ))}
+            </div>
+          )}
+          {modo === 'disenar' && (
+            <div role="tablist" aria-label="Vista" className="flex gap-4 border-b border-[#E4E4E7]">
+              {VISTAS.map((v) => {
+                const activa = vista === v.id;
+                return (
+                  <button
+                    key={v.id}
+                    role="tab"
+                    aria-selected={activa}
+                    onClick={() => setVista(v.id)}
+                    className={`-mb-px border-b-2 px-0.5 pb-1.5 pt-1 text-sm transition-colors ${activa ? 'border-[#0F3D4D] font-semibold text-[#0F3D4D]' : 'border-transparent text-muted-foreground hover:text-[#0F3D4D]'}`}
+                  >
+                    {v.nombre}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {!enGenerador && (vista === 'respuestas'
-        ? <PanelRespuestas detalle={detalle} proyectoId={proyectoId} onRecargar={onRecargar} onBorrarPruebas={onBorrarPruebas} />
+      {!enGenerador && modo === 'disenar' && enVivo && (
+        <CambiosEnVivo editor={editor} respuestas={detalle.respuestas.filter((r) => !r.esPrueba).length} onPublicado={onPublicado} />
+      )}
+
+      {!enGenerador && (modo === 'reclutar'
+        ? <PanelRespuestas detalle={detalle} proyectoId={proyectoId} enlace={enlace(detalle.codigo)} onRecargar={onRecargar} onBorrarPruebas={onBorrarPruebas} />
         : <EditorFiltro editor={editor} vista={vista} formularioId={detalle.id} onIr={irA} gen={gen} />)}
 
       {versiones && (

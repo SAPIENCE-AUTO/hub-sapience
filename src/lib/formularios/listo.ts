@@ -45,9 +45,9 @@ export function chequeosListo(o: {
       }]
       : []),
     ...(o.supuestosPorRevisar !== undefined
-      ? [{ id: 'supuestos', texto: 'Supuestos de la IA revisados', ok: o.supuestosPorRevisar === 0, falta: 'Están arriba del documento' }]
+      ? [{ id: 'supuestos', texto: 'Supuestos de la IA revisados', ok: o.supuestosPorRevisar === 0, falta: 'Revísalos y marca «Ya lo revisé»' }]
       : []),
     { id: 'probado', texto: 'Contestado en prueba', ok: o.respuestasDePrueba > 0, falta: 'Contéstalo desde el enlace, en prueba' },
-    { id: 'tablero', texto: 'Vinculado a un tablero de Reclutamiento', ok: o.vinculado, falta: 'Se elige en Respuestas' },
+    { id: 'tablero', texto: 'Vinculado a un tablero de Reclutamiento', ok: o.vinculado, falta: 'Se elige en Reclutar' },
   ];
 }

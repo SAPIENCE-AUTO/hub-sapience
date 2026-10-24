@@ -25,8 +25,10 @@ export default createEndpoint({
       );
       if (r?.hay) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Este filtro ya tiene respuestas reales: solo se puede cerrar o reabrir en vivo.' });
     }
+    // Fuera de «en vivo» se edita directo: lo que quedó sin publicar pasa a ser el filtro.
+    const aplicaCambios = input.estado === 'borrador' || input.estado === 'prueba';
     const { rowCount } = await pool.query(
-      `update formularios set estado = $2, updated_at = now() where id = $1`,
+      `update formularios set estado = $2, updated_at = now()${aplicaCambios ? ', definicion = coalesce(cambios, definicion), cambios = null' : ''} where id = $1`,
       [input.formularioId, input.estado],
     );
     if (!rowCount) throw new ZiteError({ code: 'NOT_FOUND', message: 'No se encontró el formulario.' });

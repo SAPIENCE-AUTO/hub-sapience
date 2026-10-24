@@ -24,6 +24,8 @@ export default createEndpoint({
     titulo: z.string().optional(),
     estado: z.string().optional(),
     definicion: z.any().optional(),
+    /** En vivo: la copia de trabajo con los cambios sin publicar (si hay). */
+    cambios: z.any().optional(),
     /** Sube con cada guardado del editor: con ella se evita pisar cambios de otra persona. */
     revision: z.number().optional(),
     tablero: z.object({ id: z.string(), nombre: z.string() }).optional(),
@@ -54,7 +56,7 @@ export default createEndpoint({
   }),
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
-    const { rows: [f] } = await pool.query(`select id, codigo, titulo, estado, definicion, revision, vinculo, generador from formularios where id = $1`, [input.formularioId]);
+    const { rows: [f] } = await pool.query(`select id, codigo, titulo, estado, definicion, cambios, revision, vinculo, generador from formularios where id = $1`, [input.formularioId]);
     if (!f) return { found: false };
     const def = leerDefinicion(f.definicion);
 
@@ -75,6 +77,7 @@ export default createEndpoint({
 
     return {
       found: true, id: f.id, codigo: f.codigo, titulo: f.titulo, estado: f.estado, definicion: def, revision: f.revision,
+      cambios: f.cambios ? leerDefinicion(f.cambios) : undefined,
       tablero: vinculo ? { id: vinculo.boardId, nombre: vinculo.boardName } : undefined,
       generador: generadorParaNavegador(leerGenerador(f.generador)),
       usoIA: { usadas: await usoDeLaHora(context.user!.email), limite: LIMITE_POR_HORA },

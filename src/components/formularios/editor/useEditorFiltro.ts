@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { getFormularioDetail, pingFormularioEditor, saveFormularioDefinicion } from 'zite-endpoints-sdk';
+import { getFormularioDetail, pingFormularioEditor, publishFormularioCambios, saveFormularioDefinicion } from 'zite-endpoints-sdk';
+import { cambiosEnPalabras } from '@/lib/formularios/ia';
 import { revisarConLugar } from '@/lib/formularios/revisar';
 import type { Definicion } from '@/lib/formularios/tipos';
 
@@ -15,6 +16,8 @@ import type { Definicion } from '@/lib/formularios/tipos';
  *   guardado. Lo propio no se pierde: queda en Deshacer.
  * - Cada 30 s se avisa que el editor sigue abierto y se sabe quién más lo
  *   tiene abierto (pingFormularioEditor).
+ * - En vivo se edita una copia (el servidor la guarda aparte): los
+ *   participantes siguen con lo publicado hasta «Publicar cambios».
  */
 
 export type EstadoGuardado = 'guardado' | 'pendiente' | 'guardando' | 'por_corregir' | 'conflicto' | 'error';
@@ -54,12 +57,16 @@ function sesionDeVentana(formularioId: string): string {
   }
 }
 
-export function useEditorFiltro({ formularioId, inicial, revisionInicial, onGuardado }: {
+const mismo = (a: Definicion, b: Definicion) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+export function useEditorFiltro({ formularioId, inicial, revisionInicial, onGuardado, publicada: publicadaInicial }: {
   formularioId: string;
   inicial: Definicion;
   revisionInicial: number;
   /** Con lo que quedó guardado (lo usan las respuestas y las cuotas). */
   onGuardado?: (def: Definicion) => void;
+  /** Solo en vivo: lo que contestan los participantes; lo que se edita es una copia. */
+  publicada?: Definicion;
 }) {
   const [h, dispatch] = useReducer(historia, { def: inicial, pasado: [], futuro: [] });
   const actual = useRef(h.def);
@@ -77,6 +84,9 @@ export function useEditorFiltro({ formularioId, inicial, revisionInicial, onGuar
   onGuardadoRef.current = onGuardado;
   /** Secciones que puso el generador con IA y se marcan como puestas con el próximo guardado (fase 3). */
   const porMarcar = useRef<Record<string, string>>({});
+  const [publicada, setPublicada] = useState<Definicion | undefined>(publicadaInicial);
+  const enVivo = publicadaInicial !== undefined;
+  useEffect(() => setPublicada(publicadaInicial), [enVivo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const problemas = useMemo(() => revisarConLugar(h.def), [h.def]);
 
@@ -132,11 +142,39 @@ export function useEditorFiltro({ formularioId, inicial, revisionInicial, onGuar
   const cargarGuardada = useCallback(async () => {
     const r = await getFormularioDetail({ formularioId });
     if (!r.found) return;
-    guardada.current = { def: r.definicion, revision: r.revision ?? 0 };
-    actual.current = r.definicion;
-    dispatch({ tipo: 'poner', def: r.definicion });
+    const def = r.cambios ?? r.definicion;
+    guardada.current = { def, revision: r.revision ?? 0 };
+    actual.current = def;
+    dispatch({ tipo: 'poner', def });
+    if (r.estado === 'en_vivo') setPublicada(r.definicion);
     setConflicto(false);
   }, [formularioId]);
+
+  // ── En vivo: la copia de trabajo contra lo publicado ──
+  const cambiosPendientes = useMemo(() => !!publicada && !mismo(h.def, publicada), [h.def, publicada]);
+  const resumenCambios = useMemo(() => (cambiosPendientes && publicada ? cambiosEnPalabras(publicada, h.def) : []), [cambiosPendientes, publicada, h.def]);
+
+  /** Espera a que termine el guardado en curso y guarda lo que falte. */
+  const asentar = useCallback(async () => {
+    for (let i = 0; enVueloRef.current && i < 50; i++) await new Promise((r) => setTimeout(r, 200));
+    if (actual.current !== guardada.current.def) await guardarAhora();
+  }, [guardarAhora]);
+
+  /** Publica la copia de trabajo (o la descarta). Devuelve si se pudo; si otra ventana guardó antes, queda en conflicto. */
+  const publicarCambios = useCallback(async (descartar = false): Promise<boolean> => {
+    if (!descartar) await asentar();
+    const r = await publishFormularioCambios({ formularioId, revision: guardada.current.revision, descartar }) as { ok: boolean; revision: number };
+    if (!r.ok) { setConflicto(true); return false; }
+    if (descartar && publicada) {
+      guardada.current = { def: publicada, revision: r.revision };
+      actual.current = publicada;
+      dispatch({ tipo: 'poner', def: publicada });
+    } else {
+      guardada.current = { def: actual.current, revision: r.revision };
+      setPublicada(actual.current);
+    }
+    return true;
+  }, [formularioId, asentar, publicada]);
 
   // Aviso de quién más lo tiene abierto, y de si alguien guardó mientras tanto.
   useEffect(() => {
@@ -187,6 +225,12 @@ export function useEditorFiltro({ formularioId, inicial, revisionInicial, onGuar
     cargarGuardada,
     reintentar: guardarAhora,
     sinGuardar: h.def !== guardada.current.def,
+    /** En vivo: lo que contestan los participantes (undefined fuera de vivo). */
+    publicada,
+    cambiosPendientes,
+    resumenCambios,
+    publicar: useCallback(() => publicarCambios(false), [publicarCambios]),
+    descartarCambios: useCallback(() => publicarCambios(true), [publicarCambios]),
   };
 }
 

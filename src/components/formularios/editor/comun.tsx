@@ -32,6 +32,8 @@ export interface ContextoDoc {
   /** La pregunta elegida: solo ella muestra sus herramientas (IA, menú, agregar y mover opciones). */
   elegida: string | null;
   elegir: (id: string | null) => void;
+  /** Número de cada pregunta (las de contenido no cuentan), como en el Word. */
+  numeros: Record<string, number>;
 }
 
 export const Contexto = createContext<ContextoDoc | null>(null);
@@ -69,6 +71,26 @@ export function Logica({ lineas, onMotivo, className = '' }: {
         </p>
       ))}
     </div>
+  );
+}
+
+const ETIQUETA: Partial<Record<LineaLogica['tipo'], string>> = { termina: 'Termina', descarta: 'No cuenta', excluye: 'Fuera de perfil' };
+
+/** La lógica de una opción en etiquetas chicas (el detalle, al pasar el mouse); la línea completa sale al elegir la pregunta. */
+export function EtiquetasLogica({ lineas }: { lineas: LineaLogica[] }) {
+  const etiquetas = lineas.map((l) => ({
+    l,
+    texto: ETIQUETA[l.tipo] ?? (/se quitan las demás/.test(l.texto) ? 'Exclusiva' : /escribir cuál/.test(l.texto) ? 'Pide cuál' : undefined),
+  })).filter((x): x is { l: LineaLogica; texto: string } => !!x.texto);
+  if (!etiquetas.length) return null;
+  return (
+    <span className="ml-auto flex flex-shrink-0 flex-wrap justify-end gap-1 pl-2">
+      {etiquetas.map(({ l, texto }, i) => (
+        <span key={i} title={l.texto} className="whitespace-nowrap rounded-full border px-1.5 py-px text-[10.5px] font-medium" style={{ color: COLOR_LOGICA[l.tipo], borderColor: `${COLOR_LOGICA[l.tipo]}55`, backgroundColor: `${COLOR_LOGICA[l.tipo]}0d` }}>
+          {texto}
+        </span>
+      ))}
+    </span>
   );
 }
 

@@ -17,6 +17,10 @@ const MINUTOS_ENTRE_AUTOMATICAS = 30;
  * cambia y son la clave de las columnas del tablero. Si el filtro está
  * vinculado a un tablero, las columnas que ya existen toman el nombre corto
  * nuevo de su pregunta (renombrarColumnas).
+ *
+ * En vivo (2026-10-24) se guarda en `cambios`, la copia de trabajo: los
+ * participantes siguen con `definicion` hasta que se publica
+ * (publishFormularioCambios). La revisión sube igual, para no pisar a nadie.
  */
 export default createEndpoint({
   authenticated: true,
@@ -45,11 +49,19 @@ export default createEndpoint({
     const client = await pool.connect();
     try {
       await client.query('begin');
-      const { rows: [f] } = await client.query(`select revision, vinculo from formularios where id = $1 for update`, [input.formularioId]);
+      const { rows: [f] } = await client.query(`select revision, vinculo, estado from formularios where id = $1 for update`, [input.formularioId]);
       if (!f) throw new ZiteError({ code: 'NOT_FOUND', message: 'No se encontró el formulario.' });
       if (f.revision !== input.revision) {
         await client.query('rollback');
         return { ok: false, revision: f.revision as number };
+      }
+      if (f.estado === 'en_vivo') {
+        const { rows: [n] } = await client.query(
+          `update formularios set cambios = $2, revision = revision + 1, updated_at = now() where id = $1 returning revision`,
+          [input.formularioId, JSON.stringify(def)],
+        );
+        await client.query('commit');
+        return { ok: true, revision: n.revision as number };
       }
       await client.query(
         `insert into formulario_versiones (formulario_id, revision, definicion, created_by)
@@ -60,7 +72,7 @@ export default createEndpoint({
         [input.formularioId, context.user!.id, MINUTOS_ENTRE_AUTOMATICAS],
       );
       const { rows: [n] } = await client.query(
-        `update formularios set definicion = $2, revision = revision + 1, updated_at = now() where id = $1 returning revision`,
+        `update formularios set definicion = $2, cambios = null, revision = revision + 1, updated_at = now() where id = $1 returning revision`,
         [input.formularioId, JSON.stringify(def)],
       );
       if (input.aplicadas && Object.keys(input.aplicadas).length) {

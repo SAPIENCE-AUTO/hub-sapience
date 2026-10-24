@@ -9,7 +9,7 @@ import {
   agregarFila, agregarOpcion, cambiarFila, cambiarOpcion, cambiarTipo, moverFila, moverOpcion, quitarFila, quitarOpcion, usosDeOpcion,
 } from '@/lib/formularios/editar';
 import { esDeOpciones, forma, type Opcion, type Pregunta, type Seccion } from '@/lib/formularios/tipos';
-import { BotonIcono, EnlaceImagen, Logica, claveDestino, useDoc, type Destino } from './comun';
+import { BotonIcono, EnlaceImagen, EtiquetasLogica, Logica, claveDestino, useDoc, type Destino } from './comun';
 import { TextoEditable } from './TextoEditable';
 import { imagenesDe, traeArchivos } from './imagenes';
 
@@ -113,9 +113,11 @@ function FilaOpcion({ s, p, o, i, total, bloqueada }: { s: Seccion; p: Pregunta;
             onGuardar={(v) => cambiar({ label: v })}
           />
         )}
-        <Logica lineas={lineas} className="mt-0.5" onMotivo={bloqueada ? undefined : (campo, v) => cambiar({ [campo]: v })} />
+        {/* Elegida la pregunta, la lógica completa (con el motivo editable); si no, solo sus etiquetas. */}
+        {elegida === p.id && <Logica lineas={lineas} className="mt-0.5" onMotivo={bloqueada ? undefined : (campo, v) => cambiar({ [campo]: v })} />}
         {enlace && <EnlaceImagen onPoner={(url) => ponerImagenDeEnlace(destino, url)} onCerrar={() => setEnlace(false)} />}
       </div>
+      {elegida !== p.id && <EtiquetasLogica lineas={lineas} />}
       {!bloqueada && (
         <div className={`flex-shrink-0 items-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover/o:opacity-100 sm:focus-within:opacity-100 ${elegida === p.id ? 'flex' : 'hidden'}`}>
           <BotonIcono titulo="Subir" disabled={i === 0} onClick={() => aplicar((d) => moverOpcion(d, p.id, o.id, -1))}><ArrowUp className="h-3.5 w-3.5" /></BotonIcono>

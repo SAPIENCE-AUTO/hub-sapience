@@ -10,7 +10,7 @@ const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'swipe', label: 'Swipe' },
   { id: 'ejes', label: 'Ejes' },
   { id: 'prework', label: 'Prework' },
-  { id: 'formularios', label: 'Formularios' },
+  { id: 'formularios', label: 'Filtros' },
 ];
 
 /**

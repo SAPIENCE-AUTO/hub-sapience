@@ -59,7 +59,7 @@ function Respuesta({ p }: { p: Pregunta }) {
 }
 
 export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
-  const { def, aplicar, quitar, nuevo, setNuevo, ia, elegida, elegir: elegirPregunta, ponerImagenDeEnlace } = useDoc();
+  const { def, aplicar, quitar, nuevo, setNuevo, ia, elegida, elegir: elegirPregunta, ponerImagenDeEnlace, numeros } = useDoc();
   const activa = elegida === p.id;
   const faltanImagenes = imagenesQueFaltan({ ...def, secciones: [{ id: '', preguntas: [p] }] })[0]?.faltan ?? 0;
   useEffect(() => { if (nuevo === p.id) elegirPregunta(p.id); }, [nuevo, p.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -101,6 +101,12 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
     >
       {input}
       <div className="flex items-start gap-2">
+        {/* El número de la pregunta, el mismo del Word. */}
+        {numeros[p.id] !== undefined && (
+          <span className="mt-0.5 flex h-[22px] min-w-[24px] flex-shrink-0 items-center justify-center rounded-md px-1 text-[11.5px] font-bold text-white" style={{ backgroundColor: TEAL }}>
+            {numeros[p.id]}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           {f !== 'ninguna' && (bloqueada || activa || !!p.nombre?.trim()) && (
             <p className="mb-0.5 text-[12px] font-semibold leading-snug" style={{ color: TEAL }} title="Nombre corto: el de su columna en el tablero y en el Excel. El participante no lo ve.">

@@ -21,7 +21,7 @@ export default createEndpoint({
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
     const { rows: [f] } = await pool.query(
-      `select titulo, plantilla, definicion, proyecto_id, generador from formularios where id = $1`,
+      `select titulo, plantilla, coalesce(cambios, definicion) as definicion, proyecto_id, generador from formularios where id = $1`,
       [input.formularioId],
     );
     if (!f) throw new ZiteError({ code: 'NOT_FOUND', message: 'No se encontró ese filtro.' });
