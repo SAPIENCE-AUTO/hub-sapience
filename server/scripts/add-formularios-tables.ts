@@ -108,6 +108,32 @@ async function main() {
       ciudad     text
     );
     create index if not exists codigos_postales_pais_cp_idx on codigos_postales (pais, cp);
+
+    -- La muestra del proyecto (2026-10-26, con el OK de Sergio): sus actividades (sesiones, tríadas,
+    -- entrevistas…) con fecha, lugar, perfil y cupo, y en qué tablero y calendario se crean sus grupos y
+    -- eventos. Cambia a lo largo del proyecto: cada cambio guarda una versión con quién, cuándo y por qué.
+    create table if not exists muestras (
+      id             uuid primary key default gen_random_uuid(),
+      proyecto_id    uuid not null unique references projects(id) on delete cascade,
+      definicion     jsonb not null default '{"actividades": []}'::jsonb,
+      version        int not null default 1,
+      tablero_id     text,
+      calendario_id  text,
+      created_by     text,
+      created_at     timestamptz not null default now(),
+      updated_at     timestamptz not null default now()
+    );
+    create table if not exists muestra_versiones (
+      id          uuid primary key default gen_random_uuid(),
+      muestra_id  uuid not null references muestras(id) on delete cascade,
+      version     int not null,
+      definicion  jsonb not null,
+      cambios     jsonb not null default '[]'::jsonb,
+      motivo      text,
+      created_by  text,
+      created_at  timestamptz not null default now()
+    );
+    create index if not exists muestra_versiones_muestra_idx on muestra_versiones (muestra_id, version desc);
   `);
   console.log('✅ Tablas de formularios creadas (o ya existían).');
 

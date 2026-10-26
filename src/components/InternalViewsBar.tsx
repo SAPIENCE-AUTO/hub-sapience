@@ -40,6 +40,8 @@ interface Props {
   currentFiltersJson: string;
   hasUnsavedChanges: boolean;
   onViewUpdated?: (view: InternalView) => void;
+  /** Al final de la fila (el conteo de participantes del tablero). */
+  derecha?: React.ReactNode;
 }
 
 const EDGE_THRESHOLD = 120;
@@ -49,7 +51,7 @@ const MIN_DRAG_PX = 5;
 export const InternalViewsBar = memo(forwardRef<InternalViewsBarHandle, Props>(function InternalViewsBar({
   boardId, projectCode, boardName,
   activeViewId, onViewSelected, currentFiltersJson,
-  hasUnsavedChanges, onViewUpdated,
+  hasUnsavedChanges, onViewUpdated, derecha,
 }: Props, ref) {
   const [views, setViews] = useState<InternalView[]>([]);
   const [loading, setLoading] = useState(false);
@@ -411,7 +413,7 @@ export const InternalViewsBar = memo(forwardRef<InternalViewsBarHandle, Props>(f
 
   return (
     <>
-      <div className="flex items-center gap-1.5 px-6 py-2 bg-muted/20 border-b border-border/40 overflow-x-auto flex-shrink-0">
+      <div className="flex items-center gap-1.5 px-6 py-1.5 bg-muted/20 border-b border-border/40 overflow-x-auto flex-shrink-0">
 
         {/* "Todos" tab */}
         <button className={tabCls(activeViewId === null)} onClick={() => onViewSelected(null)}>
@@ -605,6 +607,7 @@ export const InternalViewsBar = memo(forwardRef<InternalViewsBarHandle, Props>(f
             <Save className="w-3 h-3" /> Guardar en vista
           </button>
         )}
+        {derecha && <div className={`flex-shrink-0 whitespace-nowrap pl-2 ${hasUnsavedChanges && activeViewId ? '' : 'ml-auto'}`}>{derecha}</div>}
       </div>
 
       {/* ── Ghost floating tab ─────────────────────────────────────────────── */}

@@ -3,6 +3,7 @@ import { createEndpoint } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { cargarFiltro, generadorParaNavegador, proponerEstructura } from '../serverUtils/formularios/generar';
 import { leerDefinicion } from '../lib/formularios/tipos';
+import { nombreDeUsuario, proponerMuestraSiNoHay } from '../serverUtils/muestra/muestra';
 
 /**
  * Etapa 1 del generador con IA (fase 3 de Filtros): propone la estructura
@@ -31,6 +32,11 @@ export default createEndpoint({
       filtro, email: context.user!.email, stream, pedido: input.pedido,
       ajuste: input.sobre === 'escrito' ? { sobre: 'escrito', definicion: leerDefinicion(input.definicion) } : input.sobre === 'propuesta' ? { sobre: 'propuesta' } : undefined,
     });
+    // Con la primera estructura, la IA también propone la muestra del proyecto (si aún no tiene), sin hacer esperar.
+    if (!input.sobre) {
+      const email = context.user!.email;
+      nombreDeUsuario(email).then((por) => proponerMuestraSiNoHay(filtro.proyectoId, email, por)).catch((err) => console.error('[muestra] no se pudo proponer al armar el filtro', (err as Error).message));
+    }
     return { generador: generadorParaNavegador(r.generador), problemas: r.problemas };
   },
 });

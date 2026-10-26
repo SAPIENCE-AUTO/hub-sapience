@@ -92,6 +92,8 @@ export interface Gasto { modelo: string; entrada: number; cacheLeidos: number; c
  */
 export async function llamarJSON<S extends z.ZodTypeAny>(opts: {
   usuario: Contenido;
+  /** Otro sistema en lugar de la skill de filtros (la muestra del proyecto). */
+  sistema?: string;
   esquema: S;
   modelo: string;
   esfuerzo: Esfuerzo;
@@ -103,7 +105,7 @@ export async function llamarJSON<S extends z.ZodTypeAny>(opts: {
   /** «Detener»: corta la llamada a la IA (deja de gastar). */
   signal?: AbortSignal;
 }): Promise<z.infer<S>> {
-  const system: Anthropic.Beta.Messages.BetaTextBlockParam[] = [{ type: 'text', text: systemPrompt(), cache_control: { type: 'ephemeral' } }];
+  const system: Anthropic.Beta.Messages.BetaTextBlockParam[] = [{ type: 'text', text: opts.sistema ?? systemPrompt(), cache_control: { type: 'ephemeral' } }];
   const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [{ role: 'user', content: opts.usuario }];
   let ultimoError = '';
   let conProblemas: { data: z.infer<S> } | null = null;

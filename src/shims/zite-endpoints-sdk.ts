@@ -156,6 +156,10 @@ export const getAvisoPrivacidad = (input?: any): Promise<any> => call('getAvisoP
 export const getFormularioDocumento = (input?: any): Promise<any> => call('getFormularioDocumento', input);
 export const publishFormularioCambios = (input?: any): Promise<any> => call('publishFormularioCambios', input);
 export const actualizarHistorialFormulario = (input?: any): Promise<any> => call('actualizarHistorialFormulario', input);
+// Muestra del proyecto (Reclutamiento → Muestra)
+export const getMuestra = (input?: any): Promise<any> => call('getMuestra', input);
+export const saveMuestra = (input?: any): Promise<any> => call('saveMuestra', input);
+export const proponerMuestra = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('proponerMuestra', input);
 // Filtros fase 3: generador con IA (los de la IA, con avance)
 export const generateFormularioCambio = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateFormularioCambio', input);
 export const generateFormularioNombres = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateFormularioNombres', input);

@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '../components/StatusBadge';
@@ -32,7 +32,7 @@ import { InlineInput } from '../components/table/InlineInput';
 import { GroupPicker } from '../components/table/GroupPicker';
 import { GroupSectionHeader } from '../components/table/GroupSectionHeader';
 import { ExportRecruitmentGroupsDialog, NO_GROUP_KEY, type ExportGroupOption } from '../components/ExportRecruitmentGroupsDialog';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, FileText, X, AlertTriangle, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, FileText, X, AlertTriangle, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList, MoreHorizontal, FileSpreadsheet, ListChecks } from 'lucide-react';
 import RecruitmentStatusPanel from '../components/RecruitmentStatusPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
@@ -2273,7 +2273,22 @@ const loadGeneralHiddenColumns = (boardId: string): Set<string> => {
 };
 
 // ── Main RecruitmentPage ──────────────────────────────────────────────────────
-export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMuestra?: boolean; onOpenMuestra?: () => void } = {}) {
+/**
+ * Las partes de Reclutamiento (2026-10-26): Muestra · Filtros · Participantes,
+ * en un selector antes de los tableros (por defecto, Participantes). En Muestra
+ * o Filtros se ve su contenido en lugar del tablero; el tablero no se desmonta,
+ * así que al regresar sigue con sus filtros y su vista.
+ */
+export type ParteReclutamiento = 'muestra' | 'filtros' | 'participantes';
+export interface PartesReclutamiento {
+  activa: ParteReclutamiento;
+  onElegir: (p: ParteReclutamiento) => void;
+  muestra: { contenido: React.ReactNode; resumen: { cubiertos: number; lugares: number } | null };
+  filtros: { contenido: React.ReactNode; resumen: { enVivo: number; respuestas: number } | null };
+}
+
+export default function RecruitmentPage({ partes }: { partes?: PartesReclutamiento } = {}) {
+  const enOtraParte = !!partes && partes.activa !== 'participantes';
   const { selectedProject, projects } = useProject();
   const { user } = useAuth();
   const presence = useProjectPresence({ projectCode: selectedProject, pageName: 'recruitment', enabled: !!selectedProject && !!user, user: user ?? undefined });
@@ -2317,8 +2332,6 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
   const [exportExcelDialogOpen, setExportExcelDialogOpen] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [statusPanelOpen, setStatusPanelOpen] = useState(false);
-  const [compactMode, setCompactMode] = useState(() => localStorage.getItem('recruit-compact') === '1');
-  const toggleCompact = () => setCompactMode(prev => { const next = !prev; localStorage.setItem('recruit-compact', next ? '1' : '0'); return next; });
 
   const [activeView, setActiveView] = useState<InternalView | null>(null);
   const internalViewsBarRef = useRef<InternalViewsBarHandle>(null);
@@ -3128,7 +3141,31 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
     <div className="flex flex-col h-full">
       {/* Board tabs */}
       <div className="flex items-center border-b border-border bg-card flex-shrink-0 overflow-hidden min-w-0">
-        <BoardTabsBar
+        {/* Las partes de Reclutamiento: un selector, para que no se confunda con las pestañas de los tableros (que solo salen en Participantes). */}
+        {partes && (
+          <div className="ml-3 mr-1 my-1.5 flex flex-shrink-0 items-center gap-0.5 rounded-lg bg-[#EEF0F3] p-[3px]">
+            {(['muestra', 'filtros', 'participantes'] as const).map((parte) => {
+              const on = partes.activa === parte;
+              const r = parte === 'muestra' ? partes.muestra.resumen : null;
+              const f = parte === 'filtros' ? partes.filtros.resumen : null;
+              return (
+                <button
+                  key={parte}
+                  type="button"
+                  onClick={() => partes.onElegir(parte)}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-[13px] transition-colors ${on ? 'bg-white font-semibold text-[#0F3D4D] shadow-sm' : 'text-[#5B687B] hover:text-[#0F3D4D]'}`}
+                >
+                  {parte === 'muestra' ? 'Muestra' : parte === 'filtros' ? 'Filtros' : 'Participantes'}
+                  {r && r.lugares > 0 && <span className="text-[11px] font-normal text-[#8b93a1]" title="Lugares cubiertos de la muestra">{r.cubiertos}/{r.lugares}</span>}
+                  {f && f.enVivo > 0 && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" title="Hay un filtro en vivo" />}
+                  {f && f.respuestas > 0 && <span className="text-[11px] font-normal text-[#8b93a1]" title="Respuestas reales de los filtros del proyecto">{f.respuestas}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {partes && !enOtraParte && <div className="mx-1 h-5 w-px flex-shrink-0 bg-border" />}
+        {!enOtraParte && <BoardTabsBar
           boards={boards}
           boardObjects={boardObjects}
           activeBoard={activeBoardId}
@@ -3165,39 +3202,21 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
           onRenameBoard={handleRenameBoard}
           addLabel="Tablero"
           inputPlaceholder="Nombre tablero"
-        />
-        <button
-          onClick={() => setImportDialogOpen(true)}
-          title="Crear tablero desde Excel"
-          className="px-2.5 py-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 border-l border-border/40 flex-shrink-0"
-        >
-          <Upload className="w-3 h-3" /> Importar Excel
-        </button>
+        />}
         {/* Dead inline tabs code removed — BoardTabsBar handles everything above */}
         {presence.members.length > 0 && (
           <div className="flex items-center px-3 pb-1 flex-shrink-0">
             <ProjectPresenceAvatars members={presence.members} />
           </div>
         )}
-        {onOpenMuestra && (
-          <Button
-            size="sm" variant={hasMuestra ? 'default' : 'outline'}
-            className="gap-1.5 h-7 text-xs ml-auto mr-3 flex-shrink-0"
-            onClick={onOpenMuestra}
-          >
-            <ClipboardList className="w-3 h-3" />
-            {hasMuestra ? 'Ver muestra' : 'Definir muestra'}
-          </Button>
-        )}
       </div>
 
-      {!compactMode && (
+      {partes && enOtraParte ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{partes.activa === 'muestra' ? partes.muestra.contenido : partes.filtros.contenido}</div>
+      ) : (
       <>
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-6 py-3 bg-muted/30 flex-shrink-0 flex-wrap border-b border-border/40">
-        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground flex-shrink-0" onClick={toggleCompact} title="Modo compacto">
-          <ChevronsDownUp className="w-4 h-4" />
-        </Button>
+      {/* Barra del tablero en una sola línea (2026-10-26): lo que se usa a la vista; exportar en un menú y lo demás en «⋯». */}
+      <div className="flex items-center gap-2 px-6 py-1.5 bg-muted/30 flex-shrink-0 flex-wrap border-b border-border/40">
         <Input placeholder="Buscar..." className="w-44 h-8 text-sm" value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
         <AdvancedFilterSheet
           columns={allColumns}
@@ -3331,88 +3350,74 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
             </PopoverContent>
           </Popover>
         )}
-        <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setDuplicateSearchOpen(true)}>
-          <SearchCheck className="w-3.5 h-3.5" /> Verificar duplicado
-        </Button>
+        {/* El formulario vinculado y su sincronización, en un solo botón. */}
         {activeBoardId && (
-          <Button size="sm" variant={dynCols.linkedFormInfo ? 'default' : 'outline'} className="gap-1.5 h-8" onClick={() => setLinkDialogOpen(true)}>
-            <Link2 className="w-3.5 h-3.5" />
-            {dynCols.linkedFormInfo ? (
-              <span className="flex items-center gap-1.5">
-                <span className="max-w-[120px] truncate">{dynCols.linkedFormInfo.formName}</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 flex-shrink-0" />
-              </span>
-            ) : 'Vincular form'}
-          </Button>
-        )}
-        {activeBoardId && dynCols.linkedFormInfo && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground border border-border rounded-md px-2.5 h-8">
-            {syncing ? (
-              <><RefreshCw className="w-3 h-3 animate-spin flex-shrink-0" /><span>Sincronizando...</span></>
-            ) : lastSyncTime ? (
-              <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" /><span>Sync: {(() => { const diff = Math.floor((Date.now() - lastSyncTime.getTime()) / 60000); return diff < 1 ? 'ahora mismo' : `hace ${diff} min`; })()}</span></>
-            ) : (
-              <><span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 flex-shrink-0" /><span>Esperando sync...</span></>
-            )}
-            <button
-              onClick={() => handleSync(false)}
-              disabled={syncing}
-              className="ml-1 p-0.5 rounded hover:bg-muted disabled:opacity-40 transition-colors"
-              title="Sincronizar ahora"
-            >
-              <RefreshCw className="w-3 h-3" />
+          <div className={`flex h-8 flex-shrink-0 items-center rounded-md border text-xs ${dynCols.linkedFormInfo ? 'border-emerald-500/50' : 'border-border'}`}>
+            <button type="button" className="flex h-full items-center gap-1.5 rounded-l-md px-2.5 hover:bg-muted" onClick={() => setLinkDialogOpen(true)} title={dynCols.linkedFormInfo ? 'Formulario vinculado: cambiarlo' : 'Vincular un formulario o filtro'}>
+              <Link2 className="h-3.5 w-3.5" />
+              {dynCols.linkedFormInfo ? (
+                <>
+                  <span className="max-w-[140px] truncate font-medium">{dynCols.linkedFormInfo.formName}</span>
+                  <span className="text-muted-foreground">
+                    {syncing ? '· sincronizando…' : lastSyncTime ? `· ${(() => { const diff = Math.floor((Date.now() - lastSyncTime.getTime()) / 60000); return diff < 1 ? 'al día' : diff < 60 ? `hace ${diff} min` : `hace ${Math.floor(diff / 60)} h`; })()}` : '· esperando'}
+                  </span>
+                </>
+              ) : <span className="font-medium">Vincular form</span>}
             </button>
+            {dynCols.linkedFormInfo && (
+              <button type="button" onClick={() => handleSync(false)} disabled={syncing} className="flex h-full items-center rounded-r-md border-l px-2 hover:bg-muted disabled:opacity-40" title="Sincronizar ahora">
+                <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
+              </button>
+            )}
           </div>
         )}
 
-        {activeBoardId && (() => {
-          const currentProject = projects.find(p => p.projectCode === selectedProject);
-          const hasMuestra = !!(currentProject as any)?.muestra?.trim() || !!(currentProject as any)?.muestraImagen?.trim();
-          return hasMuestra ? (
-            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-primary border-primary/40 hover:bg-primary/10" onClick={() => setStatusPanelOpen(true)}>
-              <BarChart3 className="w-3.5 h-3.5" /> Status
-            </Button>
-          ) : null;
-        })()}
+        <div className="flex-1" />
         {activeBoardId && (
           <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setShareDialogOpen(true)}>
             <Share2 className="w-3.5 h-3.5" /> Compartir
           </Button>
         )}
-        {activeBoardId && (
-          <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setImportDialogOpen(true)}>
-            <Upload className="w-3.5 h-3.5" /> Importar Excel
-          </Button>
-        )}
         {activeBoardId && boardRows.length > 0 && (
-          <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => {
-            exportRecruitmentCsv(boardRows, hiddenColumns, dynCols, groupDynCols);
-            toast.success(`${boardRows.filter(r => !r.parentRowId).length} filas exportadas a CSV`);
-          }}>
-            <Download className="w-3.5 h-3.5" /> Exportar CSV
-          </Button>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1.5 h-8" disabled={exportingExcel}>
+                <Download className="w-3.5 h-3.5" /> {exportingExcel ? 'Generando…' : 'Exportar'} <ChevronDown className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setExportExcelDialogOpen(true)}>
+                <FileSpreadsheet className="mr-2 h-4 w-4" />Excel (eliges grupos y columnas)
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => {
+                exportRecruitmentCsv(boardRows, hiddenColumns, dynCols, groupDynCols);
+                toast.success(`${boardRows.filter(r => !r.parentRowId).length} filas exportadas a CSV`);
+              }}>
+                <FileText className="mr-2 h-4 w-4" />CSV (todo el tablero)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-        {activeBoardId && boardRows.length > 0 && (
-          <Button size="sm" variant="outline" className="gap-1.5 h-8" disabled={exportingExcel} onClick={() => setExportExcelDialogOpen(true)}>
-            <Download className="w-3.5 h-3.5" /> {exportingExcel ? 'Generando...' : 'Exportar Excel'}
-          </Button>
-        )}
-        <div className="ml-auto">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="gap-1.5 h-8 text-muted-foreground hover:text-foreground"
-            onClick={() => setTrashOpen(true)}
-            title="Papelera"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-
-        <div className="flex-1" />
-        <span className="text-xs text-muted-foreground hidden sm:inline">
-          {boardRows.filter(r => !r.parentRowId).length} participantes
-        </span>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="h-8 w-8 p-0" aria-label="Más opciones del tablero">
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            {activeBoardId && (() => {
+              const currentProject = projects.find(p => p.projectCode === selectedProject);
+              const hasMuestra = !!(currentProject as any)?.muestra?.trim() || !!(currentProject as any)?.muestraImagen?.trim();
+              return hasMuestra ? (
+                <DropdownMenuItem onSelect={() => setStatusPanelOpen(true)}><BarChart3 className="mr-2 h-4 w-4" />Status con IA</DropdownMenuItem>
+              ) : null;
+            })()}
+            <DropdownMenuItem onSelect={() => setDuplicateSearchOpen(true)}><SearchCheck className="mr-2 h-4 w-4" />Buscar en otros proyectos</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setImportDialogOpen(true)}><Upload className="mr-2 h-4 w-4" />Importar Excel</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setTrashOpen(true)}><Trash2 className="mr-2 h-4 w-4" />Papelera</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Internal Views Bar */}
@@ -3427,45 +3432,11 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
           currentFiltersJson={currentFiltersJson}
           hasUnsavedChanges={hasUnsavedViewChanges}
           onViewUpdated={handleViewUpdated}
+          derecha={<span className="text-xs text-muted-foreground">{boardRows.filter(r => !r.parentRowId).length} participantes</span>}
         />
       )}
-      </>
-      )}
-      {compactMode && (
-        <div className="flex items-center gap-2 px-4 py-1 bg-muted/30 border-b border-border/40 flex-shrink-0">
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground flex-shrink-0" onClick={toggleCompact} title="Expandir toolbar">
-            <ChevronsUpDown className="w-3.5 h-3.5" />
-          </Button>
-          <div className="w-px h-4 bg-border/50" />
-          {activeBoardId && (
-            <span className="text-[11px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-md truncate max-w-[150px]">{activeBoardName}</span>
-          )}
-          {activeView && (
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-              <Eye className="w-3 h-3" /> {activeView.viewName}
-            </span>
-          )}
-          {totalActiveFilters > 0 && (
-            <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
-              {totalActiveFilters} filtro{totalActiveFilters !== 1 ? 's' : ''}
-            </span>
-          )}
-          <Input placeholder="Buscar..." className="w-36 h-6 text-xs" value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
-          {dynCols.linkedFormInfo && (
-            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-              {syncing ? 'Sync...' : 'Fillout'}
-            </span>
-          )}
-          <div className="flex-1" />
-          <span className="text-[11px] text-muted-foreground">
-            {boardRows.filter(r => !r.parentRowId).length} participantes
-          </span>
-        </div>
-      )}
-
       {/* Table area */}
-      <div className="flex-1 flex flex-col overflow-hidden px-6 py-4">
+      <div className="flex-1 flex flex-col overflow-hidden px-6 py-2">
         {loading || (activeBoardId && !groupDynCols.hasInitiallyLoaded) ? (
           <div className="space-y-2">{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
         ) : boardRows.length === 0 && totalActiveFilters === 0 && !activeBoardId ? (
@@ -3542,6 +3513,8 @@ export default function RecruitmentPage({ hasMuestra, onOpenMuestra }: { hasMues
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>

@@ -6,7 +6,7 @@ import type { Gasto } from './claude';
 // van en paralelo; al terminar se anota cuánto gastó. Un filtro completo son unas 12 llamadas.
 export const LIMITE_POR_HORA = Number(process.env.FORMULARIOS_IA_LIMITE_HORA || 60);
 
-export type AccionIA = 'estructura' | 'seccion' | 'logica' | 'pregunta' | 'comentario' | 'nombres' | 'identificacion' | 'clasificacion';
+export type AccionIA = 'estructura' | 'seccion' | 'logica' | 'pregunta' | 'comentario' | 'nombres' | 'identificacion' | 'clasificacion' | 'muestra';
 
 /** Lo que cuenta para el tope: una llamada que falló sin llegar a la IA (sin saldo, sin conexión) no gastó nada y no cuenta. */
 const CUENTA = '(ok is distinct from false or modelo is not null)';

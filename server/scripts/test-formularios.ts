@@ -39,6 +39,7 @@ import { sugerirCorreo } from '../../src/lib/formularios/correo';
 import { recalificar } from '../../src/serverUtils/formularios/traer';
 import { alternarMarca, leerFormato, sinFormato } from '../../src/lib/formularios/formato';
 import { tramosDe } from '../../src/lib/formularios/documento';
+import { cambiosEntre, leerMuestra, nombreDeGrupo, nuevaActividad, porPerfil, siguienteCodigo } from '../../src/lib/reclutamiento/muestra';
 import { leerCatalogoSepomex } from '../../src/serverUtils/formularios/codigosPostales';
 import { direccionDeComponentes } from '../../src/serverUtils/formularios/direcciones';
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
@@ -1224,6 +1225,22 @@ caso('negritas y color: se leen, se ponen y se quitan, y no llegan a las columna
   assert.match(xml, /<w:u w:val="single"\/>.*?<w:t xml:space="preserve">años<\/w:t>/);
   assert.match(xml, /<w:color w:val="7030A0"\/>.*?<w:t xml:space="preserve">cumplidos<\/w:t>/);
   assert.ok(!xml.includes('**') && !xml.includes('=='));
+});
+
+caso('la muestra: códigos por técnica, cambios en palabras y lugares por perfil', () => {
+  const s1 = nuevaActividad([], 'sesion', { id: 'a1', perfil: 'Perfil A', lugar: 'CDMX', fecha: '2026-11-04T18:00' });
+  const s2 = nuevaActividad([s1], 'sesion', { id: 'a2', perfil: 'Perfil B' });
+  const e1 = nuevaActividad([s1, s2], 'entrevista', { id: 'a3', perfil: 'Perfil A' });
+  assert.deepEqual([s1.codigo, s2.codigo, e1.codigo], ['S1', 'S2', 'E1']);
+  assert.equal(siguienteCodigo([s1, s2, e1], 'sesion'), 'S3');
+  assert.deepEqual([s1.personas, s1.reserva, e1.personas, e1.reserva], [8, 2, 1, 0]);
+  assert.equal(nombreDeGrupo(s1), 'S1 · mié 4 nov · 6:00 pm · CDMX');
+  const v1 = leerMuestra({ actividades: [s1, s2, e1] });
+  const v2 = leerMuestra({ actividades: [{ ...s1, lugar: 'Monterrey' }, e1, nuevaActividad([s1, s2, e1], 'triada', { id: 'a4' })] });
+  assert.deepEqual(cambiosEntre(v1, v2), ['S1: lugar de CDMX a Monterrey', 'Se agregó T1 (Tríada)', 'Se quitó S2']);
+  assert.deepEqual(porPerfil(v1.actividades).map((p) => [p.perfil, p.total.personas, p.total.reserva]), [['Perfil A', 9, 2], ['Perfil B', 8, 2]]);
+  // Lo guardado a medias o viejo no truena: lo que falta toma el valor de su técnica.
+  assert.deepEqual(leerMuestra({ actividades: [{ tecnica: 'nada', personas: -3 }, 7] }).actividades.map((a) => [a.tecnica, a.personas]), [['otra', 1]]);
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {
