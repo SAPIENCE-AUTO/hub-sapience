@@ -745,7 +745,7 @@ Pedido de Sergio: que el enlace de los participantes sea de Sharpli y no de Sapi
 
 **Queda a la vista (sin datos):** la dirección del servidor (`hub-sapience-api…`) y los nombres de los servicios en el código; las imágenes de las preguntas viven en una carpeta pública (quien tenga su dirección las ve). Captcha, pendiente.
 
-### Muestra: insumos a la vista y cambios pedidos a la IA (2026-10-26)
+### Muestra: insumos a la vista y cambios pedidos a la IA (2026-10-26, `ed0905b`)
 
 Pedido de Sergio: ver qué insumos va a leer la IA para la muestra, poder sumarle archivos, imágenes o texto (siempre arrastrando o eligiendo), y corregir lo que propone con comentarios.
 
