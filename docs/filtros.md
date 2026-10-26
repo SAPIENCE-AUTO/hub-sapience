@@ -668,6 +668,22 @@ Sergio preguntó qué pasaba si quería cambiar de color un texto del filtro: no
 
 **Probado en local (2026-10-24):** en el filtro de prueba `yjgpzy0`, «frutas» en color y «este mes» en negritas en una pregunta, y «probar» y «5 minutos» en la bienvenida: el editor, el celular de al lado, el formulario en `/f/yjgpzy0` a 375 y el Word y el PDF salen igual. 84 pruebas.
 
+### Celular y correo por defecto (2026-10-26)
+
+Sergio: el correo debería ir siempre, a menos que el analista lo quite. Hoy «Antes de empezar» solo pedía aviso, nombre e identificación; el celular dependía de que el filtro lo preguntara y el correo casi nunca iba.
+
+**Qué se construyó:**
+
+- **«Antes de empezar» trae celular y correo** después del nombre (`inicio.ts`: `contacto_celular`, tipo celular, y `contacto_correo`, tipo correo; solo si acepta el aviso). Sin el prefijo `hub_`: **no son fijas ni cortan**, el analista las corrige, las hace opcionales o las quita como cualquier pregunta. El celular es el del panel (`claves.telefono`).
+- Si el filtro ya pide celular o correo (una plantilla o un filtro anterior), ese no se agrega. Los filtros que ya existían no cambian.
+- Quitar una pregunta que era el nombre, el celular, la edad o el género del panel ya no deja el filtro con un problema que impide guardar (`quitarPregunta` limpia `claves`).
+- La IA ya no los vuelve a preguntar (regla 2 de `reglas.md`, `contrato.md`); al escribir la lógica, el celular del panel sigue siendo el de «Antes de empezar» si no se quitó (`generar.ts`).
+- Las traídas de un filtro anterior no salen «Incompletas» por no tener celular o correo nuevos («Antes de empezar» no cuenta para ellas).
+
+**Probado en local (2026-10-26):** un filtro nuevo desde la plantilla ALONG 2 («Prueba celular y correo por defecto», queda para borrarse) trae el correo en «Antes de empezar» como pregunta 3, sin candado y con su menú para quitarla (ALONG 2 ya pedía celular). 84 pruebas.
+
+**Comprobado en producción (2026-10-24):** el paso automático al tablero funciona: en «ALONG 2 - PRUEBA LUIS», en vivo, una respuesta real que calificó apareció en su tablero 7 segundos después.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
@@ -678,6 +694,7 @@ Sergio preguntó qué pasaba si quería cambiar de color un texto del filtro: no
 | Cómo reconocer a la misma persona | **Resuelto (2026-10-24):** la misma búsqueda de los tableros (2 de 3 iguales entre nombre, correo y celular) y, entre filtros, el celular | — |
 | Quién entra a la base | **Resuelto (2026-10-24):** todo el que contesta queda en Filtros; al tablero pasa en automático quien entra a un perfil con lugar; los demás, a mano | — |
 | Buscar gente en varios filtros anteriores | «Buscar en la base» con los atributos comunes (edad, NSE, ciudad, marcas…) y la biblioteca | Fase 6 |
+| Reclutamiento por técnica | Bocetos (2026-10-26): Muestra (perfiles por técnica y cada sesión, tríada o entrevista con su fecha y su cuota), tablero agrupado por técnica y sesión con «Por asignar», titular/reserva y 6 estatus, y la ficha de la persona (igual en Filtros y el tablero). Esperan su visto bueno | Rediseño de Reclutamiento |
 | Países del NSE para arrancar | México ya está (AMAI 2022, confirmada); falta el siguiente con estudio en puerta | — |
 | Columnas al tablero | Todas, con una vista de solo las clave | — |
 | Imágenes de conceptos confidenciales | Caso por caso | — |
@@ -707,3 +724,4 @@ Sergio preguntó qué pasaba si quería cambiar de color un texto del filtro: no
 - **2026-10-24 · rediseño del flujo:** con los bocetos aprobados por Sergio: un solo camino de 5 pasos con un botón por paso, «Por revisar» en un chip, modos Diseñar y Reclutar (enlace, tablero y cuotas con barras), preguntas numeradas y lógica en etiquetas, el celular sigue la lectura, «Filtros» en todo y la lista con el paso de cada filtro; en vivo se edita una copia y se publica con «Publicar cambios» (columna `formularios.cambios`, creada con su OK). 81 pruebas. Probado en local y subido a `main` con el OK de Sergio (`2d4c4d6`).
 - **2026-10-24 · fase 5 (operación):** nadie se corta por defecto (se registran todos los motivos; «cortar» a petición, y siempre el aviso y la identificación); al recibir una respuesta, historial y duplicados con la búsqueda de los tableros, paso solo al tablero en vivo para quien entra a un perfil con lugar (con su historial en notas) y clasificación con IA (medio centavo de dólar por persona); traer a quienes contestaron un filtro anterior; pestaña Filtros junto a Reclutamiento y filtros del Hub en «Vincular form». 83 pruebas. Probado en local y subido a `main` con el OK de Sergio (`0bd0d7d`).
 - **2026-10-24 · negritas y color:** a pedido de Sergio, los textos que lee el participante (pregunta, ayuda, contenido, entrada de sección, bienvenida y despedidas) llevan negritas y un color para resaltar, con botones en el editor; se ven igual en el formulario, el celular y el Word/PDF, y salen sin formato en el tablero, el Excel y el flujo. 84 pruebas. Probado en local y subido a `main` con el OK de Sergio (`35be0b0`).
+- **2026-10-26 · celular y correo por defecto:** «Antes de empezar» los pide después del nombre (si el filtro no los pide ya), como preguntas que el analista puede corregir o quitar; la IA ya no los repite. 84 pruebas. Probado en local, sin subir.

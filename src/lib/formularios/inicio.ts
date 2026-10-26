@@ -6,16 +6,24 @@ import type { Definicion, Pregunta, Seccion } from './tipos';
  * y la identificación oficial: quien no acepta el aviso o no quiere dar su
  * identificación termina ahí; sin la foto no puede seguir. La pone el Hub
  * (como las preguntas del NSE): la IA no la escribe y en el editor queda fija.
+ *
+ * El celular y el correo también van aquí por defecto (pedido de Sergio,
+ * 2026-10-26), pero son preguntas normales: el analista las puede corregir o
+ * quitar. Con nombre, celular y correo la búsqueda de duplicados (2 de 3) sirve.
  */
 export const SECCION_INICIO = 'hub_inicio';
 export const ID_AVISO = 'hub_aviso';
 export const ID_NOMBRE = 'hub_nombre';
 export const ID_ACEPTA_IDENTIFICACION = 'hub_id_acepta';
 export const ID_FOTO_IDENTIFICACION = 'hub_id_foto';
+// Sin «hub_»: no quedan fijas ni cortan el filtro.
+export const ID_CELULAR = 'contacto_celular';
+export const ID_CORREO = 'contacto_correo';
 
 export const esDelInicio = (preguntaId: string) => preguntaId.startsWith('hub_');
 
-export function seccionInicio(): Seccion {
+/** `contacto`: qué datos de contacto se ponen (los que el filtro todavía no pide). */
+export function seccionInicio(contacto: { celular?: boolean; correo?: boolean } = { celular: true, correo: true }): Seccion {
   const acepto = { pregunta: ID_AVISO, incluye: ['acepto'] };
   return {
     id: SECCION_INICIO,
@@ -30,6 +38,8 @@ export function seccionInicio(): Seccion {
         ],
       },
       { id: ID_NOMBRE, tipo: 'texto', nombre: 'Nombre', texto: 'Nombre', ayuda: 'Escribe tu nombre completo.', mostrarSi: acepto },
+      ...(contacto.celular ? [{ id: ID_CELULAR, tipo: 'telefono', nombre: 'Celular', texto: 'Celular', ayuda: 'Para contactarte si quedas en el estudio.', mostrarSi: acepto } satisfies Pregunta] : []),
+      ...(contacto.correo ? [{ id: ID_CORREO, tipo: 'correo', nombre: 'Correo', texto: 'Correo electrónico', mostrarSi: acepto } satisfies Pregunta] : []),
       {
         id: ID_ACEPTA_IDENTIFICACION, tipo: 'unica', nombre: 'Acepta dar identificación', texto: 'Identificación', mostrarSi: acepto,
         ayuda: 'Para llenar este cuestionario y poder participar necesitamos una foto de una identificación oficial vigente (INE, pasaporte, etc.). ¿Estás de acuerdo?',
@@ -50,7 +60,8 @@ const repetida = (p: Pregunta) => p.id === 'aviso' || p.id === 'nombre';
 /**
  * El filtro con «Antes de empezar» al principio (si no lo tenía). Quita su
  * propio aviso y su nombre, que ahora van ahí, y el nombre para el panel pasa
- * a ser el de «Antes de empezar».
+ * a ser el de «Antes de empezar». El celular y el correo solo se agregan si el
+ * filtro no los pide ya (una plantilla o un filtro anterior).
  */
 export function conInicio(def: Definicion): Definicion {
   if (def.secciones.some((s) => s.id === SECCION_INICIO)) return def;
@@ -62,7 +73,13 @@ export function conInicio(def: Definicion): Definicion {
     // La que se llamaba igual (las indicaciones de una plantilla) cambia de nombre: dos «Antes de empezar» seguidas confunden.
     .map((s) => (s.titulo?.trim().toLowerCase() === titulo ? { ...s, titulo: 'Indicaciones' } : s));
   const nombre = def.claves?.nombre && !quitadas.has(def.claves.nombre) ? def.claves.nombre : ID_NOMBRE;
-  return { ...def, secciones: [seccionInicio(), ...secciones], claves: { ...def.claves, nombre } };
+  const tiene = (tipo: Pregunta['tipo']) => secciones.some((s) => s.preguntas.some((p) => p.tipo === tipo));
+  const contacto = { celular: !tiene('telefono'), correo: !tiene('correo') };
+  return {
+    ...def,
+    secciones: [seccionInicio(contacto), ...secciones],
+    claves: { ...def.claves, nombre, ...(contacto.celular ? { telefono: ID_CELULAR } : {}) },
+  };
 }
 
 /** «Antes de empezar» siempre primero, aunque se reordene lo demás. */

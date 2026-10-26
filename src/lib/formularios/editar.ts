@@ -258,8 +258,12 @@ export function agregarPregunta(def: Definicion, seccionId: string, tipo: TipoPr
   };
 }
 
-export const quitarPregunta = (def: Definicion, id: string): Definicion =>
-  enSecciones(def, (s) => ({ ...s, preguntas: s.preguntas.filter((p) => p.id !== id) }));
+/** Quita una pregunta; si era la del nombre, el celular, la edad o el género del panel, ese dato se queda sin pregunta. */
+export function quitarPregunta(def: Definicion, id: string): Definicion {
+  const sin = enSecciones(def, (s) => ({ ...s, preguntas: s.preguntas.filter((p) => p.id !== id) }));
+  if (!def.claves || !Object.values(def.claves).includes(id)) return sin;
+  return { ...sin, claves: Object.fromEntries(Object.entries(def.claves).filter(([, v]) => v !== id)) as Definicion['claves'] };
+}
 
 /**
  * Sube o baja una pregunta. En la orilla de su sección pasa a la sección de

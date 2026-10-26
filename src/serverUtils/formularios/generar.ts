@@ -9,7 +9,7 @@ import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQ
 import { reglaNse } from '../../lib/formularios/nse';
 import { revisarConLugar } from '../../lib/formularios/revisar';
 import { sinNombreCorto } from '../../lib/formularios/tabla';
-import { ID_NOMBRE, SECCION_INICIO } from '../../lib/formularios/inicio';
+import { ID_CELULAR, ID_NOMBRE, SECCION_INICIO } from '../../lib/formularios/inicio';
 import { leerDefinicion, type Definicion, type Pregunta, type Seccion } from '../../lib/formularios/tipos';
 import { conLatido, llamarJSON, MODELOS, type Contenido } from './claude';
 import {
@@ -296,8 +296,12 @@ export function conservarLogica(parche: Parche, def: Definicion): Parche {
 function revisarLogica(r: { frentes: unknown[]; alertas: unknown[]; claves: unknown; textos: unknown }, def: Definicion, e: Estructura, ajuste: boolean) {
   const conocidos: Conocidos = { ...conocidosDe(def), frentes: new Set(e.frentes.map((f) => f.id)) };
   const parche = asentarIds(sinVacios({ frentes: r.frentes, alertas: r.alertas, claves: r.claves }) as Parche, conocidos, def);
-  // El nombre lo pide «Antes de empezar» (lo pone el Hub): es el del panel aunque la IA haya elegido otro.
-  if (def.secciones.some((s) => s.id === SECCION_INICIO)) parche.claves = { ...parche.claves, nombre: ID_NOMBRE };
+  // El nombre (y el celular, si no se quitó) los pide «Antes de empezar» (lo pone el Hub): son los del panel aunque la IA haya elegido otros.
+  const inicio = def.secciones.find((s) => s.id === SECCION_INICIO);
+  if (inicio) {
+    const celular = inicio.preguntas.some((p) => p.id === ID_CELULAR);
+    parche.claves = { ...parche.claves, nombre: ID_NOMBRE, ...(celular ? { telefono: ID_CELULAR } : {}) };
+  }
   const textos = Object.fromEntries(Object.entries(sinVacios(r.textos) as Record<string, string>).filter(([, v]) => v?.trim()));
   const completo: Parche = ajuste ? conservarLogica(parche, def) : { ...parche, textos };
   const despues = aplicarParche(def, completo);

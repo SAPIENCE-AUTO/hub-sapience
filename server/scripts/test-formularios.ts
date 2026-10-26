@@ -15,7 +15,7 @@ import { condicionEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta
 import { filasFlujo, filasFlujoDeEstructura, mapaFlujo } from '../../src/lib/formularios/flujo';
 import { duracionEstimada, duracionPorPerfil } from '../../src/lib/formularios/duracion';
 import {
-  GRUPOS_TIPOS, agregarOpcion, agregarPregunta, agregarSeccion, cambiarOpcion, cambiarPregunta, cambiarTipo, comoSimple, diferencias, idNuevo,
+  GRUPOS_TIPOS, agregarOpcion, agregarPregunta, agregarSeccion, cambiarOpcion, cambiarPregunta, cambiarTipo, comoSimple, diferencias, esFija, idNuevo,
   moverPregunta, moverSeccion, preguntasParaCondicion, quitarOpcion, quitarPregunta, usosDeOpcion, usosDePregunta, usosDeSeccion,
 } from '../../src/lib/formularios/editar';
 import { TIPOS, forma, type Pregunta, type Seccion } from '../../src/lib/formularios/tipos';
@@ -1107,7 +1107,7 @@ caso('el flujo de una estructura (antes de escribir) sale con las mismas ramas q
   assert.ok(filtros && filtros.tipo === 'paso' && filtros.bloque.termina.length > 0);
 });
 
-caso('todo filtro arranca con «Antes de empezar»: aviso, nombre e identificación', () => {
+caso('todo filtro arranca con «Antes de empezar»: aviso, nombre, celular, correo e identificación', () => {
   const d = conInicio(ALONG2);
   assert.equal(d.secciones[0].id, SECCION_INICIO);
   assert.equal(d.secciones.flatMap((x) => x.preguntas).filter((p) => p.id === 'aviso' || p.id === 'nombre').length, 0);
@@ -1123,8 +1123,20 @@ caso('todo filtro arranca con «Antes de empezar»: aviso, nombre e identificaci
   assert.deepEqual(inicio.preguntas.map((p) => p.clave), ['hub_aviso']);
   assert.equal(evaluar(d, { hub_aviso: 'no_acepto' }).terminado?.motivo, 'No aceptó el aviso de privacidad');
   assert.equal(evaluar(d, { hub_aviso: 'acepto', hub_nombre: 'Persona de Prueba', hub_id_acepta: 'no' }).terminado?.motivo, 'No quiso dar su identificación');
-  assert.deepEqual(pantallas(d, { hub_aviso: 'acepto' })[0].preguntas.map((p) => p.clave), ['hub_aviso', 'hub_nombre', 'hub_id_acepta']);
-  assert.deepEqual(pantallas(d, { hub_aviso: 'acepto', hub_id_acepta: 'si' })[0].preguntas.map((p) => p.clave), ['hub_aviso', 'hub_nombre', 'hub_id_acepta', 'hub_id_foto']);
+  // ALONG 2 ya pide su celular: solo se agrega el correo, y el celular del panel sigue siendo el suyo.
+  assert.deepEqual(pantallas(d, { hub_aviso: 'acepto' })[0].preguntas.map((p) => p.clave), ['hub_aviso', 'hub_nombre', 'contacto_correo', 'hub_id_acepta']);
+  assert.deepEqual(pantallas(d, { hub_aviso: 'acepto', hub_id_acepta: 'si' })[0].preguntas.map((p) => p.clave), ['hub_aviso', 'hub_nombre', 'contacto_correo', 'hub_id_acepta', 'hub_id_foto']);
+  assert.equal(d.claves?.telefono, ALONG2.claves?.telefono);
+  // Un filtro que no los pide: los dos, y el celular es el del panel.
+  const vacio = conInicio(definicionVacia());
+  assert.deepEqual(vacio.secciones[0].preguntas.map((p) => p.id), ['hub_aviso', 'hub_nombre', 'contacto_celular', 'contacto_correo', 'hub_id_acepta', 'hub_id_foto']);
+  assert.equal(vacio.claves?.telefono, 'contacto_celular');
+  // El analista los puede quitar (no son fijos ni cortan), y el filtro sigue sin problemas.
+  assert.ok(!esFija(vacio, 'contacto_celular') && !esFija(vacio, 'contacto_correo'));
+  const sinCelular = quitarPregunta(vacio, 'contacto_celular');
+  assert.equal(sinCelular.claves?.telefono, undefined);
+  assert.equal(sinCelular.claves?.nombre, 'hub_nombre');
+  assert.deepEqual(revisarDefinicion(sinCelular), []);
   // Al escribir con la IA, lo que llega va después de «Antes de empezar», y la IA no lo puede quitar.
   const e = estructuraDeDefinicion(d);
   assert.ok(!e.secciones.some((x) => x.id === SECCION_INICIO));
