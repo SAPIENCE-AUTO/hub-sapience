@@ -773,6 +773,10 @@ Pedido de Sergio: al hacer la muestra de ALONG 2 y luego entrar a Filtros, se vo
 
 **Pendiente:** en ALONG 2 la muestra tiene 40 perfiles (uno por entrevista): pedirle a la IA en Muestra que los agrupe por categoría con las marcas en «reparto».
 
+### Las preguntas escritas quedaban al revés (arreglo, 2026-10-26)
+
+En la prueba en vivo de ALONG 2, al escribir las preguntas el filtro quedó al revés y «desaparecieron» secciones. Causa: `ponerSeccion` (lib/formularios/generador.ts) acomoda cada sección escrita antes de la primera que en la estructura va después; «Antes de empezar» no está en la estructura y contaba como «al final», así que cada sección caía justo después de ella (en orden inverso al de llegada). Con ese orden hay preguntas que usan otras que van después, el Hub no deja guardar un filtro así y solo se guardó lo primero; al ajustar la estructura, la comparación contra lo que había en pantalla (las mismas secciones, en desorden) decía que nada cambiaba y no salía el botón para escribir. Venía desde que «Antes de empezar» es fija (`301e804`). Arreglo: «Antes de empezar» no cuenta al acomodar; prueba nueva (90). El filtro «SCREENER V1» de ALONG 2 se recuperó con sus 12 secciones ya escritas, en orden y sin volver a gastar IA (versión anterior guardada en sus versiones); al abrirlo, la IA arma la lógica.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |

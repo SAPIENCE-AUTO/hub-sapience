@@ -445,8 +445,10 @@ export function ponerSeccion(def: Definicion, seccion: Seccion, e: Estructura): 
   const orden = new Map(e.secciones.map((s, i) => [s.id, i]));
   const otras = def.secciones.filter((s) => s.id !== seccion.id);
   const i = orden.get(seccion.id) ?? Infinity;
-  // Va antes de la primera sección que en la estructura va después de ella.
-  const antesDe = otras.findIndex((s) => (orden.get(s.id) ?? Infinity) > i);
+  // Va antes de la primera sección que en la estructura va después de ella. «Antes de empezar» no está en la
+  // estructura y va siempre primero: no cuenta (si contara como «al final», cada sección caería justo después de
+  // ella y el filtro quedaría al revés, con preguntas que usan otras que van después: así no se puede guardar).
+  const antesDe = otras.findIndex((s) => s.id !== SECCION_INICIO && (orden.get(s.id) ?? Infinity) > i);
   const secciones = inicioPrimero(antesDe < 0 ? [...otras, seccion] : [...otras.slice(0, antesDe), seccion, ...otras.slice(antesDe)]);
   let nueva: Definicion = { ...def, secciones };
   // La sección del NSE trae su regla.

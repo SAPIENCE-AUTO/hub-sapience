@@ -20,7 +20,7 @@ import {
 } from '../../src/lib/formularios/editar';
 import { TIPOS, forma, type Pregunta, type Seccion } from '../../src/lib/formularios/tipos';
 import {
-  asentarEstructura, avanceEscritura, compararEstructuras, revisarEstructura, type Estructura, conservarSinCambio, definicionVacia, estructuraDeDefinicion, firmaSeccion, generadorNuevo,
+  asentarEstructura, avanceEscritura, compararEstructuras, revisarEstructura, type Estructura, type SeccionPlan, conservarSinCambio, definicionVacia, estructuraDeDefinicion, firmaSeccion, generadorNuevo,
   minutosDeEstructura, ponerSeccion, prepararParaEscribir, seccionNse,
 } from '../../src/lib/formularios/generador';
 import { definicionParaIA, promptCambio, promptEstructura, promptLogica, promptNombres, promptSeccion } from '../../src/serverUtils/formularios/prompts';
@@ -1375,6 +1375,15 @@ caso('el filtro toma de la muestra los perfiles y sus cuotas', () => {
     { id: 'f3', nombre: 'Velas', meta: 3 },
     { id: 'f4', nombre: 'Quitado', meta: 2 },
   ]);
+});
+
+caso('las secciones escritas quedan en el orden de la estructura aunque lleguen en otro, con «Antes de empezar» primero', () => {
+  const plan = (id: string): SeccionPlan => ({ id, titulo: id, para: '', preguntas: [] });
+  const e = { pais: 'MX', tituloPublico: 'x', perfil: '', frentes: [], secciones: ['s_a', 's_b', 's_c', 's_d'].map(plan), supuestos: [] } as Estructura;
+  const sec = (id: string): Seccion => ({ id, titulo: id, preguntas: [] });
+  let def = { ...conInicio({ ...ALONG2, secciones: [] }) };
+  for (const id of ['s_c', 's_a', 's_d', 's_b']) def = ponerSeccion(def, sec(id), e);
+  assert.deepEqual(def.secciones.map((s) => s.id), [SECCION_INICIO, 's_a', 's_b', 's_c', 's_d']);
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {
