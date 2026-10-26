@@ -37,7 +37,7 @@ const fechaVersion = (iso: string) => new Date(iso).toLocaleDateString('es-MX', 
 /**
  * Reclutamiento → Muestra (pedido de Sergio, 2026-10-26): las actividades del
  * estudio por técnica, con fecha, lugar, perfil y cupo. Se edita aquí y se
- * guarda como versión (con qué cambió y por qué). «Crear grupos y eventos»
+ * guarda como versión (con qué cambió y por qué). «Crear grupos y eventos…»
  * hace cada actividad un grupo del tablero y un evento del calendario, ya
  * ligados; asignar a alguien es moverlo a su grupo, y aquí se ve el avance.
  * Ningún cambio mueve ni borra gente. Los insumos que lee la IA están a la
@@ -51,8 +51,8 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
   const [guardar, setGuardar] = useState<{ motivo: string } | null>(null);
   const [trabajando, setTrabajando] = useState<string | null>(null);
   const [quitar, setQuitar] = useState<Actividad | null>(null);
-  const [tableroId, setTableroId] = useState('');
-  const [calendarioId, setCalendarioId] = useState('');
+  /** «Crear grupos y eventos…»: qué crear y dónde (se pregunta siempre). `calendario: 'nuevo'` crea «Calendario de sesiones». */
+  const [crearCon, setCrearCon] = useState<{ grupos: boolean; eventos: boolean; tablero: string; calendario: string } | null>(null);
   const [verInsumos, setVerInsumos] = useState(false);
   const [pedido, setPedido] = useState('');
   /** El último cambio de la IA, para enseñarlo y poder deshacerlo. */
@@ -64,8 +64,6 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
     setDatos(d);
     setBorrador(d.muestra ? leerMuestra(d.muestra.definicion) : VACIA);
     setCambioIA(null);
-    setTableroId((t) => t || d.muestra?.tableroId || d.tableros[0]?.id || '');
-    setCalendarioId((c) => c || d.muestra?.calendarioId || d.calendarios[0]?.id || '');
   }, [proyectoId]);
   useEffect(() => { cargar().catch((e) => toast.error((e as Error).message || 'No se pudo cargar la muestra')); }, [cargar]);
 
@@ -138,7 +136,7 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
     setTrabajando('Guardando…');
     try {
       const lista = cambios.length ? cambios : [`Primera versión: ${borrador.actividades.length} actividades`];
-      await saveMuestra({ proyectoId, definicion: borrador, cambios: lista, motivo, versionBase: datos.muestra?.version ?? 0, tableroId: tableroId || undefined, calendarioId: calendarioId || undefined });
+      await saveMuestra({ proyectoId, definicion: borrador, cambios: lista, motivo, versionBase: datos.muestra?.version ?? 0 });
       await ponerAlDia(guardada, borrador);
       setCambioIA(null);
       toast.success('Muestra guardada');
@@ -177,12 +175,27 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
 
   // ── crear grupos y eventos ──────────────────────────────────────────────────
   const pendientes = pendientesDeCrear(guardada.actividades);
-  const crear = async () => {
-    if (!datos?.muestra || !tableroId) return;
-    setTrabajando('Creando grupos y eventos…');
+  /** Abre la ventana: qué crear (grupos, eventos o los dos) y en qué tablero y calendario. */
+  const abrirCrear = () => {
+    if (!datos?.muestra) return;
+    setCrearCon({
+      grupos: pendientes.grupos.length > 0,
+      eventos: pendientes.eventos.length > 0,
+      tablero: datos.muestra.tableroId ?? (datos.tableros.length === 1 ? datos.tableros[0].id : ''),
+      calendario: datos.muestra.calendarioId ?? (datos.calendarios.length === 1 ? datos.calendarios[0].id : datos.calendarios.length ? '' : 'nuevo'),
+    });
+  };
+  const crear = async (op: { grupos: boolean; eventos: boolean; tablero: string; calendario: string }) => {
+    if (!datos?.muestra) return;
+    setCrearCon(null);
+    setTrabajando('Creando…');
+    // Los grupos de una muestra viven en un solo tablero y sus eventos en un solo calendario (así se lee el avance).
+    const tableroId = datos.muestra.tableroId ?? (op.grupos ? op.tablero : undefined);
+    let calendario = datos.calendarios.find((c) => c.id === (datos.muestra!.calendarioId ?? op.calendario));
+    let grupos = 0;
+    let eventos = 0;
     try {
-      let calendario = datos.calendarios.find((c) => c.id === calendarioId);
-      if (!calendario && pendientes.eventos.length) {
+      if (op.eventos && !calendario && op.calendario === 'nuevo') {
         const b = await saveBoard({ boardName: 'Calendario de sesiones', projectCode, boardType: 'calendar' });
         calendario = { id: b.id, nombre: b.boardName };
       }
@@ -190,12 +203,15 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
       for (const [i, a] of actividades.entries()) {
         let grupoId = a.grupoId;
         let eventoId = a.eventoId;
-        if (!grupoId) {
+        let ligar = false;
+        if (op.grupos && !grupoId && tableroId) {
           setTrabajando(`Creando el grupo ${a.codigo}…`);
           const g = await saveBoardColumn({ columnName: nombreDeGrupo(a), boardId: `${tableroId}::groups`, columnType: colorDeGrupo(a, i), columnOrder: 100 + i });
           grupoId = g.id;
+          grupos++;
+          ligar = !!eventoId; // ya tenía evento (se creó antes, sin grupo): se ligan
         }
-        if (!eventoId && a.fecha && calendario) {
+        if (op.eventos && !eventoId && a.fecha && calendario) {
           setTrabajando(`Creando el evento de ${a.codigo}…`);
           const ev = await saveCalendarEvent({
             eventName: nombreDeEvento(a), projectCode, calendarName: calendario.nombre, boardId: calendario.id,
@@ -205,16 +221,20 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
             dinamica: TECNICAS[a.tecnica].nombre, ...(a.perfil ? { perfil: a.perfil } : {}),
           });
           eventoId = ev.id;
-          await linkGroupToEvent({ groupColumnId: grupoId!, recruitmentBoardId: tableroId, calendarBoardId: calendario.id, eventId: ev.id });
+          eventos++;
+          ligar = !!grupoId;
+        }
+        if (ligar && grupoId && eventoId && tableroId && calendario) {
+          await linkGroupToEvent({ groupColumnId: grupoId, recruitmentBoardId: tableroId, calendarBoardId: calendario.id, eventId: eventoId });
         }
         actividades[i] = { ...a, grupoId, eventoId };
       }
       await saveMuestra({
         proyectoId, definicion: { ...guardada, actividades }, cambios: [], versionBase: datos.muestra.version,
-        tableroId, ...(calendario ? { calendarioId: calendario.id } : {}), soloLigas: true,
+        ...(tableroId ? { tableroId } : {}), ...(calendario ? { calendarioId: calendario.id } : {}), soloLigas: true,
       });
-      publishRecruitmentGroupsChanged({ projectCode, boardId: tableroId, changeType: 'structure' }).catch(() => {});
-      toast.success('Listo: cada actividad ya tiene su grupo en el tablero y, si tiene fecha, su evento en el calendario.');
+      if (tableroId && grupos) publishRecruitmentGroupsChanged({ projectCode, boardId: tableroId, changeType: 'structure' }).catch(() => {});
+      toast.success(`Listo: ${[grupos && `${grupos} ${grupos === 1 ? 'grupo' : 'grupos'}`, eventos && `${eventos} ${eventos === 1 ? 'evento' : 'eventos'}`].filter(Boolean).join(' y ') || 'nada nuevo que crear'}.`);
       await cargar();
       onCambio?.();
     } catch (e) {
@@ -389,7 +409,7 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
 
         {borrador.actividades.length > 0 && <MenuTecnicas onElegir={agregar} etiqueta="Agregar otra técnica" />}
 
-        {/* Crear grupos y eventos */}
+        {/* Crear grupos y eventos: siempre pregunta qué y dónde */}
         {datos.muestra && !sucia && (pendientes.grupos.length > 0 || pendientes.eventos.length > 0) && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border p-4" style={{ borderColor: `${TEAL}40`, backgroundColor: `${TEAL}08` }}>
             <div className="min-w-0 flex-1 text-sm">
@@ -398,23 +418,66 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
                 {pendientes.grupos.length > 0 && pendientes.eventos.length > 0 && ' · '}
                 {pendientes.eventos.length > 0 && `${pendientes.eventos.length} sin evento`}
               </p>
-              <p className="text-xs text-muted-foreground">Las que no tienen fecha tienen grupo y esperan su evento. No se manda ninguna invitación.</p>
+              <p className="text-xs text-muted-foreground">Eliges qué crear y en qué tablero y calendario. No se manda ninguna invitación.</p>
             </div>
-            {datos.tableros.length > 1 && (
-              <select className="h-8 rounded-md border bg-background px-2 text-sm" value={tableroId} onChange={(e) => setTableroId(e.target.value)} disabled={!!datos.muestra.tableroId} title="Tablero donde se crean los grupos">
-                {datos.tableros.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-              </select>
-            )}
-            {datos.calendarios.length > 1 && (
-              <select className="h-8 rounded-md border bg-background px-2 text-sm" value={calendarioId} onChange={(e) => setCalendarioId(e.target.value)} title="Calendario donde se crean los eventos">
-                {datos.calendarios.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
-            )}
-            <Button size="sm" className="gap-1.5" disabled={!!trabajando || !tableroId} onClick={crear}><CalendarPlus className="h-3.5 w-3.5" />Crear grupos y eventos</Button>
-            {!datos.tableros.length && <p className="basis-full text-xs" style={{ color: ALERTA }}>Primero crea un tablero en Participantes.</p>}
+            <Button size="sm" className="gap-1.5" disabled={!!trabajando} onClick={abrirCrear}><CalendarPlus className="h-3.5 w-3.5" />Crear grupos y eventos…</Button>
           </div>
         )}
       </div>
+
+      <Dialog open={!!crearCon} onOpenChange={(o) => !o && setCrearCon(null)}>
+        <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+          <DialogHeader><DialogTitle>Crear grupos y eventos</DialogTitle></DialogHeader>
+          {crearCon && datos.muestra && (
+            <div className="space-y-4 text-sm">
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-2 font-medium">
+                  <input type="checkbox" className="h-4 w-4 accent-[#0F3D4D]" disabled={!pendientes.grupos.length} checked={crearCon.grupos} onChange={(e) => setCrearCon({ ...crearCon, grupos: e.target.checked })} />
+                  {pendientes.grupos.length} {pendientes.grupos.length === 1 ? 'grupo' : 'grupos'} en el tablero
+                </label>
+                {crearCon.grupos && (datos.muestra.tableroId
+                  ? <p className="pl-6 text-xs text-muted-foreground">En «{datos.tableros.find((t) => t.id === datos.muestra!.tableroId)?.nombre ?? 'su tablero'}», donde ya están los grupos de esta muestra.</p>
+                  : datos.tableros.length
+                    ? (
+                      <select className="ml-6 h-8 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 text-sm" value={crearCon.tablero} onChange={(e) => setCrearCon({ ...crearCon, tablero: e.target.value })}>
+                        <option value="">Elige el tablero…</option>
+                        {datos.tableros.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                      </select>
+                    )
+                    : <p className="pl-6 text-xs" style={{ color: ALERTA }}>Este proyecto no tiene tablero: créalo primero en Participantes.</p>)}
+              </div>
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-2 font-medium">
+                  <input type="checkbox" className="h-4 w-4 accent-[#0F3D4D]" disabled={!pendientes.eventos.length} checked={crearCon.eventos} onChange={(e) => setCrearCon({ ...crearCon, eventos: e.target.checked })} />
+                  {pendientes.eventos.length} {pendientes.eventos.length === 1 ? 'evento' : 'eventos'} en el calendario
+                </label>
+                {crearCon.eventos && (datos.muestra.calendarioId && datos.calendarios.some((c) => c.id === datos.muestra!.calendarioId)
+                  ? <p className="pl-6 text-xs text-muted-foreground">En «{datos.calendarios.find((c) => c.id === datos.muestra!.calendarioId)?.nombre}», donde ya están los eventos de esta muestra.</p>
+                  : (
+                    <select className="ml-6 h-8 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 text-sm" value={crearCon.calendario} onChange={(e) => setCrearCon({ ...crearCon, calendario: e.target.value })}>
+                      <option value="">Elige el calendario…</option>
+                      {datos.calendarios.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                      <option value="nuevo">Uno nuevo: «Calendario de sesiones»</option>
+                    </select>
+                  ))}
+                {!pendientes.eventos.length && <p className="pl-6 text-xs text-muted-foreground">Ninguna actividad con fecha espera su evento.</p>}
+              </div>
+              <p className="text-xs text-muted-foreground">Solo las actividades con fecha llevan evento. Cada grupo se liga a su evento. No se manda ninguna invitación.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCrearCon(null)}>Cancelar</Button>
+            <Button
+              disabled={!crearCon || (!crearCon.grupos && !crearCon.eventos)
+                || (crearCon.grupos && !datos.muestra?.tableroId && !crearCon.tablero)
+                || (crearCon.eventos && !(datos.muestra?.calendarioId && datos.calendarios.some((c) => c.id === datos.muestra!.calendarioId)) && !crearCon.calendario)}
+              onClick={() => crearCon && crear(crearCon)}
+            >
+              Crear
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!guardar} onOpenChange={(o) => !o && setGuardar(null)}>
         <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
