@@ -184,7 +184,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 | 1 | Base: tipos de pregunta, lógica, opción única/múltiple, NSE por país como alerta | **Hecha** (`3d5bbfd`, 2026-10-22) |
 | 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | **Hecha** (`40d801f`, 2026-10-22) |
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | **Hecha** (`f450a2f`, 2026-10-22) |
-| 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`), Word/PDF (`9b8e584`) y formulario neutro en sharpli.mx hechos; faltan captcha, fotos y videos |
+| 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`), Word/PDF (`9b8e584`) y formulario neutro en sharpli.mx (`99571cd`) hechos; faltan captcha, fotos y videos |
 | 5 | Operación: en vivo, nadie se corta por defecto, paso solo al tablero, historial y duplicados, traer respuestas de un filtro anterior, clasificación con IA, pestaña propia | **Hecha** («En vivo» `90cadec`; lo demás `0bd0d7d`, 2026-10-24) |
 | 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | Pendiente |
 
@@ -730,7 +730,7 @@ Con Sergio: el equipo de reclutamiento revisa en un solo lugar (el tablero), por
 
 **Pendiente:** mover a alguien a un grupo no recalcula los sugeridos al momento (se recalculan con la siguiente respuesta, al publicar, al guardar la muestra o con «Buscar duplicados»); la ficha de la persona desde el tablero.
 
-### Formulario neutro en sharpli.mx (2026-10-26)
+### Formulario neutro en sharpli.mx (2026-10-26, `99571cd`)
 
 Pedido de Sergio: que el enlace de los participantes sea de Sharpli y no de Sapience, sin riesgo de que desde ahí se vea información de clientes. Sergio apuntó `sharpli.mx` (GoDaddy) al sitio del Hub en Render; es el mismo sitio, pero en ese dominio solo vive el formulario.
 
