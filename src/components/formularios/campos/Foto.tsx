@@ -3,10 +3,11 @@ import { Camera, Check, Loader2, X } from 'lucide-react';
 import { uploadFile } from 'zite-file-upload-sdk';
 import type { FotoSubida } from '@/lib/formularios/tipos';
 
-const MAX_FOTOS = 3;
-
-/** `simular`: en la vista Celular del editor la foto se queda en el navegador; nada se sube. */
-export function Foto({ valor, codigo, simular, onChange }: { valor: FotoSubida[]; codigo: string; simular?: boolean; onChange: (v: FotoSubida[]) => void }) {
+/**
+ * `max`: cuántas puede subir (de la pregunta, 3 si no se dice, hasta 10).
+ * `simular`: en la vista Celular del editor la foto se queda en el navegador; nada se sube.
+ */
+export function Foto({ valor, max, codigo, simular, onChange }: { valor: FotoSubida[]; max: number; codigo: string; simular?: boolean; onChange: (v: FotoSubida[]) => void }) {
   const [subiendo, setSubiendo] = useState(false);
   const [falla, setFalla] = useState('');
   const [vistas, setVistas] = useState<Record<string, string>>({});
@@ -17,7 +18,7 @@ export function Foto({ valor, codigo, simular, onChange }: { valor: FotoSubida[]
     setFalla('');
     const nuevas: FotoSubida[] = [];
     try {
-      for (const archivo of archivos.slice(0, MAX_FOTOS - valor.length)) {
+      for (const archivo of archivos.slice(0, max - valor.length)) {
         const { fileUrl } = simular
           ? { fileUrl: `simulada/${Date.now()}-${archivo.name}` }
           : await uploadFile({ data: archivo, filename: archivo.name, formularioCodigo: codigo });
@@ -60,7 +61,7 @@ export function Foto({ valor, codigo, simular, onChange }: { valor: FotoSubida[]
           </div>
         ))}
       </div>
-      {valor.length < MAX_FOTOS && (
+      {valor.length < max && (
         <label
           onDragOver={(e) => { if (Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setEncima(true); } }}
           onDragLeave={() => setEncima(false)}
@@ -70,8 +71,8 @@ export function Foto({ valor, codigo, simular, onChange }: { valor: FotoSubida[]
           {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
           {subiendo ? 'Subiendo…' : encima ? 'Suelta la foto aquí' : valor.length ? 'Agregar otra foto' : 'Tomar o elegir foto'}
           <input
-            type="file" accept="image/*" className="hidden" disabled={subiendo}
-            onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) void subir([a]); }}
+            type="file" accept="image/*" className="hidden" disabled={subiendo} multiple={max - valor.length > 1}
+            onChange={(e) => { const a = Array.from(e.target.files ?? []); e.target.value = ''; if (a.length) void subir(a); }}
           />
         </label>
       )}

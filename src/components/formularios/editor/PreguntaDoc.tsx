@@ -11,15 +11,15 @@ import { rango } from '@/lib/formularios/motor';
 import { nombreCampoDireccion, telefonoDe } from '@/lib/formularios/paises';
 import { nombreDePregunta } from '@/lib/formularios/tabla';
 import { TEAL } from '@/lib/toolColors';
-import { CAMPOS_DIRECCION, TIPOS, esDeOpciones, esMatriz, forma, type Pregunta, type Seccion } from '@/lib/formularios/tipos';
+import { CAMPOS_DIRECCION, TIPOS, esDeOpciones, esMatriz, forma, maxFotosDe, type Pregunta, type Seccion } from '@/lib/formularios/tipos';
 import { EnlaceImagen, Logica, useAlCerrarMenu, useDoc } from './comun';
-import { EditorCondicion, EditorMaximo, EditorRango } from './Ajustes';
+import { EditorCondicion, EditorFotos, EditorMaximo, EditorRango } from './Ajustes';
 import { ListaFilas, ListaOpciones, useElegirImagen, useZonaImagen } from './Opciones';
 import { TextoEditable } from './TextoEditable';
 import { PropuestaIA } from '../generador/PropuestaIA';
 import { MarcaIA } from '../generador/comun';
 
-type Abierto = 'condicion' | 'rango' | 'maximo' | 'ayuda' | 'nota' | 'ia' | 'enlace' | null;
+type Abierto = 'condicion' | 'rango' | 'maximo' | 'fotos' | 'ayuda' | 'nota' | 'ia' | 'enlace' | null;
 
 /** Cómo se ve la respuesta en el documento cuando no es de opciones (como en el Word: una línea, los campos…). */
 function Respuesta({ p }: { p: Pregunta }) {
@@ -32,7 +32,7 @@ function Respuesta({ p }: { p: Pregunta }) {
     case 'telefono': { const t = telefonoDe(def.pais); return linea(`${t.lada ? `${t.lada} (puede elegir otra lada) · ` : ''}Celular de ${t.digitos} dígitos`); }
     case 'correo': return linea('Correo');
     case 'direccion': return linea(CAMPOS_DIRECCION.map((c) => nombreCampoDireccion(def.pais, c)).join(' · '));
-    case 'foto': return linea('Foto desde el celular (hasta 3)');
+    case 'foto': { const n = maxFotosDe(p); return linea(`Foto desde el celular (hasta ${n === 1 ? '1' : n})`); }
     case 'casilla': return <p className="mt-1.5 flex items-center gap-2 text-[12.5px] text-muted-foreground"><span className="h-3 w-3 rounded-[3px] border border-[#71717A]" />Casilla que se marca</p>;
     case 'interruptor': return <p className="mt-1.5 text-[12.5px] text-muted-foreground">Sí · No (arranca en No)</p>;
     case 'escala': case 'estrellas': case 'deslizador': {
@@ -183,6 +183,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
                   <DropdownMenuCheckboxItem checked={!!p.aleatorio} onCheckedChange={(v) => cambiar({ aleatorio: v || undefined })}>Opciones en orden aleatorio</DropdownMenuCheckboxItem>
                 )}
                 {(f === 'varias' || f === 'orden') && <DropdownMenuItem onSelect={abrirAl('maximo')}>{f === 'orden' ? 'Cuántas ordena…' : 'Cuántas puede marcar…'}</DropdownMenuItem>}
+                {p.tipo === 'foto' && <DropdownMenuItem onSelect={abrirAl('fotos')}>Cuántas fotos puede subir…</DropdownMenuItem>}
                 {f === 'numero' && <DropdownMenuItem onSelect={abrirAl('rango')}>{p.tipo === 'numero' ? 'Qué números acepta…' : 'Rango de la escala…'}</DropdownMenuItem>}
                 <DropdownMenuItem onSelect={abrirAl('condicion')}>{p.mostrarSi ? 'Cambiar cuándo aparece…' : 'Mostrar solo si…'}</DropdownMenuItem>
                 {!p.ayuda && p.tipo !== 'contenido' && <DropdownMenuItem onSelect={abrirAl('ayuda')}>Agregar ayuda</DropdownMenuItem>}
@@ -230,6 +231,7 @@ export function PreguntaDoc({ s, p }: { s: Seccion; p: Pregunta }) {
       )}
       {abierto === 'rango' && <EditorRango p={p} onCerrar={() => setAbierto(null)} onGuardar={cambiar} />}
       {abierto === 'maximo' && <EditorMaximo p={p} onCerrar={() => setAbierto(null)} onGuardar={(n) => cambiar({ maxOpciones: n })} />}
+      {abierto === 'fotos' && <EditorFotos p={p} onCerrar={() => setAbierto(null)} onGuardar={(n) => cambiar({ maxFotos: n })} />}
       {abierto === 'ia' && <PropuestaIA alcance={{ pregunta: p.id }} onCerrar={() => setAbierto(null)} />}
     </div>
   );

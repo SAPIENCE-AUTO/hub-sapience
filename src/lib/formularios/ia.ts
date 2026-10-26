@@ -2,7 +2,7 @@ import { esDelNse, esFija, idNuevo, type TextosGenerales } from './editar';
 import { SECCION_INICIO } from './inicio';
 import { alertaEnPalabras, citar, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion, sinMarcador, ubicar, unirY } from './palabras';
 import { opcionesDe } from './tabla';
-import { TIPOS, forma, type Alerta, type Condicion, type Definicion, type Frente, type Opcion, type Pregunta, type Seccion } from './tipos';
+import { TIPOS, forma, type Alerta, type Condicion, type Definicion, type Frente, type Opcion, type Pregunta, type Seccion, maxFotosDe } from './tipos';
 
 /**
  * Lo que propone la IA, antes de aplicarlo (fase 3 de Filtros): ids
@@ -406,6 +406,7 @@ export function cambiosEnPalabras(antes: Definicion, despues: Definicion): strin
     for (const l of ld) if (!la.some((x) => x.clave === l.clave)) out.push(`En ${nombre}: ${l.texto}`);
     for (const l of la) if (!ld.some((x) => x.clave === l.clave)) out.push(`En ${nombre} deja de aplicar: ${l.texto}`);
     if (!!q.opcional !== !!p.opcional && forma(p.tipo) !== 'ninguna') out.push(`${nombre} pasa a ser ${p.opcional ? 'opcional' : 'obligatoria'}.`);
+    if (p.tipo === 'foto' && maxFotosDe(q) !== maxFotosDe(p)) out.push(`${nombre} acepta hasta ${maxFotosDe(p)} ${maxFotosDe(p) === 1 ? 'foto' : 'fotos'} (antes ${maxFotosDe(q)}).`);
   }
 
   const frentesA = new Map((antes.frentes ?? []).map((f) => [f.id, f]));

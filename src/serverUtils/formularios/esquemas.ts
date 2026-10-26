@@ -40,7 +40,7 @@ export const PreguntaZ = z.object({
   filas: z.array(z.object({ id: z.string().min(1), label: z.string() })).nullish(),
   reglasMatriz: z.array(z.object({ fila: z.string(), columnas: ids, termina: texto, cortar: si, excluyeGrupos: ids.nullish() })).nullish(),
   aleatorio: si,
-  maxOpciones: numero, min: numero, max: numero, paso: numero,
+  maxOpciones: numero, maxFotos: numero, min: numero, max: numero, paso: numero,
   etiquetas: z.object({ min: texto, max: texto }).nullish(),
   terminaFuera: z.object({ min: z.number(), max: z.number(), motivo: z.string(), cortar: si }).nullish(),
   patron: texto, patronMensaje: texto,

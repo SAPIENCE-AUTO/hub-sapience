@@ -18,7 +18,7 @@ import {
   GRUPOS_TIPOS, agregarOpcion, agregarPregunta, agregarSeccion, cambiarOpcion, cambiarPregunta, cambiarTipo, comoSimple, diferencias, esFija, idNuevo,
   moverPregunta, moverSeccion, preguntasParaCondicion, quitarOpcion, quitarPregunta, usosDeOpcion, usosDePregunta, usosDeSeccion,
 } from '../../src/lib/formularios/editar';
-import { TIPOS, forma, type Pregunta, type Seccion } from '../../src/lib/formularios/tipos';
+import { TIPOS, forma, maxFotosDe, type Pregunta, type Seccion } from '../../src/lib/formularios/tipos';
 import {
   asentarEstructura, avanceEscritura, compararEstructuras, revisarEstructura, type Estructura, type SeccionPlan, conservarSinCambio, definicionVacia, estructuraDeDefinicion, firmaSeccion, generadorNuevo,
   minutosDeEstructura, ponerSeccion, prepararParaEscribir, seccionNse,
@@ -1400,6 +1400,16 @@ caso('el celular: la lada del filtro por omisión y otra si la persona la elige'
   assert.equal(validarPantalla(pantalla, { cel: '+34 612345678' }, 'MX')?.cel, undefined);
   assert.equal(validarPantalla(pantalla, { cel: '+34 61234567' }, 'MX')?.cel, 'Escribe un celular de 9 dígitos');
   assert.equal(validarPantalla(pantalla, { cel: '551234567' }, 'MX')?.cel, 'Escribe un celular de 10 dígitos');
+});
+
+caso('fotos por pregunta: 3 si no se dice, de 1 a 10, y solo en preguntas de foto', () => {
+  assert.equal(maxFotosDe({}), 3);
+  assert.equal(maxFotosDe({ maxFotos: 7 }), 7);
+  assert.equal(maxFotosDe({ maxFotos: 40 }), 10);
+  const con = (p: Record<string, unknown>) => revisarDefinicion({ ...ALONG2, secciones: [{ id: 's', preguntas: [{ id: 'f', texto: 'Foto', ...p }] }] } as Definicion);
+  assert.ok(!con({ tipo: 'foto', maxFotos: 10 }).some((x) => /fotos/.test(x)));
+  assert.ok(con({ tipo: 'foto', maxFotos: 11 }).some((x) => /de 1 a 10 fotos/.test(x)));
+  assert.ok(con({ tipo: 'texto', maxFotos: 2 }).some((x) => /solo va en preguntas de foto/.test(x)));
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {

@@ -799,6 +799,12 @@ En la prueba de ALONG 2, el recuadro de un filtro en vivo decía «Cambios sin p
 
 Sergio pidió el código de país para que se pudiera elegir, y salía fijo. Ahora la bandera con la lada es un selector (`campos/Telefono.tsx`): por omisión la del país del filtro, y se puede elegir otra de la lista (`LADAS` en `paises.ts`: los países del Hub más Estados Unidos y España); el ejemplo y cuántos dígitos se piden cambian con ella. Con la lada del filtro se guardan solo los dígitos, como siempre (el tablero, el panel y los duplicados no cambian); con otra, «+57 3123456789» (`guardarTelefono` / `leerTelefono`), y se valida con los dígitos de esa lada. En el documento la pregunta dice «+52 (puede elegir otra lada)». Probado en local: en la vista de celular del editor, elegir Colombia cambia a 🇨🇴 +57 con ejemplo «312 345 6789»; 91 pruebas.
 
+### Hasta cuántas fotos por pregunta (2026-10-26)
+
+Pedido de Sergio: más de 3 fotos por pregunta, hasta 10, y que en cada pregunta se diga cuántas (también con la IA). Cada pregunta de foto lleva `maxFotos` (1 a 10; sin él, 3: `maxFotosDe` en `tipos.ts`). El participante ve «Puedes subir hasta N fotos» y puede elegir varias a la vez; el servidor no guarda más de las que pide la pregunta (`submitFormularioRespuesta`). En el editor, la pregunta dice «(hasta N)» y su menú trae «Cuántas fotos puede subir…»; la IA lo pone cuando se le pide (la skill lo conoce en `contrato.md`) y su resumen lo dice («acepta hasta 6 fotos (antes 3)»). El Word dice «(hasta N)». `revisar.ts` no deja más de 10 ni el ajuste en otra pregunta.
+
+**Probado en local (2026-10-26):** en «Prueba fase 1 · todos los tipos», el botón IA con «Que pueda subir hasta 6 fotos» propuso y aplicó «hasta 6»; desde el menú, «hasta 10». 92 pruebas.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |

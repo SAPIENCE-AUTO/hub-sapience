@@ -171,6 +171,22 @@ export function EditorRango({ p, onGuardar, onCerrar }: { p: Pregunta; onGuardar
 }
 
 /** Tope de cuántas se marcan (varias) o cuántas se ordenan. */
+/** Foto: cuántas puede subir, de 1 a 10 (sin tope puesto, 3). */
+export function EditorFotos({ p, onGuardar, onCerrar }: { p: Pregunta; onGuardar: (n?: number) => void; onCerrar: () => void }) {
+  const [n, setN] = useState<number | undefined>(p.maxFotos ?? 3);
+  const vale = n !== undefined && Number.isInteger(n) && n >= 1 && n <= 10;
+  return (
+    <Caja titulo="Cuántas fotos puede subir" onCerrar={onCerrar}>
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        Hasta <CampoNumero etiqueta="Fotos" valor={n} onChange={setN} /> fotos <span className="text-muted-foreground">(de 1 a 10)</span>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Button size="sm" disabled={!vale} onClick={() => { onGuardar(n === 3 ? undefined : n); onCerrar(); }}>Guardar</Button>
+      </div>
+    </Caja>
+  );
+}
+
 export function EditorMaximo({ p, onGuardar, onCerrar }: { p: Pregunta; onGuardar: (n?: number) => void; onCerrar: () => void }) {
   const [n, setN] = useState<number | undefined>(p.maxOpciones);
   return (

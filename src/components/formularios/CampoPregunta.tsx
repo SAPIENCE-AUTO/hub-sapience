@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Check } from 'lucide-react';
 import { porOrdenar, type PreguntaVisible } from '@/lib/formularios/motor';
-import { forma, type FotoSubida, type Respuestas, type Valor } from '@/lib/formularios/tipos';
+import { forma, type FotoSubida, type Respuestas, type Valor, maxFotosDe } from '@/lib/formularios/tipos';
 import { ERROR, inputClass, type CampoProps } from './campos/estilo';
 import { Botones, Imagenes, ListaUna, ListaVarias, Ordenar } from './campos/Opciones';
 import { Matriz } from './campos/Matriz';
@@ -30,6 +30,7 @@ function indicacion(pv: PreguntaVisible): string | undefined {
   if (forma(p.tipo) === 'varias') return p.maxOpciones ? `Marca hasta ${p.maxOpciones}` : 'Puedes marcar varias';
   // Si la ayuda ya lo dice («Puedes marcar varios lugares»), no se repite.
   if (forma(p.tipo) === 'matriz_varias') return /vari[oa]s/i.test(pv.ayuda ?? '') ? undefined : 'Puedes marcar varias en cada renglón';
+  if (p.tipo === 'foto') { const n = maxFotosDe(p); return n > 1 ? `Puedes subir hasta ${n} fotos` : undefined; }
   if (p.tipo === 'ordenar') {
     const n = porOrdenar(pv);
     return n === pv.opciones.length ? 'Toca las opciones en orden, empezando por la que más' : `Toca tus ${n} primeras en orden, empezando por la que más`;
@@ -115,7 +116,7 @@ export function CampoPregunta({ pv, resp, error, codigo, pais, simular, onChange
       {p.tipo === 'estrellas' && <Estrellas {...campo} />}
       {p.tipo === 'deslizador' && <Deslizador {...campo} />}
 
-      {p.tipo === 'foto' && <Foto valor={(valor as FotoSubida[] | undefined) ?? []} codigo={codigo} simular={simular} onChange={(v) => onChange(clave, v)} />}
+      {p.tipo === 'foto' && <Foto valor={(valor as FotoSubida[] | undefined) ?? []} max={maxFotosDe(p)} codigo={codigo} simular={simular} onChange={(v) => onChange(clave, v)} />}
 
       {error && <p className="text-[13px] font-medium" style={{ color: ERROR }}>{error}</p>}
     </div>

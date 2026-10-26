@@ -91,6 +91,8 @@ export function revisarConLugar(def: Definicion): Problema[] {
         if (o.otra && !esDeOpciones(p.tipo)) mal(`${donde}: «Otra, ¿cuál?» solo va en preguntas de opciones.`);
       }
       if (p.maxOpciones !== undefined && f !== 'varias' && f !== 'orden') mal(`${donde}: «máximo de opciones» solo va en preguntas de varias respuestas o en ordenar.`);
+      if (p.maxFotos !== undefined && p.tipo !== 'foto') mal(`${donde}: «cuántas fotos» solo va en preguntas de foto.`);
+      if (p.maxFotos !== undefined && (!Number.isInteger(p.maxFotos) || p.maxFotos < 1 || p.maxFotos > 10)) mal(`${donde}: se pueden pedir de 1 a 10 fotos.`);
       if (esMatriz(p.tipo) && !p.filas?.length) mal(`${donde}: a la matriz le faltan las filas.`);
       if (!esMatriz(p.tipo) && (p.filas?.length || p.reglasMatriz?.length)) mal(`${donde}: solo una matriz lleva filas.`);
       for (const r of p.reglasMatriz ?? []) {

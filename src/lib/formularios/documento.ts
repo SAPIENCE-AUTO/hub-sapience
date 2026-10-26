@@ -4,7 +4,7 @@ import { nombreCampoDireccion, PAISES, telefonoDe } from './paises';
 import { leerFormato, sinFormato } from './formato';
 import { alertaEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion, type LineaLogica } from './palabras';
 import { opcionesDe } from './tabla';
-import { CAMPOS_DIRECCION, forma, type Definicion, type Opcion, type Pregunta } from './tipos';
+import { CAMPOS_DIRECCION, forma, type Definicion, type Opcion, type Pregunta, maxFotosDe } from './tipos';
 
 /**
  * El screener como documento para el cliente (Word y PDF), con lo que el
@@ -102,7 +102,7 @@ function respuestaAbierta(def: Definicion, p: Pregunta): string | undefined {
     case 'telefono': { const t = telefonoDe(def.pais); return `Celular de ${t.digitos} dígitos${t.lada ? ` (${t.lada})` : ''}`; }
     case 'correo': return 'Correo electrónico';
     case 'direccion': return CAMPOS_DIRECCION.map((c) => nombreCampoDireccion(def.pais, c)).join(', ');
-    case 'foto': return 'Foto desde el celular';
+    case 'foto': { const n = maxFotosDe(p); return n > 1 ? `Foto desde el celular (hasta ${n})` : 'Foto desde el celular'; }
     case 'escala': case 'estrellas': case 'deslizador': {
       const r = rango(p);
       const extremos = [p.etiquetas?.min && `${r.min} = ${p.etiquetas.min}`, p.etiquetas?.max && `${r.max} = ${p.etiquetas.max}`].filter(Boolean).join(', ');

@@ -54,7 +54,7 @@ Formato en `texto`, `ayuda`, `intro`, la bienvenida y las despedidas: `**así**`
 | `deslizador` | 0 a 100 | opcional `paso`, `etiquetas` |
 | `casilla` | una casilla («Acepto…»); si es obligatoria hay que marcarla | |
 | `interruptor` | sí o no | |
-| `foto` | fotos desde el celular (hasta 3) | |
+| `foto` | fotos desde el celular | `maxFotos`: cuántas puede subir, de 1 a 10 (sin esto, 3). Ponlo cuando el estudio pida varias («sube hasta 5 fotos de tu despensa») o una sola. |
 | `contenido` | texto sin pregunta (instrucciones) | |
 
 - **`nombre`** es el nombre corto de la pregunta: el encabezado de su columna en el tablero de Reclutamiento y en el Excel (el participante no lo ve). De 1 a 3 palabras, sin signos de interrogación, como lo escribiría el equipo: «Edad», «Género», «Hijos», «Código postal», «Marcas que compra», «Marca favorita», «Rechazo de marcas», «Aviso de privacidad». Distinto de los demás nombres del filtro; en una sección que se repite, distinto dentro de la sección y sin el nombre de la opción (la columna ya lleva el del bloque: «Tu aerosol · Marcas que compra»). Lo lleva toda pregunta menos `contenido`.

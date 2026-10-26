@@ -143,6 +143,8 @@ export interface Pregunta {
   aleatorio?: boolean;
   /** Tope de cuántas se marcan (varias) o cuántas se ordenan (ordenar: «tus 3 favoritas»). */
   maxOpciones?: number;
+  /** Foto: cuántas puede subir, de 1 a 10 (sin esto, 3). */
+  maxFotos?: number;
   /** Número y escalas: rango aceptado. Escala 0–10, estrellas 1–5 y deslizador 0–100 si no se dice (motor.ts → rango). */
   min?: number;
   max?: number;
@@ -310,3 +312,8 @@ export function leerDefinicion(guardada: unknown): Definicion {
     nse: d.nse ? { regla: 'AMAI 2018', ...d.nse } : undefined,
   };
 }
+
+/** Fotos por pregunta: 3 si no se dice, hasta 10 (pedido de Sergio, 2026-10-26). */
+export const FOTOS_POR_DEFECTO = 3;
+export const FOTOS_TOPE = 10;
+export const maxFotosDe = (p: { maxFotos?: number }) => Math.min(FOTOS_TOPE, Math.max(1, Math.round(p.maxFotos ?? FOTOS_POR_DEFECTO)));

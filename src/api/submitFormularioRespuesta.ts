@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { evaluar } from '../lib/formularios/motor';
-import { leerDefinicion, type FotoSubida, type Respuestas } from '../lib/formularios/tipos';
+import { leerDefinicion, type FotoSubida, type Respuestas, FOTOS_TOPE, maxFotosDe } from '../lib/formularios/tipos';
 import { alRecibirRespuesta } from '../serverUtils/formularios/alRecibir';
 
 /**
@@ -32,18 +32,22 @@ export default createEndpoint({
     }
 
     // Solo se aceptan fotos subidas a la carpeta de este formulario (server/upload.ts): nadie puede apuntar a otra.
+    // Y no más de las que pide su pregunta (3 si no se dice, hasta 10).
+    const def = leerDefinicion(f.definicion);
+    const preguntaDe = (clave: string) => def.secciones.flatMap((s) => s.preguntas).find((p) => p.id === clave.split('@')[0]);
     const respuestas: Respuestas = {};
     for (const [clave, valor] of Object.entries(input.respuestas)) {
       if (Array.isArray(valor) && valor.some((x) => typeof x === 'object' && x !== null)) {
+        const p = preguntaDe(clave);
         respuestas[clave] = (valor as FotoSubida[])
           .filter((x) => typeof x?.ruta === 'string' && x.ruta.startsWith(`${f.id}/`))
+          .slice(0, p ? maxFotosDe(p) : FOTOS_TOPE)
           .map((x) => ({ ruta: x.ruta, nombre: String(x.nombre ?? '').slice(0, 150) }));
       } else {
         respuestas[clave] = valor;
       }
     }
 
-    const def = leerDefinicion(f.definicion);
     const resultado = evaluar(def, respuestas);
     const texto = (id?: string) => (id && typeof respuestas[id] === 'string' ? (respuestas[id] as string).slice(0, 200) : null);
 
