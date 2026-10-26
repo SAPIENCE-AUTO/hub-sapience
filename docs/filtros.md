@@ -668,7 +668,7 @@ Sergio preguntó qué pasaba si quería cambiar de color un texto del filtro: no
 
 **Probado en local (2026-10-24):** en el filtro de prueba `yjgpzy0`, «frutas» en color y «este mes» en negritas en una pregunta, y «probar» y «5 minutos» en la bienvenida: el editor, el celular de al lado, el formulario en `/f/yjgpzy0` a 375 y el Word y el PDF salen igual. 84 pruebas.
 
-### Celular y correo por defecto (2026-10-26)
+### Celular y correo por defecto (2026-10-26, `3a538a3`)
 
 Sergio: el correo debería ir siempre, a menos que el analista lo quite. Hoy «Antes de empezar» solo pedía aviso, nombre e identificación; el celular dependía de que el filtro lo preguntara y el correo casi nunca iba.
 
@@ -724,4 +724,4 @@ Sergio: el correo debería ir siempre, a menos que el analista lo quite. Hoy «A
 - **2026-10-24 · rediseño del flujo:** con los bocetos aprobados por Sergio: un solo camino de 5 pasos con un botón por paso, «Por revisar» en un chip, modos Diseñar y Reclutar (enlace, tablero y cuotas con barras), preguntas numeradas y lógica en etiquetas, el celular sigue la lectura, «Filtros» en todo y la lista con el paso de cada filtro; en vivo se edita una copia y se publica con «Publicar cambios» (columna `formularios.cambios`, creada con su OK). 81 pruebas. Probado en local y subido a `main` con el OK de Sergio (`2d4c4d6`).
 - **2026-10-24 · fase 5 (operación):** nadie se corta por defecto (se registran todos los motivos; «cortar» a petición, y siempre el aviso y la identificación); al recibir una respuesta, historial y duplicados con la búsqueda de los tableros, paso solo al tablero en vivo para quien entra a un perfil con lugar (con su historial en notas) y clasificación con IA (medio centavo de dólar por persona); traer a quienes contestaron un filtro anterior; pestaña Filtros junto a Reclutamiento y filtros del Hub en «Vincular form». 83 pruebas. Probado en local y subido a `main` con el OK de Sergio (`0bd0d7d`).
 - **2026-10-24 · negritas y color:** a pedido de Sergio, los textos que lee el participante (pregunta, ayuda, contenido, entrada de sección, bienvenida y despedidas) llevan negritas y un color para resaltar, con botones en el editor; se ven igual en el formulario, el celular y el Word/PDF, y salen sin formato en el tablero, el Excel y el flujo. 84 pruebas. Probado en local y subido a `main` con el OK de Sergio (`35be0b0`).
-- **2026-10-26 · celular y correo por defecto:** «Antes de empezar» los pide después del nombre (si el filtro no los pide ya), como preguntas que el analista puede corregir o quitar; la IA ya no los repite. 84 pruebas. Probado en local, sin subir.
+- **2026-10-26 · celular y correo por defecto:** «Antes de empezar» los pide después del nombre (si el filtro no los pide ya), como preguntas que el analista puede corregir o quitar; la IA ya no los repite. 84 pruebas. Probado en local y subido a `main` con el OK de Sergio (`3a538a3`).
