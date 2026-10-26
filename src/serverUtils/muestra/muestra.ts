@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { pool, ZiteError } from '../../../server/compat';
 import { leerDefinicion } from '../../lib/formularios/tipos';
-import { leerMuestra, muestraDeLaIA, muestraParaIA, ORDEN_TECNICAS, type DefinicionMuestra, type Tecnica } from '../../lib/reclutamiento/muestra';
+import { leerMuestra, muestraDeLaIA, muestraParaIA, nombreDeGrupo, nombreExterno, ORDEN_TECNICAS, type DefinicionMuestra, type Tecnica } from '../../lib/reclutamiento/muestra';
 import { contenidoDeInsumos, hayInsumos } from '../formularios/insumos';
 import { insumosDeLaMuestra } from './insumos';
 import { llamarJSON, MODELOS } from '../formularios/claude';
@@ -10,7 +10,8 @@ import { conRegistro } from '../formularios/uso';
 // La muestra del proyecto en la base (tablas `muestras` y `muestra_versiones`,
 // en add-formularios-tables.ts). Los grupos y eventos los crea la pantalla con
 // los mismos endpoints que usa el tablero (saveBoardColumn, saveCalendarEvent,
-// linkGroupToEvent): aquí solo se guarda la muestra y se lee el avance.
+// linkGroupToEvent): aquí se guarda la muestra, se lee el avance y se ponen al
+// día los nombres de los grupos que ya existen.
 
 export interface MuestraGuardada {
   id: string;
@@ -106,12 +107,20 @@ const ActividadZ = z.object({
   lugar: z.string().nullish(),
   fecha: z.string().nullish(),
   notas: z.string().nullish(),
+  // Lo que no sea una opción válida se ignora al leerlo (deLaIA), no truena la respuesta.
+  modalidad: z.string().nullish(),
+  genero: z.string().nullish(),
+  edad: z.string().nullish(),
+  nse: z.string().nullish(),
 });
 const PerfilZ = z.object({
   nombre: z.string().min(1),
   descripcion: z.string().nullish(),
   reparto: z.string().nullish(),
   cuota: z.number().min(0).max(1000).nullish(),
+  genero: z.string().nullish(),
+  edad: z.string().nullish(),
+  nse: z.string().nullish(),
 });
 const PropuestaZ = z.object({
   perfiles: z.array(PerfilZ).max(30).default([]),
@@ -135,6 +144,7 @@ function reglas(o: { delFiltro: { nombre: string; meta: number }[]; fijos?: Perf
   return [
     '- perfiles: los grupos de personas que se reclutan con los mismos criterios. Nunca un perfil por persona ni por actividad: si 5 entrevistas son de usuarios de aerosoles de distintas marcas, es un perfil «Aerosoles» con cuota 5 y en "reparto" «2 Glade · 1 Air Wick · 2 Febreze». Lo que solo reparte dentro de un perfil (marcas, ciudades, mitad hombres y mitad mujeres, edades) va en "reparto", no en otro perfil.',
     '- descripcion: quién es, en una línea («Mamás de 25 a 35, NSE C, compran aromatizantes cada mes»). cuota: cuántas personas titulares se necesitan de ese perfil; tiene que cuadrar con lo que suman sus actividades.',
+    '- genero ("mujeres", "hombres" o "mixto"), edad («25–35») y nse («C+», «C/D+») de cada perfil: lo que digan los insumos; si no lo dicen, null (nunca lo inventes).',
     o.fijos?.length
       ? `- Los perfiles ya están decididos (los del filtro): usa exactamente estos, con su nombre y su cuota, sin agregar ni quitar: ${o.fijos.map((p) => `«${p.nombre}» (cuota ${p.cuota})`).join(', ')}.`
       : o.delFiltro.length
@@ -144,6 +154,8 @@ function reglas(o: { delFiltro: { nombre: string; meta: number }[]; fijos?: Perf
     '- tecnica: sesion = sesión de grupo o focus group; visita = visita en casa o etnografía; compra = compra acompañada o shop-along; taller = taller o co-creación; otra = lo que no encaje (prework, comunidad en línea).',
     '- personas: los titulares; reserva: los de respaldo (si no se dice, el estándar: 2 en sesiones, 1 en minigrupos y tríadas, 0 en entrevistas).',
     '- perfil (de cada actividad): exactamente el nombre de uno de los perfiles.',
+    '- modalidad (de cada actividad): "presencial" u "online". Visitas y compras acompañadas siempre son presenciales.',
+    '- genero, edad y nse de una actividad: solo si esa actividad es distinta de su perfil (S1 de mujeres y S2 de hombres dentro de un perfil mixto; una tríada de 25–35 y otra de 36–45); si es igual, null.',
     '- lugar: la ciudad o «En línea». fecha: solo si los insumos o el equipo dicen día y hora (formato AAAA-MM-DDTHH:MM, hora de la ciudad); nunca la inventes, déjala vacía.',
   ].filter(Boolean);
 }
@@ -151,7 +163,7 @@ function reglas(o: { delFiltro: { nombre: string; meta: number }[]; fijos?: Perf
 function instrucciones(delFiltro: { nombre: string; meta: number }[], fijos?: PerfilesFijos): string {
   return [
     'Arma la muestra del estudio con los insumos de arriba: primero sus perfiles con su cuota y después sus actividades. Responde solo con este JSON:',
-    '{"perfiles": [{"nombre": "…", "descripcion": "…", "reparto": "…", "cuota": 5}], "actividades": [{"tecnica": "sesion" | "minigrupo" | "triada" | "diada" | "entrevista" | "visita" | "compra" | "taller" | "otra", "perfil": "…", "personas": 8, "reserva": 2, "duracionMin": 120, "lugar": "CDMX", "fecha": "2026-11-04T18:00", "notas": "…"}], "supuestos": ["…"]}',
+    '{"perfiles": [{"nombre": "…", "descripcion": "…", "reparto": "…", "cuota": 5, "genero": "mixto", "edad": "25–55", "nse": "C+"}], "actividades": [{"tecnica": "sesion" | "minigrupo" | "triada" | "diada" | "entrevista" | "visita" | "compra" | "taller" | "otra", "perfil": "…", "modalidad": "presencial" | "online", "genero": null, "edad": null, "nse": null, "personas": 8, "reserva": 2, "duracionMin": 120, "lugar": "CDMX", "fecha": "2026-11-04T18:00", "notas": "…"}], "supuestos": ["…"]}',
     ...reglas({ delFiltro, fijos }),
     '- supuestos: en frases cortas, lo que tuviste que suponer porque los insumos no lo dicen («Supuse 2 de reserva por sesión»). Ninguno si no supusiste nada.',
     '- Si los insumos no dicen qué actividades de campo lleva el estudio, responde {"actividades": [], "supuestos": []}: nunca inventes una muestra.',
@@ -166,7 +178,7 @@ function instruccionesDeCambio(delFiltro: { nombre: string; meta: number }[], ac
     `El equipo pide este cambio: «${comentario}»`,
     '',
     'Devuelve la muestra completa ya con el cambio. Responde solo con este JSON:',
-    '{"perfiles": [{"id": "…", "nombre": "…", "descripcion": "…", "reparto": "…", "cuota": 5}], "actividades": [{"id": "…", "tecnica": "sesion" | "minigrupo" | "triada" | "diada" | "entrevista" | "visita" | "compra" | "taller" | "otra", "perfil": "…", "personas": 8, "reserva": 2, "duracionMin": 120, "lugar": "CDMX", "fecha": "2026-11-04T18:00", "notas": "…"}], "supuestos": ["…"], "nota": "…"}',
+    '{"perfiles": [{"id": "…", "nombre": "…", "descripcion": "…", "reparto": "…", "cuota": 5, "genero": "mixto", "edad": "25–55", "nse": "C+"}], "actividades": [{"id": "…", "tecnica": "sesion" | "minigrupo" | "triada" | "diada" | "entrevista" | "visita" | "compra" | "taller" | "otra", "perfil": "…", "modalidad": "presencial" | "online", "genero": null, "edad": null, "nse": null, "personas": 8, "reserva": 2, "duracionMin": 120, "lugar": "CDMX", "fecha": "2026-11-04T18:00", "notas": "…"}], "supuestos": ["…"], "nota": "…"}',
     '- Cada perfil y cada actividad que se queda lleva su "id" tal cual, aunque cambie; los nuevos van sin id; los que se quitan, no los incluyas.',
     '- Cambia solo lo que pide el equipo: todo lo demás va idéntico (mismos valores, misma fecha, mismo orden).',
     ...reglas({ delFiltro }),
@@ -198,8 +210,11 @@ export async function proponerMuestra(proyectoId: string, email: string, fijos?:
     onGasto,
   }));
   if (!leido.actividades.length) throw new ZiteError({ code: 'BAD_REQUEST', message: SIN_ACTIVIDADES });
-  // Con perfiles fijos, son esos tal cual (nombre y cuota), aunque la IA los haya escrito distinto.
-  const perfiles = fijos?.length ? fijos.map((p) => ({ nombre: p.nombre, descripcion: p.descripcion, cuota: p.cuota })) : leido.perfiles;
+  // Con perfiles fijos, son esos tal cual (nombre y cuota), aunque la IA los haya escrito distinto; género, edad y NSE, los que leyó.
+  const leidoDe = (nombre: string) => leido.perfiles.find((x) => x.nombre.trim().toLowerCase() === nombre.trim().toLowerCase());
+  const perfiles = fijos?.length
+    ? fijos.map((p) => ({ nombre: p.nombre, descripcion: p.descripcion, cuota: p.cuota, genero: leidoDe(p.nombre)?.genero, edad: leidoDe(p.nombre)?.edad, nse: leidoDe(p.nombre)?.nse }))
+    : leido.perfiles;
   return { ...muestraDeLaIA({ actividades: [] }, { perfiles, actividades: leido.actividades }), supuestos: leido.supuestos.slice(0, 8), origen: 'ia' };
 }
 
@@ -286,6 +301,40 @@ export async function guardarMuestra(o: {
     [m.id, m.version, def, JSON.stringify(o.cambios), o.motivo ?? null, o.por],
   );
   return m.version as number;
+}
+
+/**
+ * Los grupos que ya existen toman su nombre nuevo y su nombre público (el de
+ * las vistas externas, sin el perfil) cuando cambia lo que los nombra: la
+ * actividad o su perfil. Lo demás del grupo (color, evento ligado) se queda, y
+ * un nombre que alguien cambió en el tablero solo se pisa si cambia la actividad.
+ */
+export async function nombresAlTablero(antes: DefinicionMuestra | undefined, despues: DefinicionMuestra, tableroId: string | undefined): Promise<number> {
+  if (!tableroId) return 0;
+  const previas = new Map((antes?.actividades ?? []).map((a) => [a.id, a]));
+  const cambian = new Map(despues.actividades.flatMap((a) => {
+    if (!a.grupoId) return [];
+    const nombre = nombreDeGrupo(a, despues);
+    const publico = nombreExterno(a, despues);
+    const v = previas.get(a.id);
+    if (v && antes && nombreDeGrupo(v, antes) === nombre && nombreExterno(v, antes) === publico) return [];
+    return [[a.grupoId, { nombre, publico }] as const];
+  }));
+  if (!cambian.size) return 0;
+  const { rows } = await pool.query(
+    `select id::text as id, options_json from board_columns where board_id = $1 and id::text = any($2::text[]) and deleted_at is null`,
+    [`${tableroId}::groups`, [...cambian.keys()]],
+  );
+  for (const r of rows) {
+    const c = cambian.get(r.id)!;
+    let opciones: Record<string, unknown> = {};
+    try { opciones = JSON.parse(r.options_json || '{}') ?? {}; } catch { /* ilegible: se rehace */ }
+    await pool.query(
+      `update board_columns set column_name = $2, options_json = $3, updated_at = now() where id = $1`,
+      [r.id, c.nombre, JSON.stringify({ ...opciones, publicName: c.publico })],
+    );
+  }
+  return rows.length;
 }
 
 /**

@@ -9,13 +9,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DatetimePicker } from '@/components/pm/EventFormFields';
 import { ALERTA, EXITO, GRIS, TEAL } from '@/lib/toolColors';
 import { MarcaIA, botonTeal } from '@/components/formularios/generador/comun';
 import { InsumosMuestra, cuantosInsumos, type Reunion, type VistaInsumos } from './InsumosMuestra';
 import {
-  TECNICAS, ORDEN_TECNICAS, cambiosEntre, colorDeGrupo, fechaCorta, leerMuestra, lugares, nombreDeEvento, nombreDeGrupo, nuevaActividad, nuevoPerfil, pendientesDeCrear, porPerfil, porTecnica,
-  type Actividad, type DefinicionMuestra, type PerfilMuestra, type Tecnica,
+  GENEROS, MODALIDADES, TECNICAS, ORDEN_TECNICAS, cambiosEntre, colorDeGrupo, detallesDe, edadCorta, esGenero, fechaCorta, leerMuestra, letraDePerfil, lugares,
+  nombreDeEvento, nombreDeGrupo, nombreExterno, nuevaActividad, nuevoPerfil, pendientesDeCrear, porPerfil, porTecnica,
+  type Actividad, type DefinicionMuestra, type Modalidad, type PerfilMuestra, type Tecnica,
 } from '@/lib/reclutamiento/muestra';
 
 interface Avance { total: number; confirmados: number; porEstatus: Record<string, number> }
@@ -149,20 +151,20 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
     }
   };
 
-  /** Lo que cambió de una actividad que ya tiene grupo o evento, también en el tablero y el calendario. */
+  /**
+   * Lo que cambió de una actividad que ya tiene evento, también en el
+   * calendario. Los nombres de los grupos los pone al día el servidor al guardar.
+   */
   const ponerAlDia = async (antes: DefinicionMuestra, despues: DefinicionMuestra) => {
     const tablero = datos?.muestra?.tableroId;
     const calendario = datos?.calendarios.find((c) => c.id === datos?.muestra?.calendarioId);
     for (const a of despues.actividades) {
       const v = antes.actividades.find((x) => x.id === a.id);
       if (!v) continue;
-      if (a.grupoId && tablero && nombreDeGrupo(a) !== nombreDeGrupo(v)) {
-        await saveBoardColumn({ id: a.grupoId, columnName: nombreDeGrupo(a), boardId: `${tablero}::groups` });
-      }
-      const delEvento = (x: Actividad) => [nombreDeEvento(x), x.fecha, x.duracionMin, x.lugar, x.perfil].join('|');
-      if (a.eventoId && calendario && delEvento(a) !== delEvento(v)) {
+      const delEvento = (x: Actividad, def: DefinicionMuestra) => [nombreDeEvento(x, def), x.fecha, x.duracionMin, x.lugar, x.perfil].join('|');
+      if (a.eventoId && calendario && delEvento(a, despues) !== delEvento(v, antes)) {
         await saveCalendarEvent({
-          id: a.eventoId, eventName: nombreDeEvento(a), projectCode, calendarName: calendario.nombre, boardId: calendario.id,
+          id: a.eventoId, eventName: nombreDeEvento(a, despues), projectCode, calendarName: calendario.nombre, boardId: calendario.id,
           ...(a.fecha ? { eventDate: new Date(a.fecha).toISOString() } : {}),
           ...(a.duracionMin ? { durationHours: a.duracionMin / 60 } : {}),
           ...(a.lugar ? { location: a.lugar } : {}),
@@ -206,7 +208,11 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
         let ligar = false;
         if (op.grupos && !grupoId && tableroId) {
           setTrabajando(`Creando el grupo ${a.codigo}…`);
-          const g = await saveBoardColumn({ columnName: nombreDeGrupo(a), boardId: `${tableroId}::groups`, columnType: colorDeGrupo(a, i), columnOrder: 100 + i });
+          const g = await saveBoardColumn({
+            columnName: nombreDeGrupo(a, guardada), boardId: `${tableroId}::groups`, columnType: colorDeGrupo(a, i), columnOrder: 100 + i,
+            // El nombre de las vistas externas: sin el perfil (puede llevar marcas).
+            optionsJson: JSON.stringify({ publicName: nombreExterno(a, guardada) }),
+          });
           grupoId = g.id;
           grupos++;
           ligar = !!eventoId; // ya tenía evento (se creó antes, sin grupo): se ligan
@@ -214,7 +220,7 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
         if (op.eventos && !eventoId && a.fecha && calendario) {
           setTrabajando(`Creando el evento de ${a.codigo}…`);
           const ev = await saveCalendarEvent({
-            eventName: nombreDeEvento(a), projectCode, calendarName: calendario.nombre, boardId: calendario.id,
+            eventName: nombreDeEvento(a, guardada), projectCode, calendarName: calendario.nombre, boardId: calendario.id,
             eventDate: new Date(a.fecha).toISOString(),
             ...(a.duracionMin ? { durationHours: a.duracionMin / 60 } : {}),
             ...(a.lugar ? { location: a.lugar } : {}),
@@ -370,11 +376,11 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
               <span className="flex-1" />
               <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={agregarPerfil}><Plus className="h-3.5 w-3.5" />Agregar perfil</Button>
             </div>
-            <div className="hidden grid-cols-[minmax(130px,1fr)_minmax(180px,1.6fr)_minmax(150px,1.2fr)_70px_150px_28px] gap-2 pb-1 text-[11px] text-muted-foreground lg:grid">
-              <span>Perfil</span><span>Quién es</span><span>Reparto</span><span>Cuota</span><span>En actividades</span><span />
+            <div className="hidden grid-cols-[minmax(180px,1.3fr)_minmax(140px,1.2fr)_104px_76px_64px_minmax(120px,1fr)_70px_130px_28px] gap-2 pb-1 text-[11px] text-muted-foreground lg:grid">
+              <span>Perfil</span><span>Quién es</span><span>Género</span><span>Edad</span><span>NSE</span><span>Reparto</span><span>Cuota</span><span>En actividades</span><span />
             </div>
             {perfiles.map((f) => (f.perfil
-              ? <FilaPerfil key={f.perfil.id} p={f.perfil} fila={f} guardado={guardada.perfiles?.find((x) => x.id === f.perfil!.id)} onCambiar={(c) => cambiarPerfil(f.perfil!.id, c)} onQuitar={() => quitarPerfil(f.perfil!.id)} />
+              ? <FilaPerfil key={f.perfil.id} p={f.perfil} letra={letraDePerfil(borrador, f.perfil.id)} fila={f} guardado={guardada.perfiles?.find((x) => x.id === f.perfil!.id)} onCambiar={(c) => cambiarPerfil(f.perfil!.id, c)} onQuitar={() => quitarPerfil(f.perfil!.id)} />
               : <p key="sin" className="border-t py-2 text-xs" style={{ color: '#8a4b00' }}>{f.total.actividades} {f.total.actividades === 1 ? 'actividad' : 'actividades'} sin perfil ({f.total.personas} lugares): elige su perfil abajo.</p>))}
             {!borrador.perfiles?.length && <p className="py-2 text-xs text-muted-foreground">Sin perfiles todavía. Cada perfil es un grupo de personas con los mismos criterios y su cuota; lo que se reparte dentro (marcas, ciudades) va en «Reparto».</p>}
           </div>
@@ -389,13 +395,14 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
               <span className="flex-1" />
               <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => agregar(tecnica)}><Plus className="h-3.5 w-3.5" />Agregar</Button>
             </div>
-            <div className="mt-1 hidden grid-cols-[52px_minmax(150px,1.3fr)_minmax(90px,0.8fr)_minmax(120px,1fr)_118px_74px_116px_44px_28px] gap-2 px-4 pb-1 text-[11px] text-muted-foreground lg:grid">
-              <span>Código</span><span>Fecha y hora</span><span>Lugar</span><span>Perfil</span><span>Personas + reserva</span><span>Minutos</span><span>Avance</span><span /><span />
+            <div className="mt-1 hidden grid-cols-[52px_minmax(150px,1.2fr)_minmax(90px,0.7fr)_minmax(120px,1fr)_minmax(150px,1.2fr)_118px_74px_116px_44px_28px] gap-2 px-4 pb-1 text-[11px] text-muted-foreground lg:grid">
+              <span>Código</span><span>Fecha y hora</span><span>Lugar</span><span>Perfil</span><span>Modalidad y para quién</span><span>Personas + reserva</span><span>Minutos</span><span>Avance</span><span /><span />
             </div>
             {actividades.map((a) => (
               <FilaActividad
                 key={a.id}
                 a={a}
+                def={borrador}
                 perfiles={borrador.perfiles ?? []}
                 avance={a.grupoId ? datos.avance[a.grupoId] : undefined}
                 guardada={guardada.actividades.find((x) => x.id === a.id)}
@@ -525,8 +532,8 @@ function MenuTecnicas({ onElegir, etiqueta }: { onElegir: (t: Tecnica) => void; 
   );
 }
 
-function FilaPerfil({ p, fila, guardado, onCambiar, onQuitar }: {
-  p: PerfilMuestra; fila: ReturnType<typeof porPerfil>[number]; guardado?: PerfilMuestra;
+function FilaPerfil({ p, letra, fila, guardado, onCambiar, onQuitar }: {
+  p: PerfilMuestra; letra?: string; fila: ReturnType<typeof porPerfil>[number]; guardado?: PerfilMuestra;
   onCambiar: (c: Partial<PerfilMuestra>) => void; onQuitar: () => void;
 }) {
   const cambiado = !guardado || JSON.stringify(guardado) !== JSON.stringify(p);
@@ -534,9 +541,18 @@ function FilaPerfil({ p, fila, guardado, onCambiar, onQuitar }: {
   const diferencia = lugares - p.cuota;
   const detalle = Object.entries(fila.tecnicas).map(([t, x]) => `${x!.actividades} ${x!.actividades === 1 ? TECNICAS[t as Tecnica].nombre.toLowerCase() : TECNICAS[t as Tecnica].plural.toLowerCase()}`).join(', ');
   return (
-    <div className={`grid grid-cols-2 items-center gap-2 border-t py-2 lg:grid-cols-[minmax(130px,1fr)_minmax(180px,1.6fr)_minmax(150px,1.2fr)_70px_150px_28px] lg:py-1.5 ${cambiado ? 'bg-amber-50/40' : ''}`}>
-      <Input className="h-8 text-sm font-medium" value={p.nombre} onChange={(e) => onCambiar({ nombre: e.target.value })} onBlur={() => { if (!p.nombre.trim()) onCambiar({ nombre: guardado?.nombre ?? 'Perfil sin nombre' }); }} aria-label="Nombre del perfil" />
+    <div className={`grid grid-cols-2 items-center gap-2 border-t py-2 lg:grid-cols-[minmax(180px,1.3fr)_minmax(140px,1.2fr)_104px_76px_64px_minmax(120px,1fr)_70px_130px_28px] lg:py-1.5 ${cambiado ? 'bg-amber-50/40' : ''}`}>
+      <div className="flex min-w-0 items-center gap-1.5">
+        {letra && <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-semibold text-white" style={{ backgroundColor: TEAL }} title={`En las vistas externas: «Perfil ${letra}»`}>{letra}</span>}
+        <Input className="h-8 min-w-0 text-sm font-medium" value={p.nombre} onChange={(e) => onCambiar({ nombre: e.target.value })} onBlur={() => { if (!p.nombre.trim()) onCambiar({ nombre: guardado?.nombre ?? 'Perfil sin nombre' }); }} aria-label="Nombre del perfil" />
+      </div>
       <Input className="h-8 text-sm" placeholder="Quién es" value={p.descripcion ?? ''} onChange={(e) => onCambiar({ descripcion: e.target.value || undefined })} aria-label="Quién es" />
+      <select className="h-8 min-w-0 rounded-md border bg-background px-2 text-sm" value={p.genero ?? ''} onChange={(e) => onCambiar({ genero: esGenero(e.target.value) ? e.target.value : undefined })} aria-label="Género">
+        <option value="">—</option>
+        {Object.entries(GENEROS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+      <Input className="h-8 px-2 text-sm" placeholder="25–35" value={p.edad ?? ''} onChange={(e) => onCambiar({ edad: e.target.value || undefined })} aria-label="Edad" />
+      <Input className="h-8 px-2 text-sm" placeholder="C+" value={p.nse ?? ''} onChange={(e) => onCambiar({ nse: e.target.value || undefined })} aria-label="NSE" />
       <Input className="h-8 text-sm" placeholder="Reparto (p. ej. 2 Glade · 3 otras)" value={p.reparto ?? ''} onChange={(e) => onCambiar({ reparto: e.target.value || undefined })} aria-label="Reparto" />
       <Input type="number" min={0} className="h-8 w-[66px] px-2 text-sm font-semibold" value={p.cuota} onChange={(e) => { const n = parseInt(e.target.value, 10); onCambiar({ cuota: Number.isFinite(n) && n >= 0 ? n : 0 }); }} aria-label="Cuota" />
       <span className="text-xs" title={detalle || 'Sin actividades'}>
@@ -551,15 +567,15 @@ function FilaPerfil({ p, fila, guardado, onCambiar, onQuitar }: {
   );
 }
 
-function FilaActividad({ a, perfiles, avance, guardada, onCambiar, onQuitar }: {
-  a: Actividad; perfiles: PerfilMuestra[]; avance?: Avance; guardada?: Actividad;
+function FilaActividad({ a, def, perfiles, avance, guardada, onCambiar, onQuitar }: {
+  a: Actividad; def: DefinicionMuestra; perfiles: PerfilMuestra[]; avance?: Avance; guardada?: Actividad;
   onCambiar: (c: Partial<Actividad>) => void; onQuitar: () => void;
 }) {
   const numero = (v: string) => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : 0; };
   const cambiada = guardada && JSON.stringify(guardada) !== JSON.stringify(a);
   const lleno = avance ? Math.min(100, Math.round((avance.total / Math.max(1, a.personas)) * 100)) : 0;
   return (
-    <div className={`grid grid-cols-2 items-center gap-2 border-t px-4 py-2 lg:grid-cols-[52px_minmax(150px,1.3fr)_minmax(90px,0.8fr)_minmax(120px,1fr)_118px_74px_116px_44px_28px] lg:border-t-0 lg:py-1 ${cambiada || !guardada ? 'bg-amber-50/40' : ''}`}>
+    <div className={`grid grid-cols-2 items-center gap-2 border-t px-4 py-2 lg:grid-cols-[52px_minmax(150px,1.2fr)_minmax(90px,0.7fr)_minmax(120px,1fr)_minmax(150px,1.2fr)_118px_74px_116px_44px_28px] lg:border-t-0 lg:py-1 ${cambiada || !guardada ? 'bg-amber-50/40' : ''}`}>
       <Input className="h-8 px-2 text-sm font-semibold" value={a.codigo} onChange={(e) => onCambiar({ codigo: e.target.value.toUpperCase().slice(0, 8) })} aria-label="Código" />
       <div className="col-span-1 [&_button]:h-8"><DatetimePicker value={a.fecha ?? ''} onChange={(iso) => onCambiar({ fecha: iso || undefined })} /></div>
       <Input className="h-8 text-sm" placeholder="Lugar" value={a.lugar ?? ''} onChange={(e) => onCambiar({ lugar: e.target.value || undefined })} aria-label="Lugar" />
@@ -572,6 +588,7 @@ function FilaActividad({ a, perfiles, avance, guardada, onCambiar, onQuitar }: {
         <option value="">Sin perfil</option>
         {perfiles.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
       </select>
+      <ParaQuien a={a} def={def} onCambiar={onCambiar} />
       <div className="flex items-center gap-1">
         <Input type="number" min={0} className="h-8 w-14 px-2 text-sm" value={a.personas} onChange={(e) => onCambiar({ personas: numero(e.target.value) })} aria-label="Personas" />
         <span className="text-xs text-muted-foreground">+</span>
@@ -597,5 +614,58 @@ function FilaActividad({ a, perfiles, avance, guardada, onCambiar, onQuitar }: {
       </button>
       {a.fecha && <span className="col-span-2 text-[11px] text-muted-foreground lg:hidden">{fechaCorta(a.fecha)}</span>}
     </div>
+  );
+}
+
+/**
+ * Modalidad, género, edad y NSE de una actividad: lo que no se escribe aquí
+ * sale de su perfil. Abajo, cómo se llaman su grupo y su evento.
+ */
+function ParaQuien({ a, def, onCambiar }: { a: Actividad; def: DefinicionMuestra; onCambiar: (c: Partial<Actividad>) => void }) {
+  const d = detallesDe(a, def);
+  const p = def.perfiles?.find((x) => x.id === a.perfilId);
+  const resumen = [MODALIDADES[d.modalidad], d.genero && GENEROS[d.genero], d.edad && edadCorta(d.edad), d.nse && `NSE ${d.nse}`].filter(Boolean).join(' · ');
+  const propio = !!(a.genero || a.edad || a.nse);
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className="h-8 min-w-0 truncate rounded-md border bg-background px-2 text-left text-xs hover:bg-muted" title={resumen}>
+          <span className={propio ? 'font-medium' : ''}>{resumen}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 space-y-3 p-3">
+        <div className="flex gap-1">
+          {(Object.keys(MODALIDADES) as Modalidad[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              className="h-7 flex-1 rounded-md border text-xs font-medium"
+              style={d.modalidad === m ? { backgroundColor: TEAL, borderColor: TEAL, color: 'white' } : undefined}
+              onClick={() => onCambiar({ modalidad: m })}
+            >
+              {MODALIDADES[m]}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-[1fr_72px_64px] gap-2">
+          <label className="space-y-1 text-[11px] text-muted-foreground">Género
+            <select className="h-8 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={a.genero ?? ''} onChange={(e) => onCambiar({ genero: esGenero(e.target.value) ? e.target.value : undefined })}>
+              <option value="">{p?.genero ? `${GENEROS[p.genero]} (perfil)` : '—'}</option>
+              {Object.entries(GENEROS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 text-[11px] text-muted-foreground">Edad
+            <Input className="h-8 px-2 text-sm text-foreground" placeholder={p?.edad ?? '25–35'} value={a.edad ?? ''} onChange={(e) => onCambiar({ edad: e.target.value || undefined })} />
+          </label>
+          <label className="space-y-1 text-[11px] text-muted-foreground">NSE
+            <Input className="h-8 px-2 text-sm text-foreground" placeholder={p?.nse ?? 'C+'} value={a.nse ?? ''} onChange={(e) => onCambiar({ nse: e.target.value || undefined })} />
+          </label>
+        </div>
+        <div className="space-y-1 border-t pt-2 text-[11px]">
+          <p><span className="text-muted-foreground">Grupo y evento: </span>{nombreDeGrupo(a, def)}</p>
+          <p><span className="text-muted-foreground">Vistas externas: </span>{nombreExterno(a, def)}</p>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

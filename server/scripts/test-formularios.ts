@@ -41,7 +41,7 @@ import { sugerir } from '../../src/serverUtils/formularios/tableroHub';
 import { bandejaDe } from '../../src/lib/formularios/motor';
 import { alternarMarca, leerFormato, sinFormato } from '../../src/lib/formularios/formato';
 import { tramosDe } from '../../src/lib/formularios/documento';
-import { cambiosEntre, cuotasPorNombre, deLaIA, fechaParaIA, frentesConLaMuestra, frentesDeLaMuestra, leerMuestra, muestraDeLaIA, muestraParaIA, nombreDeGrupo, nuevaActividad, porPerfil, siguienteCodigo } from '../../src/lib/reclutamiento/muestra';
+import { cambiosEntre, cuotasPorNombre, deLaIA, edadCorta, fechaParaIA, frentesConLaMuestra, frentesDeLaMuestra, leerMuestra, muestraDeLaIA, muestraParaIA, nombreDeEvento, nombreDeGrupo, nombreExterno, nuevaActividad, porPerfil, siguienteCodigo } from '../../src/lib/reclutamiento/muestra';
 import { leerCatalogoSepomex } from '../../src/serverUtils/formularios/codigosPostales';
 import { direccionDeComponentes } from '../../src/serverUtils/formularios/direcciones';
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
@@ -1263,7 +1263,7 @@ caso('la muestra: códigos por técnica, cambios en palabras y lugares por perfi
   assert.deepEqual([s1.codigo, s2.codigo, e1.codigo], ['S1', 'S2', 'E1']);
   assert.equal(siguienteCodigo([s1, s2, e1], 'sesion'), 'S3');
   assert.deepEqual([s1.personas, s1.reserva, e1.personas, e1.reserva], [8, 2, 1, 0]);
-  assert.equal(nombreDeGrupo(s1), 'S1 · mié 4 nov · 6:00 pm · CDMX');
+  assert.equal(nombreDeGrupo(s1, leerMuestra({ actividades: [s1] })), 'S1 · Sesión de grupo · Presencial · Perfil A · CDMX');
   const v1 = leerMuestra({ actividades: [s1, s2, e1] });
   const v2 = leerMuestra({ actividades: [{ ...s1, lugar: 'Monterrey' }, e1, nuevaActividad([s1, s2, e1], 'triada', { id: 'a4' })] });
   // En una muestra de antes, el perfil sale de sus actividades: al quitar la última, se va también.
@@ -1271,6 +1271,37 @@ caso('la muestra: códigos por técnica, cambios en palabras y lugares por perfi
   assert.deepEqual(porPerfil(v1).map((p) => [p.nombre, p.total.personas, p.total.reserva]), [['Perfil A', 9, 2], ['Perfil B', 8, 2]]);
   // Lo guardado a medias o viejo no truena: lo que falta toma el valor de su técnica.
   assert.deepEqual(leerMuestra({ actividades: [{ tecnica: 'nada', personas: -3 }, 7] }).actividades.map((a) => [a.tecnica, a.personas]), [['otra', 1]]);
+});
+
+caso('los nombres de grupos y eventos dicen para quién es; el externo cambia el perfil por su letra', () => {
+  const def = leerMuestra({
+    perfiles: [
+      { id: 'pm_a', nombre: 'Limpiadores Marca Uno', cuota: 2, genero: 'mixto', edad: '25 a 55', nse: 'C+' },
+      { id: 'pm_b', nombre: 'Aerosoles', cuota: 8, genero: 'nada', edad: ' ', nse: 'NSE C/D+' },
+    ],
+    actividades: [
+      { id: 'a1', codigo: 'V1', tecnica: 'visita', perfilId: 'pm_a', lugar: 'CDMX', personas: 1 },
+      { id: 'a2', codigo: 'S1', tecnica: 'sesion', perfilId: 'pm_b', lugar: 'En línea', genero: 'mujeres', edad: '25-35' },
+      { id: 'a3', codigo: 'S2', tecnica: 'sesion', perfilId: 'pm_b', lugar: 'Monterrey', modalidad: 'online', genero: 'hombres' },
+    ],
+  });
+  // Lo que no es una opción válida o está vacío no se guarda.
+  assert.deepEqual([def.perfiles![1].genero, def.perfiles![1].edad], [undefined, undefined]);
+  const [v1, s1, s2] = def.actividades;
+  assert.equal(nombreDeGrupo(v1, def), 'V1 · Visita en casa · Presencial · Limpiadores Marca Uno · Mixto 25–55 años · NSE C+ · CDMX');
+  assert.equal(nombreDeEvento(v1, def), 'V1 · Visita en casa · Presencial · Limpiadores Marca Uno · Mixto 25–55 años · NSE C+');
+  assert.equal(nombreExterno(v1, def), 'V1 · Visita en casa · Presencial · Perfil A · Mixto 25–55 años · NSE C+ · CDMX');
+  // «En línea» ya dice que es online (no se repite); lo de la actividad gana a lo del perfil.
+  assert.equal(nombreExterno(s1, def), 'S1 · Sesión de grupo · Online · Perfil B · Mujeres 25–35 años · NSE C/D+');
+  assert.equal(nombreExterno(s2, def), 'S2 · Sesión de grupo · Online · Perfil B · Hombres · NSE C/D+ · Monterrey');
+  assert.ok(!nombreExterno(v1, def).includes('Marca'));
+  assert.deepEqual([edadCorta('18+'), edadCorta('25 a 35 años'), edadCorta('30–45')], ['18+', '25–35 años', '30–45 años']);
+  // Cambiarlos se dice en palabras; la IA los lee y los escribe (null quita, lo que no viene se queda).
+  const despues = { ...def, perfiles: def.perfiles!.map((p) => (p.id === 'pm_a' ? { ...p, nse: 'C' } : p)), actividades: def.actividades.map((a) => (a.id === 'a2' ? { ...a, modalidad: 'presencial' as const } : a)) };
+  assert.deepEqual(cambiosEntre(def, despues), ['Perfil «Limpiadores Marca Uno»: NSE C', 'S1: modalidad a Presencial']);
+  assert.deepEqual(muestraParaIA(def).actividades[1], { ...muestraParaIA(def).actividades[1], modalidad: null, genero: 'mujeres', edad: '25-35' });
+  const ia = deLaIA(def.actividades, [{ id: 'a2', tecnica: 'sesion', genero: null }, { id: 'a3', tecnica: 'sesion', modalidad: 'cualquiera' }, { tecnica: 'visita', modalidad: 'presencial', nse: 'D' }]);
+  assert.deepEqual(ia.map((a) => [a.codigo, a.modalidad, a.genero, a.edad, a.nse]), [['S1', undefined, undefined, '25-35', undefined], ['S2', undefined, 'hombres', undefined, undefined], ['V1', 'presencial', undefined, undefined, 'D']]);
 });
 
 caso('la muestra con la IA: lo que se queda conserva grupo y evento, lo nuevo toma código libre', () => {

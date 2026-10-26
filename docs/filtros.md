@@ -825,6 +825,17 @@ Pedido de Sergio: que siempre pregunte en qué tablero y en qué calendario, y p
 
 Sergio: la dirección llegaba al tablero partida en 6 columnas («Dirección · Calle», «· Colonia»…) y el pin de Google Maps del tablero (sale en columnas cuyo nombre dice «dirección») buscaba solo un pedazo. Ahora el tablero lleva una sola columna con la dirección completa como la busca Google («calle número, colonia, CP municipio, estado, país»; `direccionCompleta` en `tabla.ts`); las 6 partes siguen solo en el Excel (`soloExcel`). En los tableros ya ligados, la columna nueva se crea y se llena en las filas que ya estaban al poner al día el tablero (`rellenar`). En ALONG 2 se creó y se llenó (8 filas, 2026-10-26) y, a pedido de Sergio, sus 6 columnas partidas se mandaron a la papelera del tablero (con sus 48 celdas; el dato sigue en cada respuesta y en el Excel).
 
+### Grupos y eventos con para quién es, y un nombre externo sin marcas (2026-10-26, sin subir)
+
+Sergio: los grupos del tablero y los eventos del calendario van numerados y con el detalle de cada actividad (presencial u online, género, edad, perfil…), y para las vistas externas un nombre «críptico» con género, edad, NSE y modalidad, sin las marcas que se buscan. En la Muestra, cada perfil lleva **Género** (Mujeres, Hombres, Mixto), **Edad** y **NSE**, y cada actividad un recuadro **Modalidad y para quién**: Presencial u Online (sin elegir, online si el lugar dice «En línea») y género, edad y NSE solo si esa actividad es distinta de su perfil (S1 mujeres, S2 hombres). El recuadro enseña cómo se llamarán su grupo y su evento (`detallesDe`, `nombreDeGrupo`, `nombreDeEvento`, `nombreExterno` en `lib/reclutamiento/muestra.ts`):
+
+- Grupo: «V1 · Visita en casa · Presencial · Aerosoles · Mixto 25–55 años · NSE C+ · CDMX». Evento: lo mismo sin el lugar (el evento lo lleva aparte). La fecha ya no va en el nombre del grupo: la cabecera del grupo la toma de su evento.
+- Externo: el perfil se cambia por su letra («Perfil A», la de la cuadrita junto a su nombre en la tabla de perfiles): «V1 · Visita en casa · Presencial · Perfil A · Mixto 25–55 años · NSE C+ · CDMX». Se guarda como el «Nombre público» del grupo (`publicName` en `options_json`), que el tablero ya usaba en las vistas externas y deja cambiar a mano.
+
+Al crear grupos se ponen los dos nombres; al guardar la muestra, el servidor renombra los grupos que ya existen cuando cambia lo que los nombra (`nombresAlTablero` en `serverUtils/muestra/muestra.ts`, sin tocar su color ni su evento ligado) y la pantalla, los eventos. La IA llena género, edad y NSE de cada perfil (solo si los insumos lo dicen) y la modalidad de cada actividad.
+
+**Probado en local (2026-10-26):** en «3 MAYO PRUEBA 3» (versión 4), sus 3 grupos y el evento de S1 tomaron el nombre nuevo y el externo, con el evento ligado intacto. 94 pruebas. ALONG 2 no tiene grupos (se quitaron para rehacerlos): sus perfiles aún no tienen género, edad ni NSE.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |

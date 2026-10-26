@@ -28,6 +28,12 @@ export const TECNICAS = {
 export type Tecnica = keyof typeof TECNICAS;
 export const ORDEN_TECNICAS = Object.keys(TECNICAS) as Tecnica[];
 
+/** Para quién es y cómo se hace: lo dicen los nombres de los grupos y los eventos (pedido de Sergio, 2026-10-26). */
+export const GENEROS = { mujeres: 'Mujeres', hombres: 'Hombres', mixto: 'Mixto' } as const;
+export type Genero = keyof typeof GENEROS;
+export const MODALIDADES = { presencial: 'Presencial', online: 'Online' } as const;
+export type Modalidad = keyof typeof MODALIDADES;
+
 export interface PerfilMuestra {
   id: string;
   nombre: string;
@@ -37,6 +43,10 @@ export interface PerfilMuestra {
   reparto?: string;
   /** Cuántas personas (titulares) se necesitan de este perfil. */
   cuota: number;
+  /** Lo de todas sus actividades («25–35», «C+»), salvo las que digan otra cosa. */
+  genero?: Genero;
+  edad?: string;
+  nse?: string;
 }
 
 export interface Actividad {
@@ -55,6 +65,12 @@ export interface Actividad {
   personas: number;
   reserva: number;
   notas?: string;
+  /** Sin escribir: online si el lugar lo dice («En línea»), si no presencial. */
+  modalidad?: Modalidad;
+  /** Solo cuando esta actividad no es como su perfil (S1 mujeres, S2 hombres); si no, valen los del perfil. */
+  genero?: Genero;
+  edad?: string;
+  nse?: string;
   /** El grupo del tablero y el evento del calendario, cuando ya se crearon. */
   grupoId?: string;
   eventoId?: string;
@@ -72,6 +88,14 @@ export interface DefinicionMuestra {
 const esTecnica = (t: unknown): t is Tecnica => typeof t === 'string' && t in TECNICAS;
 const entero = (n: unknown, def: number) => (typeof n === 'number' && Number.isFinite(n) && n >= 0 ? Math.round(n) : def);
 const texto = (s: unknown) => (typeof s === 'string' && s.trim() ? s.trim() : undefined);
+export const esGenero = (g: unknown): g is Genero => typeof g === 'string' && g in GENEROS;
+const esModalidad = (m: unknown): m is Modalidad => typeof m === 'string' && m in MODALIDADES;
+/** Género, edad y NSE escritos (de un perfil o una actividad), sin los vacíos. */
+const paraQuienDe = (x: { genero?: unknown; edad?: unknown; nse?: unknown }) => ({
+  ...(esGenero(x.genero) ? { genero: x.genero } : {}),
+  ...(texto(x.edad) ? { edad: texto(x.edad) } : {}),
+  ...(texto(x.nse) ? { nse: texto(x.nse) } : {}),
+});
 
 /** Lo guardado, con lo que falte puesto (nunca truena con datos viejos o a medias). */
 export function leerMuestra(json: unknown): DefinicionMuestra {
@@ -84,6 +108,7 @@ export function leerMuestra(json: unknown): DefinicionMuestra {
       ...(texto(p.descripcion) ? { descripcion: texto(p.descripcion) } : {}),
       ...(texto(p.reparto) ? { reparto: texto(p.reparto) } : {}),
       cuota: entero(p.cuota, 0),
+      ...paraQuienDe(p),
     }];
   });
   const actividades = (Array.isArray(d.actividades) ? d.actividades : []).flatMap((a): Actividad[] => {
@@ -102,6 +127,8 @@ export function leerMuestra(json: unknown): DefinicionMuestra {
       personas: entero(a.personas, t.personas),
       reserva: entero(a.reserva, t.reserva),
       notas: texto(a.notas),
+      ...(esModalidad(a.modalidad) ? { modalidad: a.modalidad } : {}),
+      ...paraQuienDe(a),
       grupoId: texto(a.grupoId),
       eventoId: texto(a.eventoId),
     }];
@@ -175,14 +202,66 @@ export function fechaCorta(iso?: string): string | undefined {
   return `${DIAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]} · ${hora}`;
 }
 
-/** El nombre del grupo del tablero: «S1 · mar 4 nov · 6:00 pm · CDMX». */
-export function nombreDeGrupo(a: Actividad): string {
-  return [a.codigo, fechaCorta(a.fecha), a.lugar].filter(Boolean).join(' · ');
+// ── nombres de grupos y eventos ──────────────────────────────────────────────
+const ONLINE = /en l[ií]nea|online|virtual|remot|zoom|teams|meet/i;
+
+/** Modalidad, género, edad y NSE de una actividad: lo suyo o, si no lo dice, lo de su perfil. */
+export function detallesDe(a: Actividad, def: DefinicionMuestra): { modalidad: Modalidad; genero?: Genero; edad?: string; nse?: string } {
+  const p = def.perfiles?.find((x) => x.id === a.perfilId);
+  return {
+    modalidad: a.modalidad ?? (a.lugar && ONLINE.test(a.lugar) ? 'online' : 'presencial'),
+    genero: a.genero ?? p?.genero,
+    edad: a.edad ?? p?.edad,
+    nse: a.nse ?? p?.nse,
+  };
 }
 
-/** El nombre del evento del calendario: «S1 · Sesión de grupo · Aerosoles». */
-export function nombreDeEvento(a: Actividad): string {
-  return [a.codigo, TECNICAS[a.tecnica].nombre, a.perfil].filter(Boolean).join(' · ');
+/** «25 a 35», «25-35 años» → «25–35 años». */
+export function edadCorta(edad: string): string {
+  const e = edad.replace(/(\d+)\s*(?:-|–|—|a)\s*(\d+)/i, '$1–$2').trim();
+  return /años?$/i.test(e) || !/\d$/.test(e) ? e : `${e} años`;
+}
+
+/** «Mujeres 25–35 años», «NSE C+»: lo que se lee de para quién es. */
+function paraQuien(d: ReturnType<typeof detallesDe>): string[] {
+  return [
+    [d.genero && GENEROS[d.genero], d.edad && edadCorta(d.edad)].filter(Boolean).join(' '),
+    d.nse ? `NSE ${d.nse.replace(/^nse\s*/i, '')}` : '',
+  ];
+}
+
+/** El lugar, salvo cuando solo repite que es online («En línea»). */
+const lugarDe = (a: Actividad, d: ReturnType<typeof detallesDe>) => (d.modalidad === 'online' && a.lugar && ONLINE.test(a.lugar) ? undefined : a.lugar);
+
+/** La letra de cada perfil en las vistas externas: A, B, C… (en el orden de la lista). */
+export function letraDePerfil(def: DefinicionMuestra, perfilId?: string): string | undefined {
+  const i = (def.perfiles ?? []).findIndex((p) => p.id === perfilId);
+  if (i < 0) return undefined;
+  const letra = (n: number): string => (n < 26 ? String.fromCharCode(65 + n) : letra(Math.floor(n / 26) - 1) + letra(n % 26));
+  return letra(i);
+}
+
+/** El nombre del grupo del tablero: «V1 · Visita en casa · Presencial · Aerosoles · Mixto 25–55 años · NSE C+ · CDMX». */
+export function nombreDeGrupo(a: Actividad, def: DefinicionMuestra): string {
+  const d = detallesDe(a, def);
+  return [a.codigo, TECNICAS[a.tecnica].nombre, MODALIDADES[d.modalidad], a.perfil, ...paraQuien(d), lugarDe(a, d)].filter(Boolean).join(' · ');
+}
+
+/** El nombre del evento del calendario: el del grupo sin el lugar (el evento lo lleva aparte). */
+export function nombreDeEvento(a: Actividad, def: DefinicionMuestra): string {
+  const d = detallesDe(a, def);
+  return [a.codigo, TECNICAS[a.tecnica].nombre, MODALIDADES[d.modalidad], a.perfil, ...paraQuien(d)].filter(Boolean).join(' · ');
+}
+
+/**
+ * El nombre del grupo en las vistas externas (el «nombre público» del
+ * tablero): en vez del perfil, que suele llevar marcas o categorías, su letra.
+ * «V1 · Visita en casa · Presencial · Perfil A · Mixto 25–55 años · NSE C+ · CDMX».
+ */
+export function nombreExterno(a: Actividad, def: DefinicionMuestra): string {
+  const d = detallesDe(a, def);
+  const letra = letraDePerfil(def, a.perfilId);
+  return [a.codigo, TECNICAS[a.tecnica].nombre, MODALIDADES[d.modalidad], letra && `Perfil ${letra}`, ...paraQuien(d), lugarDe(a, d)].filter(Boolean).join(' · ');
 }
 
 /** El color del grupo en el tablero, por técnica (los mismos tonos que usa el tablero). */
@@ -235,6 +314,10 @@ const CAMPOS: { campo: keyof Actividad; nombre: string; valor: (a: Actividad) =>
   { campo: 'lugar', nombre: 'lugar', valor: (a) => a.lugar },
   { campo: 'personas', nombre: 'personas', valor: (a) => String(a.personas) },
   { campo: 'reserva', nombre: 'reserva', valor: (a) => String(a.reserva) },
+  { campo: 'modalidad', nombre: 'modalidad', valor: (a) => (a.modalidad ? MODALIDADES[a.modalidad] : undefined) },
+  { campo: 'genero', nombre: 'género', valor: (a) => (a.genero ? GENEROS[a.genero] : undefined) },
+  { campo: 'edad', nombre: 'edad', valor: (a) => a.edad },
+  { campo: 'nse', nombre: 'NSE', valor: (a) => a.nse },
 ];
 
 /** Los cambios en palabras: «Se agregó S5 (Sesión de grupo, Difusores)», «S1: fecha de … a …», «Se quitó S4». */
@@ -250,6 +333,9 @@ export function cambiosEntre(antes: DefinicionMuestra | undefined, despues: Defi
     if (v.cuota !== p.cuota) out.push(`Perfil «${p.nombre}»: cuota de ${v.cuota} a ${p.cuota}`);
     if ((v.descripcion ?? '') !== (p.descripcion ?? '')) out.push(`Perfil «${p.nombre}»: cambió quién es`);
     if ((v.reparto ?? '') !== (p.reparto ?? '')) out.push(`Perfil «${p.nombre}»: ${p.reparto ? `reparto ${p.reparto}` : 'sin reparto'}`);
+    if (v.genero !== p.genero) out.push(`Perfil «${p.nombre}»: género ${p.genero ? GENEROS[p.genero].toLowerCase() : '(se quitó)'}`);
+    if ((v.edad ?? '') !== (p.edad ?? '')) out.push(`Perfil «${p.nombre}»: edad ${p.edad ?? '(se quitó)'}`);
+    if ((v.nse ?? '') !== (p.nse ?? '')) out.push(`Perfil «${p.nombre}»: NSE ${p.nse ?? '(se quitó)'}`);
   }
   const quedan = new Set((despues.perfiles ?? []).map((p) => p.id));
   for (const v of antes?.perfiles ?? []) if (!quedan.has(v.id)) out.push(`Se quitó el perfil «${v.nombre}»`);
@@ -290,6 +376,10 @@ export interface ActividadIA {
   lugar?: string | null;
   fecha?: string | null;
   notas?: string | null;
+  modalidad?: string | null;
+  genero?: string | null;
+  edad?: string | null;
+  nse?: string | null;
 }
 
 /** La fecha como la lee y escribe la IA: «2026-11-04T18:00», en hora de la Ciudad de México. */
@@ -305,15 +395,22 @@ export function fechaParaIA(iso?: string): string | undefined {
 }
 
 /** Un perfil como lo escribe la IA: con su `id` si ya existía (en un cambio). */
-export interface PerfilIA { id?: string | null; nombre: string; descripcion?: string | null; reparto?: string | null; cuota?: number | null }
+export interface PerfilIA {
+  id?: string | null; nombre: string; descripcion?: string | null; reparto?: string | null; cuota?: number | null;
+  genero?: string | null; edad?: string | null; nse?: string | null;
+}
 
 /** La muestra como se la da a leer a la IA (para pedirle un cambio): con su id, sin grupos ni eventos. */
 export function muestraParaIA(def: DefinicionMuestra) {
   return {
-    perfiles: (def.perfiles ?? []).map((p) => ({ id: p.id, nombre: p.nombre, descripcion: p.descripcion ?? null, reparto: p.reparto ?? null, cuota: p.cuota })),
+    perfiles: (def.perfiles ?? []).map((p) => ({
+      id: p.id, nombre: p.nombre, descripcion: p.descripcion ?? null, reparto: p.reparto ?? null, cuota: p.cuota,
+      genero: p.genero ?? null, edad: p.edad ?? null, nse: p.nse ?? null,
+    })),
     actividades: def.actividades.map((a) => ({
       id: a.id, codigo: a.codigo, tecnica: a.tecnica, perfil: a.perfil ?? null, personas: a.personas, reserva: a.reserva,
       duracionMin: a.duracionMin ?? null, lugar: a.lugar ?? null, fecha: fechaParaIA(a.fecha) ?? null, notas: a.notas ?? null,
+      modalidad: a.modalidad ?? null, genero: a.genero ?? null, edad: a.edad ?? null, nse: a.nse ?? null,
     })),
     supuestos: def.supuestos ?? [],
   };
@@ -323,6 +420,16 @@ const UNA_PERSONA: Tecnica[] = ['entrevista', 'visita', 'compra'];
 const textoIA = (v: string | null | undefined, antes?: string) => (v === undefined ? antes : v?.trim() || undefined);
 const numeroIA = (v: number | null | undefined, antes: number | undefined, minimo: number) =>
   (v === undefined || v === null ? antes : v >= minimo ? Math.round(v) : antes);
+/** Modalidad, género, edad y NSE como los escribió la IA, sobre los de antes (lo que no viene se queda; `null` lo quita). */
+function detallesIA(r: { modalidad?: string | null; genero?: string | null; edad?: string | null; nse?: string | null }, antes: { modalidad?: Modalidad; genero?: Genero; edad?: string; nse?: string } = {}) {
+  const opcion = <T extends string>(v: string | null | undefined, previo: T | undefined, valida: (x: unknown) => x is T) =>
+    (v === undefined ? previo : valida(v) ? v : undefined);
+  const modalidad = opcion(r.modalidad, antes.modalidad, esModalidad);
+  const genero = opcion(r.genero, antes.genero, esGenero);
+  const edad = textoIA(r.edad, antes.edad);
+  const nse = textoIA(r.nse, antes.nse);
+  return { ...(modalidad ? { modalidad } : {}), ...(genero ? { genero } : {}), ...(edad ? { edad } : {}), ...(nse ? { nse } : {}) };
+}
 
 /**
  * Los perfiles que propuso la IA, sobre los que había: los que se quedan
@@ -346,6 +453,7 @@ export function perfilesDeLaIA(actual: PerfilMuestra[], leidos: PerfilIA[]): Per
       ...(textoIA(r.descripcion, base.descripcion) ? { descripcion: textoIA(r.descripcion, base.descripcion) } : {}),
       ...(textoIA(r.reparto, base.reparto) ? { reparto: textoIA(r.reparto, base.reparto) } : {}),
       cuota: numeroIA(r.cuota, base.cuota, 0) ?? 0,
+      ...detallesIA({ genero: r.genero, edad: r.edad, nse: r.nse }, base),
     });
   }
   return out;
@@ -385,9 +493,10 @@ export function deLaIA(actual: Actividad[], leidas: ActividadIA[]): Actividad[] 
     const prev = r.id ? previas.get(r.id) : undefined;
     if (!prev || usados.has(prev.id)) { nuevas.push({ ...r, id: undefined }); continue; }
     usados.add(prev.id);
+    const { modalidad: _m, genero: _g, edad: _e, nse: _n, ...previa } = prev;
     const fecha = r.fecha === undefined || r.fecha === fechaParaIA(prev.fecha) ? prev.fecha : textoIA(r.fecha);
     quedan.push({
-      ...prev,
+      ...previa,
       tecnica: r.tecnica,
       // Si cambió de técnica, su código ya no le queda («S2» que ahora es tríada): toma uno nuevo abajo.
       codigo: r.tecnica === prev.tecnica ? prev.codigo : '',
@@ -398,6 +507,7 @@ export function deLaIA(actual: Actividad[], leidas: ActividadIA[]): Actividad[] 
       lugar: textoIA(r.lugar, prev.lugar),
       fecha: fecha && !Number.isNaN(new Date(fecha).getTime()) ? fecha : undefined,
       notas: textoIA(r.notas, prev.notas),
+      ...detallesIA(r, prev),
     });
   }
   const lista = [...quedan];
@@ -414,6 +524,7 @@ export function deLaIA(actual: Actividad[], leidas: ActividadIA[]): Actividad[] 
       ...(a.lugar?.trim() ? { lugar: a.lugar.trim() } : {}),
       ...(a.fecha && !Number.isNaN(new Date(a.fecha).getTime()) ? { fecha: a.fecha } : {}),
       ...(a.notas?.trim() ? { notas: a.notas.trim() } : {}),
+      ...detallesIA(a),
     }));
   }
   return lista;
