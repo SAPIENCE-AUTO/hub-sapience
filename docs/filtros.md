@@ -785,6 +785,12 @@ Pedido de Sergio: en los selectores con imágenes, poder crear la imagen de una 
 
 **Probado en local (2026-10-26):** en «Prueba fase 1 · todos los tipos», la opción «Frasco» con «frasco de vidrio con tapa de rosca»: imagen genérica de un frasco con tapa, guardada en la carpeta de imágenes del Hub (39 KB), registrada en el uso.
 
+### La imagen de la opción en los bloques que se repiten (2026-10-26)
+
+Pedido de Sergio (prueba de ALONG 2): en los bloques que se repiten por cada opción marcada («Tu aerosol», «Tu difusor»), que la imagen de esa opción salga junto al título, como referencia de qué se pregunta. `CuerpoPantalla` (Participante.tsx) la toma de la opción del bloque (`pantalla.instancia.imagen`): igual en el formulario, en la vista Celular y en el celular junto al documento. Sin imagen, el título se ve como antes.
+
+**Probado en local (2026-10-26):** en «Prueba celular y correo por defecto», «Aerosol (lata que rocías)» con una imagen hecha con IA: el bloque «Tu aerosol» la muestra junto al título.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |

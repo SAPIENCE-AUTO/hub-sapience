@@ -172,11 +172,23 @@ export function Despedida({ texto, onOtraVez }: { texto: string; onOtraVez?: () 
   );
 }
 
-/** Título y texto de entrada de la sección, y sus preguntas (`children`). */
+/**
+ * Título y texto de entrada de la sección, y sus preguntas (`children`). En un
+ * bloque que se repite por cada opción marcada («Tu aerosol»), la imagen de
+ * esa opción va junto al título, como referencia de qué se está preguntando.
+ */
 export function CuerpoPantalla({ pantalla, enMarco, children }: { pantalla?: Pantalla; enMarco: boolean; children: React.ReactNode }) {
+  const imagen = pantalla?.instancia?.imagen;
   return (
     <div className={`flex-1 px-5 pt-6 ${enMarco ? 'pb-8' : 'pb-32'}`}>
-      {pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#1F1F23]">{pantalla.titulo}</h2>}
+      {imagen
+        ? (
+          <div className="flex items-center gap-3">
+            <img src={imagen} alt="" className="h-[72px] w-[72px] flex-shrink-0 rounded-xl border border-[#E4E4E7] bg-white object-contain p-1" />
+            {pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#1F1F23]">{pantalla.titulo}</h2>}
+          </div>
+        )
+        : pantalla?.titulo && <h2 className="text-[22px] font-bold text-[#1F1F23]">{pantalla.titulo}</h2>}
       {pantalla?.intro && <p className="mt-2 text-[15px] leading-relaxed text-[#45454D]"><TextoConFormato texto={pantalla.intro} /></p>}
       <div className="mt-6 space-y-9">{children}</div>
     </div>
