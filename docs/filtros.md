@@ -757,6 +757,22 @@ Pedido de Sergio: ver qué insumos va a leer la IA para la muestra, poder sumarl
 
 **Probado en local (2026-10-26)** en «3 MAYO PRUEBA 3»: «S1 es en línea y agrega una tríada del mismo perfil» cambió el lugar de S1 (con su grupo y evento) y agregó T1; una imagen inventada («2 sesiones en Guadalajara, 18 nov 6 pm») soltada en los insumos se leyó y agregó S2 y S3; deshacer y quitar la imagen funcionan; el PDF del filtro quedó intacto y su copia en la carpeta de la muestra. 87 pruebas.
 
+### Perfiles y cuotas en la Muestra; el filtro los toma con los mismos insumos (2026-10-26)
+
+Pedido de Sergio: al hacer la muestra de ALONG 2 y luego entrar a Filtros, se volvían a pedir los insumos y los perfiles se definían en dos lados (la IA de la muestra hasta hizo 40 perfiles, uno por entrevista). Ahora la Muestra dice **qué gente se necesita y cuánta**; el filtro, **cómo encontrarla**.
+
+**Qué se construyó:**
+
+- **Perfiles y cuotas en la Muestra** (`PerfilMuestra` en `lib/reclutamiento/muestra.ts`): nombre, quién es, reparto (lo que se reparte dentro del perfil: marcas, ciudades, hombres y mujeres) y cuota. Tabla editable con lo que suman sus actividades («faltan 2», «sobran 3»); cada actividad elige su perfil de la lista. Las muestras de antes sacan sus perfiles de lo escrito en sus actividades (id fijo, cuota = lo que suman).
+- **La IA de la Muestra** propone primero los perfiles (agrupados, nunca uno por persona; lo que solo reparte va en «reparto») y luego las actividades; al pedirle cambios conserva el id de cada perfil (`muestraDeLaIA`).
+- **El filtro toma los perfiles y los insumos**: al crearlo, el paso de insumos enseña «De la Muestra · se usa sola» (perfiles con cuota e insumos) y no pide subirlos otra vez (`insumosParaFiltro`, sin repetir lo que el filtro ya tiene). La estructura usa exactamente los perfiles de la Muestra (`frentesDeLaMuestra`; los de más se dejan fuera con un supuesto) y cada perfil del filtro queda ligado (`perfilMuestra`). En el filtro, su nombre y cuota se ven «de la Muestra» y no se editan ahí.
+- **Cuotas al día solas**: al guardar la muestra, los filtros del proyecto toman nombre y cuota de sus perfiles (`perfilesALosFiltros`: el screener, su copia de trabajo si está en vivo y la estructura del generador; reconoce por liga, por nombre o por el nombre de antes) y los sugeridos del tablero se recalculan con esas cuotas. Agregar o quitar perfiles del filtro sigue siendo con sus preguntas («Comentar» los perfiles).
+- **Si el filtro va primero**, la muestra que propone la IA usa los perfiles y cuotas de esa estructura (`proponerMuestraSiNoHay` con perfiles fijos), y quedan ligados al armar la lógica.
+
+**Probado en local (2026-10-26)** en «3 MAYO PRUEBA 3»: «Agrega el perfil Consumidores de la competencia con 4 entrevistas» creó el perfil (cuota 4, reparto «2 hombres · 2 mujeres») y E3–E6; al guardar, los dos filtros de prueba con perfiles de esos nombres quedaron ligados con cuota 10 y 4 (los demás, igual); un filtro nuevo enseñó lo de la Muestra sin subir nada y su estructura salió con exactamente esos dos perfiles y cuotas (la IA avisó que la propuesta decía 8 y 8). 89 pruebas.
+
+**Pendiente:** en ALONG 2 la muestra tiene 40 perfiles (uno por entrevista): pedirle a la IA en Muestra que los agrupe por categoría con las marcas en «reparto».
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |

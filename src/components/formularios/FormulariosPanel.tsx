@@ -482,7 +482,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
 
       {enGenerador && (
         <GeneradorFiltro
-          gen={gen} formularioId={detalle.id} actual={estructuraActual} onCerrar={() => setVerEstructura(false)}
+          gen={gen} formularioId={detalle.id} proyectoId={proyectoId} actual={estructuraActual} onCerrar={() => setVerEstructura(false)}
           regla={editor.def.secciones.length ? editor.def.nse?.regla : undefined}
         />
       )}

@@ -8,9 +8,11 @@ import { EstructuraPanel } from './Estructura';
  * van en el camino del filtro, arriba (Recorrido); las preguntas se escriben
  * ya en el documento. El uso de la IA de la hora está en el menú «⋯».
  */
-export function GeneradorFiltro({ gen, formularioId, actual, regla, onCerrar }: {
+export function GeneradorFiltro({ gen, formularioId, proyectoId, actual, regla, onCerrar }: {
   gen: GeneradorUI;
   formularioId: string;
+  /** El proyecto: de su muestra salen perfiles, cuotas e insumos. */
+  proyectoId?: string;
   /** Se abrió desde el documento para cambiar la estructura de lo ya escrito. */
   actual?: Estructura;
   /** La regla de NSE del filtro ya escrito. */
@@ -23,7 +25,7 @@ export function GeneradorFiltro({ gen, formularioId, actual, regla, onCerrar }: 
   return (
     <div className="mx-auto max-w-[860px] space-y-5">
       {paso === 'insumos'
-        ? <Insumos gen={gen} formularioId={formularioId} />
+        ? <Insumos gen={gen} formularioId={formularioId} proyectoId={proyectoId} />
         : <EstructuraPanel gen={gen} actual={actual} regla={regla} onCerrar={onCerrar} />}
     </div>
   );

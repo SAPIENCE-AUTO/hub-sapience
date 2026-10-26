@@ -204,7 +204,8 @@ export function EstructuraPanel({ gen, actual, regla, onCerrar }: {
           <BotonComentar hay={!!comentarios[SECCION_PERFILES]} onClick={() => setAbierto(SECCION_PERFILES)} />
         </div>
         {e.frentes.length === 0 && <p className="py-2 text-sm" style={{ color: PELIGRO }}>Sin perfiles: nadie calificaría.</p>}
-        <ul>{e.frentes.map((f) => <FilaFrente key={f.id} f={f} editable={!!propuesta} onGuardar={(c) => gen.editarFrente(f.id, c).catch((err) => toast.error((err as Error).message))} />)}</ul>
+        <ul>{e.frentes.map((f) => <FilaFrente key={f.id} f={f} editable={!!propuesta && !f.perfilMuestra} onGuardar={(c) => gen.editarFrente(f.id, c).catch((err) => toast.error((err as Error).message))} />)}</ul>
+        {e.frentes.some((f) => f.perfilMuestra) && <p className="mt-1 text-[11px] text-muted-foreground">Los perfiles y cuotas vienen de la Muestra: se cambian en Reclutamiento → Muestra.</p>}
         <Comentario
           valor={comentarios[SECCION_PERFILES]} abierto={abierto === SECCION_PERFILES}
           onAbrir={() => setAbierto(SECCION_PERFILES)} onGuardar={(t) => guardarComentario(SECCION_PERFILES, t)} onCerrar={() => setAbierto(null)}

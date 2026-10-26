@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { pool, ZiteError } from '../../../server/compat';
 import { leerDefinicion } from '../../lib/formularios/tipos';
-import { deLaIA, leerMuestra, muestraParaIA, ORDEN_TECNICAS, type DefinicionMuestra, type Tecnica } from '../../lib/reclutamiento/muestra';
+import { leerMuestra, muestraDeLaIA, muestraParaIA, ORDEN_TECNICAS, type DefinicionMuestra, type Tecnica } from '../../lib/reclutamiento/muestra';
 import { contenidoDeInsumos, hayInsumos } from '../formularios/insumos';
 import { insumosDeLaMuestra } from './insumos';
 import { llamarJSON, MODELOS } from '../formularios/claude';
@@ -107,39 +107,58 @@ const ActividadZ = z.object({
   fecha: z.string().nullish(),
   notas: z.string().nullish(),
 });
-const PropuestaZ = z.object({ actividades: z.array(ActividadZ).max(120), supuestos: z.array(z.string()).default([]) });
+const PerfilZ = z.object({
+  nombre: z.string().min(1),
+  descripcion: z.string().nullish(),
+  reparto: z.string().nullish(),
+  cuota: z.number().min(0).max(1000).nullish(),
+});
+const PropuestaZ = z.object({
+  perfiles: z.array(PerfilZ).max(30).default([]),
+  actividades: z.array(ActividadZ).max(120),
+  supuestos: z.array(z.string()).default([]),
+});
 const CambioZ = z.object({
+  perfiles: z.array(PerfilZ.extend({ id: z.string().nullish() })).max(30).nullish(),
   actividades: z.array(ActividadZ.extend({ id: z.string().nullish() })).max(200),
   supuestos: z.array(z.string()).default([]),
   nota: z.string().nullish(),
 });
 
+/** Perfiles que ya están decididos (los del filtro, cuando el filtro se armó primero): la IA no los cambia. */
+export type PerfilesFijos = { nombre: string; descripcion?: string; cuota: number }[];
+
 const SISTEMA = `Eres analista de investigación cualitativa en una agencia de investigación de mercados en México. Lees los insumos de un estudio (propuesta, notas, transcripción del kick-off, tablas e imágenes) y armas su muestra: cada actividad de campo por separado. Escribes en español de México, sin tecnicismos. Respondes solo con un objeto JSON, sin texto antes ni después.`;
 
-/** Cómo se escribe cada actividad (igual al proponer y al cambiar). */
-function reglasDeActividad(perfiles: { nombre: string; meta: number }[]): string[] {
+/** Cómo se escriben los perfiles y cada actividad (igual al proponer y al cambiar). */
+function reglas(o: { delFiltro: { nombre: string; meta: number }[]; fijos?: PerfilesFijos }): string[] {
   return [
-    '- Una entrada por cada actividad de campo: si son 4 sesiones, son 4 entradas; si son 16 entrevistas, son 16 entradas de 1 persona cada una (lo mismo en visitas y compras acompañadas).',
+    '- perfiles: los grupos de personas que se reclutan con los mismos criterios. Nunca un perfil por persona ni por actividad: si 5 entrevistas son de usuarios de aerosoles de distintas marcas, es un perfil «Aerosoles» con cuota 5 y en "reparto" «2 Glade · 1 Air Wick · 2 Febreze». Lo que solo reparte dentro de un perfil (marcas, ciudades, mitad hombres y mitad mujeres, edades) va en "reparto", no en otro perfil.',
+    '- descripcion: quién es, en una línea («Mamás de 25 a 35, NSE C, compran aromatizantes cada mes»). cuota: cuántas personas titulares se necesitan de ese perfil; tiene que cuadrar con lo que suman sus actividades.',
+    o.fijos?.length
+      ? `- Los perfiles ya están decididos (los del filtro): usa exactamente estos, con su nombre y su cuota, sin agregar ni quitar: ${o.fijos.map((p) => `«${p.nombre}» (cuota ${p.cuota})`).join(', ')}.`
+      : o.delFiltro.length
+        ? `- Si sirven, usa de base los perfiles del filtro del proyecto (mismo nombre): ${o.delFiltro.map((p) => `«${p.nombre}» (cuota ${p.meta})`).join(', ')}.`
+        : '',
+    '- Una actividad por cada actividad de campo: si son 4 sesiones, son 4 entradas; si son 16 entrevistas, son 16 entradas de 1 persona cada una (lo mismo en visitas y compras acompañadas).',
     '- tecnica: sesion = sesión de grupo o focus group; visita = visita en casa o etnografía; compra = compra acompañada o shop-along; taller = taller o co-creación; otra = lo que no encaje (prework, comunidad en línea).',
     '- personas: los titulares; reserva: los de respaldo (si no se dice, el estándar: 2 en sesiones, 1 en minigrupos y tríadas, 0 en entrevistas).',
-    perfiles.length
-      ? `- perfil: usa exactamente uno de estos nombres de perfil del filtro: ${perfiles.map((p) => `«${p.nombre}»`).join(', ')}.`
-      : '- perfil: un nombre corto del perfil de esa actividad («Mamás 25-35 NSE C»).',
+    '- perfil (de cada actividad): exactamente el nombre de uno de los perfiles.',
     '- lugar: la ciudad o «En línea». fecha: solo si los insumos o el equipo dicen día y hora (formato AAAA-MM-DDTHH:MM, hora de la ciudad); nunca la inventes, déjala vacía.',
-  ];
+  ].filter(Boolean);
 }
 
-function instrucciones(perfiles: { nombre: string; meta: number }[]): string {
+function instrucciones(delFiltro: { nombre: string; meta: number }[], fijos?: PerfilesFijos): string {
   return [
-    'Arma la muestra del estudio con los insumos de arriba. Responde solo con este JSON:',
-    '{"actividades": [{"tecnica": "sesion" | "minigrupo" | "triada" | "diada" | "entrevista" | "visita" | "compra" | "taller" | "otra", "perfil": "…", "personas": 8, "reserva": 2, "duracionMin": 120, "lugar": "CDMX", "fecha": "2026-11-04T18:00", "notas": "…"}], "supuestos": ["…"]}',
-    ...reglasDeActividad(perfiles),
+    'Arma la muestra del estudio con los insumos de arriba: primero sus perfiles con su cuota y después sus actividades. Responde solo con este JSON:',
+    '{"perfiles": [{"nombre": "…", "descripcion": "…", "reparto": "…", "cuota": 5}], "actividades": [{"tecnica": "sesion" | "minigrupo" | "triada" | "diada" | "entrevista" | "visita" | "compra" | "taller" | "otra", "perfil": "…", "personas": 8, "reserva": 2, "duracionMin": 120, "lugar": "CDMX", "fecha": "2026-11-04T18:00", "notas": "…"}], "supuestos": ["…"]}',
+    ...reglas({ delFiltro, fijos }),
     '- supuestos: en frases cortas, lo que tuviste que suponer porque los insumos no lo dicen («Supuse 2 de reserva por sesión»). Ninguno si no supusiste nada.',
     '- Si los insumos no dicen qué actividades de campo lleva el estudio, responde {"actividades": [], "supuestos": []}: nunca inventes una muestra.',
   ].join('\n');
 }
 
-function instruccionesDeCambio(perfiles: { nombre: string; meta: number }[], actual: DefinicionMuestra, comentario: string): string {
+function instruccionesDeCambio(delFiltro: { nombre: string; meta: number }[], actual: DefinicionMuestra, comentario: string): string {
   return [
     'Esta es la muestra actual del estudio (JSON):',
     JSON.stringify(muestraParaIA(actual)),
@@ -147,10 +166,10 @@ function instruccionesDeCambio(perfiles: { nombre: string; meta: number }[], act
     `El equipo pide este cambio: «${comentario}»`,
     '',
     'Devuelve la muestra completa ya con el cambio. Responde solo con este JSON:',
-    '{"actividades": [{"id": "…", "tecnica": "sesion" | "minigrupo" | "triada" | "diada" | "entrevista" | "visita" | "compra" | "taller" | "otra", "perfil": "…", "personas": 8, "reserva": 2, "duracionMin": 120, "lugar": "CDMX", "fecha": "2026-11-04T18:00", "notas": "…"}], "supuestos": ["…"], "nota": "…"}',
-    '- Cada actividad que se queda lleva su "id" tal cual, aunque cambie; las nuevas van sin id; las que se quitan, no las incluyas.',
+    '{"perfiles": [{"id": "…", "nombre": "…", "descripcion": "…", "reparto": "…", "cuota": 5}], "actividades": [{"id": "…", "tecnica": "sesion" | "minigrupo" | "triada" | "diada" | "entrevista" | "visita" | "compra" | "taller" | "otra", "perfil": "…", "personas": 8, "reserva": 2, "duracionMin": 120, "lugar": "CDMX", "fecha": "2026-11-04T18:00", "notas": "…"}], "supuestos": ["…"], "nota": "…"}',
+    '- Cada perfil y cada actividad que se queda lleva su "id" tal cual, aunque cambie; los nuevos van sin id; los que se quitan, no los incluyas.',
     '- Cambia solo lo que pide el equipo: todo lo demás va idéntico (mismos valores, misma fecha, mismo orden).',
-    ...reglasDeActividad(perfiles),
+    ...reglas({ delFiltro }),
     '- Si el pedido necesita algo de los insumos (la propuesta, el kick-off, un archivo nuevo), búscalo ahí.',
     '- supuestos: los que siguen valiendo y los nuevos que tuviste que hacer; quita los que el pedido ya resolvió.',
     '- nota: en una frase, qué cambiaste. Nombra las que ya existían por su código (S1, E2); las nuevas, solo por su técnica y perfil. Si el pedido no se puede hacer o no es claro, devuelve la muestra sin cambios y di por qué.',
@@ -159,15 +178,19 @@ function instruccionesDeCambio(perfiles: { nombre: string; meta: number }[], act
 
 const SIN_ACTIVIDADES = 'Los insumos no dicen qué actividades lleva el estudio (sesiones, entrevistas…). Agrega la propuesta, el kick-off o una nota en los insumos de la muestra, o ármala a mano.';
 
-/** Propone la muestra con los insumos de la muestra (o los del filtro, si nadie los ha tocado). No la guarda. */
-export async function proponerMuestra(proyectoId: string, email: string): Promise<DefinicionMuestra> {
+/**
+ * Propone la muestra con los insumos de la muestra (o los del filtro, si nadie
+ * los ha tocado). No la guarda. `fijos`: los perfiles ya decididos (cuando el
+ * filtro se armó primero), que la IA no cambia.
+ */
+export async function proponerMuestra(proyectoId: string, email: string, fijos?: PerfilesFijos): Promise<DefinicionMuestra> {
   const fuente = await insumosDeLaMuestra(proyectoId);
   if (!hayInsumos(fuente.insumos)) throw new ZiteError({ code: 'BAD_REQUEST', message: 'La muestra todavía no tiene insumos. Agrega la propuesta, el kick-off o una nota, o ármala a mano.' });
-  const perfiles = await perfilesDelProyecto(proyectoId);
+  const delFiltro = await perfilesDelProyecto(proyectoId);
   const contenido = await contenidoDeInsumos(fuente.insumos);
   const leido = await conRegistro(email, fuente.filtro?.id ?? null, 'muestra', (onGasto) => llamarJSON({
     sistema: SISTEMA,
-    usuario: [...contenido, { type: 'text', text: instrucciones(perfiles) }],
+    usuario: [...contenido, { type: 'text', text: instrucciones(delFiltro, fijos) }],
     esquema: PropuestaZ,
     modelo: MODELOS.cambios,
     esfuerzo: 'medium',
@@ -175,7 +198,9 @@ export async function proponerMuestra(proyectoId: string, email: string): Promis
     onGasto,
   }));
   if (!leido.actividades.length) throw new ZiteError({ code: 'BAD_REQUEST', message: SIN_ACTIVIDADES });
-  return { actividades: deLaIA([], leido.actividades), supuestos: leido.supuestos.slice(0, 8), origen: 'ia' };
+  // Con perfiles fijos, son esos tal cual (nombre y cuota), aunque la IA los haya escrito distinto.
+  const perfiles = fijos?.length ? fijos.map((p) => ({ nombre: p.nombre, descripcion: p.descripcion, cuota: p.cuota })) : leido.perfiles;
+  return { ...muestraDeLaIA({ actividades: [] }, { perfiles, actividades: leido.actividades }), supuestos: leido.supuestos.slice(0, 8), origen: 'ia' };
 }
 
 /**
@@ -186,11 +211,11 @@ export async function proponerMuestra(proyectoId: string, email: string): Promis
  */
 export async function comentarMuestra(proyectoId: string, actual: DefinicionMuestra, comentario: string, email: string): Promise<{ definicion: DefinicionMuestra; nota?: string }> {
   const fuente = await insumosDeLaMuestra(proyectoId);
-  const perfiles = await perfilesDelProyecto(proyectoId);
+  const delFiltro = await perfilesDelProyecto(proyectoId);
   const contenido = hayInsumos(fuente.insumos) ? await contenidoDeInsumos(fuente.insumos) : [];
   const leido = await conRegistro(email, fuente.filtro?.id ?? null, 'muestra', (onGasto) => llamarJSON({
     sistema: SISTEMA,
-    usuario: [...contenido, { type: 'text', text: instruccionesDeCambio(perfiles, actual, comentario) }],
+    usuario: [...contenido, { type: 'text', text: instruccionesDeCambio(delFiltro, actual, comentario) }],
     esquema: CambioZ,
     modelo: MODELOS.cambios,
     esfuerzo: 'medium',
@@ -203,7 +228,7 @@ export async function comentarMuestra(proyectoId: string, actual: DefinicionMues
     return { definicion: actual, nota: nota ?? 'La IA no devolvió actividades: no se cambió nada.' };
   }
   return {
-    definicion: { ...actual, actividades: deLaIA(actual.actividades, leido.actividades), supuestos: leido.supuestos.slice(0, 8) },
+    definicion: { ...actual, ...muestraDeLaIA(actual, { perfiles: leido.perfiles ?? undefined, actividades: leido.actividades }), supuestos: leido.supuestos.slice(0, 8) },
     ...(nota ? { nota } : {}),
   };
 }
@@ -265,12 +290,13 @@ export async function guardarMuestra(o: {
 
 /**
  * Al proponer la estructura de un filtro con la IA: si el proyecto aún no
- * tiene muestra, la IA la propone con los mismos insumos y queda guardada
- * (versión 1). No crea grupos ni eventos: eso se hace desde Muestra.
+ * tiene muestra, la IA la propone con los mismos insumos y los perfiles y
+ * cuotas de esa estructura (`fijos`), y queda guardada (versión 1). No crea
+ * grupos ni eventos: eso se hace desde Muestra.
  */
-export async function proponerMuestraSiNoHay(proyectoId: string | null, email: string, por: string): Promise<void> {
+export async function proponerMuestraSiNoHay(proyectoId: string | null, email: string, por: string, fijos?: PerfilesFijos): Promise<void> {
   if (!proyectoId || (await muestraDeProyecto(proyectoId))) return;
-  const def = await proponerMuestra(proyectoId, email);
+  const def = await proponerMuestra(proyectoId, email, fijos);
   const cambios = [`La propuso la IA con los insumos: ${def.actividades.length} actividades`];
   await guardarMuestra({ proyectoId, definicion: def, cambios, motivo: 'Propuesta de la IA al armar el filtro', por, versionBase: 0 })
     .catch((e) => { if (!(e instanceof ZiteError)) throw e; }); // si alguien la creó mientras tanto, se queda la suya

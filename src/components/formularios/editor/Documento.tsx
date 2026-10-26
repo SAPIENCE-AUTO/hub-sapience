@@ -165,12 +165,17 @@ function Frentes({ ctx }: { ctx: ContextoDoc }) {
         {frentes.map((f) => (
           <li key={f.id} className="text-[14px]">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              {/* Los que salen de la Muestra: nombre y cuota se cambian allá (el filtro los toma solo). */}
               <span className="font-semibold text-[#1F1F23]">
-                <TextoEditable valor={f.nombre} linea obligatorio etiqueta="Nombre del perfil" onGuardar={(v) => aplicar((d) => cambiarFrente(d, f.id, { nombre: v }))} />
+                {f.perfilMuestra
+                  ? f.nombre
+                  : <TextoEditable valor={f.nombre} linea obligatorio etiqueta="Nombre del perfil" onGuardar={(v) => aplicar((d) => cambiarFrente(d, f.id, { nombre: v }))} />}
               </span>
               <label className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
                 Cuota
-                <CuotaFrente valor={f.meta} onGuardar={(meta) => aplicar((d) => cambiarFrente(d, f.id, { meta }))} />
+                {f.perfilMuestra
+                  ? <span className="font-medium text-[#1F1F23]" title="Se cambia en Reclutamiento → Muestra">{f.meta} · de la Muestra</span>
+                  : <CuotaFrente valor={f.meta} onGuardar={(meta) => aplicar((d) => cambiarFrente(d, f.id, { meta }))} />}
               </label>
             </div>
             <p className="mt-0.5 text-[12.5px] leading-snug text-[#257E55]">↳ {frenteEnPalabras(def, f)}</p>

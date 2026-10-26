@@ -32,10 +32,12 @@ export default createEndpoint({
       filtro, email: context.user!.email, stream, pedido: input.pedido,
       ajuste: input.sobre === 'escrito' ? { sobre: 'escrito', definicion: leerDefinicion(input.definicion) } : input.sobre === 'propuesta' ? { sobre: 'propuesta' } : undefined,
     });
-    // Con la primera estructura, la IA también propone la muestra del proyecto (si aún no tiene), sin hacer esperar.
+    // Con la primera estructura, la IA también propone la muestra del proyecto (si aún no tiene), con los
+    // perfiles y cuotas de esta estructura, sin hacer esperar.
     if (!input.sobre) {
       const email = context.user!.email;
-      nombreDeUsuario(email).then((por) => proponerMuestraSiNoHay(filtro.proyectoId, email, por)).catch((err) => console.error('[muestra] no se pudo proponer al armar el filtro', (err as Error).message));
+      const fijos = (r.generador.estructura?.frentes ?? []).map((f) => ({ nombre: f.nombre, descripcion: f.quien || undefined, cuota: f.meta }));
+      nombreDeUsuario(email).then((por) => proponerMuestraSiNoHay(filtro.proyectoId, email, por, fijos)).catch((err) => console.error('[muestra] no se pudo proponer al armar el filtro', (err as Error).message));
     }
     return { generador: generadorParaNavegador(r.generador), problemas: r.problemas };
   },

@@ -14,8 +14,8 @@ import { ALERTA, EXITO, GRIS, TEAL } from '@/lib/toolColors';
 import { MarcaIA, botonTeal } from '@/components/formularios/generador/comun';
 import { InsumosMuestra, cuantosInsumos, type Reunion, type VistaInsumos } from './InsumosMuestra';
 import {
-  TECNICAS, ORDEN_TECNICAS, cambiosEntre, colorDeGrupo, fechaCorta, leerMuestra, lugares, nombreDeEvento, nombreDeGrupo, nuevaActividad, pendientesDeCrear, porPerfil, porTecnica,
-  type Actividad, type DefinicionMuestra, type Tecnica,
+  TECNICAS, ORDEN_TECNICAS, cambiosEntre, colorDeGrupo, fechaCorta, leerMuestra, lugares, nombreDeEvento, nombreDeGrupo, nuevaActividad, nuevoPerfil, pendientesDeCrear, porPerfil, porTecnica,
+  type Actividad, type DefinicionMuestra, type PerfilMuestra, type Tecnica,
 } from '@/lib/reclutamiento/muestra';
 
 interface Avance { total: number; confirmados: number; porEstatus: Record<string, number> }
@@ -79,6 +79,18 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
   const cambiar = (id: string, cambio: Partial<Actividad>) => setBorrador((b) => ({ ...b, actividades: b.actividades.map((a) => (a.id === id ? { ...a, ...cambio } : a)) }));
   const agregar = (tecnica: Tecnica) => setBorrador((b) => ({ ...b, actividades: [...b.actividades, nuevaActividad(b.actividades, tecnica)] }));
   const quitarActividad = (id: string) => setBorrador((b) => ({ ...b, actividades: b.actividades.filter((a) => a.id !== id) }));
+  // Perfiles: renombrar uno renombra el perfil de sus actividades; quitarlo las deja sin perfil.
+  const cambiarPerfil = (id: string, c: Partial<PerfilMuestra>) => setBorrador((b) => ({
+    ...b,
+    perfiles: (b.perfiles ?? []).map((p) => (p.id === id ? { ...p, ...c } : p)),
+    actividades: c.nombre !== undefined ? b.actividades.map((a) => (a.perfilId === id ? { ...a, perfil: c.nombre } : a)) : b.actividades,
+  }));
+  const agregarPerfil = () => setBorrador((b) => ({ ...b, perfiles: [...(b.perfiles ?? []), nuevoPerfil({ nombre: `Perfil ${(b.perfiles?.length ?? 0) + 1}` })] }));
+  const quitarPerfil = (id: string) => setBorrador((b) => ({
+    ...b,
+    perfiles: (b.perfiles ?? []).filter((p) => p.id !== id),
+    actividades: b.actividades.map((a) => { if (a.perfilId !== id) return a; const { perfilId: _i, perfil: _n, ...resto } = a; return resto; }),
+  }));
 
   // ── IA ──────────────────────────────────────────────────────────────────────
   const proponer = async () => {
@@ -216,7 +228,8 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
   if (!datos) return <div className="flex h-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
 
   const tecnicas = porTecnica(borrador.actividades);
-  const perfiles = porPerfil(borrador.actividades);
+  const perfiles = porPerfil(borrador);
+  const cuotaTotal = (borrador.perfiles ?? []).reduce((n, p) => n + p.cuota, 0);
   const total = lugares(borrador.actividades);
   const cubiertos = guardada.actividades.reduce((n, a) => n + Math.min(a.personas, a.grupoId ? datos.avance[a.grupoId]?.total ?? 0 : 0), 0);
   const ultima = datos.versiones[0];
@@ -270,7 +283,7 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
         )}
 
         {/* Vacía: los insumos a la vista, para sumarles y que la IA la proponga */}
-        {!borrador.actividades.length && !trabajando && (
+        {!borrador.actividades.length && !borrador.perfiles?.length && !trabajando && (
           <div className="rounded-xl border bg-card p-5">
             <p className="font-medium">Todavía no hay muestra</p>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">Cada sesión, tríada o entrevista con su fecha, lugar, perfil y cupo. De aquí salen los grupos del tablero y los eventos del calendario.</p>
@@ -328,32 +341,22 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
           </div>
         )}
 
-        {/* Cuántos de cada perfil */}
-        {borrador.actividades.length > 0 && (
+        {/* Perfiles y cuotas: qué gente se necesita y cuánta (el filtro los toma de aquí) */}
+        {(borrador.actividades.length > 0 || !!borrador.perfiles?.length) && (
           <div className="rounded-xl border bg-card p-4">
-            <div className="mb-2 flex flex-wrap items-baseline gap-x-3">
-              <span className="text-sm font-semibold" style={{ color: TEAL }}>Cuántos de cada perfil</span>
-              <span className="text-xs text-muted-foreground">{total} lugares · {cubiertos} ya en su grupo</span>
+            <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="text-sm font-semibold" style={{ color: TEAL }}>Perfiles y cuotas</span>
+              <span className="text-xs text-muted-foreground">{cuotaTotal} personas · {total} lugares en actividades · {cubiertos} ya en su grupo</span>
+              <span className="flex-1" />
+              <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={agregarPerfil}><Plus className="h-3.5 w-3.5" />Agregar perfil</Button>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="text-xs text-muted-foreground">
-                  <th className="py-1 pr-3 text-left font-medium">Perfil</th>
-                  {tecnicas.map((t) => <th key={t.tecnica} className="px-2 py-1 text-center font-medium">{TECNICAS[t.tecnica].plural}</th>)}
-                  <th className="px-2 py-1 text-center font-medium">Total</th>
-                </tr></thead>
-                <tbody>
-                  {perfiles.map((p) => (
-                    <tr key={p.perfil} className="border-t">
-                      <td className="py-1.5 pr-3">{p.perfil}</td>
-                      {tecnicas.map((t) => { const x = p.tecnicas[t.tecnica]; return <td key={t.tecnica} className="px-2 py-1.5 text-center">{x ? `${x.personas}${x.reserva ? ` + ${x.reserva}` : ''}` : '—'}</td>; })}
-                      <td className="px-2 py-1.5 text-center font-semibold">{p.total.personas}{p.total.reserva ? ` + ${p.total.reserva}` : ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="hidden grid-cols-[minmax(130px,1fr)_minmax(180px,1.6fr)_minmax(150px,1.2fr)_70px_150px_28px] gap-2 pb-1 text-[11px] text-muted-foreground lg:grid">
+              <span>Perfil</span><span>Quién es</span><span>Reparto</span><span>Cuota</span><span>En actividades</span><span />
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">Titulares + reserva.</p>
+            {perfiles.map((f) => (f.perfil
+              ? <FilaPerfil key={f.perfil.id} p={f.perfil} fila={f} guardado={guardada.perfiles?.find((x) => x.id === f.perfil!.id)} onCambiar={(c) => cambiarPerfil(f.perfil!.id, c)} onQuitar={() => quitarPerfil(f.perfil!.id)} />
+              : <p key="sin" className="border-t py-2 text-xs" style={{ color: '#8a4b00' }}>{f.total.actividades} {f.total.actividades === 1 ? 'actividad' : 'actividades'} sin perfil ({f.total.personas} lugares): elige su perfil abajo.</p>))}
+            {!borrador.perfiles?.length && <p className="py-2 text-xs text-muted-foreground">Sin perfiles todavía. Cada perfil es un grupo de personas con los mismos criterios y su cuota; lo que se reparte dentro (marcas, ciudades) va en «Reparto».</p>}
           </div>
         )}
 
@@ -373,7 +376,7 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
               <FilaActividad
                 key={a.id}
                 a={a}
-                perfiles={datos.perfiles.map((p) => p.nombre)}
+                perfiles={borrador.perfiles ?? []}
                 avance={a.grupoId ? datos.avance[a.grupoId] : undefined}
                 guardada={guardada.actividades.find((x) => x.id === a.id)}
                 onCambiar={(c) => cambiar(a.id, c)}
@@ -459,23 +462,53 @@ function MenuTecnicas({ onElegir, etiqueta }: { onElegir: (t: Tecnica) => void; 
   );
 }
 
+function FilaPerfil({ p, fila, guardado, onCambiar, onQuitar }: {
+  p: PerfilMuestra; fila: ReturnType<typeof porPerfil>[number]; guardado?: PerfilMuestra;
+  onCambiar: (c: Partial<PerfilMuestra>) => void; onQuitar: () => void;
+}) {
+  const cambiado = !guardado || JSON.stringify(guardado) !== JSON.stringify(p);
+  const lugares = fila.total.personas;
+  const diferencia = lugares - p.cuota;
+  const detalle = Object.entries(fila.tecnicas).map(([t, x]) => `${x!.actividades} ${x!.actividades === 1 ? TECNICAS[t as Tecnica].nombre.toLowerCase() : TECNICAS[t as Tecnica].plural.toLowerCase()}`).join(', ');
+  return (
+    <div className={`grid grid-cols-2 items-center gap-2 border-t py-2 lg:grid-cols-[minmax(130px,1fr)_minmax(180px,1.6fr)_minmax(150px,1.2fr)_70px_150px_28px] lg:py-1.5 ${cambiado ? 'bg-amber-50/40' : ''}`}>
+      <Input className="h-8 text-sm font-medium" value={p.nombre} onChange={(e) => onCambiar({ nombre: e.target.value })} onBlur={() => { if (!p.nombre.trim()) onCambiar({ nombre: guardado?.nombre ?? 'Perfil sin nombre' }); }} aria-label="Nombre del perfil" />
+      <Input className="h-8 text-sm" placeholder="Quién es" value={p.descripcion ?? ''} onChange={(e) => onCambiar({ descripcion: e.target.value || undefined })} aria-label="Quién es" />
+      <Input className="h-8 text-sm" placeholder="Reparto (p. ej. 2 Glade · 3 otras)" value={p.reparto ?? ''} onChange={(e) => onCambiar({ reparto: e.target.value || undefined })} aria-label="Reparto" />
+      <Input type="number" min={0} className="h-8 w-[66px] px-2 text-sm font-semibold" value={p.cuota} onChange={(e) => { const n = parseInt(e.target.value, 10); onCambiar({ cuota: Number.isFinite(n) && n >= 0 ? n : 0 }); }} aria-label="Cuota" />
+      <span className="text-xs" title={detalle || 'Sin actividades'}>
+        <span className="font-medium" style={{ color: diferencia === 0 && lugares ? EXITO : diferencia ? '#8a4b00' : undefined }}>{lugares} {lugares === 1 ? 'lugar' : 'lugares'}</span>
+        {diferencia < 0 && <span style={{ color: '#8a4b00' }}> · faltan {-diferencia}</span>}
+        {diferencia > 0 && <span style={{ color: '#8a4b00' }}> · sobran {diferencia}</span>}
+      </span>
+      <button type="button" className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-[#D32222]" onClick={onQuitar} aria-label={`Quitar el perfil ${p.nombre}`}>
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 function FilaActividad({ a, perfiles, avance, guardada, onCambiar, onQuitar }: {
-  a: Actividad; perfiles: string[]; avance?: Avance; guardada?: Actividad;
+  a: Actividad; perfiles: PerfilMuestra[]; avance?: Avance; guardada?: Actividad;
   onCambiar: (c: Partial<Actividad>) => void; onQuitar: () => void;
 }) {
   const numero = (v: string) => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : 0; };
   const cambiada = guardada && JSON.stringify(guardada) !== JSON.stringify(a);
-  const listId = `perfiles-${a.id}`;
   const lleno = avance ? Math.min(100, Math.round((avance.total / Math.max(1, a.personas)) * 100)) : 0;
   return (
     <div className={`grid grid-cols-2 items-center gap-2 border-t px-4 py-2 lg:grid-cols-[52px_minmax(150px,1.3fr)_minmax(90px,0.8fr)_minmax(120px,1fr)_118px_74px_116px_44px_28px] lg:border-t-0 lg:py-1 ${cambiada || !guardada ? 'bg-amber-50/40' : ''}`}>
       <Input className="h-8 px-2 text-sm font-semibold" value={a.codigo} onChange={(e) => onCambiar({ codigo: e.target.value.toUpperCase().slice(0, 8) })} aria-label="Código" />
       <div className="col-span-1 [&_button]:h-8"><DatetimePicker value={a.fecha ?? ''} onChange={(iso) => onCambiar({ fecha: iso || undefined })} /></div>
       <Input className="h-8 text-sm" placeholder="Lugar" value={a.lugar ?? ''} onChange={(e) => onCambiar({ lugar: e.target.value || undefined })} aria-label="Lugar" />
-      <>
-        <Input className="h-8 text-sm" placeholder="Perfil" list={listId} value={a.perfil ?? ''} onChange={(e) => onCambiar({ perfil: e.target.value || undefined })} aria-label="Perfil" />
-        <datalist id={listId}>{perfiles.map((p) => <option key={p} value={p} />)}</datalist>
-      </>
+      <select
+        className="h-8 min-w-0 rounded-md border bg-background px-2 text-sm"
+        value={a.perfilId ?? ''}
+        onChange={(e) => { const p = perfiles.find((x) => x.id === e.target.value); onCambiar(p ? { perfilId: p.id, perfil: p.nombre } : { perfilId: undefined, perfil: undefined }); }}
+        aria-label="Perfil"
+      >
+        <option value="">Sin perfil</option>
+        {perfiles.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+      </select>
       <div className="flex items-center gap-1">
         <Input type="number" min={0} className="h-8 w-14 px-2 text-sm" value={a.personas} onChange={(e) => onCambiar({ personas: numero(e.target.value) })} aria-label="Personas" />
         <span className="text-xs text-muted-foreground">+</span>

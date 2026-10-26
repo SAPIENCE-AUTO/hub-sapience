@@ -138,3 +138,23 @@ export async function cambiarInsumos(
   if (quitado?.ruta?.startsWith(`insumos/${carpeta(proyectoId)}/`)) await borrarArchivoInsumo(quitado);
   return insumosDeLaMuestra(proyectoId);
 }
+
+/**
+ * Lo que lee la IA de un filtro: sus insumos y los de la muestra del proyecto,
+ * sin repetir (un archivo con el mismo nombre, una reunión ya elegida o el
+ * mismo texto cuentan una vez). Así no se vuelven a subir; lo propio del
+ * filtro (un screener en Word, por ejemplo) se suma.
+ */
+export async function insumosParaFiltro(proyectoId: string | null, propios: Insumos): Promise<Insumos> {
+  if (!proyectoId) return propios;
+  const { insumos: deMuestra } = await insumosDeLaMuestra(proyectoId);
+  const nombres = new Set(propios.archivos.map((a) => a.nombre.trim().toLowerCase()));
+  const reuniones = new Set(propios.reuniones.map((r) => r.id));
+  const notas = [propios.notas?.trim(), deMuestra.notas?.trim()].filter((x): x is string => !!x);
+  return {
+    ...propios,
+    archivos: [...propios.archivos, ...deMuestra.archivos.filter((a) => !nombres.has(a.nombre.trim().toLowerCase()))],
+    reuniones: [...propios.reuniones, ...deMuestra.reuniones.filter((r) => !reuniones.has(r.id))],
+    ...(notas.length ? { notas: [...new Set(notas)].join('\n\n') } : {}),
+  };
+}

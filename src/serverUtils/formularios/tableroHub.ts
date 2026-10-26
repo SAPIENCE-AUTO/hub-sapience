@@ -1,6 +1,6 @@
 import { pool } from '../../../server/compat';
 import { publishEvent } from '../../lib/ably';
-import { leerMuestra } from '../../lib/reclutamiento/muestra';
+import { cuotasPorNombre, leerMuestra } from '../../lib/reclutamiento/muestra';
 import { columnas, type FilaRespuesta } from '../../lib/formularios/tabla';
 import { leerDefinicion, type Definicion, type Resultado } from '../../lib/formularios/tipos';
 import { recalificar } from './traer';
@@ -17,7 +17,7 @@ import { asegurarColumnas, columnasParaTablero, vinculoVigente, type Vinculo } f
  *
  * Sugeridos: los mejores candidatos (IA alto primero, sin historial que
  * preocupe, los que contestaron antes) hasta cubrir lo que le falta a cada
- * perfil: su cuota (de la muestra si la hay; si no, la del filtro) menos los
+ * perfil: su cuota (la del perfil en la muestra si la hay; si no, la del filtro) menos los
  * que ya están en un grupo. Quien cae en varios perfiles se sugiere para uno
  * solo, el que más le falta, y cuenta una vez.
  */
@@ -113,10 +113,8 @@ export async function actualizarTablero(formularioId: string): Promise<{ escrita
     const resultado = anterior.terminado?.clave.startsWith('hub_') ? anterior : recalificar(def, r.respuestas, anterior);
     return { id: r.id as string, createdAt: new Date(r.created_at).toISOString(), esPrueba: r.es_prueba as boolean, respuestas: r.respuestas, duracionSeg: r.duracion_seg ?? undefined, resultado, anterior, fila: filaDe.get(String(r.id))! };
   });
-  const muestraPorPerfil = new Map<string, number>();
-  for (const a of f.muestra ? leerMuestra(f.muestra).actividades : []) {
-    if (a.perfil) muestraPorPerfil.set(a.perfil.trim().toLowerCase(), (muestraPorPerfil.get(a.perfil.trim().toLowerCase()) ?? 0) + a.personas);
-  }
+  // La cuota de cada perfil sale de la muestra (si la hay).
+  const muestraPorPerfil = f.muestra ? cuotasPorNombre(leerMuestra(f.muestra)) : new Map<string, number>();
   const sugeridos = sugerir(def, filas.map((x) => ({ ...x, enGrupo: enGrupo.has(String(x.fila.id)) })), muestraPorPerfil);
   const nombrePerfil = (id: string) => def.frentes?.find((x) => x.id === id)?.nombre ?? id;
 

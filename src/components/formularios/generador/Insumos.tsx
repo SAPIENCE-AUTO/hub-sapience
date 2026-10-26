@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { FileText, Loader2, Mic, Upload, X } from 'lucide-react';
-import { getFormularioReuniones } from 'zite-endpoints-sdk';
+import { getFormularioReuniones, getMuestra } from 'zite-endpoints-sdk';
 import { INFO, TEAL } from '@/lib/toolColors';
 import { traeArchivos } from '@/lib/swipe/imagenes';
 import type { ReunionInsumo } from '@/lib/formularios/generador';
@@ -9,6 +9,14 @@ import type { GeneradorUI } from './useGenerador';
 import { AvanceIA, Etiqueta, MarcaIA, archivoABase64, botonSecundario, botonTeal } from './comun';
 
 type Reunion = ReunionInsumo & { tipo?: string };
+
+/** Lo que el filtro ya trae de la muestra del proyecto (sin contar lo que el filtro también tiene). */
+interface DeLaMuestra {
+  perfiles: { nombre: string; cuota: number }[];
+  archivos: string[];
+  reuniones: ReunionInsumo[];
+  notas: string;
+}
 
 /** Lo que acepta cada punto de partida, por extensión. */
 const ACEPTA = { word: ['docx', 'pdf'], otros: ['pdf', 'pptx', 'docx'] };
@@ -22,7 +30,7 @@ const TIPO_ARCHIVO = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint', xlsx: 'Exce
  * PowerPoint) y la transcripción del kick-off de Notetaker; o el Word de un
  * screener que ya existe; o qué cambia de un filtro anterior.
  */
-export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId: string }) {
+export function Insumos({ gen, formularioId, proyectoId }: { gen: GeneradorUI; formularioId: string; proyectoId?: string }) {
   const g = gen.g!;
   const origen = g.origen;
   const [notas, setNotas] = useState(g.insumos.notas ?? '');
@@ -32,6 +40,24 @@ export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId:
   const input = useRef<HTMLInputElement>(null);
   const acepta = origen === 'word' ? ACEPTA.word : ACEPTA.otros;
   const elegidas = new Set(g.insumos.reuniones.map((r) => r.id));
+  const [muestra, setMuestra] = useState<DeLaMuestra | null>(null);
+
+  // Los perfiles, las cuotas y los insumos de la muestra del proyecto: el filtro los usa sin volver a subirlos.
+  useEffect(() => {
+    if (!proyectoId) return;
+    getMuestra({ proyectoId }).then((r) => {
+      const ins = r.insumos?.insumos ?? { archivos: [], reuniones: [] };
+      const perfiles = ((r.muestra?.definicion?.perfiles ?? []) as { nombre: string; cuota: number }[]).filter((p) => p.cuota > 0);
+      setMuestra({ perfiles, archivos: (ins.archivos ?? []).map((a: { nombre: string }) => a.nombre), reuniones: ins.reuniones ?? [], notas: ins.notas?.trim() ?? '' });
+    }).catch(() => setMuestra(null));
+  }, [proyectoId]);
+  const propiosArchivos = new Set(g.insumos.archivos.map((a) => a.nombre.trim().toLowerCase()));
+  const archivosMuestra = (muestra?.archivos ?? []).filter((n) => !propiosArchivos.has(n.trim().toLowerCase()));
+  const reunionesMuestra = new Set((muestra?.reuniones ?? []).map((r) => r.id));
+  const soloDeMuestra = (muestra?.reuniones ?? []).filter((r) => !elegidas.has(r.id));
+  // El texto de la muestra cuenta si no es el mismo del filtro (mientras nadie la toca, la muestra usa el de un filtro).
+  const notasMuestra = !!muestra?.notas && muestra.notas !== (g.insumos.notas ?? '').trim();
+  const hayDeMuestra = !!muestra && (muestra.perfiles.length > 0 || archivosMuestra.length > 0 || soloDeMuestra.length > 0 || notasMuestra);
 
   useEffect(() => {
     if (origen === 'word') return;
@@ -70,7 +96,7 @@ export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId:
     await gen.pedirEstructura(origen === 'filtro' ? notas.trim() || undefined : undefined);
   };
 
-  const hayAlgo = !!(notas.trim() || g.insumos.archivos.length || g.insumos.reuniones.length);
+  const hayAlgo = !!(notas.trim() || g.insumos.archivos.length || g.insumos.reuniones.length || archivosMuestra.length || soloDeMuestra.length || notasMuestra);
   const listo = origen === 'word' ? g.insumos.archivos.length > 0 : origen === 'filtro' ? true : hayAlgo;
   const ocupado = gen.llamada.corriendo || subiendo.length > 0;
 
@@ -100,6 +126,22 @@ export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId:
         {origen === 'word' && <p className="text-xs text-muted-foreground">Se convierte en un filtro editable con su misma redacción. Lo que la IA tenga que interpretar queda en los supuestos.</p>}
         {origen === 'filtro' && <p className="text-xs text-muted-foreground">Ya es una copia. Si no cambia nada, úsalo tal cual; si cambia algo, la IA lo adapta y lo que no cambia se queda igual.</p>}
       </div>
+
+      {hayDeMuestra && muestra && (
+        <section className="space-y-1.5 rounded-lg border px-3 py-2.5" style={{ borderColor: `${TEAL}30`, backgroundColor: `${TEAL}06` }}>
+          <Etiqueta>De la Muestra · se usa sola</Etiqueta>
+          {muestra.perfiles.length > 0 && (
+            <p className="text-sm"><span className="font-medium" style={{ color: TEAL }}>Perfiles y cuotas: </span>{muestra.perfiles.map((p) => `${p.nombre} ${p.cuota}`).join(' · ')}</p>
+          )}
+          {(archivosMuestra.length > 0 || soloDeMuestra.length > 0 || notasMuestra) && (
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium" style={{ color: TEAL }}>Insumos: </span>
+              {[...archivosMuestra, ...soloDeMuestra.map((r) => r.titulo), ...(notasMuestra ? ['texto de la Muestra'] : [])].join(' · ')}
+            </p>
+          )}
+          <p className="text-[11px] text-muted-foreground">Se cambian en Reclutamiento → Muestra. Aquí suma solo lo propio del filtro.</p>
+        </section>
+      )}
 
       <section className="space-y-1.5">
         <Etiqueta>{origen === 'filtro' ? 'Qué cambia' : 'Notas'}</Etiqueta>
@@ -151,7 +193,7 @@ export function Insumos({ gen, formularioId }: { gen: GeneradorUI; formularioId:
             {reuniones?.map((r) => (
               <li key={r.id}>
                 <label className="flex cursor-pointer items-center gap-2 rounded-md border bg-white px-2.5 py-1.5 text-sm hover:bg-[#0F3D4D]/[0.02]">
-                  <input type="checkbox" checked={elegidas.has(r.id)} disabled={ocupado} onChange={() => alternarReunion(r)} className="h-4 w-4 accent-[#0F3D4D]" />
+                  <input type="checkbox" checked={elegidas.has(r.id) || reunionesMuestra.has(r.id)} disabled={ocupado || (reunionesMuestra.has(r.id) && !elegidas.has(r.id))} title={reunionesMuestra.has(r.id) && !elegidas.has(r.id) ? 'Viene de la Muestra' : undefined} onChange={() => alternarReunion(r)} className="h-4 w-4 accent-[#0F3D4D]" />
                   <Mic className="h-4 w-4 flex-shrink-0" style={{ color: INFO }} />
                   <span className="min-w-0 flex-1 truncate">{r.titulo}</span>
                   <span className="whitespace-nowrap text-[11px] text-muted-foreground">{[r.tipo, fecha(r.fecha)].filter(Boolean).join(' · ')}</span>

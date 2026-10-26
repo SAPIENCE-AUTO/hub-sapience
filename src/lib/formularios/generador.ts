@@ -83,7 +83,11 @@ export interface SeccionPlan {
   cambia?: boolean;
 }
 
-export interface FrentePlan { id: string; nombre: string; grupo: string; meta: number; quien: string }
+export interface FrentePlan {
+  id: string; nombre: string; grupo: string; meta: number; quien: string;
+  /** El perfil de la muestra del proyecto del que sale (nombre y cuota se cambian en Muestra). */
+  perfilMuestra?: string;
+}
 
 export interface Estructura {
   pais: string;
@@ -227,7 +231,7 @@ export function estructuraDeDefinicion(def: Definicion, anterior?: Estructura): 
     pais: def.pais,
     tituloPublico: def.tituloPublico,
     perfil: anterior?.perfil ?? '',
-    frentes: (def.frentes ?? []).map((f) => ({ id: f.id, nombre: f.nombre, grupo: f.grupo, meta: f.meta, quien: frenteEnPalabras(def, f) })),
+    frentes: (def.frentes ?? []).map((f) => ({ id: f.id, nombre: f.nombre, grupo: f.grupo, meta: f.meta, quien: frenteEnPalabras(def, f), ...(f.perfilMuestra ? { perfilMuestra: f.perfilMuestra } : {}) })),
     // «Antes de empezar» la pone el Hub: no es parte de lo que se planea con la IA.
     secciones: def.secciones.filter((s) => s.id !== SECCION_INICIO).map((s) => {
       const plan: SeccionPlan = {
@@ -462,7 +466,7 @@ export function prepararParaEscribir(def: Definicion, e: Estructura, salen: stri
   const frentesQueSiguen = new Set(e.frentes.map((f) => f.id));
   const frentes = def.frentes?.filter((f) => frentesQueSiguen.has(f.id)).map((f) => {
     const p = e.frentes.find((x) => x.id === f.id)!;
-    return { ...f, nombre: p.nombre, meta: p.meta, grupo: p.grupo };
+    return { ...f, nombre: p.nombre, meta: p.meta, grupo: p.grupo, ...(p.perfilMuestra ? { perfilMuestra: p.perfilMuestra } : {}) };
   });
   return { ...def, pais: e.pais, tituloPublico: e.tituloPublico, secciones, ...(frentes ? { frentes } : {}) };
 }

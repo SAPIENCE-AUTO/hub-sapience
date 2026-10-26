@@ -41,7 +41,7 @@ import { sugerir } from '../../src/serverUtils/formularios/tableroHub';
 import { bandejaDe } from '../../src/lib/formularios/motor';
 import { alternarMarca, leerFormato, sinFormato } from '../../src/lib/formularios/formato';
 import { tramosDe } from '../../src/lib/formularios/documento';
-import { cambiosEntre, deLaIA, fechaParaIA, leerMuestra, muestraParaIA, nombreDeGrupo, nuevaActividad, porPerfil, siguienteCodigo } from '../../src/lib/reclutamiento/muestra';
+import { cambiosEntre, cuotasPorNombre, deLaIA, fechaParaIA, frentesConLaMuestra, frentesDeLaMuestra, leerMuestra, muestraDeLaIA, muestraParaIA, nombreDeGrupo, nuevaActividad, porPerfil, siguienteCodigo } from '../../src/lib/reclutamiento/muestra';
 import { leerCatalogoSepomex } from '../../src/serverUtils/formularios/codigosPostales';
 import { direccionDeComponentes } from '../../src/serverUtils/formularios/direcciones';
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
@@ -1266,8 +1266,9 @@ caso('la muestra: códigos por técnica, cambios en palabras y lugares por perfi
   assert.equal(nombreDeGrupo(s1), 'S1 · mié 4 nov · 6:00 pm · CDMX');
   const v1 = leerMuestra({ actividades: [s1, s2, e1] });
   const v2 = leerMuestra({ actividades: [{ ...s1, lugar: 'Monterrey' }, e1, nuevaActividad([s1, s2, e1], 'triada', { id: 'a4' })] });
-  assert.deepEqual(cambiosEntre(v1, v2), ['S1: lugar de CDMX a Monterrey', 'Se agregó T1 (Tríada)', 'Se quitó S2']);
-  assert.deepEqual(porPerfil(v1.actividades).map((p) => [p.perfil, p.total.personas, p.total.reserva]), [['Perfil A', 9, 2], ['Perfil B', 8, 2]]);
+  // En una muestra de antes, el perfil sale de sus actividades: al quitar la última, se va también.
+  assert.deepEqual(cambiosEntre(v1, v2), ['Se quitó el perfil «Perfil B»', 'S1: lugar de CDMX a Monterrey', 'Se agregó T1 (Tríada)', 'Se quitó S2']);
+  assert.deepEqual(porPerfil(v1).map((p) => [p.nombre, p.total.personas, p.total.reserva]), [['Perfil A', 9, 2], ['Perfil B', 8, 2]]);
   // Lo guardado a medias o viejo no truena: lo que falta toma el valor de su técnica.
   assert.deepEqual(leerMuestra({ actividades: [{ tecnica: 'nada', personas: -3 }, 7] }).actividades.map((a) => [a.tecnica, a.personas]), [['otra', 1]]);
 });
@@ -1305,6 +1306,75 @@ caso('la muestra con la IA: lo que se queda conserva grupo y evento, lo nuevo to
   assert.ok(cambiosEntre({ actividades: [s1, s2, t1] }, { actividades: despues }).includes('Se quitó S2'));
   // Al proponer desde cero, todas son nuevas.
   assert.deepEqual(deLaIA([], [{ tecnica: 'sesion' }, { tecnica: 'sesion', personas: 6 }]).map((a) => [a.codigo, a.personas, a.reserva]), [['S1', 8, 2], ['S2', 6, 2]]);
+});
+
+caso('perfiles de la muestra: salen de las muestras de antes, cambian en palabras y la IA no los duplica', () => {
+  // Una muestra de antes (perfil escrito en cada actividad): sus perfiles salen solos, con id fijo y la cuota de sus actividades.
+  const vieja = { actividades: [{ id: 'a1', tecnica: 'sesion', perfil: 'Perfil A', personas: 8 }, { id: 'a2', tecnica: 'entrevista', perfil: 'perfil a ', personas: 1 }, { id: 'a3', tecnica: 'entrevista', perfil: 'Perfil B', personas: 1 }] };
+  const l1 = leerMuestra(vieja);
+  const l2 = leerMuestra(vieja);
+  assert.deepEqual(l1.perfiles!.map((p) => [p.nombre, p.cuota]), [['Perfil A', 9], ['Perfil B', 1]]);
+  assert.deepEqual(l1.perfiles!.map((p) => p.id), l2.perfiles!.map((p) => p.id));
+  assert.deepEqual(cambiosEntre(l1, l2), []);
+  assert.equal(l1.actividades[1].perfil, 'Perfil A');
+  assert.deepEqual(porPerfil(l1).map((p) => [p.nombre, p.total.personas]), [['Perfil A', 9], ['Perfil B', 1]]);
+  // Cambios de perfil en palabras.
+  const [pa, pb] = l1.perfiles!;
+  const l3 = { ...l1, perfiles: [{ ...pa, nombre: 'Mamás', cuota: 10, reparto: '5 CDMX · 5 Monterrey' }] };
+  assert.deepEqual(cambiosEntre(l1, l3), ['Perfil «Perfil A»: ahora se llama «Mamás»', 'Perfil «Mamás»: cuota de 9 a 10', 'Perfil «Mamás»: reparto 5 CDMX · 5 Monterrey', 'Se quitó el perfil «Perfil B»']);
+  assert.deepEqual([...cuotasPorNombre(l3).entries()], [['mamás', 10]]);
+  // La IA propone: perfiles agrupados y actividades que los nombran; sin cuota, la de sus actividades.
+  const nueva = muestraDeLaIA({ actividades: [] }, {
+    perfiles: [{ nombre: 'Aerosoles', reparto: '2 Marca X · 1 Marca Y', cuota: 3 }, { nombre: 'Reeds' }, { nombre: 'aerosoles' }],
+    actividades: [{ tecnica: 'entrevista', perfil: 'Aerosoles', personas: 3 }, { tecnica: 'entrevista', perfil: 'Reeds', personas: 2 }],
+  });
+  assert.deepEqual(nueva.perfiles!.map((p) => [p.nombre, p.cuota, p.reparto ?? '']), [['Aerosoles', 3, '2 Marca X · 1 Marca Y'], ['Reeds', 2, '']]);
+  assert.equal(nueva.actividades.length, 5);
+  assert.ok(nueva.actividades.every((a) => a.perfilId && nueva.perfiles!.some((p) => p.id === a.perfilId)));
+  // Al pedirle un cambio: el perfil que se queda conserva su id aunque cambie de nombre, y sus actividades lo siguen.
+  const actual = { ...nueva, actividades: nueva.actividades };
+  const aero = nueva.perfiles![0];
+  const cambio = muestraDeLaIA(actual, {
+    perfiles: [{ id: aero.id, nombre: 'Aerosoles y sprays', cuota: 3 }, { id: nueva.perfiles![1].id, nombre: 'Reeds', cuota: 2 }],
+    actividades: actual.actividades.map((a) => ({ id: a.id, tecnica: a.tecnica, perfil: a.perfilId === aero.id ? 'Aerosoles' : 'Reeds' })),
+  });
+  assert.equal(cambio.perfiles![0].id, aero.id);
+  assert.equal(cambio.actividades.filter((a) => a.perfilId === aero.id).length, 3);
+  assert.ok(cambio.actividades.filter((a) => a.perfilId === aero.id).every((a) => a.perfil === 'Aerosoles y sprays'));
+  // muestraParaIA lleva los perfiles con su id.
+  assert.deepEqual(muestraParaIA(cambio).perfiles.map((p) => p.nombre), ['Aerosoles y sprays', 'Reeds']);
+  void pb;
+});
+
+caso('el filtro toma de la muestra los perfiles y sus cuotas', () => {
+  const perfiles = [{ id: 'pm_a', nombre: 'Aerosoles', cuota: 5, descripcion: 'Usan aerosol cada semana' }, { id: 'pm_b', nombre: 'Reeds', cuota: 4 }, { id: 'pm_c', nombre: 'Sin cuota', cuota: 0 }];
+  // Al proponer la estructura: exactamente los de la muestra (con cuota), conserva lo que escribió la IA y deja fuera lo de más.
+  const plan = [
+    { id: 'fr_1', nombre: 'aerosoles', grupo: 'general', meta: 6, quien: 'Entra si usa aerosol' },
+    { id: 'fr_2', nombre: 'Velas', grupo: 'general', meta: 3, quien: 'Entra si usa velas' },
+  ];
+  let n = 0;
+  const r = frentesDeLaMuestra(plan, perfiles, () => `fr_nuevo${++n}`);
+  assert.deepEqual(r.frentes.map((f) => [f.id, f.nombre, f.meta, f.quien, f.perfilMuestra]), [
+    ['fr_1', 'Aerosoles', 5, 'Entra si usa aerosol', 'pm_a'],
+    ['fr_nuevo1', 'Reeds', 4, '', 'pm_b'],
+  ]);
+  assert.deepEqual(r.fuera, ['Velas']);
+  // Al guardar la muestra: los del filtro toman nombre y cuota (por liga, por nombre o por el nombre de antes).
+  const frentes = [
+    { id: 'f1', nombre: 'Aerosoles', meta: 5, perfilMuestra: 'pm_a' },
+    { id: 'f2', nombre: 'Reeds', meta: 4 },
+    { id: 'f3', nombre: 'Velas', meta: 3 },
+    { id: 'f4', nombre: 'Quitado', meta: 2, perfilMuestra: 'pm_x' },
+  ];
+  const despues = [{ id: 'pm_a', nombre: 'Aerosoles y sprays', cuota: 6 }, { id: 'pm_b', nombre: 'Difusores', cuota: 4 }];
+  const antes = [{ id: 'pm_a', nombre: 'Aerosoles', cuota: 5 }, { id: 'pm_b', nombre: 'Reeds', cuota: 4 }];
+  assert.deepEqual(frentesConLaMuestra(frentes, despues, antes), [
+    { id: 'f1', nombre: 'Aerosoles y sprays', meta: 6, perfilMuestra: 'pm_a' },
+    { id: 'f2', nombre: 'Difusores', meta: 4, perfilMuestra: 'pm_b' },
+    { id: 'f3', nombre: 'Velas', meta: 3 },
+    { id: 'f4', nombre: 'Quitado', meta: 2 },
+  ]);
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {

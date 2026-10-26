@@ -6,7 +6,13 @@
  * cada cambio guarda una versión. Cada actividad se vuelve un grupo del tablero
  * de Reclutamiento y un evento del calendario, ya ligados; asignar a alguien es
  * moverlo a ese grupo. Puro: lo usan la pantalla, el servidor y las pruebas.
+ *
+ * Los perfiles y sus cuotas se definen aquí (2026-10-26): la muestra dice qué
+ * gente se necesita y cuánta; el filtro, cómo encontrarla (toma estos perfiles
+ * y se queda al día con sus cuotas, ver serverUtils/muestra/filtros.ts).
  */
+
+import type { FrentePlan } from '../formularios/generador';
 
 export const TECNICAS = {
   sesion: { nombre: 'Sesión de grupo', plural: 'Sesiones de grupo', letra: 'S', personas: 8, reserva: 2, duracionMin: 120, color: 'blue' },
@@ -22,11 +28,24 @@ export const TECNICAS = {
 export type Tecnica = keyof typeof TECNICAS;
 export const ORDEN_TECNICAS = Object.keys(TECNICAS) as Tecnica[];
 
+export interface PerfilMuestra {
+  id: string;
+  nombre: string;
+  /** Quién es, en una línea («Mamás de 25 a 35, NSE C, compran aromatizantes»). */
+  descripcion?: string;
+  /** Cómo se reparte dentro del perfil, en palabras («2 Glade · 1 Air Wick · 2 Febreze»). */
+  reparto?: string;
+  /** Cuántas personas (titulares) se necesitan de este perfil. */
+  cuota: number;
+}
+
 export interface Actividad {
   id: string;
   /** «S1», «T2», «E3»: lo que se lee en el tablero. */
   codigo: string;
   tecnica: Tecnica;
+  /** El perfil de la muestra; `perfil` es su nombre (lo leen el tablero, el calendario y el inicio). */
+  perfilId?: string;
   perfil?: string;
   /** Fecha y hora (ISO). Sin fecha, el grupo se crea y el evento espera. */
   fecha?: string;
@@ -42,6 +61,8 @@ export interface Actividad {
 }
 
 export interface DefinicionMuestra {
+  /** Siempre presente al leer: en las muestras de antes salen de los perfiles escritos en las actividades. */
+  perfiles?: PerfilMuestra[];
   actividades: Actividad[];
   /** Lo que la IA supuso al proponerla (para revisarlo). */
   supuestos?: string[];
@@ -55,6 +76,16 @@ const texto = (s: unknown) => (typeof s === 'string' && s.trim() ? s.trim() : un
 /** Lo guardado, con lo que falte puesto (nunca truena con datos viejos o a medias). */
 export function leerMuestra(json: unknown): DefinicionMuestra {
   const d = (json && typeof json === 'object' ? json : {}) as Partial<DefinicionMuestra>;
+  const perfiles = (Array.isArray(d.perfiles) ? d.perfiles : []).flatMap((p): PerfilMuestra[] => {
+    if (!p || typeof p !== 'object' || !texto(p.nombre)) return [];
+    return [{
+      id: texto(p.id) ?? idPerfil(),
+      nombre: texto(p.nombre)!,
+      ...(texto(p.descripcion) ? { descripcion: texto(p.descripcion) } : {}),
+      ...(texto(p.reparto) ? { reparto: texto(p.reparto) } : {}),
+      cuota: entero(p.cuota, 0),
+    }];
+  });
   const actividades = (Array.isArray(d.actividades) ? d.actividades : []).flatMap((a): Actividad[] => {
     if (!a || typeof a !== 'object') return [];
     const tecnica = esTecnica(a.tecnica) ? a.tecnica : 'otra';
@@ -63,6 +94,7 @@ export function leerMuestra(json: unknown): DefinicionMuestra {
       id: texto(a.id) ?? idActividad(),
       codigo: texto(a.codigo) ?? t.letra,
       tecnica,
+      perfilId: texto(a.perfilId),
       perfil: texto(a.perfil),
       fecha: texto(a.fecha),
       duracionMin: entero(a.duracionMin, t.duracionMin),
@@ -75,13 +107,45 @@ export function leerMuestra(json: unknown): DefinicionMuestra {
     }];
   });
   return {
-    actividades,
+    ...ligarPerfiles(perfiles, actividades),
     ...(Array.isArray(d.supuestos) && d.supuestos.length ? { supuestos: d.supuestos.filter((x): x is string => typeof x === 'string') } : {}),
     ...(d.origen === 'ia' || d.origen === 'manual' ? { origen: d.origen } : {}),
   };
 }
 
 export const idActividad = () => `a_${Math.random().toString(36).slice(2, 10)}`;
+export const idPerfil = () => `pm_${Math.random().toString(36).slice(2, 10)}`;
+const normal = (s?: string) => (s ?? '').trim().toLowerCase();
+/** Id fijo para el perfil que sale del nombre escrito en una actividad (así no cambia cada vez que se lee). */
+const idDeNombre = (nombre: string) => `pm_${normal(nombre).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'perfil'}`;
+
+/**
+ * Cada actividad con su perfil: por id o, si no, por el nombre escrito. Un
+ * nombre que no está en la lista (las muestras de antes de los perfiles) se
+ * vuelve perfil, con la cuota de lo que suman sus actividades. El nombre de la
+ * actividad se queda igual al de su perfil.
+ */
+export function ligarPerfiles(perfiles: PerfilMuestra[], actividades: Actividad[]): { perfiles: PerfilMuestra[]; actividades: Actividad[] } {
+  const lista = [...perfiles];
+  const nuevos = new Set<string>();
+  const ligadas = actividades.map((a): Actividad => {
+    let p = a.perfilId ? lista.find((x) => x.id === a.perfilId) : undefined;
+    if (!p && a.perfil) p = lista.find((x) => normal(x.nombre) === normal(a.perfil));
+    if (!p && a.perfil) {
+      p = { id: idDeNombre(a.perfil), nombre: a.perfil.trim(), cuota: 0 };
+      lista.push(p);
+      nuevos.add(p.id);
+    }
+    const { perfilId: _i, perfil: _n, ...resto } = a;
+    return p ? { ...resto, perfilId: p.id, perfil: p.nombre } : resto;
+  });
+  for (const p of lista) if (nuevos.has(p.id)) p.cuota = ligadas.filter((a) => a.perfilId === p.id).reduce((n, a) => n + a.personas, 0);
+  return { perfiles: lista, actividades: ligadas };
+}
+
+export function nuevoPerfil(base: Partial<PerfilMuestra> = {}): PerfilMuestra {
+  return { id: idPerfil(), nombre: 'Perfil nuevo', cuota: 0, ...base };
+}
 
 /** El siguiente código libre de una técnica: «S5» si ya hay S1 a S4. */
 export function siguienteCodigo(actividades: Actividad[], tecnica: Tecnica): string {
@@ -140,19 +204,24 @@ export function porTecnica(actividades: Actividad[]): { tecnica: Tecnica; totale
   });
 }
 
-/** Cuántos lugares por perfil y por técnica (la tabla de «cuántos de cada perfil»). */
-export function porPerfil(actividades: Actividad[]): { perfil: string; total: Totales; tecnicas: Partial<Record<Tecnica, Totales>> }[] {
-  const mapa = new Map<string, { total: Totales; tecnicas: Partial<Record<Tecnica, Totales>> }>();
-  for (const a of actividades) {
-    const perfil = a.perfil ?? 'Sin perfil';
-    const p = mapa.get(perfil) ?? { total: vacio(), tecnicas: {} };
+/**
+ * Cuántos lugares tiene cada perfil en las actividades, por técnica, contra su
+ * cuota (la tabla de perfiles). Las actividades sin perfil van al final.
+ */
+export function porPerfil(def: DefinicionMuestra): { perfil?: PerfilMuestra; nombre: string; total: Totales; tecnicas: Partial<Record<Tecnica, Totales>> }[] {
+  const filas = (def.perfiles ?? []).map((perfil) => ({ perfil, nombre: perfil.nombre, total: vacio(), tecnicas: {} as Partial<Record<Tecnica, Totales>> }));
+  const sin = { perfil: undefined, nombre: 'Sin perfil', total: vacio(), tecnicas: {} as Partial<Record<Tecnica, Totales>> };
+  for (const a of def.actividades) {
+    const p = filas.find((f) => f.perfil.id === a.perfilId) ?? sin;
     const t = p.tecnicas[a.tecnica] ?? vacio();
     for (const x of [p.total, t]) { x.personas += a.personas; x.reserva += a.reserva; x.actividades += 1; }
     p.tecnicas[a.tecnica] = t;
-    mapa.set(perfil, p);
   }
-  return [...mapa.entries()].map(([perfil, v]) => ({ perfil, ...v }));
+  return sin.total.actividades ? [...filas, sin] : filas;
 }
+
+/** La cuota de cada perfil por su nombre (para los sugeridos del tablero). */
+export const cuotasPorNombre = (def: DefinicionMuestra) => new Map((def.perfiles ?? []).filter((p) => p.cuota > 0).map((p) => [normal(p.nombre), p.cuota]));
 
 export const lugares = (actividades: Actividad[]) => actividades.reduce((n, a) => n + a.personas, 0);
 
@@ -173,6 +242,17 @@ export function cambiosEntre(antes: DefinicionMuestra | undefined, despues: Defi
   const viejas = new Map((antes?.actividades ?? []).map((a) => [a.id, a]));
   const nuevas = new Map(despues.actividades.map((a) => [a.id, a]));
   const out: string[] = [];
+  const perfilesAntes = new Map((antes?.perfiles ?? []).map((p) => [p.id, p]));
+  for (const p of despues.perfiles ?? []) {
+    const v = perfilesAntes.get(p.id);
+    if (!v) { out.push(`Se agregó el perfil «${p.nombre}» (cuota ${p.cuota})`); continue; }
+    if (v.nombre !== p.nombre) out.push(`Perfil «${v.nombre}»: ahora se llama «${p.nombre}»`);
+    if (v.cuota !== p.cuota) out.push(`Perfil «${p.nombre}»: cuota de ${v.cuota} a ${p.cuota}`);
+    if ((v.descripcion ?? '') !== (p.descripcion ?? '')) out.push(`Perfil «${p.nombre}»: cambió quién es`);
+    if ((v.reparto ?? '') !== (p.reparto ?? '')) out.push(`Perfil «${p.nombre}»: ${p.reparto ? `reparto ${p.reparto}` : 'sin reparto'}`);
+  }
+  const quedan = new Set((despues.perfiles ?? []).map((p) => p.id));
+  for (const v of antes?.perfiles ?? []) if (!quedan.has(v.id)) out.push(`Se quitó el perfil «${v.nombre}»`);
   for (const a of despues.actividades) {
     const v = viejas.get(a.id);
     if (!v) { out.push(`Se agregó ${a.codigo} (${[TECNICAS[a.tecnica].nombre, a.perfil].filter(Boolean).join(', ')})`); continue; }
@@ -224,9 +304,13 @@ export function fechaParaIA(iso?: string): string | undefined {
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
+/** Un perfil como lo escribe la IA: con su `id` si ya existía (en un cambio). */
+export interface PerfilIA { id?: string | null; nombre: string; descripcion?: string | null; reparto?: string | null; cuota?: number | null }
+
 /** La muestra como se la da a leer a la IA (para pedirle un cambio): con su id, sin grupos ni eventos. */
 export function muestraParaIA(def: DefinicionMuestra) {
   return {
+    perfiles: (def.perfiles ?? []).map((p) => ({ id: p.id, nombre: p.nombre, descripcion: p.descripcion ?? null, reparto: p.reparto ?? null, cuota: p.cuota })),
     actividades: def.actividades.map((a) => ({
       id: a.id, codigo: a.codigo, tecnica: a.tecnica, perfil: a.perfil ?? null, personas: a.personas, reserva: a.reserva,
       duracionMin: a.duracionMin ?? null, lugar: a.lugar ?? null, fecha: fechaParaIA(a.fecha) ?? null, notas: a.notas ?? null,
@@ -239,6 +323,52 @@ const UNA_PERSONA: Tecnica[] = ['entrevista', 'visita', 'compra'];
 const textoIA = (v: string | null | undefined, antes?: string) => (v === undefined ? antes : v?.trim() || undefined);
 const numeroIA = (v: number | null | undefined, antes: number | undefined, minimo: number) =>
   (v === undefined || v === null ? antes : v >= minimo ? Math.round(v) : antes);
+
+/**
+ * Los perfiles que propuso la IA, sobre los que había: los que se quedan
+ * conservan su id (así el filtro y el tablero los siguen reconociendo); los
+ * que no regresan se quitan. Sin cuota, la cuota es lo que suman sus
+ * actividades (se pone al ligar).
+ */
+export function perfilesDeLaIA(actual: PerfilMuestra[], leidos: PerfilIA[]): PerfilMuestra[] {
+  const previos = new Map(actual.map((p) => [p.id, p]));
+  const usados = new Set<string>();
+  const out: PerfilMuestra[] = [];
+  for (const r of leidos) {
+    const nombre = r.nombre?.trim();
+    if (!nombre || out.some((p) => normal(p.nombre) === normal(nombre))) continue;
+    const prev = r.id ? previos.get(r.id) : undefined;
+    const base = prev && !usados.has(prev.id) ? prev : { id: idPerfil(), nombre, cuota: 0 };
+    usados.add(base.id);
+    out.push({
+      id: base.id,
+      nombre,
+      ...(textoIA(r.descripcion, base.descripcion) ? { descripcion: textoIA(r.descripcion, base.descripcion) } : {}),
+      ...(textoIA(r.reparto, base.reparto) ? { reparto: textoIA(r.reparto, base.reparto) } : {}),
+      cuota: numeroIA(r.cuota, base.cuota, 0) ?? 0,
+    });
+  }
+  return out;
+}
+
+/** Perfiles y actividades de la IA juntos, ya ligados: un perfil sin cuota toma lo que suman sus actividades. */
+export function muestraDeLaIA(actual: DefinicionMuestra, leida: { perfiles?: PerfilIA[]; actividades: ActividadIA[] }): Pick<DefinicionMuestra, 'perfiles' | 'actividades'> {
+  const perfiles = leida.perfiles?.length ? perfilesDeLaIA(actual.perfiles ?? [], leida.perfiles) : (actual.perfiles ?? []);
+  const ids = new Set(perfiles.map((p) => p.id));
+  // El perfil de cada actividad: por el nombre que escribió la IA; si no está, el que ya tenía (si sigue).
+  const actividades = deLaIA(actual.actividades, leida.actividades).map((a) => {
+    const porNombre = a.perfil ? perfiles.find((p) => normal(p.nombre) === normal(a.perfil)) : undefined;
+    if (porNombre) return { ...a, perfilId: porNombre.id };
+    if (a.perfilId && ids.has(a.perfilId)) return a;
+    const { perfilId: _i, ...resto } = a;
+    return resto;
+  });
+  const ligada = ligarPerfiles(perfiles, actividades);
+  return {
+    actividades: ligada.actividades,
+    perfiles: ligada.perfiles.map((p) => (p.cuota ? p : { ...p, cuota: ligada.actividades.filter((a) => a.perfilId === p.id).reduce((n, a) => n + a.personas, 0) })),
+  };
+}
 
 /**
  * Lo que propuso la IA, sobre lo que ya había: las que se quedan conservan su
@@ -287,4 +417,43 @@ export function deLaIA(actual: Actividad[], leidas: ActividadIA[]): Actividad[] 
     }));
   }
   return lista;
+}
+
+// ── los perfiles del filtro, desde la muestra ────────────────────────────────
+/**
+ * Los perfiles de un filtro al día con los de la muestra: cada uno se reconoce
+ * por el perfil del que sale (`perfilMuestra`) o por su nombre (también el de
+ * antes, si se renombró) y toma de ahí su nombre y su cuota. Si su perfil ya no
+ * existe en la muestra, se suelta (vuelve a editarse en el filtro). Los demás
+ * se quedan igual: agregar o quitar perfiles del filtro necesita sus preguntas.
+ */
+export function frentesConLaMuestra<T extends { nombre: string; meta: number; perfilMuestra?: string }>(frentes: T[], perfiles: PerfilMuestra[], antes: PerfilMuestra[] = []): T[] {
+  return frentes.map((f) => {
+    const p = (f.perfilMuestra ? perfiles.find((x) => x.id === f.perfilMuestra) : undefined)
+      ?? perfiles.find((x) => normal(x.nombre) === normal(f.nombre))
+      ?? perfiles.find((x) => antes.some((a) => a.id === x.id && normal(a.nombre) === normal(f.nombre)));
+    if (!p) {
+      if (!f.perfilMuestra) return f;
+      const { perfilMuestra: _p, ...suelto } = f;
+      return suelto as T;
+    }
+    return { ...f, nombre: p.nombre, ...(p.cuota > 0 ? { meta: p.cuota } : {}), perfilMuestra: p.id };
+  });
+}
+
+/**
+ * Al proponer la estructura de un filtro con una muestra que ya tiene perfiles:
+ * sus perfiles son exactamente los de la muestra (nombre y cuota de ahí). Lo
+ * que la IA escribió de cada uno (quién entra) se conserva; el que falte se
+ * agrega con su descripción, y los que la IA agregó de más se dejan fuera.
+ */
+export function frentesDeLaMuestra(frentes: FrentePlan[], perfiles: PerfilMuestra[], idNuevo: () => string): { frentes: FrentePlan[]; fuera: string[] } {
+  const usados = new Set<string>();
+  const libre = (f: FrentePlan) => !usados.has(f.id);
+  const out = perfiles.filter((p) => p.cuota > 0).map((p): FrentePlan => {
+    const f = frentes.find((x) => libre(x) && x.perfilMuestra === p.id) ?? frentes.find((x) => libre(x) && normal(x.nombre) === normal(p.nombre));
+    if (f) { usados.add(f.id); return { ...f, nombre: p.nombre, meta: p.cuota, perfilMuestra: p.id }; }
+    return { id: idNuevo(), nombre: p.nombre, grupo: 'general', meta: p.cuota, quien: [p.descripcion, p.reparto && `Reparto: ${p.reparto}`].filter(Boolean).join('. '), perfilMuestra: p.id };
+  });
+  return { frentes: out, fuera: frentes.filter(libre).map((f) => f.nombre) };
 }

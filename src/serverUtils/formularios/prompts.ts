@@ -45,8 +45,18 @@ const minutos = (e: Estructura) => {
 const FORMATO_ESTRUCTURA = 'Responde solo con el JSON de la estructura, con el formato de references/estructura.md: {"pais", "tituloPublico", "perfil", "frentes": [..], "secciones": [..], "supuestos": [..]}.';
 
 /** Etapa 1: proponer, convertir un screener o ajustar una estructura. */
-export function promptEstructura(o: { origen: OrigenGenerador; estudio: DatosEstudio; base?: Estructura; pedido?: string; ajuste?: boolean }): string {
+export function promptEstructura(o: {
+  origen: OrigenGenerador; estudio: DatosEstudio; base?: Estructura; pedido?: string; ajuste?: boolean;
+  /** Los perfiles y cuotas de la muestra del proyecto: el filtro los toma tal cual. */
+  perfilesMuestra?: { id: string; nombre: string; descripcion?: string; reparto?: string; cuota: number }[];
+}): string {
   const partes = [datos(o.estudio)];
+  if (o.perfilesMuestra?.length) {
+    partes.push([
+      'PERFILES Y CUOTAS DEL ESTUDIO: ya están definidos en la muestra del proyecto. Úsalos tal cual en "frentes": uno por cada uno, con su mismo nombre, su cuota como "meta" y su id en "perfilMuestra"; no agregues otros, no los juntes ni los partas. En "quien", quién entra a cada uno según su descripción y los insumos. El reparto no va en quién entra: se cuida con preguntas y alertas, y dilo en supuestos si no se puede.',
+      ...o.perfilesMuestra.map((p) => `- id ${p.id} · «${p.nombre}» · cuota ${p.cuota}${p.descripcion ? ` · ${p.descripcion}` : ''}${p.reparto ? ` · reparto: ${p.reparto}` : ''}`),
+    ].join('\n'));
+  }
   if (o.ajuste && o.base) {
     partes.push(
       `Esta es la estructura actual del filtro (${minutos(o.base)}), en JSON:\n${JSON.stringify(o.base)}`,

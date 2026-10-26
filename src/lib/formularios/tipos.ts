@@ -182,6 +182,8 @@ export interface Frente {
   meta: number;
   /** Quién entra. Si lleva NSE, el NSE no saca a nadie: si no coincide, alerta. */
   califica: Condicion;
+  /** El perfil de la muestra del proyecto: de ahí salen su nombre y su cuota (se cambian en Muestra). */
+  perfilMuestra?: string;
 }
 
 export interface Alerta {

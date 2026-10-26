@@ -16,6 +16,10 @@ import {
   EstructuraZ, RespuestaCambioPreguntaZ, RespuestaCambioSeccionZ, RespuestaLogicaZ, RespuestaNombresZ, RespuestaSeccionZ, sinVacios,
 } from './esquemas';
 import { contenidoDeInsumos, hayInsumos } from './insumos';
+import { idNuevo } from '../../lib/formularios/editar';
+import { frentesConLaMuestra, frentesDeLaMuestra } from '../../lib/reclutamiento/muestra';
+import { insumosParaFiltro } from '../muestra/insumos';
+import { perfilesDeLaMuestra } from '../muestra/filtros';
 import { descargarImagen, esImagenNuestra, guardarCopiaDeImagen } from './imagenesEnlace';
 import { promptCambio, promptEstructura, promptLogica, promptNombres, promptSeccion, type Alcance, type DatosEstudio } from './prompts';
 import { conRegistro } from './uso';
@@ -69,10 +73,28 @@ export function generadorParaNavegador(g: Generador | undefined): Generador | un
   return { ...g, insumos: { ...g.insumos, archivos: g.insumos.archivos.map(({ texto: _t, ...a }) => a) } };
 }
 
-const contenido = async (g: Generador, texto: string): Promise<Contenido> => [
-  ...(hayInsumos(g.insumos) ? await contenidoDeInsumos(g.insumos) : []),
-  { type: 'text', text: texto },
-];
+/** Los insumos del filtro junto con los de la muestra del proyecto (no se vuelven a subir). */
+const insumosDe = (filtro: Filtro, g: Generador) => insumosParaFiltro(filtro.proyectoId, g.insumos);
+
+const contenido = async (filtro: Filtro, g: Generador, texto: string): Promise<Contenido> => {
+  const insumos = await insumosDe(filtro, g);
+  return [...(hayInsumos(insumos) ? await contenidoDeInsumos(insumos) : []), { type: 'text', text: texto }];
+};
+
+/**
+ * Los perfiles que salen de la muestra del proyecto toman de ahí su nombre y
+ * su cuota (la IA no los cambia: se cambian en Muestra). `de`: de dónde
+ * conservan su liga (lo que devuelve la IA no la trae).
+ */
+async function frentesAlDia<T extends { id: string; nombre: string; meta: number; perfilMuestra?: string }>(filtro: Filtro, frentes: T[], de: { id: string; perfilMuestra?: string }[]): Promise<T[]> {
+  const perfiles = await perfilesDeLaMuestra(filtro.proyectoId);
+  if (!perfiles.length) return frentes;
+  const ligados = frentes.map((f) => {
+    const antes = de.find((x) => x.id === f.id);
+    return antes?.perfilMuestra && !f.perfilMuestra ? { ...f, perfilMuestra: antes.perfilMuestra } : f;
+  });
+  return frentesConLaMuestra(ligados, perfiles);
+}
 
 /** Problemas nuevos: los que tiene `despues` y no tenía `antes`. */
 function problemasNuevos(antes: Definicion, despues: Definicion): string[] {
@@ -132,20 +154,27 @@ export async function proponerEstructura(o: {
   } else {
     base = undefined;
   }
-  if (!o.ajuste && g.origen !== 'filtro' && !hayInsumos(g.insumos) && !o.pedido?.trim()) {
+  if (!o.ajuste && g.origen !== 'filtro' && !hayInsumos(await insumosDe(o.filtro, g)) && !o.pedido?.trim()) {
     throw new ZiteError({ code: 'BAD_REQUEST', message: 'Agrega notas, un archivo o una reunión antes de pedir la estructura.' });
   }
   if (o.ajuste && !o.pedido?.trim()) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Escribe qué quieres cambiar de la estructura.' });
 
-  const texto = promptEstructura({ origen: g.origen, estudio: o.filtro.estudio, base: sobre, pedido: o.pedido, ajuste: !!o.ajuste });
+  // Si la muestra del proyecto ya tiene perfiles, el filtro los toma tal cual (nombre y cuota).
+  const perfilesMuestra = (await perfilesDeLaMuestra(o.filtro.proyectoId)).filter((p) => p.cuota > 0);
+  const texto = promptEstructura({ origen: g.origen, estudio: o.filtro.estudio, base: sobre, pedido: o.pedido, ajuste: !!o.ajuste, perfilesMuestra });
   const respuesta = await conRegistro(o.email, o.filtro.id, 'estructura', (onGasto) => conLatido(o.stream, o.ajuste ? 'Ajustando la estructura…' : 'Leyendo los insumos y armando la estructura…', async () =>
     llamarJSON({
       signal: o.stream?.signal,
-      usuario: await contenido(g, texto), esquema: EstructuraZ, modelo: MODELOS.estructura, esfuerzo: 'high', onGasto, aceptarConProblemas: true,
+      usuario: await contenido(o.filtro, g, texto), esquema: EstructuraZ, modelo: MODELOS.estructura, esfuerzo: 'high', onGasto, aceptarConProblemas: true,
       revisar: (r) => revisarEstructura(conservarSinCambio(sobre, sinVacios(r) as Estructura)),
     })));
   // Los ids que se conservan son los de lo que ajusta la IA (la propuesta anterior o lo escrito).
   const estructura = asentarEstructura(conservarSinCambio(sobre, sinVacios(respuesta) as Estructura), sobre);
+  if (perfilesMuestra.length) {
+    const { frentes, fuera } = frentesDeLaMuestra(estructura.frentes, perfilesMuestra, () => idNuevo('fr', [...estructura.frentes.map((f) => f.id)]));
+    estructura.frentes = frentes;
+    for (const n of fuera) estructura.supuestos.push(`Se dejó fuera el perfil «${n}»: no está en la Muestra (los perfiles y cuotas se definen ahí).`);
+  }
   // Al ajustar, la IA solo dice lo nuevo que decidió: se suma a lo que ya se había decidido.
   if (sobre) estructura.supuestos = [...sobre.supuestos, ...estructura.supuestos.filter((x) => !sobre!.supuestos.includes(x))];
   if (estructura.secciones.some((s) => s.nse) && !reglaNse(estructura.pais)) {
@@ -264,7 +293,7 @@ export async function escribirSeccion(o: { filtro: Filtro; email: string; stream
   const r = await conRegistro(o.email, o.filtro.id, 'seccion', (onGasto) => conLatido(o.stream, `Escribiendo «${plan.titulo}»…`, async () =>
     llamarJSON({
       signal: o.stream?.signal,
-      usuario: await contenido(g, texto), esquema: RespuestaSeccionZ, modelo: MODELOS.preguntas, esfuerzo: 'medium', onGasto, aceptarConProblemas: true,
+      usuario: await contenido(o.filtro, g, texto), esquema: RespuestaSeccionZ, modelo: MODELOS.preguntas, esfuerzo: 'medium', onGasto, aceptarConProblemas: true,
       revisar: (x) => revisarSeccion(sinVacios(x.seccion) as Seccion, plan, anterior, contexto, e).problemas,
     })));
   const escrita = sinVacios(r.seccion) as Seccion;
@@ -329,6 +358,7 @@ export async function armarLogica(o: { filtro: Filtro; email: string; stream?: S
       revisar: (x) => revisarLogica(x, def, e, ajuste).problemas,
     })));
   const { parche, problemas } = revisarLogica(r, def, e, ajuste);
+  if (parche.frentes) parche.frentes = await frentesAlDia(o.filtro, parche.frentes, e.frentes);
   await guardarEn(o.filtro.id, ['supuestosLogica'], r.supuestos);
   await guardarEn(o.filtro.id, ['logicaLista'], true);
   await guardarEn(o.filtro.id, ['etapa'], 'listo');
@@ -379,6 +409,7 @@ export async function proponerCambio(o: { filtro: Filtro; email: string; stream?
     parcheIA = sinVacios({ ...r, explicacion: undefined }) as Parche;
     explicacion = r.explicacion;
   }
+  if (parcheIA.frentes) parcheIA.frentes = await frentesAlDia(o.filtro, parcheIA.frentes, def.frentes ?? []);
   const sinTraer = await copiarImagenesExternas([...(parcheIA.preguntas ?? []), ...(parcheIA.secciones ?? []).flatMap((x) => x.preguntas)]);
   if (sinTraer.length) explicacion = [explicacion, ...sinTraer].filter(Boolean).join(' ');
   const { parche, despues, problemas } = revisarCambio(parcheIA, def, alcance);

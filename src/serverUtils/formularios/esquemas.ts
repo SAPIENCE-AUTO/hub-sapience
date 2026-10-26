@@ -92,6 +92,7 @@ export const EstructuraZ = z.object({
   frentes: z.array(z.object({
     id: z.string().min(1), nombre: z.string().min(1), grupo: z.string().default('general'),
     meta: z.coerce.number().int().min(1), quien: z.string().default(''),
+    perfilMuestra: z.string().nullish(),
   })).default([]),
   secciones: z.array(z.object({
     id: z.string().min(1),
