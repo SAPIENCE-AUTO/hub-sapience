@@ -815,7 +815,7 @@ Sergio: en el tablero las fotos decían «1 foto». Ahora cada pregunta de foto 
 
 Sergio: en el tablero de ALONG 2 no salía el correo. El filtro sí lo pide («Correo electrónico» en «Antes de empezar») y la respuesta llegaba a su columna «Correo», pero el «Email» propio del tablero (el de la fila, como en Fillout, y el que usa la búsqueda de duplicados) quedaba vacío. Ahora `pasarAlReclutamiento` lo llena con la primera pregunta de correo del filtro (`correoDeRespuesta`), y `actualizarTablero` llena el de las filas que quedaron vacías (sin pisar uno escrito a mano). En ALONG 2 se pusieron al día las 5 filas (2026-10-26). La columna «Correo» sigue (se puede ocultar con «Columnas»).
 
-### «Crear grupos y eventos…» pregunta qué y dónde (2026-10-26)
+### «Crear grupos y eventos…» pregunta qué y dónde (2026-10-26, `5683932`)
 
 Pedido de Sergio: que siempre pregunte en qué tablero y en qué calendario, y poder crear solo grupos o solo eventos. El botón abre una ventana: casillas para los grupos (cuántos faltan) y los eventos (cuántas actividades con fecha esperan el suyo), con la lista de tableros de Reclutamiento y de calendarios del proyecto (más «Uno nuevo: Calendario de sesiones»). Una vez que la muestra tiene grupos o eventos, su tablero o calendario queda fijo y la ventana lo dice (el avance y los cambios de fecha se leen de ahí). Si se crean eventos sin grupo, al crear después el grupo se liga a su evento. No se manda ninguna invitación.
 
