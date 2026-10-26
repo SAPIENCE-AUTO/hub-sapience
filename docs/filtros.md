@@ -823,7 +823,7 @@ Pedido de Sergio: que siempre pregunte en qué tablero y en qué calendario, y p
 
 ### La dirección completa en una columna del tablero (2026-10-26, `784f60b`)
 
-Sergio: la dirección llegaba al tablero partida en 6 columnas («Dirección · Calle», «· Colonia»…) y el pin de Google Maps del tablero (sale en columnas cuyo nombre dice «dirección») buscaba solo un pedazo. Ahora el tablero lleva una sola columna con la dirección completa como la busca Google («calle número, colonia, CP municipio, estado, país»; `direccionCompleta` en `tabla.ts`); las 6 partes siguen solo en el Excel (`soloExcel`). En los tableros ya ligados, la columna nueva se crea y se llena en las filas que ya estaban al poner al día el tablero (`rellenar`). En ALONG 2 se creó y se llenó (8 filas, 2026-10-26); sus 6 columnas partidas siguen ahí.
+Sergio: la dirección llegaba al tablero partida en 6 columnas («Dirección · Calle», «· Colonia»…) y el pin de Google Maps del tablero (sale en columnas cuyo nombre dice «dirección») buscaba solo un pedazo. Ahora el tablero lleva una sola columna con la dirección completa como la busca Google («calle número, colonia, CP municipio, estado, país»; `direccionCompleta` en `tabla.ts`); las 6 partes siguen solo en el Excel (`soloExcel`). En los tableros ya ligados, la columna nueva se crea y se llena en las filas que ya estaban al poner al día el tablero (`rellenar`). En ALONG 2 se creó y se llenó (8 filas, 2026-10-26) y, a pedido de Sergio, sus 6 columnas partidas se mandaron a la papelera del tablero (con sus 48 celdas; el dato sigue en cada respuesta y en el Excel).
 
 ## Decisiones pendientes (las toma Sergio)
 
