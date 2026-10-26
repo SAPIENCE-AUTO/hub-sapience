@@ -757,7 +757,7 @@ Pedido de Sergio: ver qué insumos va a leer la IA para la muestra, poder sumarl
 
 **Probado en local (2026-10-26)** en «3 MAYO PRUEBA 3»: «S1 es en línea y agrega una tríada del mismo perfil» cambió el lugar de S1 (con su grupo y evento) y agregó T1; una imagen inventada («2 sesiones en Guadalajara, 18 nov 6 pm») soltada en los insumos se leyó y agregó S2 y S3; deshacer y quitar la imagen funcionan; el PDF del filtro quedó intacto y su copia en la carpeta de la muestra. 87 pruebas.
 
-### Perfiles y cuotas en la Muestra; el filtro los toma con los mismos insumos (2026-10-26)
+### Perfiles y cuotas en la Muestra; el filtro los toma con los mismos insumos (2026-10-26, `7f6eced`)
 
 Pedido de Sergio: al hacer la muestra de ALONG 2 y luego entrar a Filtros, se volvían a pedir los insumos y los perfiles se definían en dos lados (la IA de la muestra hasta hizo 40 perfiles, uno por entrevista). Ahora la Muestra dice **qué gente se necesita y cuánta**; el filtro, **cómo encontrarla**.
 
