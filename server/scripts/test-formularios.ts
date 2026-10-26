@@ -34,7 +34,7 @@ import JSZip from 'jszip';
 import { documentoDeFiltro, nombreDocumento, textoDeBloques } from '../../src/lib/formularios/documento';
 import { wordDeDocumento } from '../../src/serverUtils/formularios/documento';
 import { compararIdentificacion, declaradoDe, edadDe } from '../../src/serverUtils/formularios/identificacion';
-import { agruparTelefono, limpiarTelefono, telefonoDe } from '../../src/lib/formularios/paises';
+import { LADAS, agruparTelefono, guardarTelefono, leerTelefono, limpiarTelefono, telefonoDe } from '../../src/lib/formularios/paises';
 import { sugerirCorreo } from '../../src/lib/formularios/correo';
 import { recalificar } from '../../src/serverUtils/formularios/traer';
 import { sugerir } from '../../src/serverUtils/formularios/tableroHub';
@@ -1384,6 +1384,22 @@ caso('las secciones escritas quedan en el orden de la estructura aunque lleguen 
   let def = { ...conInicio({ ...ALONG2, secciones: [] }) };
   for (const id of ['s_c', 's_a', 's_d', 's_b']) def = ponerSeccion(def, sec(id), e);
   assert.deepEqual(def.secciones.map((s) => s.id), [SECCION_INICIO, 's_a', 's_b', 's_c', 's_d']);
+});
+
+caso('el celular: la lada del filtro por omisión y otra si la persona la elige', () => {
+  // Con la del filtro, solo dígitos (como siempre); con otra, «+57 …».
+  assert.equal(guardarTelefono('5512345678', telefonoDe('MX'), 'MX'), '5512345678');
+  const co = LADAS.find((l) => l.pais === 'CO')!.telefono;
+  assert.equal(guardarTelefono('3123456789', co, 'MX'), '+57 3123456789');
+  assert.deepEqual(leerTelefono('+57 3123456789', 'MX'), { t: co, digitos: '3123456789' });
+  assert.equal(leerTelefono('5512345678', 'MX').t.lada, '+52');
+  assert.equal(leerTelefono('+1 5551234567', 'MX').t.digitos, 10);
+  // Se valida con los dígitos de la lada elegida.
+  const def = { ...ALONG2, pais: 'MX', secciones: [{ id: 's', preguntas: [{ id: 'cel', tipo: 'telefono', texto: 'Celular' }] }] } as Definicion;
+  const pantalla = pantallas(def, {})[0];
+  assert.equal(validarPantalla(pantalla, { cel: '+34 612345678' }, 'MX')?.cel, undefined);
+  assert.equal(validarPantalla(pantalla, { cel: '+34 61234567' }, 'MX')?.cel, 'Escribe un celular de 9 dígitos');
+  assert.equal(validarPantalla(pantalla, { cel: '551234567' }, 'MX')?.cel, 'Escribe un celular de 10 dígitos');
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {

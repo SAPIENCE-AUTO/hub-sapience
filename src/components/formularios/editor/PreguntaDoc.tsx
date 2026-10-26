@@ -29,7 +29,7 @@ function Respuesta({ p }: { p: Pregunta }) {
     case 'texto': return linea(p.patronMensaje ? `Respuesta corta · ${p.patronMensaje}` : 'Respuesta corta');
     case 'texto_largo': return linea('Respuesta larga');
     case 'numero': return linea('Número');
-    case 'telefono': { const t = telefonoDe(def.pais); return linea(`${t.lada ? `${t.lada} · ` : ''}Celular de ${t.digitos} dígitos`); }
+    case 'telefono': { const t = telefonoDe(def.pais); return linea(`${t.lada ? `${t.lada} (puede elegir otra lada) · ` : ''}Celular de ${t.digitos} dígitos`); }
     case 'correo': return linea('Correo');
     case 'direccion': return linea(CAMPOS_DIRECCION.map((c) => nombreCampoDireccion(def.pais, c)).join(' · '));
     case 'foto': return linea('Foto desde el celular (hasta 3)');

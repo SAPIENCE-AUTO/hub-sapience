@@ -791,6 +791,14 @@ Pedido de Sergio (prueba de ALONG 2): en los bloques que se repiten por cada opc
 
 **Probado en local (2026-10-26):** en «Prueba celular y correo por defecto», «Aerosol (lata que rocías)» con una imagen hecha con IA: el bloque «Tu aerosol» la muestra junto al título.
 
+### «Cambios sin publicar» dice cuáles y qué corregir (2026-10-26)
+
+En la prueba de ALONG 2, el recuadro de un filtro en vivo decía «Cambios sin publicar · 19 — Corrige lo marcado en el filtro para poder publicarlos» sin decir cuáles ni qué; lo marcado estaba en el aviso rojo «Sin guardar» de arriba a la derecha, que no se veía. Ahora el recuadro (`CambiosEnVivo.tsx`) trae «Ver cuáles» con la lista de cambios y, si algo quedó mal armado, la lista de lo que hay que corregir ahí mismo (cada cosa lleva a su pregunta) con «Deshacer el último cambio» (`ListaPorCorregir`, la misma del aviso de arriba). Probado dibujándolo con datos inventados (sin tocar la base).
+
+### El participante elige la lada del celular (2026-10-26)
+
+Sergio pidió el código de país para que se pudiera elegir, y salía fijo. Ahora la bandera con la lada es un selector (`campos/Telefono.tsx`): por omisión la del país del filtro, y se puede elegir otra de la lista (`LADAS` en `paises.ts`: los países del Hub más Estados Unidos y España); el ejemplo y cuántos dígitos se piden cambian con ella. Con la lada del filtro se guardan solo los dígitos, como siempre (el tablero, el panel y los duplicados no cambian); con otra, «+57 3123456789» (`guardarTelefono` / `leerTelefono`), y se valida con los dígitos de esa lada. En el documento la pregunta dice «+52 (puede elegir otra lada)». Probado en local: en la vista de celular del editor, elegir Colombia cambia a 🇨🇴 +57 con ejemplo «312 345 6789»; 91 pruebas.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |

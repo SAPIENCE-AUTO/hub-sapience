@@ -1,7 +1,7 @@
 import { calcularNse } from './nse';
 import { esDelInicio } from './inicio';
 import { sinFormato } from './formato';
-import { PAISES, nombreCampoDireccion, telefonoDe } from './paises';
+import { PAISES, leerTelefono, nombreCampoDireccion } from './paises';
 import {
   CAMPOS_DIRECCION, esDeOpciones, forma,
   type Condicion, type Definicion, type FotoSubida, type Opcion, type Pregunta, type Respuestas,
@@ -291,8 +291,9 @@ export function validar(pv: PreguntaVisible, resp: Respuestas, pais?: string): s
     if (typeof v !== 'number' || v < min || v > max) return SIN_CONTESTAR[p.tipo] ?? 'Contesta esta pregunta';
   }
   if (p.tipo === 'telefono') {
-    const { digitos } = telefonoDe(pais);
-    if (String(v).replace(/\D/g, '').length !== digitos) return `Escribe un celular de ${digitos} dígitos`;
+    // Con la lada que eligió (la del filtro, si no cambió); se cuentan los dígitos tal cual, sin la lada.
+    const { t } = leerTelefono(String(v), pais);
+    if (String(v).replace(/^\+\d{1,4}\s+/, '').replace(/\D/g, '').length !== t.digitos) return `Escribe un celular de ${t.digitos} dígitos`;
   }
   if (p.tipo === 'correo' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v))) return 'Escribe un correo válido';
   if (p.patron && f === 'texto' && !new RegExp(p.patron).test(String(v))) return p.patronMensaje ?? 'Revisa lo que escribiste';

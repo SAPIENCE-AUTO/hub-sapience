@@ -76,6 +76,38 @@ export const PAISES: Record<string, Pais & { nota?: string }> = {
 export const telefonoDe = (pais?: string): Telefono =>
   (pais && PAISES[pais]?.telefono) || { lada: '', bandera: '', digitos: 10, grupos: [3, 3, 4], ejemplo: '' };
 
+/**
+ * Las ladas que el participante puede elegir en el celular (pedido de Sergio,
+ * 2026-10-26): las de los países del Hub y algunas más. Por omisión, la del
+ * país del filtro.
+ */
+const OTRAS_LADAS: Record<string, { nombre: string; telefono: Telefono }> = {
+  US: { nombre: 'Estados Unidos', telefono: { lada: '+1', bandera: '🇺🇸', digitos: 10, grupos: [3, 3, 4], ejemplo: '555 123 4567' } },
+  ES: { nombre: 'España', telefono: { lada: '+34', bandera: '🇪🇸', digitos: 9, grupos: [3, 3, 3], ejemplo: '612 345 678' } },
+};
+export const LADAS: { pais: string; nombre: string; telefono: Telefono }[] = [
+  ...Object.entries(PAISES).flatMap(([pais, p]) => (p.telefono ? [{ pais, nombre: p.nombre, telefono: p.telefono }] : [])),
+  ...Object.entries(OTRAS_LADAS).map(([pais, p]) => ({ pais, ...p })),
+];
+
+/**
+ * Un celular guardado: solo dígitos si es de la lada del país del filtro (así
+ * siempre se guardó); con otra lada, «+57 3123456789».
+ */
+export function leerTelefono(valor: string, paisFiltro?: string): { t: Telefono; digitos: string } {
+  const base = telefonoDe(paisFiltro);
+  const m = /^\+(\d{1,4})\s+(.*)$/.exec(valor.trim());
+  const otra = m ? LADAS.find((l) => l.telefono.lada === `+${m[1]}`) : undefined;
+  if (m && otra && otra.telefono.lada !== base.lada) return { t: otra.telefono, digitos: limpiarTelefono(m[2], otra.telefono) };
+  return { t: base, digitos: limpiarTelefono(valor, base) };
+}
+
+/** Lo que se guarda: los dígitos solos con la lada del filtro; con otra, la lada antes («+1 5551234567»). */
+export function guardarTelefono(digitos: string, t: Telefono, paisFiltro?: string): string | undefined {
+  if (!digitos) return undefined;
+  return !t.lada || t.lada === telefonoDe(paisFiltro).lada ? digitos : `${t.lada} ${digitos}`;
+}
+
 /** Solo los dígitos del celular, sin la lada si la pegaron con ella («+52 55…»), hasta los que lleva el país. */
 export function limpiarTelefono(texto: string, t: Telefono): string {
   let d = texto.replace(/\D/g, '');
