@@ -33,6 +33,7 @@ import { Duracion, EditorFiltro, EstadoGuardado, irAlDocumento, type VistaEditor
 import { useGenerador } from './generador/useGenerador';
 import { GeneradorFiltro } from './generador/GeneradorFiltro';
 import { MarcaIA } from './generador/comun';
+import { enlaceDeFormulario } from '@/lib/formularios/dominio';
 
 interface FormularioRow {
   id: string; codigo: string; titulo: string; estado: string; respuestasPrueba: number; respuestasReales: number; califican: number; proyecto?: string;
@@ -59,7 +60,7 @@ const ORIGENES: { id: Origen; nombre: string; detalle: string; ia?: boolean }[] 
   { id: 'plantilla', nombre: 'Desde una plantilla', detalle: 'ALONG 2 o la de todos los tipos de pregunta.' },
 ];
 
-const enlace = (codigo: string) => `${window.location.origin}/f/${codigo}`;
+const enlace = enlaceDeFormulario;
 
 /**
  * Tools → Formularios: screeners que contestan los consumidores en /f/:codigo.

@@ -184,7 +184,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 | 1 | Base: tipos de pregunta, lógica, opción única/múltiple, NSE por país como alerta | **Hecha** (`3d5bbfd`, 2026-10-22) |
 | 2 | Editor: documento en pantalla + mapa del flujo, edición a mano, imágenes, versiones; panel con «Ver» y pantallas angostas | **Hecha** (`40d801f`, 2026-10-22) |
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | **Hecha** (`f450a2f`, 2026-10-22) |
-| 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`) y Word/PDF (`9b8e584`) hechos; faltan formulario neutro, dominio, captcha, fotos y videos |
+| 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`), Word/PDF (`9b8e584`) y formulario neutro en sharpli.mx hechos; faltan captcha, fotos y videos |
 | 5 | Operación: en vivo, nadie se corta por defecto, paso solo al tablero, historial y duplicados, traer respuestas de un filtro anterior, clasificación con IA, pestaña propia | **Hecha** («En vivo» `90cadec`; lo demás `0bd0d7d`, 2026-10-24) |
 | 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | Pendiente |
 
@@ -730,12 +730,27 @@ Con Sergio: el equipo de reclutamiento revisa en un solo lugar (el tablero), por
 
 **Pendiente:** mover a alguien a un grupo no recalcula los sugeridos al momento (se recalculan con la siguiente respuesta, al publicar, al guardar la muestra o con «Buscar duplicados»); la ficha de la persona desde el tablero.
 
+### Formulario neutro en sharpli.mx (2026-10-26)
+
+Pedido de Sergio: que el enlace de los participantes sea de Sharpli y no de Sapience, sin riesgo de que desde ahí se vea información de clientes. Sergio apuntó `sharpli.mx` (GoDaddy) al sitio del Hub en Render; es el mismo sitio, pero en ese dominio solo vive el formulario.
+
+**Qué se construyó:**
+
+- **En sharpli.mx solo se carga el formulario** (`main.tsx` → `SoloFormularios.tsx`, dominios en `lib/formularios/dominio.ts`): `/f/:codigo` y `/f/aviso`; cualquier otra dirección dice «Este enlace no existe». El código del Hub (inicio de sesión, pantallas, menús) ni se descarga.
+- **El servidor solo le contesta lo del formulario** (`FORMULARIO_ORIGINS` y `FORMULARIO_ENDPOINTS` en `server/index.ts`): desde sharpli.mx el navegador puede llamar el formulario, su envío, el aviso, el código postal, la dirección y la foto; todo lo demás se rechaza, y de todos modos pide inicio de sesión. Va aparte de `ZITE_APP_URL` porque esa variable también arma enlaces de vistas compartidas y correos de ODC.
+- **Neutro:** sin logo de Sapience (la barra oscura se volvió una línea de avance), pestaña «Cuestionario» sin ícono, e `index.html` sin título ni ícono (las vistas previas de WhatsApp los leen sin correr nada; el Hub los pone en `marcaDelHub.ts`).
+- **El enlace de Filtros** ya da `https://sharpli.mx/f/…` (en la Mac, el local). Los enlaces que ya se mandaron con el dominio del Hub siguen funcionando.
+
+**Probado en local (2026-10-26):** en `sharpli.localhost` el formulario y el aviso abren sin el código del Hub ni la palabra Sapience (revisado también en el build), `/login` dice «Este enlace no existe»; el Hub normal sigue igual; el servidor acepta a sharpli.mx solo para los servicios del formulario.
+
+**Queda a la vista (sin datos):** la dirección del servidor (`hub-sapience-api…`) y los nombres de los servicios en el código; las imágenes de las preguntas viven en una carpeta pública (quien tenga su dirección las ve). Captcha, pendiente.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
 |---|---|---|
 | Modelo de Word | **Resuelto (2026-10-24):** el formato de los filtros del equipo (MALETA D, SED R, LORO); el «ALONG 2 v4» no sirve de modelo porque es el que se armó con IA, con recuadros de colores | — |
-| Dominio de Sharpli | `encuestas.sharpli.ai`; quién administra el DNS; agregarlo en Render | Fase 4 |
+| Dominio de Sharpli | **Resuelto (2026-10-26):** `sharpli.mx`, apuntado por Sergio en GoDaddy y agregado en Render | — |
 | Aviso de privacidad | Ya va el de AGC dentro del formulario; falta que legal agregue las fotos de identificación, su revisión con IA y el plazo | — |
 | Cómo reconocer a la misma persona | **Resuelto (2026-10-24):** la misma búsqueda de los tableros (2 de 3 iguales entre nombre, correo y celular) y, entre filtros, el celular | — |
 | Quién entra a la base | **Resuelto (2026-10-24):** todo el que contesta queda en Filtros; al tablero pasa en automático quien entra a un perfil con lugar; los demás, a mano | — |

@@ -6,9 +6,6 @@ import { CampoPregunta } from './CampoPregunta';
 import { EnlaceAviso } from './AvisoPrivacidad';
 import { TextoConFormato } from './TextoConFormato';
 
-// Mismo logo que SwipePage.tsx — página pública sin login. Quitarlo es de la fase 4 (formulario neutro en el dominio de Sharpli).
-const LOGO_URL = 'https://qmqtjfhifzxvnhiyifyh.supabase.co/storage/v1/object/public/publico/logo%20sapience%20blanco%2015%20ene%2026.png';
-
 type Fase = 'bienvenida' | 'preguntas' | 'enviando' | 'gracias' | 'nocalifica';
 
 export interface Borrador { respuestas: Respuestas; pantallaId?: string; inicio: number }
@@ -209,13 +206,15 @@ export function Marco({ children, prueba, progreso, enMarco, scroll }: {
 }) {
   return (
     <div ref={scroll} className={`flex flex-col bg-[#F6F6F7] ${enMarco ? 'h-full overflow-y-auto' : 'min-h-dvh'}`}>
-      <header className={`bg-[#1F1F23] ${enMarco ? 'sticky top-0 z-10' : ''}`}>
-        <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-4">
-          <img src={LOGO_URL} alt="Sapience" className="h-6 w-auto" />
-          {prueba && <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#1F1F23]">Prueba</span>}
-        </div>
+      {/* Sin logo: el formulario es neutro (se contesta en sharpli.mx, ver lib/formularios/dominio.ts). */}
+      <header className={`bg-[#F6F6F7] ${enMarco ? 'sticky top-0 z-10' : ''}`}>
         {progreso !== undefined && (
-          <div className="h-1 bg-white/15"><div className="h-1 bg-white transition-all" style={{ width: `${progreso}%` }} /></div>
+          <div className="h-1 bg-[#E4E4E7]"><div className="h-1 bg-[#1F1F23] transition-all" style={{ width: `${progreso}%` }} /></div>
+        )}
+        {prueba && (
+          <div className="mx-auto flex max-w-lg justify-end px-5 pt-3">
+            <span className="rounded-full bg-[#1F1F23] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">Prueba</span>
+          </div>
         )}
       </header>
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col">{children}</main>

@@ -96,10 +96,24 @@ const allowedOrigins = (process.env.ZITE_APP_URL ?? 'http://localhost:5173')
   .map((s) => s.trim())
   .filter(Boolean);
 
+// El dominio de Sharpli donde contestan los participantes los filtros (oct 2026,
+// ver src/lib/formularios/dominio.ts): ese sitio solo sirve el formulario, y
+// desde ahí el navegador solo puede llamar lo que el formulario usa. Va aparte
+// de ZITE_APP_URL porque esa también arma enlaces de vistas compartidas y ODC.
+const FORMULARIO_ORIGINS = ['https://sharpli.mx', 'https://www.sharpli.mx'];
+const FORMULARIO_ENDPOINTS = new Set([
+  'getFormularioPublico', 'submitFormularioRespuesta', 'getAvisoPrivacidad',
+  'getCodigoPostal', 'sugerirDireccion', 'detalleDireccion', 'upload',
+]);
+
 app.use(
   '/api/*',
   cors({
-    origin: allowedOrigins,
+    origin: (origin, c) => {
+      if (allowedOrigins.includes(origin)) return origin;
+      if (FORMULARIO_ORIGINS.includes(origin) && FORMULARIO_ENDPOINTS.has(c.req.path.split('/').pop() ?? '')) return origin;
+      return null;
+    },
     allowMethods: ['POST', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
