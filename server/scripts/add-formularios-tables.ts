@@ -134,6 +134,15 @@ async function main() {
       created_at  timestamptz not null default now()
     );
     create index if not exists muestra_versiones_muestra_idx on muestra_versiones (muestra_id, version desc);
+
+    -- Lo que lee la IA para proponer o cambiar la muestra (archivos, imágenes, reuniones y texto). Mientras no
+    -- haya fila, son los del filtro del proyecto que más tiene (ver src/serverUtils/muestra/insumos.ts).
+    create table if not exists muestra_insumos (
+      proyecto_id  uuid primary key references projects(id) on delete cascade,
+      insumos      jsonb not null default '{}'::jsonb,
+      updated_by   text,
+      updated_at   timestamptz not null default now()
+    );
   `);
   console.log('✅ Tablas de formularios creadas (o ya existían).');
 

@@ -745,6 +745,18 @@ Pedido de Sergio: que el enlace de los participantes sea de Sharpli y no de Sapi
 
 **Queda a la vista (sin datos):** la dirección del servidor (`hub-sapience-api…`) y los nombres de los servicios en el código; las imágenes de las preguntas viven en una carpeta pública (quien tenga su dirección las ve). Captcha, pendiente.
 
+### Muestra: insumos a la vista y cambios pedidos a la IA (2026-10-26)
+
+Pedido de Sergio: ver qué insumos va a leer la IA para la muestra, poder sumarle archivos, imágenes o texto (siempre arrastrando o eligiendo), y corregir lo que propone con comentarios.
+
+**Qué se construyó:**
+
+- **«Lo que leerá la IA»** (`InsumosMuestra.tsx`): en la muestra vacía, a la vista arriba de «Proponer con IA»; con muestra, en el botón «Insumos · N» del encabezado. Archivos e imágenes (arrastrar y soltar en cualquier parte del recuadro, elegir o pegar una captura), texto y las reuniones de Notetaker del proyecto con su casilla. Acepta PDF, PowerPoint, Word, **Excel** (se lee como texto, una fila por renglón) e **imágenes** (se reducen a 1568 px en JPEG y la IA las ve).
+- **De dónde salen** (`serverUtils/muestra/insumos.ts`, tabla `muestra_insumos`, creada en producción con el OK de Sergio): mientras nadie los toca son los del filtro del proyecto que más tiene («Tomados del filtro …»); al primer cambio se copian a la muestra (los PDF e imágenes, a su propia carpeta) y ya no dependen del filtro. Quitar un archivo nunca borra el del filtro.
+- **Pedirle un cambio a la IA** (`comentarMuestra`): un cuadro debajo de los supuestos, con la muestra que se está editando (guardada o no) y los mismos insumos. La IA devuelve la muestra completa; las actividades que se quedan conservan su código, grupo y evento (`deLaIA` en `lib/reclutamiento/muestra.ts`), las nuevas toman el siguiente código libre y las que no regresan se quitan. Se ve qué cambió, con «Deshacer», y nada se guarda hasta «Guardar cambios».
+
+**Probado en local (2026-10-26)** en «3 MAYO PRUEBA 3»: «S1 es en línea y agrega una tríada del mismo perfil» cambió el lugar de S1 (con su grupo y evento) y agregó T1; una imagen inventada («2 sesiones en Guadalajara, 18 nov 6 pm») soltada en los insumos se leyó y agregó S2 y S3; deshacer y quitar la imagen funcionan; el PDF del filtro quedó intacto y su copia en la carpeta de la muestra. 87 pruebas.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |

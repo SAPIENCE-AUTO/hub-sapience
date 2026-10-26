@@ -193,3 +193,98 @@ export function pendientesDeCrear(actividades: Actividad[]): { grupos: Actividad
     eventos: actividades.filter((a) => !a.eventoId && !!a.fecha),
   };
 }
+
+// ── lo que devuelve la IA ────────────────────────────────────────────────────
+/**
+ * Una actividad como la escribe la IA, al proponer la muestra o al pedirle un
+ * cambio. En un cambio trae el `id` de las que se quedan; un campo que no
+ * viene se queda como estaba y uno en `null` (o vacío) se borra.
+ */
+export interface ActividadIA {
+  id?: string | null;
+  tecnica: Tecnica;
+  perfil?: string | null;
+  personas?: number | null;
+  reserva?: number | null;
+  duracionMin?: number | null;
+  lugar?: string | null;
+  fecha?: string | null;
+  notas?: string | null;
+}
+
+/** La fecha como la lee y escribe la IA: «2026-11-04T18:00», en hora de la Ciudad de México. */
+export function fechaParaIA(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(iso)) return iso;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
+/** La muestra como se la da a leer a la IA (para pedirle un cambio): con su id, sin grupos ni eventos. */
+export function muestraParaIA(def: DefinicionMuestra) {
+  return {
+    actividades: def.actividades.map((a) => ({
+      id: a.id, codigo: a.codigo, tecnica: a.tecnica, perfil: a.perfil ?? null, personas: a.personas, reserva: a.reserva,
+      duracionMin: a.duracionMin ?? null, lugar: a.lugar ?? null, fecha: fechaParaIA(a.fecha) ?? null, notas: a.notas ?? null,
+    })),
+    supuestos: def.supuestos ?? [],
+  };
+}
+
+const UNA_PERSONA: Tecnica[] = ['entrevista', 'visita', 'compra'];
+const textoIA = (v: string | null | undefined, antes?: string) => (v === undefined ? antes : v?.trim() || undefined);
+const numeroIA = (v: number | null | undefined, antes: number | undefined, minimo: number) =>
+  (v === undefined || v === null ? antes : v >= minimo ? Math.round(v) : antes);
+
+/**
+ * Lo que propuso la IA, sobre lo que ya había: las que se quedan conservan su
+ * id, código, grupo y evento (cambia solo lo que la IA cambió); las nuevas
+ * toman el siguiente código libre; las que no regresan se quitan. Entrevistas,
+ * visitas y compras son de una persona: si la IA juntó varias en una, se separan.
+ */
+export function deLaIA(actual: Actividad[], leidas: ActividadIA[]): Actividad[] {
+  const previas = new Map(actual.map((a) => [a.id, a]));
+  const usados = new Set<string>();
+  const quedan: Actividad[] = [];
+  const nuevas: ActividadIA[] = [];
+  for (const r of leidas) {
+    const prev = r.id ? previas.get(r.id) : undefined;
+    if (!prev || usados.has(prev.id)) { nuevas.push({ ...r, id: undefined }); continue; }
+    usados.add(prev.id);
+    const fecha = r.fecha === undefined || r.fecha === fechaParaIA(prev.fecha) ? prev.fecha : textoIA(r.fecha);
+    quedan.push({
+      ...prev,
+      tecnica: r.tecnica,
+      // Si cambió de técnica, su código ya no le queda («S2» que ahora es tríada): toma uno nuevo abajo.
+      codigo: r.tecnica === prev.tecnica ? prev.codigo : '',
+      perfil: textoIA(r.perfil, prev.perfil),
+      personas: numeroIA(r.personas, prev.personas, 1)!,
+      reserva: numeroIA(r.reserva, prev.reserva, 0)!,
+      duracionMin: numeroIA(r.duracionMin, prev.duracionMin, 10),
+      lugar: textoIA(r.lugar, prev.lugar),
+      fecha: fecha && !Number.isNaN(new Date(fecha).getTime()) ? fecha : undefined,
+      notas: textoIA(r.notas, prev.notas),
+    });
+  }
+  const lista = [...quedan];
+  for (const a of lista) if (!a.codigo) a.codigo = siguienteCodigo(lista.filter((x) => x.codigo), a.tecnica);
+  const separadas = nuevas.flatMap((a) => (UNA_PERSONA.includes(a.tecnica) && (a.personas ?? 1) > 1
+    ? Array.from({ length: Math.min(60, Math.round(a.personas!)) }, () => ({ ...a, personas: 1, reserva: 0 }))
+    : [a]));
+  for (const a of separadas) {
+    lista.push(nuevaActividad(lista, a.tecnica, {
+      ...(a.perfil?.trim() ? { perfil: a.perfil.trim() } : {}),
+      ...(a.personas && a.personas >= 1 ? { personas: Math.round(a.personas) } : {}),
+      ...(a.reserva != null && a.reserva >= 0 ? { reserva: Math.round(a.reserva) } : {}),
+      ...(a.duracionMin && a.duracionMin >= 10 ? { duracionMin: Math.round(a.duracionMin) } : {}),
+      ...(a.lugar?.trim() ? { lugar: a.lugar.trim() } : {}),
+      ...(a.fecha && !Number.isNaN(new Date(a.fecha).getTime()) ? { fecha: a.fecha } : {}),
+      ...(a.notas?.trim() ? { notas: a.notas.trim() } : {}),
+    }));
+  }
+  return lista;
+}

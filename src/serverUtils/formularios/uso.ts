@@ -12,7 +12,8 @@ export type AccionIA = 'estructura' | 'seccion' | 'logica' | 'pregunta' | 'comen
 const CUENTA = '(ok is distinct from false or modelo is not null)';
 
 /** Reserva una llamada o dice cuánto falta para poder volver a usar la IA. Devuelve el id del registro. */
-export async function reservarUsoIA(email: string, formularioId: string, accion: AccionIA): Promise<string> {
+/** `formularioId` vacío: la muestra de un proyecto que todavía no tiene filtro. */
+export async function reservarUsoIA(email: string, formularioId: string | null, accion: AccionIA): Promise<string> {
   const correo = email.toLowerCase();
   const { rows: [r] } = await pool.query(
     `select count(*)::int as n, min(created_at) as primera from formulario_ia_uso
@@ -61,7 +62,7 @@ export async function registrarUsoAutomatico(formularioId: string, accion: Accio
 }
 
 /** Corre una llamada a la IA con su registro: reserva, anota lo gastado y si salió bien. */
-export async function conRegistro<T>(email: string, formularioId: string, accion: AccionIA, trabajo: (onGasto: (g: Gasto) => void) => Promise<T>): Promise<T> {
+export async function conRegistro<T>(email: string, formularioId: string | null, accion: AccionIA, trabajo: (onGasto: (g: Gasto) => void) => Promise<T>): Promise<T> {
   const id = await reservarUsoIA(email, formularioId, accion);
   const anotaciones: Promise<void>[] = [];
   try {

@@ -41,7 +41,7 @@ import { sugerir } from '../../src/serverUtils/formularios/tableroHub';
 import { bandejaDe } from '../../src/lib/formularios/motor';
 import { alternarMarca, leerFormato, sinFormato } from '../../src/lib/formularios/formato';
 import { tramosDe } from '../../src/lib/formularios/documento';
-import { cambiosEntre, leerMuestra, nombreDeGrupo, nuevaActividad, porPerfil, siguienteCodigo } from '../../src/lib/reclutamiento/muestra';
+import { cambiosEntre, deLaIA, fechaParaIA, leerMuestra, muestraParaIA, nombreDeGrupo, nuevaActividad, porPerfil, siguienteCodigo } from '../../src/lib/reclutamiento/muestra';
 import { leerCatalogoSepomex } from '../../src/serverUtils/formularios/codigosPostales';
 import { direccionDeComponentes } from '../../src/serverUtils/formularios/direcciones';
 import { aplicarParche, asentarIds, avisosDeLogica, cambiosEnPalabras, columnasQueCambian, conocidosDe, protegerNse } from '../../src/lib/formularios/ia';
@@ -1270,6 +1270,41 @@ caso('la muestra: códigos por técnica, cambios en palabras y lugares por perfi
   assert.deepEqual(porPerfil(v1.actividades).map((p) => [p.perfil, p.total.personas, p.total.reserva]), [['Perfil A', 9, 2], ['Perfil B', 8, 2]]);
   // Lo guardado a medias o viejo no truena: lo que falta toma el valor de su técnica.
   assert.deepEqual(leerMuestra({ actividades: [{ tecnica: 'nada', personas: -3 }, 7] }).actividades.map((a) => [a.tecnica, a.personas]), [['otra', 1]]);
+});
+
+caso('la muestra con la IA: lo que se queda conserva grupo y evento, lo nuevo toma código libre', () => {
+  const s1 = nuevaActividad([], 'sesion', { id: 'a1', perfil: 'Perfil A', lugar: 'CDMX', fecha: '2026-11-05T00:00:00.000Z', grupoId: 'g1', eventoId: 'e1', notas: 'Con cámara Gesell' });
+  const s2 = nuevaActividad([s1], 'sesion', { id: 'a2', perfil: 'Perfil B', grupoId: 'g2' });
+  const t1 = nuevaActividad([s1, s2], 'triada', { id: 'a3', perfil: 'Perfil A' });
+  // La IA lee la fecha en hora de la Ciudad de México y sin grupos ni eventos.
+  assert.equal(fechaParaIA('2026-11-05T00:00:00.000Z'), '2026-11-04T18:00');
+  assert.equal(fechaParaIA('2026-11-04T18:00'), '2026-11-04T18:00');
+  const leida = muestraParaIA({ actividades: [s1] }).actividades[0];
+  assert.equal(leida.fecha, '2026-11-04T18:00');
+  assert.ok(!('grupoId' in leida) && !('eventoId' in leida));
+  const despues = deLaIA([s1, s2, t1], [
+    // S1 igual (misma fecha leída: se queda la original) pero en Monterrey; sin «notas»: se quedan.
+    { id: 'a1', tecnica: 'sesion', perfil: 'Perfil A', lugar: 'Monterrey', fecha: '2026-11-04T18:00' },
+    // La tríada se vuelve díada: código nuevo; el lugar en null se borra.
+    { id: 'a3', tecnica: 'diada', perfil: 'Perfil A', lugar: null },
+    // Nuevas: dos entrevistas juntas se separan; un id que no existe cuenta como nueva.
+    { tecnica: 'entrevista', perfil: 'Perfil B', personas: 2 },
+    { id: 'inventado', tecnica: 'sesion', perfil: 'Perfil B' },
+  ]);
+  assert.deepEqual(despues.map((a) => [a.codigo, a.tecnica, a.lugar ?? '', a.grupoId ?? '', a.eventoId ?? '']), [
+    ['S1', 'sesion', 'Monterrey', 'g1', 'e1'],
+    ['D1', 'diada', '', '', ''],
+    ['E1', 'entrevista', '', '', ''],
+    ['E2', 'entrevista', '', '', ''],
+    ['S2', 'sesion', '', '', ''],
+  ]);
+  assert.equal(despues[0].fecha, '2026-11-05T00:00:00.000Z');
+  assert.equal(despues[0].notas, 'Con cámara Gesell');
+  assert.ok(despues.every((a, i) => despues.findIndex((x) => x.id === a.id) === i));
+  // S2 (con grupo) no regresó: se quita de la muestra, y así lo dice el cambio.
+  assert.ok(cambiosEntre({ actividades: [s1, s2, t1] }, { actividades: despues }).includes('Se quitó S2'));
+  // Al proponer desde cero, todas son nuevas.
+  assert.deepEqual(deLaIA([], [{ tecnica: 'sesion' }, { tecnica: 'sesion', personas: 6 }]).map((a) => [a.codigo, a.personas, a.reserva]), [['S1', 8, 2], ['S2', 6, 2]]);
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {

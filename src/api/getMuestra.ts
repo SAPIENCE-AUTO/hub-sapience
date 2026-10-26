@@ -1,12 +1,15 @@
 import { z } from 'zod';
 import { createEndpoint } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
-import { avanceDeGrupos, insumosDelProyecto, muestraDeProyecto, perfilesDelProyecto, tablerosDelProyecto, versionesDe } from '../serverUtils/muestra/muestra';
+import { hayInsumos, reunionesDelProyecto } from '../serverUtils/formularios/insumos';
+import { insumosDeLaMuestra, insumosParaNavegador } from '../serverUtils/muestra/insumos';
+import { avanceDeGrupos, muestraDeProyecto, perfilesDelProyecto, tablerosDelProyecto, versionesDe } from '../serverUtils/muestra/muestra';
 
 /**
  * La muestra del proyecto (Reclutamiento → Muestra): sus actividades, sus
- * versiones, cuántas personas hay ya en el grupo de cada actividad y dónde se
- * pueden crear grupos y eventos. Por ahora solo para quien ve Filtros.
+ * versiones, cuántas personas hay ya en el grupo de cada actividad, dónde se
+ * pueden crear grupos y eventos, y lo que lee la IA (sus insumos y las
+ * reuniones de Notetaker del proyecto). Por ahora solo para quien ve Filtros.
  */
 export default createEndpoint({
   authenticated: true,
@@ -23,17 +26,23 @@ export default createEndpoint({
     calendarios: z.array(z.object({ id: z.string(), nombre: z.string() })),
     perfiles: z.array(z.object({ nombre: z.string(), meta: z.number() })),
     hayInsumos: z.boolean(),
+    insumos: z.any(),
+    reuniones: z.array(z.object({ id: z.string(), titulo: z.string(), fecha: z.string().optional(), tipo: z.string().optional() })),
   }),
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
-    const [muestra, { tableros, calendarios }, perfiles, insumos] = await Promise.all([
-      muestraDeProyecto(input.proyectoId), tablerosDelProyecto(input.proyectoId), perfilesDelProyecto(input.proyectoId), insumosDelProyecto(input.proyectoId),
+    const [muestra, { tableros, calendarios }, perfiles, insumos, reuniones] = await Promise.all([
+      muestraDeProyecto(input.proyectoId), tablerosDelProyecto(input.proyectoId), perfilesDelProyecto(input.proyectoId),
+      insumosDeLaMuestra(input.proyectoId), reunionesDelProyecto(input.proyectoId),
     ]);
     const grupos = (muestra?.definicion.actividades ?? []).flatMap((a) => (a.grupoId ? [a.grupoId] : []));
     const [versiones, avance] = await Promise.all([
       muestra ? versionesDe(muestra.id) : Promise.resolve([]),
       avanceDeGrupos(muestra?.tableroId, grupos),
     ]);
-    return { muestra, versiones, avance, tableros, calendarios, perfiles, hayInsumos: !!insumos };
+    return {
+      muestra, versiones, avance, tableros, calendarios, perfiles,
+      hayInsumos: hayInsumos(insumos.insumos), insumos: insumosParaNavegador(insumos), reuniones,
+    };
   },
 });

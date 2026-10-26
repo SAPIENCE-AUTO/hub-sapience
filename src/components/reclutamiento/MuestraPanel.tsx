@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { CalendarCheck, CalendarPlus, ChevronDown, History, Loader2, Plus, Sparkles, Trash2, Users } from 'lucide-react';
+import { CalendarCheck, CalendarPlus, ChevronDown, History, Loader2, Paperclip, Plus, Trash2, Undo2, Users } from 'lucide-react';
 import {
-  getMuestra, linkGroupToEvent, proponerMuestra, publishRecruitmentGroupsChanged, saveBoard, saveBoardColumn, saveCalendarEvent, saveMuestra,
+  comentarMuestra, getMuestra, linkGroupToEvent, proponerMuestra, publishRecruitmentGroupsChanged, saveBoard, saveBoardColumn, saveCalendarEvent, saveMuestra,
 } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DatetimePicker } from '@/components/pm/EventFormFields';
 import { ALERTA, EXITO, GRIS, TEAL } from '@/lib/toolColors';
+import { MarcaIA, botonTeal } from '@/components/formularios/generador/comun';
+import { InsumosMuestra, cuantosInsumos, type Reunion, type VistaInsumos } from './InsumosMuestra';
 import {
   TECNICAS, ORDEN_TECNICAS, cambiosEntre, colorDeGrupo, fechaCorta, leerMuestra, lugares, nombreDeEvento, nombreDeGrupo, nuevaActividad, pendientesDeCrear, porPerfil, porTecnica,
   type Actividad, type DefinicionMuestra, type Tecnica,
@@ -25,6 +27,8 @@ interface Datos {
   calendarios: { id: string; nombre: string }[];
   perfiles: { nombre: string; meta: number }[];
   hayInsumos: boolean;
+  insumos: VistaInsumos;
+  reuniones: Reunion[];
 }
 
 const VACIA: DefinicionMuestra = { actividades: [] };
@@ -36,7 +40,9 @@ const fechaVersion = (iso: string) => new Date(iso).toLocaleDateString('es-MX', 
  * guarda como versión (con qué cambió y por qué). «Crear grupos y eventos»
  * hace cada actividad un grupo del tablero y un evento del calendario, ya
  * ligados; asignar a alguien es moverlo a su grupo, y aquí se ve el avance.
- * Ningún cambio mueve ni borra gente.
+ * Ningún cambio mueve ni borra gente. Los insumos que lee la IA están a la
+ * vista y se les suman archivos, imágenes y texto; lo que propone se corrige
+ * pidiéndole cambios con palabras.
  */
 export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId: string; projectCode: string; onCambio?: () => void }) {
   const [datos, setDatos] = useState<Datos | null>(null);
@@ -47,12 +53,17 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
   const [quitar, setQuitar] = useState<Actividad | null>(null);
   const [tableroId, setTableroId] = useState('');
   const [calendarioId, setCalendarioId] = useState('');
+  const [verInsumos, setVerInsumos] = useState(false);
+  const [pedido, setPedido] = useState('');
+  /** El último cambio de la IA, para enseñarlo y poder deshacerlo. */
+  const [cambioIA, setCambioIA] = useState<{ antes: DefinicionMuestra; cambios: string[]; nota?: string } | null>(null);
 
   const guardada = useMemo(() => (datos?.muestra ? leerMuestra(datos.muestra.definicion) : VACIA), [datos]);
   const cargar = useCallback(async () => {
     const d = (await getMuestra({ proyectoId })) as Datos;
     setDatos(d);
     setBorrador(d.muestra ? leerMuestra(d.muestra.definicion) : VACIA);
+    setCambioIA(null);
     setTableroId((t) => t || d.muestra?.tableroId || d.tableros[0]?.id || '');
     setCalendarioId((c) => c || d.muestra?.calendarioId || d.calendarios[0]?.id || '');
   }, [proyectoId]);
@@ -77,9 +88,31 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
       for await (const c of s) if (c?.paso) setTrabajando(c.paso);
       const r = await s;
       setBorrador(leerMuestra(r.definicion));
-      toast.success('La IA propuso la muestra: revísala y guárdala.');
+      setVerInsumos(false);
+      toast.success('La IA propuso la muestra: revísala, pídele cambios y guárdala.');
     } catch (e) {
       toast.error((e as Error).message || 'La IA no pudo proponer la muestra');
+    } finally {
+      setTrabajando(null);
+    }
+  };
+
+  const pedirCambio = async () => {
+    const comentario = pedido.trim();
+    if (!comentario) return;
+    const antes = borrador;
+    setTrabajando('La IA está haciendo el cambio…');
+    try {
+      const s = comentarMuestra({ proyectoId, definicion: antes, comentario });
+      for await (const c of s) if (c?.paso) setTrabajando(c.paso);
+      const r = await s;
+      const despues = leerMuestra(r.definicion);
+      const cambios = cambiosEntre(antes, despues);
+      setBorrador(despues);
+      setCambioIA({ antes, cambios, nota: r.nota });
+      if (cambios.length) setPedido('');
+    } catch (e) {
+      toast.error((e as Error).message || 'La IA no pudo hacer el cambio');
     } finally {
       setTrabajando(null);
     }
@@ -95,6 +128,7 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
       const lista = cambios.length ? cambios : [`Primera versión: ${borrador.actividades.length} actividades`];
       await saveMuestra({ proyectoId, definicion: borrador, cambios: lista, motivo, versionBase: datos.muestra?.version ?? 0, tableroId: tableroId || undefined, calendarioId: calendarioId || undefined });
       await ponerAlDia(guardada, borrador);
+      setCambioIA(null);
       toast.success('Muestra guardada');
       await cargar();
       onCambio?.();
@@ -196,12 +230,15 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
           {datos.muestra && <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold" style={{ color: TEAL, borderColor: `${TEAL}55` }}>Versión {datos.muestra.version}</span>}
           {ultima && <span className="text-xs text-muted-foreground">cambió el {fechaVersion(ultima.fecha)}{ultima.por ? ` · ${ultima.por}` : ''}</span>}
           <span className="flex-1" />
+          {borrador.actividades.length > 0 && (
+            <Button size="sm" variant={verInsumos ? 'secondary' : 'ghost'} className="h-8 gap-1.5" onClick={() => setVerInsumos((v) => !v)}><Paperclip className="h-3.5 w-3.5" />Insumos · {cuantosInsumos(datos.insumos)}</Button>
+          )}
           {datos.versiones.length > 0 && (
             <Button size="sm" variant="ghost" className="h-8 gap-1.5" onClick={() => setVerCambios((v) => !v)}><History className="h-3.5 w-3.5" />Cambios · {datos.versiones.length}</Button>
           )}
           {sucia && (
             <>
-              <Button size="sm" variant="ghost" className="h-8" disabled={!!trabajando} onClick={() => setBorrador(guardada)}>Descartar</Button>
+              <Button size="sm" variant="ghost" className="h-8" disabled={!!trabajando} onClick={() => { setBorrador(guardada); setCambioIA(null); }}>Descartar</Button>
               <Button size="sm" className="h-8" disabled={!!trabajando} onClick={() => setGuardar({ motivo: '' })}>Guardar cambios{cambios.length ? ` · ${cambios.length}` : ''}</Button>
             </>
           )}
@@ -210,6 +247,13 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
         {trabajando && (
           <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: `${TEAL}33`, backgroundColor: `${TEAL}0a`, color: TEAL }}>
             <Loader2 className="h-4 w-4 animate-spin" />{trabajando}
+          </div>
+        )}
+
+        {verInsumos && borrador.actividades.length > 0 && (
+          <div className="rounded-xl border bg-card p-4">
+            <p className="mb-3 text-sm font-semibold" style={{ color: TEAL }}>Lo que lee la IA</p>
+            <InsumosMuestra proyectoId={proyectoId} vista={datos.insumos} reuniones={datos.reuniones} ocupado={!!trabajando} onCambio={(v) => setDatos((d) => (d ? { ...d, insumos: v, hayInsumos: cuantosInsumos(v) > 0 } : d))} />
           </div>
         )}
 
@@ -225,16 +269,19 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
           </div>
         )}
 
-        {/* Vacía */}
+        {/* Vacía: los insumos a la vista, para sumarles y que la IA la proponga */}
         {!borrador.actividades.length && !trabajando && (
-          <div className="rounded-xl border bg-card p-6 text-center">
+          <div className="rounded-xl border bg-card p-5">
             <p className="font-medium">Todavía no hay muestra</p>
-            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Cada sesión, tríada o entrevista con su fecha, lugar, perfil y cupo. De aquí salen los grupos del tablero y los eventos del calendario.</p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {datos.hayInsumos && <Button size="sm" className="gap-1.5" onClick={proponer}><Sparkles className="h-3.5 w-3.5" />Proponer con IA</Button>}
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">Cada sesión, tríada o entrevista con su fecha, lugar, perfil y cupo. De aquí salen los grupos del tablero y los eventos del calendario.</p>
+            <div className="mt-4 rounded-lg border bg-[#F9FAFB] p-4">
+              <p className="mb-3 text-sm font-semibold" style={{ color: TEAL }}>Lo que leerá la IA</p>
+              <InsumosMuestra proyectoId={proyectoId} vista={datos.insumos} reuniones={datos.reuniones} ocupado={!!trabajando} onCambio={(v) => setDatos((d) => (d ? { ...d, insumos: v, hayInsumos: cuantosInsumos(v) > 0 } : d))} />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button type="button" className={botonTeal} disabled={!datos.hayInsumos} onClick={proponer}><MarcaIA />Proponer con IA</button>
               <MenuTecnicas onElegir={agregar} etiqueta="Empezar a mano" />
             </div>
-            {!datos.hayInsumos && <p className="mt-3 text-xs text-muted-foreground">Para que la IA la proponga, agrega la propuesta, las notas o el kick-off en un filtro.</p>}
           </div>
         )}
 
@@ -244,6 +291,40 @@ export function MuestraPanel({ proyectoId, projectCode, onCambio }: { proyectoId
             <p className="font-medium" style={{ color: '#8a4b00' }}>Revisa lo que supuso la IA</p>
             <ul className="mt-1 list-disc pl-5 text-[#5c3a07]">{borrador.supuestos.map((s) => <li key={s}>{s}</li>)}</ul>
             <button type="button" className="mt-2 text-xs font-medium underline" style={{ color: '#8a4b00' }} onClick={() => setBorrador((b) => ({ ...b, supuestos: undefined }))}>Ya lo revisé</button>
+          </div>
+        )}
+
+        {/* Pedirle un cambio a la IA */}
+        {borrador.actividades.length > 0 && (
+          <div className="rounded-xl border bg-card p-3">
+            <div className="flex items-start gap-2">
+              <span className="mt-2"><MarcaIA className="h-4 w-4" /></span>
+              <Textarea
+                rows={1}
+                className="min-h-[38px] flex-1 resize-y text-sm"
+                placeholder="Pídele un cambio a la IA (p. ej. «agrega 2 tríadas de mamás»)"
+                value={pedido}
+                disabled={!!trabajando}
+                onChange={(e) => setPedido(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void pedirCambio(); } }}
+              />
+              <button type="button" className={botonTeal} disabled={!pedido.trim() || !!trabajando} onClick={pedirCambio}>Pedir cambio</button>
+            </div>
+            {cambioIA && (
+              <div className="mt-3 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: `${TEAL}33`, backgroundColor: `${TEAL}08` }}>
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    {cambioIA.nota && <p style={{ color: TEAL }}>{cambioIA.nota}</p>}
+                    {cambioIA.cambios.length
+                      ? <ul className="mt-0.5 list-disc pl-5 text-[13px]">{cambioIA.cambios.slice(0, 12).map((c) => <li key={c}>{c}</li>)}{cambioIA.cambios.length > 12 && <li>y {cambioIA.cambios.length - 12} más</li>}</ul>
+                      : <p className="text-[13px] text-muted-foreground">No cambió nada.</p>}
+                  </div>
+                  {cambioIA.cambios.length > 0 && (
+                    <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => { setBorrador(cambioIA.antes); setCambioIA(null); }}><Undo2 className="h-3.5 w-3.5" />Deshacer</Button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import mammoth from 'mammoth';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -9,7 +10,9 @@ import type { Contenido } from './claude';
 
 // Insumos del generador de Filtros: lo que se sube (propuesta en PDF o PowerPoint, Word con un
 // screener) y las reuniones de Notetaker. El PDF se guarda en la carpeta privada y la IA lo lee
-// completo, con sus tablas e imágenes; del Word y del PowerPoint se guarda el texto.
+// completo, con sus tablas e imágenes; del Word y del PowerPoint se guarda el texto. La muestra
+// del proyecto (serverUtils/muestra/insumos.ts) además acepta imágenes (van a la carpeta privada
+// y la IA las ve) y Excel (se guarda el texto, una fila por renglón).
 
 // jszip viene con pptxgenjs (igual que en propuestas/construir.ts).
 const requireCjs = createRequire(import.meta.url);
@@ -33,6 +36,24 @@ export async function textoDeWord(buf: Buffer): Promise<string> {
   return entidades(texto).split('\n').map((l) => l.replace(/\s*\|\s*$/, '').trim()).filter(Boolean).join('\n');
 }
 
+/** Excel → texto: hoja por hoja, una fila por renglón con « | » entre celdas (a lo más 3 mil filas por hoja). */
+export async function textoDeExcel(buf: Buffer): Promise<string> {
+  const libro = new ExcelJS.Workbook();
+  await libro.xlsx.load(buf as unknown as ArrayBuffer);
+  const partes: string[] = [];
+  libro.eachSheet((hoja) => {
+    const filas: string[] = [];
+    hoja.eachRow({ includeEmpty: false }, (fila) => {
+      if (filas.length >= 3000) return;
+      const celdas = (fila.values as unknown[]).slice(1).map((_, i) => fila.getCell(i + 1).text.trim());
+      while (celdas.length && !celdas[celdas.length - 1]) celdas.pop();
+      if (celdas.some(Boolean)) filas.push(celdas.join(' | '));
+    });
+    if (filas.length) partes.push(`Hoja «${hoja.name}»:\n${filas.join('\n')}`);
+  });
+  return partes.join('\n\n');
+}
+
 /** PowerPoint → texto, lámina por lámina, en su orden. */
 export async function textoDePowerPoint(buf: Buffer): Promise<string> {
   const zip = await JSZip.loadAsync(buf);
@@ -51,29 +72,40 @@ export async function textoDePowerPoint(buf: Buffer): Promise<string> {
   return partes.join('\n\n');
 }
 
+/** Las imágenes que lee la IA (el navegador las convierte a JPEG antes de subirlas). */
+const IMAGENES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+type TipoImagen = (typeof IMAGENES)[number];
+
 export function tipoDeArchivo(nombre: string, mime: string): ArchivoInsumo['tipo'] | undefined {
   if (mime === 'application/pdf' || /\.pdf$/i.test(nombre)) return 'pdf';
   if (/\.docx$/i.test(nombre) || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
   if (/\.pptx$/i.test(nombre) || mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') return 'pptx';
+  if (/\.xlsx$/i.test(nombre) || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return 'xlsx';
+  if ((IMAGENES as readonly string[]).includes(mime)) return 'imagen';
   return undefined;
 }
 
 const nombreSeguro = (nombre: string) => nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').slice(-80);
 
-/** Lee un archivo subido: el PDF va a la carpeta privada; del Word y del PowerPoint se queda el texto. */
-export async function leerArchivoInsumo(formularioId: string, id: string, nombre: string, mime: string, buf: Buffer): Promise<ArchivoInsumo> {
+/**
+ * Lee un archivo subido: el PDF y la imagen van a la carpeta privada; del Word, el PowerPoint y
+ * el Excel se queda el texto. `carpeta`: el id del filtro (o «muestra-<proyecto>»).
+ */
+export async function leerArchivoInsumo(carpeta: string, id: string, nombre: string, mime: string, buf: Buffer): Promise<ArchivoInsumo> {
   if (buf.length > MAX_BYTES) throw new ZiteError({ code: 'BAD_REQUEST', message: 'El archivo pesa más de 25 MB.' });
   const tipo = tipoDeArchivo(nombre, mime);
-  if (!tipo) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Sube un PDF, un PowerPoint (.pptx) o un Word (.docx).' });
-  if (tipo === 'pdf') {
-    const ruta = `insumos/${formularioId}/${id}-${nombreSeguro(nombre)}`;
-    const { error } = await getSupabaseAdmin().storage.from(BUCKET).upload(ruta, buf, { contentType: 'application/pdf', upsert: false });
-    if (error) throw new ZiteError({ code: 'INTERNAL_ERROR', message: `No se pudo guardar el PDF: ${error.message}` });
-    return { id, nombre, tipo, ruta };
+  if (!tipo) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Sube un PDF, un PowerPoint (.pptx), un Word (.docx), un Excel (.xlsx) o una imagen.' });
+  if (tipo === 'pdf' || tipo === 'imagen') {
+    if (tipo === 'imagen' && buf.length > 5 * 1024 * 1024) throw new ZiteError({ code: 'BAD_REQUEST', message: `«${nombre}» pesa más de 5 MB.` });
+    const ruta = `insumos/${carpeta}/${id}-${nombreSeguro(nombre)}`;
+    const contentType = tipo === 'pdf' ? 'application/pdf' : mime;
+    const { error } = await getSupabaseAdmin().storage.from(BUCKET).upload(ruta, buf, { contentType, upsert: false });
+    if (error) throw new ZiteError({ code: 'INTERNAL_ERROR', message: `No se pudo guardar «${nombre}»: ${error.message}` });
+    return { id, nombre, tipo, ruta, ...(tipo === 'imagen' ? { mime } : {}) };
   }
   let texto = '';
   try {
-    texto = tipo === 'docx' ? await textoDeWord(buf) : await textoDePowerPoint(buf);
+    texto = tipo === 'docx' ? await textoDeWord(buf) : tipo === 'xlsx' ? await textoDeExcel(buf) : await textoDePowerPoint(buf);
   } catch {
     throw new ZiteError({ code: 'BAD_REQUEST', message: `No se pudo leer «${nombre}». ¿Está dañado o protegido?` });
   }
@@ -135,11 +167,13 @@ async function transcripciones(ids: string[]): Promise<{ titulo: string; fecha: 
   });
 }
 
-async function pdfEnBase64(ruta: string): Promise<string> {
-  const { data, error } = await getSupabaseAdmin().storage.from(BUCKET).download(ruta);
-  if (error || !data) throw new ZiteError({ code: 'INTERNAL_ERROR', message: 'No se pudo leer un PDF de los insumos. Vuelve a subirlo.' });
+async function archivoEnBase64(a: ArchivoInsumo): Promise<string> {
+  const { data, error } = await getSupabaseAdmin().storage.from(BUCKET).download(a.ruta!);
+  if (error || !data) throw new ZiteError({ code: 'INTERNAL_ERROR', message: `No se pudo leer «${a.nombre}» de los insumos. Quítalo y vuelve a subirlo.` });
   return Buffer.from(await data.arrayBuffer()).toString('base64');
 }
+
+const NOMBRE_TIPO = { docx: 'Word', pptx: 'PowerPoint', xlsx: 'Excel' } as Record<string, string>;
 
 /**
  * Los insumos como contenido para la IA: los PDF como documento y todo lo
@@ -149,14 +183,21 @@ async function pdfEnBase64(ruta: string): Promise<string> {
 export async function contenidoDeInsumos(insumos: Insumos): Promise<Contenido> {
   const bloques: Contenido = [];
   for (const a of insumos.archivos.filter((x) => x.tipo === 'pdf' && x.ruta)) {
-    bloques.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: await pdfEnBase64(a.ruta!) }, title: a.nombre });
+    bloques.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: await archivoEnBase64(a) }, title: a.nombre });
+  }
+  for (const a of insumos.archivos.filter((x) => x.tipo === 'imagen' && x.ruta)) {
+    const media = (IMAGENES as readonly string[]).includes(a.mime ?? '') ? (a.mime as TipoImagen) : 'image/jpeg';
+    bloques.push({ type: 'text', text: `Imagen «${a.nombre}»:` });
+    bloques.push({ type: 'image', source: { type: 'base64', media_type: media, data: await archivoEnBase64(a) } });
   }
   const partes: string[] = [];
   if (insumos.notas?.trim()) partes.push(`NOTAS DEL EQUIPO:\n${insumos.notas.trim()}`);
-  for (const a of insumos.archivos.filter((x) => x.texto)) partes.push(`ARCHIVO «${a.nombre}» (${a.tipo === 'docx' ? 'Word' : 'PowerPoint'}):\n${a.texto}`);
+  for (const a of insumos.archivos.filter((x) => x.texto)) partes.push(`ARCHIVO «${a.nombre}» (${NOMBRE_TIPO[a.tipo] ?? a.tipo}):\n${a.texto}`);
   for (const t of await transcripciones(insumos.reuniones.map((r) => r.id))) partes.push(`TRANSCRIPCIÓN DE LA REUNIÓN «${t.titulo}» (${t.fecha}):\n${t.texto}`);
   const pdfs = insumos.archivos.filter((x) => x.tipo === 'pdf').map((x) => `«${x.nombre}»`);
   if (pdfs.length) partes.unshift(`Van adjuntos como documento: ${pdfs.join(', ')}.`);
+  const imagenes = insumos.archivos.filter((x) => x.tipo === 'imagen').map((x) => `«${x.nombre}»`);
+  if (imagenes.length) partes.unshift(`Van adjuntas como imagen: ${imagenes.join(', ')}.`);
   const texto = partes.join('\n\n———\n\n') || '(Sin insumos: solo lo que se pide abajo.)';
   if (texto.length > MAX_CARACTERES) {
     throw new ZiteError({ code: 'BAD_REQUEST', message: 'Los insumos son demasiado largos para leerlos juntos. Quita alguna reunión o archivo y vuelve a intentar.' });

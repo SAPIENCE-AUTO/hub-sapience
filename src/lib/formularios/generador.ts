@@ -25,10 +25,13 @@ export type OrigenGenerador = 'insumos' | 'word' | 'filtro';
 export interface ArchivoInsumo {
   id: string;
   nombre: string;
-  tipo: 'pdf' | 'docx' | 'pptx';
-  /** PDF: ruta en la carpeta privada `formularios`. La IA lo lee completo, con tablas e imágenes. */
+  /** Imagen y Excel: los de la muestra del proyecto (Reclutamiento → Muestra). */
+  tipo: 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'imagen';
+  /** PDF e imagen: ruta en la carpeta privada `formularios`. La IA lo lee completo, con tablas e imágenes. */
   ruta?: string;
-  /** Word y PowerPoint: su texto (las tablas, un renglón por fila con « | »). */
+  /** Imagen: su tipo (image/jpeg, image/png…). */
+  mime?: string;
+  /** Word, PowerPoint y Excel: su texto (las tablas, un renglón por fila con « | »). */
   texto?: string;
   caracteres?: number;
 }

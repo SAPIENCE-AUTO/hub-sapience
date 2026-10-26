@@ -15,7 +15,7 @@ const ACEPTA = { word: ['docx', 'pdf'], otros: ['pdf', 'pptx', 'docx'] };
 const extension = (nombre: string) => nombre.split('.').pop()?.toLowerCase() ?? '';
 
 const fecha = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
-const TIPO_ARCHIVO = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint' } as const;
+const TIPO_ARCHIVO = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint', xlsx: 'Excel', imagen: 'Imagen' } as const;
 
 /**
  * Paso 1 del generador: de dónde sale el filtro. Notas, la propuesta (PDF o
