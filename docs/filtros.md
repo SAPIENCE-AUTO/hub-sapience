@@ -712,7 +712,7 @@ Sergio pidió el orden del selector «Muestra · Filtros · Participantes», con
 
 **Probado en local (2026-10-26)** en «3 MAYO PRUEBA 3»: la IA con insumos vacíos inventaba una actividad (corregido: ahora lee el filtro con más insumos y no inventa) y juntaba 8 entrevistas en una (corregido: se separan); propuesta de 16 entrevistas con supuestos; guardar (versión 1); crear 3 grupos en «FILTRO X» y el evento de S1 en «Calendario 1», ligado y sin invitación; el horario sale en el grupo del tablero; cambiar el lugar de S1 (versión 2) renombró el grupo y movió el evento. **Quedan en la base de prueba** esa muestra, los grupos S1, E1 y E2 de «FILTRO X» y el evento de S1. 85 pruebas.
 
-### Reclutamiento: columnas del Hub en el tablero y widget del inicio (2026-10-26, pasos 2 y 4)
+### Reclutamiento: columnas del Hub en el tablero y widget del inicio (2026-10-26, pasos 2 y 4, `225b46f`)
 
 Con Sergio: el equipo de reclutamiento revisa en un solo lugar (el tablero), por grupos de personas y con todo a la vista. Esto reemplaza el «solo pasan al tablero los que entran a un perfil con lugar» de la fase 5.
 
@@ -773,4 +773,4 @@ Con Sergio: el equipo de reclutamiento revisa en un solo lugar (el tablero), por
 - **2026-10-26 · celular y correo por defecto:** «Antes de empezar» los pide después del nombre (si el filtro no los pide ya), como preguntas que el analista puede corregir o quitar; la IA ya no los repite. 84 pruebas. Probado en local y subido a `main` con el OK de Sergio (`3a538a3`).
 - **2026-10-26 · Reclutamiento, paso 1:** Filtros adentro de Reclutamiento, pestañas del proyecto en una línea con «Más», barra del tablero en una línea (Exportar y «⋯» como menús) y sin «Definir muestra»; de 8 a 12 personas a la vista en una pantalla de 13". Probado en local y subido a `main` con el OK de Sergio (`72c5e64`).
 - **2026-10-26 · Muestra:** Reclutamiento con Muestra · Filtros · Participantes; la muestra del proyecto con versiones, propuesta de la IA, y grupos y eventos creados y puestos al día desde ahí (sin invitaciones). Tablas `muestras` y `muestra_versiones` creadas con su OK. 85 pruebas. Probado en local y subido a `main` con el OK de Sergio (`72c5e64`).
-- **2026-10-26 · columnas del Hub y widget:** todas las respuestas llegan al tablero y ahí se califican (Califica, Perfil, Por qué no califica, IA, Sugerido), al día sin pisar lo que cambia el equipo; sugeridos por perfil contra la muestra; el widget del inicio con Filtro y Participantes. 86 pruebas. Probado en local, sin subir.
+- **2026-10-26 · columnas del Hub y widget:** todas las respuestas llegan al tablero y ahí se califican (Califica, Perfil, Por qué no califica, IA, Sugerido), al día sin pisar lo que cambia el equipo; sugeridos por perfil contra la muestra; el widget del inicio con Filtro y Participantes. 86 pruebas. Probado en local y subido a `main` con el OK de Sergio (`225b46f`).
