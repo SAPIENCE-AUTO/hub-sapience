@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench, Landmark, AlarmClock } from 'lucide-react';
+import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench, Landmark, AlarmClock, ChevronDown } from 'lucide-react';
 import { useAuth } from 'zite-auth-sdk';
 import { puedeVerFormularios } from '../../lib/formularios/acceso';
 import { fechaCorta } from '../../lib/reclutamiento/muestra';
@@ -19,12 +19,34 @@ const ACCENT_PALETTE = [TEAL, GOLD, INFO, EXITO, NEUTRAL, TEAL_2];
 // Header sólido con ícono + etiqueta en blanco (o tinta oscura sobre gold,
 // que es demasiado claro para texto blanco) — la identidad de color de cada
 // tarjeta vive aquí, no en un ícono con tinte chiquito.
-function ColorHead({ color, ink, icon, label }: { color: string; ink?: string; icon: ReactNode; label: string }) {
+function ColorHead({ color, ink, icon, label, extra }: { color: string; ink?: string; icon: ReactNode; label: string; extra?: ReactNode }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2" style={{ backgroundColor: color, color: ink ?? '#fff' }}>
       {icon}
       <span className="text-[11px] font-semibold uppercase tracking-wide">{label}</span>
+      {extra && <span className="ml-auto flex items-center">{extra}</span>}
     </div>
+  );
+}
+
+// Widgets colapsables (pedido de Sergio, 2026-10-26): cada quien cierra los que no usa y se quedan
+// así en todos los proyectos (en este navegador).
+const CLAVE_COLAPSADOS = 'hub-inicio-colapsados';
+function leerColapsados(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(CLAVE_COLAPSADOS) ?? '[]')); } catch { return new Set(); }
+}
+
+function BotonPlegar({ abierto, onClick }: { abierto: boolean; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={abierto ? 'Colapsar' : 'Abrir'}
+      title={abierto ? 'Colapsar' : 'Abrir'}
+      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md opacity-70 transition hover:bg-black/10 hover:opacity-100"
+    >
+      <ChevronDown className={`h-4 w-4 transition-transform ${abierto ? '' : '-rotate-90'}`} />
+    </button>
   );
 }
 
@@ -163,6 +185,17 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
   const { user } = useAuth();
   const verResumen = puedeVerFormularios(user?.email);
   const [resumen, setResumen] = useState<ResumenReclutamiento | null>(null);
+  const [colapsados, setColapsados] = useState<Set<string>>(leerColapsados);
+  const abierto = (id: string) => !colapsados.has(id);
+  const plegar = (id: string) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setColapsados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      try { localStorage.setItem(CLAVE_COLAPSADOS, JSON.stringify([...next])); } catch { /* sin almacenamiento: solo en esta visita */ }
+      return next;
+    });
+  };
   const [events, setEvents] = useState<EventItem[] | null>(null);
   const [gantt, setGantt] = useState<GanttData | null | undefined>(undefined);
   const [folders, setFolders] = useState<FolderItem[] | null>(null);
@@ -263,15 +296,18 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
           <div className="flex items-center gap-2 px-4 pt-3 pb-1">
             <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-white/15"><BarChart2 className="w-3.5 h-3.5" style={{ color: GOLD }} /></div>
             <span className="text-sm font-semibold text-white">Timelines</span>
+            <span className="flex-1" />
             {gantt && (
-              <span className="ml-auto text-xs text-white/60 font-mono">
+              <span className="text-xs text-white/60 font-mono">
                 {fmtDate(gantt.rangeStart.toISOString())} — {fmtDate(gantt.rangeEnd.toISOString())} · {gantt.segments.length} fases
               </span>
             )}
+            <span className="text-white"><BotonPlegar abierto={abierto('timelines')} onClick={plegar('timelines')} /></span>
           </div>
-          {gantt === undefined && <div className="h-16" />}
-          {gantt === null && <p className="px-4 pb-3 pt-1 text-xs text-white/60">Aún no hay fechas cargadas en el timeline</p>}
-          {gantt && (
+          {!abierto('timelines') && <div className="h-2" />}
+          {abierto('timelines') && gantt === undefined && <div className="h-16" />}
+          {abierto('timelines') && gantt === null && <p className="px-4 pb-3 pt-1 text-xs text-white/60">Aún no hay fechas cargadas en el timeline</p>}
+          {abierto('timelines') && gantt && (
             <div className="px-4 pb-3 pt-1">
               {/* Regla: inicio de cada semana (lunes), alineada con las líneas verticales de cada fila */}
               <div className="flex items-center gap-3 mb-1">
@@ -321,9 +357,11 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
               <div className="flex items-center gap-2">
                 <div className="w-[22px] h-[22px] rounded-md flex items-center justify-center flex-shrink-0 bg-white/20"><Users className="w-3 h-3 text-white" /></div>
                 <span className="text-sm font-medium text-white">Reclutamiento</span>
+                <span className="flex-1" />
                 {resumen?.muestra
-                  ? <span className="ml-auto text-xl font-semibold font-mono leading-none text-white">{resumen.muestra.cubiertos}<span className="text-sm text-white/70"> / {resumen.muestra.lugares}</span></span>
-                  : recruitment && <span className="ml-auto text-xl font-semibold font-mono leading-none text-white">{recruitment.totalParticipants}</span>}
+                  ? <span className="text-xl font-semibold font-mono leading-none text-white">{resumen.muestra.cubiertos}<span className="text-sm text-white/70"> / {resumen.muestra.lugares}</span></span>
+                  : recruitment && <span className="text-xl font-semibold font-mono leading-none text-white">{recruitment.totalParticipants}</span>}
+                <span className="text-white"><BotonPlegar abierto={abierto('reclutamiento')} onClick={plegar('reclutamiento')} /></span>
               </div>
               {resumen?.muestra ? <p className="text-[11px] text-white/70 mt-1">lugares cubiertos de la muestra · {recruitment?.totalParticipants ?? 0} participantes</p> : recruitment && (
                 <p className="text-[11px] text-white/70 mt-1">
@@ -332,7 +370,7 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                 </p>
               )}
             </div>
-            {resumen && (resumen.filtro || resumen.muestra) ? <CuerpoReclutamiento r={resumen} /> : <>
+            {abierto('reclutamiento') && (resumen && (resumen.filtro || resumen.muestra) ? <CuerpoReclutamiento r={resumen} /> : <>
             {recruitment && recruitment.boards.length > 1 && (
               <div className="px-3.5 pt-3">
                 <div className="flex h-1.5 rounded-full overflow-hidden">
@@ -369,7 +407,7 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
               </div>
             )}
             {recruitment && recruitment.boards.length === 0 && <p className="px-3.5 py-3 text-xs text-muted-foreground">Sin tableros de reclutamiento</p>}
-            </>}
+            </>)}
           </div>
 
           {/* ── Calendario ── */}
@@ -378,11 +416,13 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
               <div className="flex items-center gap-2">
                 <div className="w-[22px] h-[22px] rounded-md flex items-center justify-center flex-shrink-0 bg-white/20"><CalendarDays className="w-3 h-3 text-white" /></div>
                 <span className="text-sm font-medium text-white">Calendario</span>
-                {events && <span className="ml-auto text-xl font-semibold font-mono leading-none text-white">{events.length}</span>}
+                <span className="flex-1" />
+                {events && <span className="text-xl font-semibold font-mono leading-none text-white">{events.length}</span>}
+                <span className="text-white"><BotonPlegar abierto={abierto('calendario')} onClick={plegar('calendario')} /></span>
               </div>
               {events && <p className="text-[11px] text-white/70 mt-1">sesiones</p>}
             </div>
-            {events && events.length > 0 && (
+            {abierto('calendario') && events && events.length > 0 && (
               <div className="max-h-[150px] overflow-y-auto px-3.5">
                 {events.map(ev => {
                   const isPast = ev.eventDate ? new Date(ev.eventDate).getTime() < now : false;
@@ -395,7 +435,7 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                 })}
               </div>
             )}
-            {events && events.length === 0 && <p className="px-3.5 py-3 text-xs text-muted-foreground">Sin sesiones registradas</p>}
+            {abierto('calendario') && events && events.length === 0 && <p className="px-3.5 py-3 text-xs text-muted-foreground">Sin sesiones registradas</p>}
           </div>
         </div>
 
@@ -403,8 +443,8 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {canSeeTools && (
             <div onClick={() => onOpenTab('tools')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-              <ColorHead color={EXITO} icon={<Wrench className="w-3.5 h-3.5" />} label="Tools" />
-              <div className="px-3.5 py-3">
+              <ColorHead color={EXITO} icon={<Wrench className="w-3.5 h-3.5" />} label="Tools" extra={<BotonPlegar abierto={abierto('tools')} onClick={plegar('tools')} />} />
+              {abierto('tools') && (<div className="px-3.5 py-3">
                 {!swipeSesiones && <div className="h-4" />}
                 {swipeSesiones && swipeSesiones.length === 0 && (
                   <p className="text-xs text-muted-foreground">Sin sesiones de Swipe todavía — ábrelo para crear la primera.</p>
@@ -419,7 +459,7 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                     ))}
                   </div>
                 )}
-              </div>
+              </div>)}
             </div>
           )}
 
@@ -429,8 +469,8 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
               onClick={() => { if (collection) onOpenTab('cobranza'); else setStartDialogOpen(true); }}
               className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden"
             >
-              <ColorHead color={TEAL} icon={<Landmark className="w-3.5 h-3.5" />} label="Cobranza" />
-              <div className="px-3.5 py-3">
+              <ColorHead color={TEAL} icon={<Landmark className="w-3.5 h-3.5" />} label="Cobranza" extra={<BotonPlegar abierto={abierto('cobranza')} onClick={plegar('cobranza')} />} />
+              {abierto('cobranza') && (<div className="px-3.5 py-3">
                 {collection === undefined && <div className="h-4" />}
                 {collection === null && (
                   <div className="flex items-center justify-between gap-2">
@@ -449,24 +489,24 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                     <span className="text-sm font-semibold font-mono flex-shrink-0">{fmtCurrency(collection.collectionAmount, collection.currency)}</span>
                   </div>
                 )}
-              </div>
+              </div>)}
             </div>
           )}
 
           {/* ── Presupuesto ── */}
           {canSeeBudget && (
             <div onClick={() => onOpenTab('presupuesto')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-              <ColorHead color={GOLD} ink="#412402" icon={<DollarSign className="w-3.5 h-3.5" />} label="Presupuesto" />
-              <div className="px-3.5 py-3">
+              <ColorHead color={GOLD} ink="#412402" icon={<DollarSign className="w-3.5 h-3.5" />} label="Presupuesto" extra={<BotonPlegar abierto={abierto('presupuesto')} onClick={plegar('presupuesto')} />} />
+              {abierto('presupuesto') && (<div className="px-3.5 py-3">
                 <span className="text-xs text-muted-foreground">Ver detalle</span>
-              </div>
+              </div>)}
             </div>
           )}
 
           {/* ── Documentos ── */}
           <div onClick={() => onOpenTab('documentos')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-            <ColorHead color={NEUTRAL} icon={<FileText className="w-3.5 h-3.5" />} label="Documentos" />
-            <div className="px-3.5 py-3">
+            <ColorHead color={NEUTRAL} icon={<FileText className="w-3.5 h-3.5" />} label="Documentos" extra={<BotonPlegar abierto={abierto('documentos')} onClick={plegar('documentos')} />} />
+            {abierto('documentos') && (<div className="px-3.5 py-3">
               {!teamsLinked && (
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">Sin canal de Teams vinculado</p>
@@ -492,13 +532,13 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                   ))}
                 </div>
               )}
-            </div>
+            </div>)}
           </div>
 
           {/* ── Chat ── */}
           <div onClick={() => onOpenTab('chat')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-            <ColorHead color={ALERTA} icon={<MessageSquare className="w-3.5 h-3.5" />} label="Chat" />
-            <div className="px-3.5 py-3">
+            <ColorHead color={ALERTA} icon={<MessageSquare className="w-3.5 h-3.5" />} label="Chat" extra={<BotonPlegar abierto={abierto('chat')} onClick={plegar('chat')} />} />
+            {abierto('chat') && (<div className="px-3.5 py-3">
               {messages && messages.length === 0 && <p className="text-xs text-muted-foreground">Sin mensajes aún</p>}
               {messages && messages.length > 0 && (
                 <div className="max-h-[100px] overflow-y-auto">
@@ -510,15 +550,15 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
                   ))}
                 </div>
               )}
-            </div>
+            </div>)}
           </div>
 
           {/* ── Sharpli ── */}
           <div onClick={() => onOpenTab('sharpli')} className="rounded-xl border border-border bg-card shadow-sm hover:border-foreground/30 transition-colors cursor-pointer overflow-hidden">
-            <ColorHead color={INFO} icon={<SharpliIcon className="w-3.5 h-3.5" />} label="Sharpli" />
-            <div className="px-3.5 py-3">
+            <ColorHead color={INFO} icon={<SharpliIcon className="w-3.5 h-3.5" />} label="Sharpli" extra={<BotonPlegar abierto={abierto('sharpli')} onClick={plegar('sharpli')} />} />
+            {abierto('sharpli') && (<div className="px-3.5 py-3">
               <span className="text-xs text-muted-foreground">Ver detalle</span>
-            </div>
+            </div>)}
           </div>
         </div>
       </div>
