@@ -5,7 +5,7 @@ import { columnas, type FilaRespuesta } from '../../lib/formularios/tabla';
 import { esConteoDeFotos } from '../../lib/formularios/fotoTablero';
 import { leerDefinicion, type Definicion, type Resultado } from '../../lib/formularios/tipos';
 import { recalificar } from './traer';
-import { asegurarColumnas, columnasParaTablero, vinculoVigente, type Vinculo } from './reclutamiento';
+import { asegurarColumnas, columnasParaTablero, correoDeRespuesta, vinculoVigente, type Vinculo } from './reclutamiento';
 
 /**
  * Las columnas del Hub en el tablero (pedido de Sergio, 2026-10-26): todas
@@ -92,7 +92,7 @@ export async function actualizarTablero(formularioId: string): Promise<{ escrita
 
   // Las filas de este filtro en el tablero (una por respuesta).
   const { rows: filasTablero } = await pool.query(
-    `select id, split_part(source_form, '|', 2) as respuesta, cell_data from recruitment_rows
+    `select id, split_part(source_form, '|', 2) as respuesta, cell_data, email from recruitment_rows
      where board_id = $1 and source_form like 'Formulario Hub · %' and (deleted_at is null or deleted_at = '')`,
     [vinculo.boardId],
   );
@@ -135,6 +135,8 @@ export async function actualizarTablero(formularioId: string): Promise<{ escrita
   const cols = columnas(def, [], { completas: true }).filter((c) => (CLAVES_HUB as readonly string[]).includes(c.clave));
   // Las fotos que llegaron como «1 foto» (antes de que se vieran en el tablero) pasan a su referencia.
   const colsFoto = todas.filter((c) => c.tipo === 'Archivo' && c.tablero);
+  // El correo en el «Email» propio del tablero, si quedó vacío (antes no se llenaba).
+  const correoDe = correoDeRespuesta(def);
 
   let escritas = 0;
   let respetadas = 0;
@@ -177,6 +179,11 @@ export async function actualizarTablero(formularioId: string): Promise<{ escrita
       cellData[colId] = { textValue: nuevo };
       escritas++;
       cambio = true;
+    }
+    const correo = correoDe(x.respuestas);
+    if (correo && !String(x.fila.email ?? '').trim()) {
+      await pool.query(`update recruitment_rows set email = $2 where id = $1 and coalesce(email, '') = ''`, [x.fila.id, correo]);
+      escritas++;
     }
     if (cambio) await pool.query(`update recruitment_rows set cell_data = $2 where id = $1`, [x.fila.id, JSON.stringify(cellData)]);
     // Solo lo que calcula el Hub (la calificación, el sugerido y lo escrito): lo demás (IA, historial) lo pueden

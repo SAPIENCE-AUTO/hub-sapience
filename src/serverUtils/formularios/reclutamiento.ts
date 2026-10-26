@@ -1,7 +1,7 @@
 import { BoardColumns, CellValues, RecruitmentRows, pool } from '../../../server/compat';
 import { publishEvent } from '../../lib/ably';
 import { columnas, columnasPorRenombrar, nombreColumnaTablero, nombreLibre, type Columna, type FilaRespuesta } from '../../lib/formularios/tabla';
-import type { Definicion } from '../../lib/formularios/tipos';
+import type { Definicion, Respuestas } from '../../lib/formularios/tipos';
 
 /**
  * Pasa respuestas de un formulario a un tablero de Reclutamiento: una fila
@@ -126,6 +126,12 @@ async function ajustarColumnas(
   return { mapa, creadas: registros.length, renombradas: renombres.length };
 }
 
+/** El correo de una respuesta: el de la primera pregunta de correo del filtro (o nada). */
+export function correoDeRespuesta(def: Definicion): (resp: Respuestas) => string | undefined {
+  const p = def.secciones.flatMap((s) => s.preguntas).find((x) => x.tipo === 'correo');
+  return (resp) => { const v = p ? resp[p.id] : undefined; return typeof v === 'string' && v.trim() ? v.trim() : undefined; };
+}
+
 export const asegurarColumnas = (formularioId: string, vinculo: Vinculo, cols: Columna[], def: Definicion) =>
   ajustarColumnas(formularioId, vinculo, cols, def, true);
 
@@ -158,6 +164,8 @@ export async function pasarAlReclutamiento(
   const colCelular = todas.find((c) => c.clave === 'celular');
   const cols = todas.filter((c) => c !== colNombre && c !== colCelular);
   const { mapa, creadas } = await asegurarColumnas(formulario.id, vinculo, cols, formulario.definicion);
+  // El correo también va al «Email» propio del tablero (lo usa la búsqueda de duplicados), además de su columna.
+  const correoDe = correoDeRespuesta(formulario.definicion);
 
   // ── una fila por persona ──
   for (const f of nuevas) {
@@ -171,6 +179,7 @@ export async function pasarAlReclutamiento(
         boardId: vinculo.boardId,
         participantName: nombre ? String(nombre) : undefined,
         phone: celular ? String(celular) : undefined,
+        email: correoDe(f.respuestas),
         status: 'Pendiente',
         sourceForm: origenRespuesta(formulario.titulo, f.id),
         level: 0,

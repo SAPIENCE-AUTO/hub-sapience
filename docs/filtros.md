@@ -811,6 +811,10 @@ Sergio: en el tablero las fotos decían «1 foto». Ahora cada pregunta de foto 
 
 **Probado en local (2026-10-26):** en «ALONG 2 - PRUEBA LUIS», «Buscar duplicados» pasó sus dos columnas de foto a «Archivo» con la referencia, y en el tablero «🖼 Ver imagen» abrió la foto con enlace temporal.
 
+### El correo llena el «Email» del tablero (2026-10-26)
+
+Sergio: en el tablero de ALONG 2 no salía el correo. El filtro sí lo pide («Correo electrónico» en «Antes de empezar») y la respuesta llegaba a su columna «Correo», pero el «Email» propio del tablero (el de la fila, como en Fillout, y el que usa la búsqueda de duplicados) quedaba vacío. Ahora `pasarAlReclutamiento` lo llena con la primera pregunta de correo del filtro (`correoDeRespuesta`), y `actualizarTablero` llena el de las filas que quedaron vacías (sin pisar uno escrito a mano). En ALONG 2 se pusieron al día las 5 filas (2026-10-26). La columna «Correo» sigue (se puede ocultar con «Columnas»).
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
