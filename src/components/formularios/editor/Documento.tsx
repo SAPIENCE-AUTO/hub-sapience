@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { traerImagenDeEnlace } from 'zite-endpoints-sdk';
+import { crearImagenFormulario, traerImagenDeEnlace } from 'zite-endpoints-sdk';
 import { ArrowDown, ArrowUp, Loader2, Lock, MessageSquareText, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { SECCION_INICIO } from '@/lib/formularios/inicio';
 import {
@@ -280,6 +280,21 @@ export function Documento({ editor, ia, pendientes }: {
     }
   };
 
+  /** Una imagen hecha con IA a partir de una descripción breve; se sube como cualquier otra. */
+  const crearImagenConIA = async (destino: Destino, pedido: string) => {
+    const clave = claveDestino(destino);
+    setSubiendo((s) => new Set(s).add(clave));
+    try {
+      const r = await crearImagenFormulario({ pedido, formularioId: ia?.formularioId }) as { base64: string; tipo: string; nombre: string };
+      ia?.contarUso();
+      const bytes = Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0));
+      await ponerImagen(destino, new File([bytes], r.nombre, { type: r.tipo }));
+    } catch (err) {
+      toast.error((err as Error).message || 'No se pudo crear la imagen.');
+      setSubiendo((s) => { const n = new Set(s); n.delete(clave); return n; });
+    }
+  };
+
   // Pegar una imagen (⌘V), o el enlace de una, la pone donde está el cursor.
   useEffect(() => {
     const pegar = (e: ClipboardEvent) => {
@@ -333,6 +348,7 @@ export function Documento({ editor, ia, pendientes }: {
     def, aplicar, subiendo, nuevo, setNuevo,
     ponerImagen: (d, a) => { void ponerImagen(d, a); },
     ponerImagenDeEnlace: (d, u) => { void ponerImagenDeEnlace(d, u); },
+    crearImagenConIA: (d, p) => { void crearImagenConIA(d, p); },
     apuntar: (d) => { apuntado.current = d; },
     quitar: (q) => (q.usos.length || q.confirmar ? setPorQuitar(q) : q.hacer()),
     ia,

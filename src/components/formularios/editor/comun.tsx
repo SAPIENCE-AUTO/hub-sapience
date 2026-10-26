@@ -20,6 +20,8 @@ export interface ContextoDoc {
   ponerImagen: (destino: Destino, archivo: File) => void;
   /** La imagen de un enlace de internet: el Hub la descarga y guarda su copia, como si se hubiera subido. */
   ponerImagenDeEnlace: (destino: Destino, url: string) => void;
+  /** Una imagen hecha con IA a partir de una descripción breve (sin marcas ni texto), subida como cualquier otra. */
+  crearImagenConIA: (destino: Destino, pedido: string) => void;
   /** Dónde está el cursor: ahí cae una imagen pegada. */
   apuntar: (destino: Destino | null) => void;
   /** Id de lo recién agregado: su texto se abre en edición. */
@@ -148,6 +150,31 @@ export function useAlCerrarMenu() {
 }
 
 /** Cuadro para pegar el enlace de una imagen (.jpg, .png…) y ponerla. */
+/** La descripción breve de una imagen para la IA (empieza con el texto de la opción). */
+export function PedidoImagenIA({ inicial, onCrear, onCerrar }: { inicial: string; onCrear: (pedido: string) => void; onCerrar: () => void }) {
+  const [pedido, setPedido] = useState(inicial);
+  const crear = () => { if (pedido.trim().length >= 2) { onCrear(pedido.trim()); onCerrar(); } };
+  return (
+    <div className="mt-1.5 space-y-1" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          aria-label="Qué debe mostrar la imagen"
+          placeholder="Qué debe mostrar (p. ej. «aromatizante en aerosol»)"
+          className="h-8 min-w-0 flex-1 rounded-md border border-[#0F3D4D]/30 bg-white px-2 text-[13px] outline-none focus:border-[#0F3D4D]"
+          value={pedido}
+          maxLength={500}
+          onChange={(e) => setPedido(e.target.value)}
+          onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') crear(); if (e.key === 'Escape') onCerrar(); }}
+        />
+        <button type="button" disabled={pedido.trim().length < 2} onClick={crear} className="h-8 rounded-md bg-[#0F3D4D] px-3 text-[12.5px] font-medium text-white disabled:opacity-40">Crear</button>
+        <button type="button" onClick={onCerrar} className="h-8 px-1 text-[12.5px] text-muted-foreground hover:text-[#0F3D4D]">Cancelar</button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">Sin marcas ni texto. Para un logo o un empaque real, sube la imagen.</p>
+    </div>
+  );
+}
+
 export function EnlaceImagen({ onPoner, onCerrar }: { onPoner: (url: string) => void; onCerrar: () => void }) {
   const [url, setUrl] = useState('');
   const poner = () => { if (url.trim()) { onPoner(url.trim()); onCerrar(); } };

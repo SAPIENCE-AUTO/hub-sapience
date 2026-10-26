@@ -151,6 +151,7 @@ export const getCodigoPostal = (input?: any): Promise<any> => call('getCodigoPos
 export const sugerirDireccion = (input?: any): Promise<any> => call('sugerirDireccion', input);
 export const detalleDireccion = (input?: any): Promise<any> => call('detalleDireccion', input);
 export const traerImagenDeEnlace = (input?: any): Promise<any> => call('traerImagenDeEnlace', input);
+export const crearImagenFormulario = (input?: any): Promise<any> => call('crearImagenFormulario', input);
 export const duplicateFormulario = (input?: any): Promise<any> => call('duplicateFormulario', input);
 export const getAvisoPrivacidad = (input?: any): Promise<any> => call('getAvisoPrivacidad', input);
 export const getFormularioDocumento = (input?: any): Promise<any> => call('getFormularioDocumento', input);

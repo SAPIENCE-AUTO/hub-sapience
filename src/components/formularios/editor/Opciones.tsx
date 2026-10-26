@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowDown, ArrowUp, ImagePlus, Link2, Loader2, MoreHorizontal, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ImagePlus, Link2, Loader2, MoreHorizontal, Plus, Sparkles, X } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -9,7 +9,7 @@ import {
   agregarFila, agregarOpcion, cambiarFila, cambiarOpcion, cambiarTipo, moverFila, moverOpcion, quitarFila, quitarOpcion, usosDeOpcion,
 } from '@/lib/formularios/editar';
 import { esDeOpciones, forma, type Opcion, type Pregunta, type Seccion } from '@/lib/formularios/tipos';
-import { BotonIcono, EnlaceImagen, EtiquetasLogica, Logica, claveDestino, useDoc, type Destino } from './comun';
+import { BotonIcono, EnlaceImagen, EtiquetasLogica, Logica, PedidoImagenIA, claveDestino, useDoc, type Destino } from './comun';
 import { TextoEditable } from './TextoEditable';
 import { imagenesDe, traeArchivos } from './imagenes';
 
@@ -75,8 +75,9 @@ function Marca({ p, i }: { p: Pregunta; i: number }) {
 }
 
 function FilaOpcion({ s, p, o, i, total, bloqueada }: { s: Seccion; p: Pregunta; o: Opcion; i: number; total: number; bloqueada: boolean }) {
-  const { def, aplicar, quitar, nuevo, setNuevo, elegida, ponerImagenDeEnlace } = useDoc();
+  const { def, aplicar, quitar, nuevo, setNuevo, elegida, ponerImagenDeEnlace, crearImagenConIA } = useDoc();
   const [enlace, setEnlace] = useState(false);
+  const [conIA, setConIA] = useState(false);
   const destino: Destino = { tipo: 'opcion', pregunta: p.id, opcion: o.id };
   const zona = useZonaImagen(destino, { tipo: 'pregunta', pregunta: p.id });
   const { input, elegir } = useElegirImagen(destino);
@@ -116,6 +117,7 @@ function FilaOpcion({ s, p, o, i, total, bloqueada }: { s: Seccion; p: Pregunta;
         {/* Elegida la pregunta, la lógica completa (con el motivo editable); si no, solo sus etiquetas. */}
         {elegida === p.id && <Logica lineas={lineas} className="mt-0.5" onMotivo={bloqueada ? undefined : (campo, v) => cambiar({ [campo]: v })} />}
         {enlace && <EnlaceImagen onPoner={(url) => ponerImagenDeEnlace(destino, url)} onCerrar={() => setEnlace(false)} />}
+        {conIA && <PedidoImagenIA inicial={o.label} onCrear={(pedido) => crearImagenConIA(destino, pedido)} onCerrar={() => setConIA(false)} />}
       </div>
       {elegida !== p.id && <EtiquetasLogica lineas={lineas} />}
       {!bloqueada && (
@@ -163,6 +165,7 @@ function FilaOpcion({ s, p, o, i, total, bloqueada }: { s: Seccion; p: Pregunta;
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={elegir}><ImagePlus className="mr-2 h-4 w-4" />{o.imagen ? 'Cambiar imagen…' : 'Poner imagen…'}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setTimeout(() => setConIA(true), 0)}><Sparkles className="mr-2 h-4 w-4" />Crear imagen con IA…</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setTimeout(() => setEnlace(true), 0)}><Link2 className="mr-2 h-4 w-4" />Pegar enlace de imagen…</DropdownMenuItem>
                   {o.imagen && <DropdownMenuItem onSelect={() => cambiar({ imagen: undefined })}>Quitar imagen</DropdownMenuItem>}
                 </>
