@@ -684,7 +684,7 @@ Sergio: el correo debería ir siempre, a menos que el analista lo quite. Hoy «A
 
 **Comprobado en producción (2026-10-24):** el paso automático al tablero funciona: en «ALONG 2 - PRUEBA LUIS», en vivo, una respuesta real que calificó apareció en su tablero 7 segundos después.
 
-### Reclutamiento: Filtros adentro y barra del tablero en una línea (2026-10-26, paso 1 del rediseño)
+### Reclutamiento: Filtros adentro y barra del tablero en una línea (2026-10-26, paso 1 del rediseño, `72c5e64`)
 
 Primer paso del rediseño de Reclutamiento que aprobó Sergio (orden: 1) esto, 2) columnas del Hub en el tablero, 3) muestra con IA que crea grupos y eventos, 4) widget del inicio). Medido a 1366 × 650 (una pantalla de 13" con el navegador): antes la primera persona aparecía a 392 px y cabían unas 8; ahora a 284 px y caben unas 12.
 
@@ -697,7 +697,7 @@ Primer paso del rediseño de Reclutamiento que aprobó Sergio (orden: 1) esto, 2
 
 **Probado en local (2026-10-26):** a 1366 × 650 todo en una línea (pestañas con «Más», barra del tablero) y 12 personas a la vista; Filtros adentro (lista, regresar al tablero), menús Exportar y «⋯»; en celular, las pestañas en su línea con «Más».
 
-### Reclutamiento: Muestra (2026-10-26, paso 3 del rediseño, adelantado)
+### Reclutamiento: Muestra (2026-10-26, paso 3 del rediseño, adelantado, `72c5e64`)
 
 Sergio pidió el orden del selector «Muestra · Filtros · Participantes», con Participantes por defecto al abrir Reclutamiento, y adelantar la Muestra antes de las columnas del Hub.
 
@@ -753,5 +753,5 @@ Sergio pidió el orden del selector «Muestra · Filtros · Participantes», con
 - **2026-10-24 · fase 5 (operación):** nadie se corta por defecto (se registran todos los motivos; «cortar» a petición, y siempre el aviso y la identificación); al recibir una respuesta, historial y duplicados con la búsqueda de los tableros, paso solo al tablero en vivo para quien entra a un perfil con lugar (con su historial en notas) y clasificación con IA (medio centavo de dólar por persona); traer a quienes contestaron un filtro anterior; pestaña Filtros junto a Reclutamiento y filtros del Hub en «Vincular form». 83 pruebas. Probado en local y subido a `main` con el OK de Sergio (`0bd0d7d`).
 - **2026-10-24 · negritas y color:** a pedido de Sergio, los textos que lee el participante (pregunta, ayuda, contenido, entrada de sección, bienvenida y despedidas) llevan negritas y un color para resaltar, con botones en el editor; se ven igual en el formulario, el celular y el Word/PDF, y salen sin formato en el tablero, el Excel y el flujo. 84 pruebas. Probado en local y subido a `main` con el OK de Sergio (`35be0b0`).
 - **2026-10-26 · celular y correo por defecto:** «Antes de empezar» los pide después del nombre (si el filtro no los pide ya), como preguntas que el analista puede corregir o quitar; la IA ya no los repite. 84 pruebas. Probado en local y subido a `main` con el OK de Sergio (`3a538a3`).
-- **2026-10-26 · Reclutamiento, paso 1:** Filtros adentro de Reclutamiento, pestañas del proyecto en una línea con «Más», barra del tablero en una línea (Exportar y «⋯» como menús) y sin «Definir muestra»; de 8 a 12 personas a la vista en una pantalla de 13". Probado en local, sin subir.
-- **2026-10-26 · Muestra:** Reclutamiento con Muestra · Filtros · Participantes; la muestra del proyecto con versiones, propuesta de la IA, y grupos y eventos creados y puestos al día desde ahí (sin invitaciones). Tablas `muestras` y `muestra_versiones` creadas con su OK. 85 pruebas. Probado en local, sin subir.
+- **2026-10-26 · Reclutamiento, paso 1:** Filtros adentro de Reclutamiento, pestañas del proyecto en una línea con «Más», barra del tablero en una línea (Exportar y «⋯» como menús) y sin «Definir muestra»; de 8 a 12 personas a la vista en una pantalla de 13". Probado en local y subido a `main` con el OK de Sergio (`72c5e64`).
+- **2026-10-26 · Muestra:** Reclutamiento con Muestra · Filtros · Participantes; la muestra del proyecto con versiones, propuesta de la IA, y grupos y eventos creados y puestos al día desde ahí (sin invitaciones). Tablas `muestras` y `muestra_versiones` creadas con su OK. 85 pruebas. Probado en local y subido a `main` con el OK de Sergio (`72c5e64`).
