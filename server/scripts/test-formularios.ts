@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
 import { evaluar, pantallas, pantallaDeMuestra, definicionPublica, validarPantalla, describir, terminacion, type Pantalla } from '../../src/lib/formularios/motor';
-import { columnas, columnasPorRenombrar, nombreColumnaTablero, sinNombreCorto, type FilaRespuesta } from '../../src/lib/formularios/tabla';
+import { columnas, columnasPorRenombrar, nombreColumnaTablero, sinNombreCorto, type FilaRespuesta, direccionCompleta } from '../../src/lib/formularios/tabla';
 import { construirExcel } from '../../src/lib/formularios/excel';
 import { imagenesQueFaltan, revisarDefinicion } from '../../src/lib/formularios/revisar';
 import { PLANTILLAS } from '../../src/lib/formularios/plantillas';
@@ -1410,6 +1410,17 @@ caso('fotos por pregunta: 3 si no se dice, de 1 a 10, y solo en preguntas de fot
   assert.ok(!con({ tipo: 'foto', maxFotos: 10 }).some((x) => /fotos/.test(x)));
   assert.ok(con({ tipo: 'foto', maxFotos: 11 }).some((x) => /de 1 a 10 fotos/.test(x)));
   assert.ok(con({ tipo: 'texto', maxFotos: 2 }).some((x) => /solo va en preguntas de foto/.test(x)));
+});
+
+caso('la dirección completa en una columna del tablero; las partes solo en el Excel', () => {
+  assert.equal(direccionCompleta({ calle: 'Av. Ejemplo', numero: '100', colonia: 'Centro', cp: '06000', ciudad: 'Cuauhtémoc', estado: 'Ciudad de México' }, 'MX'),
+    'Av. Ejemplo 100, Centro, 06000 Cuauhtémoc, Ciudad de México, México');
+  assert.equal(direccionCompleta({ calle: ' ', ciudad: 'Monterrey' }, 'MX'), 'Monterrey, México');
+  assert.equal(direccionCompleta(undefined, 'MX'), undefined);
+  const def = { ...ALONG2, secciones: [{ id: 's', preguntas: [{ id: 'dom', tipo: 'direccion', texto: '¿Dónde vives?', nombre: 'Domicilio' }] }] } as Definicion;
+  const cols = columnas(def, [], { completas: true }).filter((c) => c.clave.startsWith('dom'));
+  assert.deepEqual(cols.filter((c) => !c.soloExcel).map((c) => c.titulo), ['Dirección · Domicilio']);
+  assert.equal(cols.filter((c) => c.soloExcel).length, 6);
 });
 
 caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo que no cuadra es alerta', () => {

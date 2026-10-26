@@ -1,10 +1,10 @@
 import { bandejaDe, explicarResultado, seleccion, textoRespuesta } from './motor';
 import { fotosParaTablero } from './fotoTablero';
 import { NOMBRES_NSE } from './nse';
-import { nombreCampoDireccion } from './paises';
+import { PAISES, nombreCampoDireccion } from './paises';
 import { sinFormato } from './formato';
 import {
-  CAMPOS_DIRECCION, esMatriz, forma,
+  CAMPOS_DIRECCION, esMatriz, forma, type CampoDireccion,
   type Condicion, type Definicion, type FotoSubida, type Opcion, type Pregunta, type Respuestas, type Resultado,
 } from './tipos';
 
@@ -45,6 +45,28 @@ export interface Columna {
   valor: (f: FilaRespuesta) => Celda;
   /** Lo que va al tablero, si no es lo mismo que en el Excel (las fotos: su referencia, no «1 foto»). */
   tablero?: (f: FilaRespuesta) => Celda;
+  /** Solo en el Excel, no en el tablero (las partes de la dirección: el tablero lleva la dirección completa). */
+  soloExcel?: boolean;
+  /** Al poner al día el tablero, se llena en las filas donde está vacía (la dirección completa, que antes no existía). */
+  rellenar?: boolean;
+}
+
+const sinAcentos = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/** «Av. Vallarta 1500, Americana, 44600 Guadalajara, Jalisco, México»: como la busca Google Maps. */
+export function direccionCompleta(v: unknown, pais?: string): string | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const d = v as Partial<Record<CampoDireccion, string>>;
+  const t = (k: CampoDireccion) => d[k]?.trim() ?? '';
+  const partes = [
+    [t('calle'), t('numero')].filter(Boolean).join(' '),
+    t('colonia'),
+    [t('cp'), t('ciudad')].filter(Boolean).join(' '),
+    t('estado'),
+  ].filter(Boolean);
+  if (!partes.length) return undefined;
+  const nombrePais = pais ? PAISES[pais]?.nombre : undefined;
+  return [...partes, ...(nombrePais ? [nombrePais] : [])].join(', ');
 }
 
 function buscar(def: Definicion, id: string): Pregunta | undefined {
@@ -143,9 +165,15 @@ export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = 
             });
           }
         } else if (p.tipo === 'direccion') {
+          // En el tablero, la dirección completa en una columna (el mapa la busca entera); en el Excel, además, cada parte.
+          const conDireccion = sinAcentos(titulo).includes('direccion') ? titulo : `Dirección · ${titulo}`;
+          deSecciones.push({
+            clave, tipo: 'Texto', seccion, titulo: conDireccion, rellenar: true,
+            valor: (f) => direccionCompleta(f.respuestas[clave], def.pais),
+          });
           for (const campo of CAMPOS_DIRECCION) {
             deSecciones.push({
-              clave: `${clave}.${campo}`, tipo: 'Texto', seccion, titulo: `${titulo} · ${nombreCampoDireccion(def.pais, campo)}`,
+              clave: `${clave}.${campo}`, tipo: 'Texto', seccion, titulo: `${titulo} · ${nombreCampoDireccion(def.pais, campo)}`, soloExcel: true,
               valor: (f) => (f.respuestas[clave] as Record<string, string> | undefined)?.[campo]?.trim() || undefined,
             });
           }

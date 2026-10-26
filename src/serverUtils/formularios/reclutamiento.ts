@@ -58,7 +58,7 @@ export async function vinculoVigente(vinculo: Vinculo | null): Promise<Vinculo |
 
 /** Todas las columnas que el screener puede tener en un tablero (nombre y celular van en las columnas base). */
 export function columnasParaTablero(def: Definicion): Columna[] {
-  return columnas(def, [], { completas: true }).filter((c) => c.clave !== 'nombre' && c.clave !== 'celular');
+  return columnas(def, [], { completas: true }).filter((c) => c.clave !== 'nombre' && c.clave !== 'celular' && !c.soloExcel);
 }
 
 /**
@@ -159,7 +159,7 @@ export async function pasarAlReclutamiento(
 
   // Todas las columnas del screener, no solo las contestadas: así una pregunta que se agregó en el editor
   // después de vincular también llega al tablero (con su texto de ese momento).
-  const todas = columnas(formulario.definicion, nuevas, { completas: true });
+  const todas = columnas(formulario.definicion, nuevas, { completas: true }).filter((c) => !c.soloExcel);
   const colNombre = todas.find((c) => c.clave === 'nombre');
   const colCelular = todas.find((c) => c.clave === 'celular');
   const cols = todas.filter((c) => c !== colNombre && c !== colCelular);

@@ -135,6 +135,8 @@ export async function actualizarTablero(formularioId: string): Promise<{ escrita
   const cols = columnas(def, [], { completas: true }).filter((c) => (CLAVES_HUB as readonly string[]).includes(c.clave));
   // Las fotos que llegaron como «1 foto» (antes de que se vieran en el tablero) pasan a su referencia.
   const colsFoto = todas.filter((c) => c.tipo === 'Archivo' && c.tablero);
+  // Columnas nuevas que se llenan en las filas que ya estaban (la dirección completa).
+  const colsRellenar = todas.filter((c) => c.rellenar);
   // El correo en el «Email» propio del tablero, si quedó vacío (antes no se llenaba).
   const correoDe = correoDeRespuesta(def);
 
@@ -171,6 +173,19 @@ export async function actualizarTablero(formularioId: string): Promise<{ escrita
       const nuevo = String(c.tablero!(fila) ?? '');
       const actual = valorDeCelda(cellData[colId]);
       if (!colId || !nuevo || actual === nuevo || (actual && !esConteoDeFotos(actual))) continue;
+      await pool.query(
+        `insert into cell_values (board_id, row_id, column_id, text_value) values ($1, $2, $3, $4)
+         on conflict (board_id, row_id, column_id) where deleted_at is null do update set text_value = excluded.text_value, updated_at = now()`,
+        [vinculo.boardId, String(x.fila.id), colId, nuevo],
+      );
+      cellData[colId] = { textValue: nuevo };
+      escritas++;
+      cambio = true;
+    }
+    for (const c of colsRellenar) {
+      const colId = mapa[c.clave];
+      const nuevo = String(c.valor(fila) ?? '');
+      if (!colId || !nuevo || valorDeCelda(cellData[colId])) continue;
       await pool.query(
         `insert into cell_values (board_id, row_id, column_id, text_value) values ($1, $2, $3, $4)
          on conflict (board_id, row_id, column_id) where deleted_at is null do update set text_value = excluded.text_value, updated_at = now()`,
