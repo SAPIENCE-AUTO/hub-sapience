@@ -72,6 +72,27 @@ function legible(def: Editor['def'], texto: string): string {
   });
 }
 
+/** Lo que hay que corregir para que se guarde, cada cosa lleva a su pregunta; y «Deshacer el último cambio». */
+export function ListaPorCorregir({ editor, onIr }: { editor: Editor; onIr: (id: { seccion?: string; pregunta?: string }) => void }) {
+  return (
+    <>
+      <ul className="max-h-72 space-y-2 overflow-y-auto">
+        {editor.problemas.map((p, i) => (
+          <li key={i}>
+            {p.pregunta || p.seccion ? (
+              <button type="button" className="text-left hover:underline" onClick={() => onIr(p)}>
+                {p.pregunta && <span className="font-medium">{citar(editor.def, p.pregunta, 50)}: </span>}
+                {legible(editor.def, p.pregunta ? p.texto.replace(/^«[^»]+»: /, '') : p.texto)}
+              </button>
+            ) : legible(editor.def, p.texto)}
+          </li>
+        ))}
+      </ul>
+      <Button size="sm" variant="outline" className="mt-3" disabled={!editor.puedeDeshacer} onClick={editor.deshacer}><Undo2 className="mr-1 h-3.5 w-3.5" />Deshacer el último cambio</Button>
+    </>
+  );
+}
+
 export function EstadoGuardado({ editor, onIr, generando }: { editor: Editor; onIr: (id: { seccion?: string; pregunta?: string }) => void; generando?: boolean }) {
   const { estado, problemas } = editor;
   // Mientras la IA escribe, una sección puede usar otra que todavía no llega: se guarda al completarse.
@@ -92,19 +113,7 @@ export function EstadoGuardado({ editor, onIr, generando }: { editor: Editor; on
         </PopoverTrigger>
         <PopoverContent align="start" className="w-96 max-w-[calc(100vw-2rem)] text-sm">
           <p className="mb-2 text-xs text-muted-foreground">Mientras esto no se corrija, los cambios no se guardan (si el filtro está en prueba, la gente sigue contestando lo último guardado).</p>
-          <ul className="max-h-72 space-y-2 overflow-y-auto">
-            {problemas.map((p, i) => (
-              <li key={i}>
-                {p.pregunta || p.seccion ? (
-                  <button type="button" className="text-left hover:underline" onClick={() => onIr(p)}>
-                    {p.pregunta && <span className="font-medium">{citar(editor.def, p.pregunta, 50)}: </span>}
-                    {legible(editor.def, p.pregunta ? p.texto.replace(/^«[^»]+»: /, '') : p.texto)}
-                  </button>
-                ) : legible(editor.def, p.texto)}
-              </li>
-            ))}
-          </ul>
-          <Button size="sm" variant="outline" className="mt-3" disabled={!editor.puedeDeshacer} onClick={editor.deshacer}><Undo2 className="mr-1 h-3.5 w-3.5" />Deshacer el último cambio</Button>
+          <ListaPorCorregir editor={editor} onIr={onIr} />
         </PopoverContent>
       </Popover>
     );

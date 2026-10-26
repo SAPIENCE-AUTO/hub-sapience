@@ -526,7 +526,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
       )}
 
       {!enGenerador && modo === 'disenar' && enVivo && (
-        <CambiosEnVivo editor={editor} respuestas={detalle.respuestas.filter((r) => !r.esPrueba).length} onPublicado={onPublicado} />
+        <CambiosEnVivo editor={editor} respuestas={detalle.respuestas.filter((r) => !r.esPrueba).length} onPublicado={onPublicado} onIr={irA} />
       )}
 
       {!enGenerador && (modo === 'reclutar'

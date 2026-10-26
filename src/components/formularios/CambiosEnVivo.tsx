@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { ChevronDown, Loader2 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ALERTA } from '@/lib/toolColors';
 import type { Definicion } from '@/lib/formularios/tipos';
 import type { Editor } from './editor/useEditorFiltro';
+import { ListaPorCorregir } from './editor/EditorFiltro';
 import { botonSecundario, botonTeal } from './generador/comun';
 
 const MAX_EN_LISTA = 12;
@@ -15,16 +16,20 @@ const MAX_EN_LISTA = 12;
  * Editar un filtro en vivo (pedido de Sergio, 2026-10-24): lo que se cambia
  * se guarda en una copia y los participantes siguen con lo publicado hasta
  * «Publicar cambios», que antes dice qué cambia y que lo ya contestado no se
- * toca. «Descartar» regresa a lo publicado.
+ * toca. «Descartar» regresa a lo publicado. Aquí mismo se ven los cambios
+ * («Ver cuáles») y, si algo quedó mal armado, qué corregir para publicar.
  */
-export function CambiosEnVivo({ editor, respuestas, onPublicado }: {
+export function CambiosEnVivo({ editor, respuestas, onPublicado, onIr }: {
   editor: Editor;
   /** Cuántas respuestas ya entraron (no cambian al publicar). */
   respuestas: number;
   onPublicado: (def: Definicion) => void;
+  /** Lleva a la pregunta o sección de lo que hay que corregir. */
+  onIr: (id: { seccion?: string; pregunta?: string }) => void;
 }) {
   const [confirmar, setConfirmar] = useState<'publicar' | 'descartar' | null>(null);
   const [trabajando, setTrabajando] = useState(false);
+  const [verCambios, setVerCambios] = useState(false);
 
   if (!editor.cambiosPendientes) {
     return <p className="text-xs text-muted-foreground">En vivo: lo que cambies se guarda aparte y los participantes no lo ven hasta que lo publiques.</p>;
@@ -52,11 +57,26 @@ export function CambiosEnVivo({ editor, respuestas, onPublicado }: {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-3 py-2.5" style={{ borderColor: `${ALERTA}66`, backgroundColor: `${ALERTA}0f` }}>
       <div className="min-w-0 flex-1 text-xs" style={{ color: '#8a4b00' }}>
-        <p className="font-semibold">Cambios sin publicar · {resumen.length}</p>
-        <p>{porCorregir ? 'Corrige lo marcado en el filtro para poder publicarlos.' : 'Los participantes siguen viendo la versión publicada.'}</p>
+        <p className="flex flex-wrap items-center gap-x-2 font-semibold">
+          Cambios sin publicar · {resumen.length}
+          <button type="button" className="flex items-center gap-0.5 font-medium underline-offset-2 hover:underline" onClick={() => setVerCambios((v) => !v)}>
+            {verCambios ? 'Ocultar' : 'Ver cuáles'}<ChevronDown className={`h-3 w-3 transition-transform ${verCambios ? 'rotate-180' : ''}`} />
+          </button>
+        </p>
+        <p>{porCorregir ? `Para publicarlos (y para que se guarden), corrige ${editor.problemas.length === 1 ? 'esto' : `estas ${editor.problemas.length} cosas`}:` : 'Los participantes siguen viendo la versión publicada.'}</p>
       </div>
       <button type="button" className={`${botonSecundario} !text-xs`} disabled={trabajando} onClick={() => setConfirmar('descartar')}>Descartar</button>
       <button type="button" className={`${botonTeal} !px-3 !py-1.5 !text-xs`} disabled={trabajando || porCorregir} onClick={() => setConfirmar('publicar')}>Publicar cambios</button>
+      {porCorregir && (
+        <div className="basis-full rounded-md border border-[#D32222]/25 bg-white px-3 py-2 text-[13px] text-[#1F1F23]">
+          <ListaPorCorregir editor={editor} onIr={onIr} />
+        </div>
+      )}
+      {verCambios && (
+        <ul className="max-h-60 basis-full list-disc space-y-0.5 overflow-y-auto rounded-md bg-white px-3 py-2 pl-7 text-[13px] text-[#1F1F23]">
+          {resumen.map((c) => <li key={c}>{c}</li>)}
+        </ul>
+      )}
 
       <AlertDialog open={!!confirmar} onOpenChange={(o) => !o && !trabajando && setConfirmar(null)}>
         <AlertDialogContent>
