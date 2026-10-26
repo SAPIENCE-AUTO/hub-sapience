@@ -88,6 +88,12 @@ async function ajustarColumnas(
     puestos[r.clave] = r.nombre;
   }
 
+  // Las columnas de fotos que se crearon como texto («1 foto») pasan a «Archivo», para que se vean.
+  for (const c of cols.filter((x) => x.tipo === 'Archivo')) {
+    const viva = vivas.find((v) => v.id === mapa[c.clave]);
+    if (viva && viva.columnType !== 'Archivo') await BoardColumns.update({ id: viva.id, record: { columnType: 'Archivo' } });
+  }
+
   const usados = new Set(vivas.map((c) => {
     const r = renombres.find((x) => x.id === c.id);
     return (r ? r.nombre : c.columnName ?? '').toLowerCase();
@@ -173,7 +179,7 @@ export async function pasarAlReclutamiento(
       },
     });
     const celdas = cols
-      .map((c) => ({ c, v: c.valor(f) }))
+      .map((c) => ({ c, v: (c.tablero ?? c.valor)(f) }))
       .filter(({ v }) => v !== undefined && v !== '')
       .map(({ c, v }) => ({
         columnId: mapa[c.clave],

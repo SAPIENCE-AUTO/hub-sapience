@@ -1,4 +1,5 @@
 import { bandejaDe, explicarResultado, seleccion, textoRespuesta } from './motor';
+import { fotosParaTablero } from './fotoTablero';
 import { NOMBRES_NSE } from './nse';
 import { nombreCampoDireccion } from './paises';
 import { sinFormato } from './formato';
@@ -38,10 +39,12 @@ export interface Columna {
   clave: string;
   titulo: string;
   /** Tipo de columna del tablero de Reclutamiento. */
-  tipo: 'Texto' | 'Número';
+  tipo: 'Texto' | 'Número' | 'Archivo';
   /** Encabezado de grupo encima de la columna (la sección del screener). */
   seccion: string;
   valor: (f: FilaRespuesta) => Celda;
+  /** Lo que va al tablero, si no es lo mismo que en el Excel (las fotos: su referencia, no «1 foto»). */
+  tablero?: (f: FilaRespuesta) => Celda;
 }
 
 function buscar(def: Definicion, id: string): Pregunta | undefined {
@@ -146,6 +149,12 @@ export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = 
               valor: (f) => (f.respuestas[clave] as Record<string, string> | undefined)?.[campo]?.trim() || undefined,
             });
           }
+        } else if (p.tipo === 'foto') {
+          deSecciones.push({
+            clave, tipo: 'Archivo', seccion, titulo,
+            valor: (f) => celda(def, p, clave, f.respuestas),
+            tablero: (f) => fotosParaTablero(f.respuestas[clave]),
+          });
         } else {
           deSecciones.push({ clave, tipo: forma(p.tipo) === 'numero' ? 'Número' : 'Texto', seccion, titulo, valor: (f) => celda(def, p, clave, f.respuestas) });
         }

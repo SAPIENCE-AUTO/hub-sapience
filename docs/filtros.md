@@ -805,6 +805,12 @@ Pedido de Sergio: más de 3 fotos por pregunta, hasta 10, y que en cada pregunta
 
 **Probado en local (2026-10-26):** en «Prueba fase 1 · todos los tipos», el botón IA con «Que pueda subir hasta 6 fotos» propuso y aplicó «hasta 6»; desde el menú, «hasta 10». 92 pruebas.
 
+### Las fotos se ven en el tablero (2026-10-26)
+
+Sergio: en el tablero las fotos decían «1 foto». Ahora cada pregunta de foto va al tablero como columna «Archivo» (como las fotos de Fillout): la celda guarda la referencia de la foto (`hubfoto:<ruta>`, una lista en JSON si son varias; `lib/formularios/fotoTablero.ts`) y al abrirla el tablero pide un enlace temporal de 10 minutos (`firmarFotosFormulario`, solo con sesión del Hub; `useUrlParaVer` en `components/formularios/urlFoto.ts`, usado por el visor de archivos de `DynamicColumns.tsx`). Las fotos siguen en la carpeta privada: en un enlace compartido del tablero no se ven («Esta foto solo se ve dentro del Hub»). Las columnas que ya existían como texto pasan solas a «Archivo» y las celdas «1 foto» toman su referencia la próxima vez que el Hub pone al día el tablero (al llegar una respuesta, al publicar cambios, al guardar la muestra o con «Buscar duplicados»). Incluye la foto de la identificación de «Antes de empezar». El Excel sigue diciendo «N fotos».
+
+**Probado en local (2026-10-26):** en «ALONG 2 - PRUEBA LUIS», «Buscar duplicados» pasó sus dos columnas de foto a «Archivo» con la referencia, y en el tablero «🖼 Ver imagen» abrió la foto con enlace temporal.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |

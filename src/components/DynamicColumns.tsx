@@ -49,6 +49,7 @@ import {
 import { executeButtonAction, getStreetViewUrl, checkImageWeb } from 'zite-endpoints-sdk';
 import { ColumnFilterPopover } from './ColumnFilterPopover';
 import { toast } from 'sonner';
+import { useUrlParaVer } from './formularios/urlFoto';
 
 /**
  * If `raw` is a JSON address object (has `address`, `city`, or `state` keys),
@@ -1430,15 +1431,18 @@ type WebCheckResult = {
   error?: string;
 };
 
-function FilePreviewDialog({ open, onOpenChange, url, fileName, index, total, onNavigate }: {
+function FilePreviewDialog({ open, onOpenChange, url: urlCelda, fileName, index, total, onNavigate }: {
   open: boolean; onOpenChange: (o: boolean) => void; url: string; fileName?: string;
   // Carrusel — solo se pasan cuando la celda tiene más de un archivo
   // (MultiFileCell). Con un solo archivo, index/total/onNavigate quedan
   // undefined y no se muestran flechas ni contador.
   index?: number; total?: number; onNavigate?: (newIndex: number) => void;
 }) {
-  const fileType = getFileType(url);
-  const title = fileName || url.split('/').pop()?.split('?')[0] || 'Archivo';
+  // Una foto de un filtro (carpeta privada) se ve con un enlace temporal que se pide al abrirla; lo demás, tal cual.
+  const { url: urlVer, error: errorVer } = useUrlParaVer(urlCelda, open);
+  const url = urlVer ?? '';
+  const fileType = getFileType(urlCelda);
+  const title = fileName || urlCelda.split('/').pop()?.split('?')[0] || 'Archivo';
   const canNavigate = total !== undefined && total > 1 && onNavigate !== undefined && index !== undefined;
 
   useEffect(() => {
@@ -1460,7 +1464,7 @@ function FilePreviewDialog({ open, onOpenChange, url, fileName, index, total, on
   const [heicUrl, setHeicUrl] = useState<string | null>(null);
   const [heicError, setHeicError] = useState(false);
   const [converting, setConverting] = useState(false);
-  const needsHeicConvert = open && fileType === 'image' && isHeic(url);
+  const needsHeicConvert = open && fileType === 'image' && isHeic(urlCelda) && !!url;
 
   useEffect(() => {
     if (!needsHeicConvert) return;
@@ -1614,6 +1618,11 @@ function FilePreviewDialog({ open, onOpenChange, url, fileName, index, total, on
               <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                 Descargar el archivo original
               </a>
+            </div>
+          )}
+          {!url && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {errorVer ? <><AlertTriangle className="w-5 h-5" />Esta foto solo se ve dentro del Hub.</> : <><Loader2 className="w-5 h-5 animate-spin" />Abriendo la foto…</>}
             </div>
           )}
           {fileType === 'image' && displayUrl && !converting && !heicError && (
