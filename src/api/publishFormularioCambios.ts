@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { renombrarColumnas, type Vinculo } from '../serverUtils/formularios/reclutamiento';
+import { actualizarTablero } from '../serverUtils/formularios/tableroHub';
 import { revisarDefinicion } from '../lib/formularios/revisar';
 import { leerDefinicion } from '../lib/formularios/tipos';
 
@@ -48,8 +49,10 @@ export default createEndpoint({
       );
       await client.query('commit');
       if (f.vinculo) {
+        // Primero los nombres de columna; después, con las reglas y cuotas nuevas, las columnas del Hub.
         renombrarColumnas(input.formularioId, f.vinculo as Vinculo, def)
-          .catch((err) => console.error('[filtros] no se pudieron renombrar las columnas del tablero', err));
+          .then(() => actualizarTablero(input.formularioId))
+          .catch((err) => console.error('[filtros] no se pudo poner al día el tablero', err));
       }
       return { ok: true, revision: n.revision as number };
     } catch (err) {

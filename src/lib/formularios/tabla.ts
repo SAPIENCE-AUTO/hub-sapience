@@ -1,4 +1,4 @@
-import { explicarResultado, seleccion, textoRespuesta } from './motor';
+import { bandejaDe, explicarResultado, seleccion, textoRespuesta } from './motor';
 import { NOMBRES_NSE } from './nse';
 import { nombreCampoDireccion } from './paises';
 import { sinFormato } from './formato';
@@ -95,12 +95,15 @@ export function columnas(def: Definicion, filas: FilaRespuesta[], { completas = 
   const fijas: Columna[] = [
     { clave: 'nombre', tipo: 'Texto', seccion: 'Persona', titulo: 'Nombre', valor: (f) => (def.claves?.nombre ? celda(def, buscar(def, def.claves.nombre)!, def.claves.nombre, f.respuestas) : undefined) },
     { clave: 'celular', tipo: 'Texto', seccion: 'Persona', titulo: 'Celular', valor: (f) => (def.claves?.telefono ? celda(def, buscar(def, def.claves.telefono)!, def.claves.telefono, f.respuestas) : undefined) },
-    {
-      clave: 'resultado', tipo: 'Texto', seccion: 'Resultado', titulo: 'Resultado',
-      valor: (f) => (f.resultado.califica ? 'Califica' : f.resultado.incompleto ? 'Incompleta' : 'No califica'),
-    },
+    // Las columnas del Hub en el tablero (2026-10-26): las mantiene al día (serverUtils/formularios/tableroHub.ts) salvo las que cambió el equipo.
+    { clave: 'resultado', tipo: 'Texto', seccion: 'Resultado', titulo: comoAntes ? 'Resultado' : 'Califica', valor: (f) => bandejaDe(f.resultado) },
     { clave: 'frente', tipo: 'Texto', seccion: 'Resultado', titulo: comoAntes ? 'Frente' : 'Perfil', valor: (f) => f.resultado.frentes.map(nombreFrente).join(', ') || undefined },
     { clave: 'motivo', tipo: 'Texto', seccion: 'Resultado', titulo: 'Por qué no califica', valor: (f) => explicarResultado(f.resultado) },
+    {
+      clave: 'ia', tipo: 'Texto', seccion: 'Resultado', titulo: 'IA',
+      valor: (f) => (f.resultado.ia ? `${f.resultado.ia.encaje[0].toUpperCase()}${f.resultado.ia.encaje.slice(1)}${f.resultado.ia.alertas.length ? ' ⚠' : ''}` : undefined),
+    },
+    { clave: 'sugerido', tipo: 'Texto', seccion: 'Resultado', titulo: 'Sugerido', valor: (f) => (f.resultado.sugerido ? `★ ${f.resultado.sugerido}` : undefined) },
     { clave: 'nse', tipo: 'Texto', seccion: 'Resultado', titulo: 'NSE', valor: (f) => f.resultado.nse?.nivel },
     { clave: 'nse_puntos', tipo: 'Número', seccion: 'Resultado', titulo: 'Puntos NSE', valor: (f) => f.resultado.nse?.puntos },
     { clave: 'alertas', tipo: 'Texto', seccion: 'Resultado', titulo: 'Alertas', valor: (f) => f.resultado.alertas.join(' · ') || undefined },

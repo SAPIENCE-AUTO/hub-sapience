@@ -2318,6 +2318,14 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
   // renamingBoard/renameValue removed — BoardTabsBar handles rename state internally
   // dragTabIdxRef/dragOverTabIdx removed — BoardTabsBar handles tab drag state internally
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  // Qué filtro del Hub pasa sus respuestas a cada tablero (para decirlo en el botón del formulario vinculado).
+  const [filtrosHubPorTablero, setFiltrosHubPorTablero] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!selectedProject || !puedeVerFormularios(user?.email)) return;
+    getFormularios({ proyectoCodigo: selectedProject })
+      .then((d: { formularios: { titulo: string; tableroId?: string }[] }) => setFiltrosHubPorTablero(Object.fromEntries(d.formularios.flatMap((f) => (f.tableroId ? [[f.tableroId, f.titulo]] : [])))))
+      .catch(() => setFiltrosHubPorTablero({}));
+  }, [selectedProject, user?.email, linkDialogOpen]);
   const [duplicateHistoryRow, setDuplicateHistoryRow] = useState<Row | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
@@ -3352,8 +3360,8 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
         )}
         {/* El formulario vinculado y su sincronización, en un solo botón. */}
         {activeBoardId && (
-          <div className={`flex h-8 flex-shrink-0 items-center rounded-md border text-xs ${dynCols.linkedFormInfo ? 'border-emerald-500/50' : 'border-border'}`}>
-            <button type="button" className="flex h-full items-center gap-1.5 rounded-l-md px-2.5 hover:bg-muted" onClick={() => setLinkDialogOpen(true)} title={dynCols.linkedFormInfo ? 'Formulario vinculado: cambiarlo' : 'Vincular un formulario o filtro'}>
+          <div className={`flex h-8 flex-shrink-0 items-center rounded-md border text-xs ${dynCols.linkedFormInfo || filtrosHubPorTablero[activeBoardId] ? 'border-emerald-500/50' : 'border-border'}`}>
+            <button type="button" className="flex h-full items-center gap-1.5 rounded-l-md px-2.5 hover:bg-muted" onClick={() => setLinkDialogOpen(true)} title={dynCols.linkedFormInfo || filtrosHubPorTablero[activeBoardId] ? 'Formulario vinculado: cambiarlo' : 'Vincular un formulario o filtro'}>
               <Link2 className="h-3.5 w-3.5" />
               {dynCols.linkedFormInfo ? (
                 <>
@@ -3362,6 +3370,8 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
                     {syncing ? '· sincronizando…' : lastSyncTime ? `· ${(() => { const diff = Math.floor((Date.now() - lastSyncTime.getTime()) / 60000); return diff < 1 ? 'al día' : diff < 60 ? `hace ${diff} min` : `hace ${Math.floor(diff / 60)} h`; })()}` : '· esperando'}
                   </span>
                 </>
+              ) : filtrosHubPorTablero[activeBoardId] ? (
+                <><span className="max-w-[160px] truncate font-medium">Filtro: {filtrosHubPorTablero[activeBoardId]}</span><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /></>
               ) : <span className="font-medium">Vincular form</span>}
             </button>
             {dynCols.linkedFormInfo && (

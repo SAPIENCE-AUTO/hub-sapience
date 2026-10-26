@@ -311,7 +311,8 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
   const [creando, setCreando] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState(detalle.titulo);
   const [trabajando, setTrabajando] = useState(false);
-  const pendientes = detalle.respuestas.filter((r) => r.califica && !r.enReclutamiento).length;
+  // Todas pasan (en el tablero se califican); las traídas, una por una.
+  const pendientes = detalle.respuestas.filter((r) => !r.enReclutamiento && !r.traida).length;
   const mostrarSelector = !detalle.tablero || cambiando;
 
   useEffect(() => {
@@ -403,12 +404,12 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
             <span className="text-sm">Vinculado al tablero <strong>«{detalle.tablero!.nombre}»</strong></span>
             <Button size="sm" onClick={pasar} disabled={trabajando || pendientes === 0}>
               {trabajando ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="mr-1 h-3.5 w-3.5" />}
-              Pasar las que califican ({pendientes})
+              Pasar al tablero ({pendientes})
             </Button>
             <Button size="sm" variant="ghost" onClick={() => { setTableros(null); setCambiando(true); }}>Cambiar tablero</Button>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">En vivo, quien entra a un perfil con lugar pasa en automático al tablero, como «Pendiente», con su historial en las notas. Pasar dos veces no duplica.</p>
+        <p className="text-xs text-muted-foreground">En vivo, todas las respuestas pasan solas al tablero, como «Pendiente», con su historial en las notas, y ahí se califican en sus columnas (Califica, Perfil, IA, Sugerido). Pasar dos veces no duplica.</p>
       </CardContent>
     </Card>
   );

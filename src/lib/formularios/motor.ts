@@ -5,7 +5,7 @@ import { PAISES, nombreCampoDireccion, telefonoDe } from './paises';
 import {
   CAMPOS_DIRECCION, esDeOpciones, forma,
   type Condicion, type Definicion, type FotoSubida, type Opcion, type Pregunta, type Respuestas,
-  type Resultado, type Seccion, type TipoPregunta, type Valor,
+  type Bandeja, type Resultado, type Seccion, type TipoPregunta, type Valor,
 } from './tipos';
 
 /**
@@ -421,6 +421,18 @@ export function evaluar(def: Definicion, resp: Respuestas): Resultado {
     nse: nse && (fueraDe.length ? { ...nse, fueraDe } : nse),
     frentes, alertas, incompleto,
   };
+}
+
+/**
+ * La bandeja (2026-10-26, con Sergio): todas las respuestas llegan al tablero
+ * y ahí se califican en una columna. Candidato: entra a un perfil sin ningún
+ * motivo en contra. Casi: un solo motivo (o completa sin perfil): se puede
+ * rescatar. No entra: dos o más motivos, o se cortó en «Antes de empezar».
+ */
+export function bandejaDe(res: Resultado): Bandeja {
+  if (res.califica) return 'Candidato';
+  if (res.terminado?.clave.startsWith('hub_') || (res.noCalifica?.length ?? 0) >= 2) return 'No entra';
+  return 'Casi';
 }
 
 /** Por qué no califica, en palabras del panel y del Excel. */

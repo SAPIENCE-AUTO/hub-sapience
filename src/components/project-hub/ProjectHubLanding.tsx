@@ -1,7 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench, Landmark } from 'lucide-react';
+import { Users, CalendarDays, BarChart2, DollarSign, FileText, MessageSquare, Folder, Wrench, Landmark, AlarmClock } from 'lucide-react';
+import { useAuth } from 'zite-auth-sdk';
+import { puedeVerFormularios } from '../../lib/formularios/acceso';
+import { fechaCorta } from '../../lib/reclutamiento/muestra';
 import { SharpliIcon } from '../SharpliIcon';
-import { getRecruitmentSummary, getTasks, getProjectTeamsFiles, getMessages, getSwipeSesiones, getCollectionProcesses } from 'zite-endpoints-sdk';
+import { getRecruitmentSummary, getTasks, getProjectTeamsFiles, getMessages, getSwipeSesiones, getCollectionProcesses, getResumenReclutamiento } from 'zite-endpoints-sdk';
 import { computeGanttSegments, GanttData } from './ganttMath';
 import { TEAL, TEAL_2, GOLD, INFO, EXITO, NEUTRAL, ALERTA, EstadoPill } from '../../lib/toolColors';
 import { fmtCurrency } from '../../lib/format';
@@ -26,6 +29,73 @@ function ColorHead({ color, ink, icon, label }: { color: string; ink?: string; i
 }
 
 type PmSection = 'timelines' | 'calendarios';
+
+/** El widget nuevo de Reclutamiento (getResumenReclutamiento.ts): lo que falta, no conteos. */
+interface ResumenReclutamiento {
+  filtro: { titulo: string; estado: string; respuestas: number; hoy: number; candidatos: number; casi: number; sugeridos: number; sinRevisar: number } | null;
+  muestra: { lugares: number; cubiertos: number; porTecnica: { nombre: string; lugares: number; cubiertos: number }[]; urgente?: { codigo: string; fecha: string; personas: number; cubiertos: number; perfil?: string } } | null;
+}
+
+const NOMBRE_ESTADO_FILTRO: Record<string, string> = { borrador: 'Borrador', prueba: 'Prueba', en_vivo: 'En vivo', cerrado: 'Cerrado' };
+
+function Dato({ etiqueta, valor, nota, color }: { etiqueta: string; valor: number; nota?: string; color?: string }) {
+  return (
+    <div className="rounded-lg bg-muted/50 px-2.5 py-2">
+      <p className="text-[11px] text-muted-foreground">{etiqueta}</p>
+      <p className="text-lg font-semibold leading-tight">{valor}</p>
+      {nota && <p className="text-[11px]" style={{ color: color ?? 'hsl(var(--muted-foreground))' }}>{nota}</p>}
+    </div>
+  );
+}
+
+/** Los dos bloques del widget nuevo: el filtro y los participantes contra la muestra. */
+function CuerpoReclutamiento({ r }: { r: ResumenReclutamiento }) {
+  const dias = r.muestra?.urgente ? Math.ceil((new Date(r.muestra.urgente.fecha).getTime() - Date.now()) / 86_400_000) : undefined;
+  return (
+    <div className="space-y-3 px-3.5 py-3">
+      {r.filtro && (
+        <div>
+          <p className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: TEAL }}>
+            Filtro
+            <EstadoPill estado={r.filtro.estado} />
+            <span className="truncate font-normal normal-case tracking-normal text-muted-foreground">{r.filtro.titulo}</span>
+          </p>
+          {r.filtro.estado === 'en_vivo' || r.filtro.respuestas > 0 ? (
+            <div className="grid grid-cols-3 gap-2">
+              <Dato etiqueta="Respuestas" valor={r.filtro.respuestas} nota={r.filtro.hoy ? `+${r.filtro.hoy} hoy` : undefined} color={EXITO} />
+              <Dato etiqueta="Candidatos" valor={r.filtro.candidatos} nota={r.filtro.casi ? `${r.filtro.casi} casi` : undefined} />
+              <Dato etiqueta="Sugeridos" valor={r.filtro.sugeridos} nota={r.filtro.sinRevisar ? `${r.filtro.sinRevisar} sin contactar` : undefined} color={ALERTA} />
+            </div>
+          ) : <p className="text-xs text-muted-foreground">{NOMBRE_ESTADO_FILTRO[r.filtro.estado] ?? r.filtro.estado}: todavía sin respuestas reales.</p>}
+        </div>
+      )}
+      {r.muestra && (
+        <div className={r.filtro ? 'border-t border-border pt-3' : ''}>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: TEAL }}>Participantes</p>
+          <div className="mb-1 flex justify-between text-xs"><span>Lugares cubiertos</span><span className="font-semibold">{r.muestra.cubiertos} de {r.muestra.lugares}</span></div>
+          <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${Math.round((r.muestra.cubiertos / Math.max(1, r.muestra.lugares)) * 100)}%`, backgroundColor: TEAL }} /></div>
+          {r.muestra.porTecnica.map((t) => (
+            <div key={t.nombre} className="flex justify-between py-0.5 text-xs">
+              <span className="text-muted-foreground">{t.nombre}</span>
+              <span className="font-mono" style={t.cubiertos >= t.lugares ? { color: EXITO } : undefined}>{t.cubiertos} / {t.lugares}</span>
+            </div>
+          ))}
+          {r.muestra.urgente && (
+            <div className="mt-2 flex items-center gap-2 rounded-lg border px-2.5 py-2" style={{ borderColor: `${ALERTA}66`, backgroundColor: `${ALERTA}10` }}>
+              <AlarmClock className="h-4 w-4 flex-shrink-0" style={{ color: ALERTA }} />
+              <div className="min-w-0 text-xs">
+                <p className="font-semibold">Más urgente: {r.muestra.urgente.codigo} · {fechaCorta(r.muestra.urgente.fecha)}</p>
+                <p className="text-muted-foreground">
+                  {dias !== undefined && dias <= 1 ? (dias <= 0 ? 'hoy' : 'mañana') : `en ${dias} días`} · {r.muestra.urgente.cubiertos} de {r.muestra.urgente.personas} · faltan {r.muestra.urgente.personas - r.muestra.urgente.cubiertos}{r.muestra.urgente.perfil ? ` de ${r.muestra.urgente.perfil}` : ''}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface ProjectHubLandingProps {
   projectCode: string;
@@ -89,6 +159,10 @@ function statusColor(seg: { status?: string; startDate: string; endDate: string 
 
 export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSeeTools, canSeeCobranza, client, onOpenTab, onOpenActividades }: ProjectHubLandingProps) {
   const [recruitment, setRecruitment] = useState<RecruitmentSummary | null>(null);
+  // El widget nuevo de Reclutamiento (filtro y participantes contra la muestra), por ahora para quien ve Filtros.
+  const { user } = useAuth();
+  const verResumen = puedeVerFormularios(user?.email);
+  const [resumen, setResumen] = useState<ResumenReclutamiento | null>(null);
   const [events, setEvents] = useState<EventItem[] | null>(null);
   const [gantt, setGantt] = useState<GanttData | null | undefined>(undefined);
   const [folders, setFolders] = useState<FolderItem[] | null>(null);
@@ -113,6 +187,8 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
     if (canSeeCobranza) loadCollection();
 
     getRecruitmentSummary({ projectCode }).then(setRecruitment).catch(() => setRecruitment({ totalParticipants: 0, boards: [] }));
+    setResumen(null);
+    if (verResumen && projectId) getResumenReclutamiento({ proyectoId: projectId }).then(setResumen).catch(() => setResumen(null));
 
     getTasks({ projectCode, only: 'events' }).then(d => {
       // El widget del home es un resumen de "qué sigue" — las sesiones
@@ -142,7 +218,7 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
     }).catch(() => { setTeamsLinked(false); setFolders([]); });
 
     getMessages({ channel: projectCode, limit: 3 }).then(d => setMessages(d.messages ?? [])).catch(() => setMessages([]));
-  }, [projectCode, projectId, canSeeTools, canSeeCobranza]);
+  }, [projectCode, projectId, canSeeTools, canSeeCobranza, verResumen]);
 
   const now = Date.now();
 
@@ -245,15 +321,18 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
               <div className="flex items-center gap-2">
                 <div className="w-[22px] h-[22px] rounded-md flex items-center justify-center flex-shrink-0 bg-white/20"><Users className="w-3 h-3 text-white" /></div>
                 <span className="text-sm font-medium text-white">Reclutamiento</span>
-                {recruitment && <span className="ml-auto text-xl font-semibold font-mono leading-none text-white">{recruitment.totalParticipants}</span>}
+                {resumen?.muestra
+                  ? <span className="ml-auto text-xl font-semibold font-mono leading-none text-white">{resumen.muestra.cubiertos}<span className="text-sm text-white/70"> / {resumen.muestra.lugares}</span></span>
+                  : recruitment && <span className="ml-auto text-xl font-semibold font-mono leading-none text-white">{recruitment.totalParticipants}</span>}
               </div>
-              {recruitment && (
+              {resumen?.muestra ? <p className="text-[11px] text-white/70 mt-1">lugares cubiertos de la muestra · {recruitment?.totalParticipants ?? 0} participantes</p> : recruitment && (
                 <p className="text-[11px] text-white/70 mt-1">
                   participantes · {recruitment.boards.reduce((n, b) => n + b.groups.length, 0)} grupos
                   {recruitment.boards.length > 1 ? ` · ${recruitment.boards.length} tableros` : ''}
                 </p>
               )}
             </div>
+            {resumen && (resumen.filtro || resumen.muestra) ? <CuerpoReclutamiento r={resumen} /> : <>
             {recruitment && recruitment.boards.length > 1 && (
               <div className="px-3.5 pt-3">
                 <div className="flex h-1.5 rounded-full overflow-hidden">
@@ -290,6 +369,7 @@ export function ProjectHubLanding({ projectCode, projectId, canSeeBudget, canSee
               </div>
             )}
             {recruitment && recruitment.boards.length === 0 && <p className="px-3.5 py-3 text-xs text-muted-foreground">Sin tableros de reclutamiento</p>}
+            </>}
           </div>
 
           {/* ── Calendario ── */}

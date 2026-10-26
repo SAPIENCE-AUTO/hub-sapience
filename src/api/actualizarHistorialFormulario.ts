@@ -3,6 +3,7 @@ import { createEndpoint, pool } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { guardarHistorial } from '../serverUtils/formularios/historial';
 import { recalificar } from '../serverUtils/formularios/traer';
+import { actualizarTablero } from '../serverUtils/formularios/tableroHub';
 import { leerDefinicion, type Respuestas, type Resultado } from '../lib/formularios/tipos';
 
 /**
@@ -33,6 +34,8 @@ export default createEndpoint({
       const h = await guardarHistorial(r.id);
       if (h?.nivel) conHistorial++;
     }
+    // Y las columnas del Hub en el tablero (con el historial nuevo cambian los sugeridos).
+    await actualizarTablero(input.formularioId).catch((err) => console.error('[filtros] columnas del Hub', (err as Error).message));
     return { revisadas: rows.length, conHistorial };
   },
 });

@@ -712,6 +712,24 @@ Sergio pidió el orden del selector «Muestra · Filtros · Participantes», con
 
 **Probado en local (2026-10-26)** en «3 MAYO PRUEBA 3»: la IA con insumos vacíos inventaba una actividad (corregido: ahora lee el filtro con más insumos y no inventa) y juntaba 8 entrevistas en una (corregido: se separan); propuesta de 16 entrevistas con supuestos; guardar (versión 1); crear 3 grupos en «FILTRO X» y el evento de S1 en «Calendario 1», ligado y sin invitación; el horario sale en el grupo del tablero; cambiar el lugar de S1 (versión 2) renombró el grupo y movió el evento. **Quedan en la base de prueba** esa muestra, los grupos S1, E1 y E2 de «FILTRO X» y el evento de S1. 85 pruebas.
 
+### Reclutamiento: columnas del Hub en el tablero y widget del inicio (2026-10-26, pasos 2 y 4)
+
+Con Sergio: el equipo de reclutamiento revisa en un solo lugar (el tablero), por grupos de personas y con todo a la vista. Esto reemplaza el «solo pasan al tablero los que entran a un perfil con lugar» de la fase 5.
+
+**Qué se construyó:**
+
+- **Todas las respuestas llegan al tablero** (`alRecibir.ts` → `pasarAlTablero`): en vivo, cada respuesta pasa sola, califique o no, menos quien no aceptó el aviso o no dio su identificación (sin su consentimiento no se guarda). Antes de pasar, la IA la clasifica. En prueba, «Pasar al tablero (N)» pasa todas a mano (ya no solo las que califican).
+- **Columnas del Hub** (`tableroHub.ts`, `actualizarTablero`), columnas normales del tablero que se filtran, ordenan y guardan en vistas: **Califica** (Candidato, Casi o No entra: `bandejaDe` en `motor.ts`; antes «Resultado»), **Perfil**, **Por qué no califica**, **IA** (Alto, Medio o Bajo, con ⚠ si vio algo raro) y **Sugerido** («★ Perfil»). En los tableros vinculados antes, IA y Sugerido se acomodan junto a las demás del Hub.
+- **Se mantienen al día** al llegar cada respuesta, al publicar cambios del filtro, al guardar la muestra (las cuotas salen de ahí) y con «Buscar duplicados»: califican con las reglas de hoy (sin tocar a quien se cortó en «Antes de empezar»). **Lo que el equipo cambia a mano no se pisa**: de cada celda se guarda lo último que escribió el Hub (`resultado.tablero.escrito`) y, si la celda ya no dice eso, no se vuelve a tocar.
+- **Sugeridos** (`sugerir`): los mejores candidatos (IA alto primero, sin «ya participó» ni «mismo proyecto», los que contestaron antes) hasta cubrir lo que le falta a cada perfil: su cuota (de la muestra por nombre del perfil, si la hay; si no, la del filtro) menos los que ya están en un grupo. Quien cae en varios perfiles se sugiere para uno solo: el que más gente le falta y, si empatan, donde la IA lo ve mejor. Cuenta una vez.
+- **El historial** ya no cuenta la propia fila de la persona en el tablero (ahora todas llegan).
+- **El botón del formulario vinculado** del tablero dice «Filtro: …» cuando el tablero lo alimenta un filtro del Hub.
+- **Widget del inicio** (`getResumenReclutamiento.ts`, para quien ve Filtros; los demás siguen viendo el de antes): arriba, lugares cubiertos de la muestra («0 / 10»); **Filtro**: el que está en vivo, con respuestas (+hoy), candidatos (y cuántos casi) y sugeridos (y cuántos sin contactar); **Participantes**: lugares cubiertos, por técnica, y la actividad más urgente (la próxima con cupo pendiente: cuándo, cuántos van y cuántos faltan de qué perfil).
+
+**Probado en local (2026-10-26):** en el tablero de `lv4los` aparecieron las 5 columnas (la vieja «Resultado» renombrada a «Califica») con sus valores; cambiar a mano una calificación y recalcular la respetó; en «ALONG 2 - PRUEBA LUIS» (en vivo) la respuesta quedó Candidato, IA «Medio ⚠» y sugerida para su perfil, y el widget del inicio dice «Sugeridos 1 · 1 sin contactar». **No se probó con una respuesta real nueva** el paso de todas al tablero (la lógica es la misma que se probó). 86 pruebas.
+
+**Pendiente:** mover a alguien a un grupo no recalcula los sugeridos al momento (se recalculan con la siguiente respuesta, al publicar, al guardar la muestra o con «Buscar duplicados»); la ficha de la persona desde el tablero.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
@@ -755,3 +773,4 @@ Sergio pidió el orden del selector «Muestra · Filtros · Participantes», con
 - **2026-10-26 · celular y correo por defecto:** «Antes de empezar» los pide después del nombre (si el filtro no los pide ya), como preguntas que el analista puede corregir o quitar; la IA ya no los repite. 84 pruebas. Probado en local y subido a `main` con el OK de Sergio (`3a538a3`).
 - **2026-10-26 · Reclutamiento, paso 1:** Filtros adentro de Reclutamiento, pestañas del proyecto en una línea con «Más», barra del tablero en una línea (Exportar y «⋯» como menús) y sin «Definir muestra»; de 8 a 12 personas a la vista en una pantalla de 13". Probado en local y subido a `main` con el OK de Sergio (`72c5e64`).
 - **2026-10-26 · Muestra:** Reclutamiento con Muestra · Filtros · Participantes; la muestra del proyecto con versiones, propuesta de la IA, y grupos y eventos creados y puestos al día desde ahí (sin invitaciones). Tablas `muestras` y `muestra_versiones` creadas con su OK. 85 pruebas. Probado en local y subido a `main` con el OK de Sergio (`72c5e64`).
+- **2026-10-26 · columnas del Hub y widget:** todas las respuestas llegan al tablero y ahí se califican (Califica, Perfil, Por qué no califica, IA, Sugerido), al día sin pisar lo que cambia el equipo; sugeridos por perfil contra la muestra; el widget del inicio con Filtro y Participantes. 86 pruebas. Probado en local, sin subir.

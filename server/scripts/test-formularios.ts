@@ -9,7 +9,7 @@ import { imagenesQueFaltan, revisarDefinicion } from '../../src/lib/formularios/
 import { PLANTILLAS } from '../../src/lib/formularios/plantillas';
 import { ALONG2 } from '../../src/lib/formularios/plantillas/along2';
 import { PRUEBA_TIPOS } from '../../src/lib/formularios/plantillas/pruebaTipos';
-import { leerDefinicion, type Definicion, type Respuestas } from '../../src/lib/formularios/tipos';
+import { leerDefinicion, type Definicion, type Respuestas, type Resultado } from '../../src/lib/formularios/tipos';
 import { calcularNse, reglaNse, reglaVigente } from '../../src/lib/formularios/nse';
 import { condicionEnPalabras, frenteEnPalabras, logicaDeOpcion, logicaDePregunta, logicaDeSeccion } from '../../src/lib/formularios/palabras';
 import { filasFlujo, filasFlujoDeEstructura, mapaFlujo } from '../../src/lib/formularios/flujo';
@@ -37,6 +37,8 @@ import { compararIdentificacion, declaradoDe, edadDe } from '../../src/serverUti
 import { agruparTelefono, limpiarTelefono, telefonoDe } from '../../src/lib/formularios/paises';
 import { sugerirCorreo } from '../../src/lib/formularios/correo';
 import { recalificar } from '../../src/serverUtils/formularios/traer';
+import { sugerir } from '../../src/serverUtils/formularios/tableroHub';
+import { bandejaDe } from '../../src/lib/formularios/motor';
 import { alternarMarca, leerFormato, sinFormato } from '../../src/lib/formularios/formato';
 import { tramosDe } from '../../src/lib/formularios/documento';
 import { cambiosEntre, leerMuestra, nombreDeGrupo, nuevaActividad, porPerfil, siguienteCodigo } from '../../src/lib/reclutamiento/muestra';
@@ -1225,6 +1227,33 @@ caso('negritas y color: se leen, se ponen y se quitan, y no llegan a las columna
   assert.match(xml, /<w:u w:val="single"\/>.*?<w:t xml:space="preserve">años<\/w:t>/);
   assert.match(xml, /<w:color w:val="7030A0"\/>.*?<w:t xml:space="preserve">cumplidos<\/w:t>/);
   assert.ok(!xml.includes('**') && !xml.includes('=='));
+});
+
+caso('en el tablero: bandejas y sugeridos (los mejores hasta cubrir lo que falta, una vez cada quien)', () => {
+  const base = { califica: true, descartes: [], gruposExcluidos: [], alertas: [], incompleto: false };
+  assert.equal(bandejaDe({ ...base, frentes: ['a'] }), 'Candidato');
+  assert.equal(bandejaDe({ ...base, califica: false, frentes: [], noCalifica: ['Edad fuera'] }), 'Casi');
+  assert.equal(bandejaDe({ ...base, califica: false, frentes: [], noCalifica: ['Edad fuera', 'Trabaja en publicidad'] }), 'No entra');
+  assert.equal(bandejaDe({ ...base, califica: false, frentes: [], terminado: { motivo: 'No aceptó el aviso de privacidad', clave: 'hub_aviso' } }), 'No entra');
+  const def = { ...definicionVacia(), frentes: [
+    { id: 'a', nombre: 'Perfil A', grupo: 'a', meta: 2, califica: { pregunta: 'x', incluye: ['1'] } },
+    { id: 'b', nombre: 'Perfil B', grupo: 'b', meta: 1, califica: { pregunta: 'x', incluye: ['2'] } },
+  ] } as Definicion;
+  const ia = (encaje: 'alto' | 'medio' | 'bajo', perfiles: [string, 'alto' | 'medio' | 'bajo'][] = []) => ({ encaje, resumen: '', alertas: [], perfiles: perfiles.map(([id, e]) => ({ id, encaje: e, razon: '' })) });
+  const fila = (id: string, frentes: string[], extra: Record<string, unknown> = {}, enGrupo = false, createdAt = '2026-10-01') => ({ id, createdAt, enGrupo, resultado: { ...base, frentes, ...extra } as Resultado });
+  const s = sugerir(def, [
+    fila('c1', ['a', 'b'], { ia: ia('alto', [['a', 'medio'], ['b', 'alto']]) }),
+    fila('c2', ['a'], { ia: ia('medio') }),
+    fila('c3', ['a'], { ia: ia('alto'), historial: { nivel: 'ya_participo', nota: '', entradas: [], calculado: '' } }),
+    fila('c4', ['b'], { ia: ia('bajo') }),
+    fila('c5', ['a'], {}, true),
+  ]);
+  // A pide 2 y ya tiene 1 en un grupo; B pide 1. c1 empata en lo que falta y va a B (la IA lo ve mejor ahí); c2 cubre A;
+  // c3 ya participó y no se sugiere; a c4 ya no le queda lugar.
+  assert.deepEqual([...s.entries()].sort(), [['c1', 'b'], ['c2', 'a']]);
+  // Con la muestra, la cuota sale de ahí (por nombre del perfil).
+  const conMuestra = sugerir(def, [fila('c2', ['a'], { ia: ia('medio') }), fila('c6', ['a'], { ia: ia('alto') })], new Map([['perfil a', 1]]));
+  assert.deepEqual([...conMuestra.keys()], ['c6']);
 });
 
 caso('la muestra: códigos por técnica, cambios en palabras y lugares por perfil', () => {

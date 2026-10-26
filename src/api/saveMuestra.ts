@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { createEndpoint } from '../../server/compat';
+import { createEndpoint, pool } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { guardarMuestra, nombreDeUsuario } from '../serverUtils/muestra/muestra';
+import { actualizarTablero } from '../serverUtils/formularios/tableroHub';
 
 /**
  * Guarda la muestra como versión nueva, con sus cambios en palabras (los
@@ -26,6 +27,12 @@ export default createEndpoint({
     exigirAccesoFormularios(context);
     const por = await nombreDeUsuario(context.user!.email);
     const version = await guardarMuestra({ ...input, motivo: input.motivo?.trim() || undefined, por });
+    // Las cuotas de los perfiles salen de la muestra: los sugeridos de los tableros se recalculan (sin hacer esperar).
+    if (!input.soloLigas) {
+      pool.query(`select id from formularios where proyecto_id = $1 and vinculo is not null`, [input.proyectoId])
+        .then(({ rows }) => Promise.all(rows.map((r) => actualizarTablero(r.id))))
+        .catch((err) => console.error('[muestra] no se pudieron recalcular los sugeridos', (err as Error).message));
+    }
     return { version };
   },
 });

@@ -253,7 +253,18 @@ export interface Resultado {
   ia?: ClasificacionIA;
   /** Traída de un filtro anterior (no la contestó en este): de dónde y cuándo contestó. */
   traida?: { formularioId: string; titulo: string; proyecto?: string; respuestaId: string; fecha: string };
+  /** El perfil para el que el Hub la sugiere (los mejores candidatos hasta cubrir lo que falta de cada perfil). */
+  sugerido?: string;
+  /**
+   * Su fila en el tablero y lo último que el Hub escribió en sus columnas
+   * (Califica, Perfil, Motivo, IA, Sugerido): si la celda ya no dice eso, la
+   * cambió el equipo y el Hub ya no la toca.
+   */
+  tablero?: { fila?: string; escrito: Record<string, string> };
 }
+
+/** La bandeja de una respuesta: Candidato (sin motivos), Casi (un motivo) o No entra (dos o más, o no dio el aviso o la identificación). */
+export type Bandeja = 'Candidato' | 'Casi' | 'No entra';
 
 /** Historial de duplicados de quien contestó (la misma búsqueda de los tableros de Reclutamiento). */
 export interface HistorialPersona {

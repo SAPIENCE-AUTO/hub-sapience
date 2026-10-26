@@ -69,6 +69,8 @@ export async function historialDe(persona: Persona, ctx: { proyecto?: string; fo
   for (const r of candidatas) {
     const iguales = Number(!!tel && ultimos10(r.phone) === tel) + Number(!!correo && normalizeEmail(r.email) === correo) + Number(!!nombre && normalizeName(r.participantName) === nombre);
     if (iguales < 2 || !r.projectCode) continue;
+    // Su propia fila (ahora todas las respuestas llegan al tablero) no es historial.
+    if (ctx.excluir && typeof r.sourceForm === 'string' && r.sourceForm.endsWith(`|${ctx.excluir}`)) continue;
     const p = datos.projectMap.get(r.projectCode);
     const fecha = p?.startDate ? new Date(p.startDate) : undefined;
     if (fecha && fecha > inicio && r.projectCode !== ctx.proyecto) continue; // proyectos posteriores a este no cuentan

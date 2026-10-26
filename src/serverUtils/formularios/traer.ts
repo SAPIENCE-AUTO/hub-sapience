@@ -15,9 +15,9 @@ const sinInicio = (def: Definicion): Definicion => ({ ...def, secciones: def.sec
 
 /** Califica de nuevo con el filtro de ahora, conservando lo que se agregó después (traída, historial, IA, identificación). */
 export function recalificar(def: Definicion, respuestas: Respuestas, anterior: Resultado): Resultado {
-  const { traida, historial, ia, perfilLleno } = anterior;
+  const { traida, historial, ia, perfilLleno, sugerido, tablero } = anterior;
   const identificacion = (anterior as { identificacion?: unknown }).identificacion;
-  return { ...evaluar(sinInicio(def), respuestas), traida, historial, ia, perfilLleno, ...(identificacion ? { identificacion } : {}) } as Resultado;
+  return { ...evaluar(sinInicio(def), respuestas), traida, historial, ia, perfilLleno, sugerido, tablero, ...(identificacion ? { identificacion } : {}) } as Resultado;
 }
 
 /**
