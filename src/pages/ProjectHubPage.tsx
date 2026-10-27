@@ -4,7 +4,7 @@ import { useAuth } from 'zite-auth-sdk';
 import { useProject } from '../context/ProjectContext';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, DollarSign, Wrench, Landmark } from 'lucide-react';
+import { ArrowLeft, Home, Users, Activity, MessageSquare, FileText, DollarSign, Wrench, Landmark, BookOpenText } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
 import { SharpliIcon } from '../components/SharpliIcon';
 import { ProjectHubLanding } from '../components/project-hub/ProjectHubLanding';
@@ -14,7 +14,9 @@ import { FormulariosPanel } from '../components/formularios/FormulariosPanel';
 import { MuestraPanel } from '../components/reclutamiento/MuestraPanel';
 import { leerMuestra } from '../lib/reclutamiento/muestra';
 import { puedeVerFormularios } from '../lib/formularios/acceso';
+import { puedeVerGuias } from '../lib/guias/acceso';
 import SharpliEmbedTab from '../components/project-hub/SharpliEmbedTab';
+import GuiasTab from '../components/guias/GuiasTab';
 import RecruitmentPage, { type ParteReclutamiento } from './RecruitmentPage';
 import PMPage from './PMPage';
 import ChatPage from './ChatPage';
@@ -28,7 +30,7 @@ import { getFormularios, getMuestra, getProjects } from 'zite-endpoints-sdk';
 import type { GetProjectsOutputType } from 'zite-endpoints-sdk';
 
 type Project = GetProjectsOutputType['projects'][0];
-type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos' | 'tools' | 'cobranza' | 'sharpli';
+type TabId = 'hub' | 'reclutamiento' | 'actividades' | 'presupuesto' | 'chat' | 'documentos' | 'guias' | 'tools' | 'cobranza' | 'sharpli';
 type PmSection = 'timelines' | 'calendarios';
 
 const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -38,6 +40,7 @@ const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ classNam
   { id: 'cobranza',      label: 'Cobranza',       icon: Landmark },
   { id: 'chat',          label: 'Chat',           icon: MessageSquare },
   { id: 'documentos',    label: 'Documentos',     icon: FileText },
+  { id: 'guias',         label: 'Guías',          icon: BookOpenText },
   { id: 'tools',         label: 'Tools',          icon: Wrench },
   { id: 'sharpli',       label: 'Sharpli',        icon: SharpliIcon },
 ];
@@ -131,10 +134,14 @@ export default function ProjectHubPage() {
   // et al.): Owner o purchaseLevel Finanzas, no un gate por role solamente.
   const canSeeCobranza = !!(user?.role === 'Owner' || user?.purchaseLevel === 'Finanzas');
 
+  // Guías de tópicos: por ahora solo quien está en la lista de src/lib/guias/acceso.ts (el candado real es del servidor).
+  const canSeeGuias = puedeVerGuias(user?.email);
+
   const visibleTabs = ALL_TABS.filter(t =>
     (t.id !== 'presupuesto' || canSeeBudget) &&
     (t.id !== 'tools' || canSeeTools) &&
-    (t.id !== 'cobranza' || canSeeCobranza),
+    (t.id !== 'cobranza' || canSeeCobranza) &&
+    (t.id !== 'guias' || canSeeGuias),
   );
 
   // Reset active tab if it's no longer visible (p.ej. se perdió el acceso a Presupuesto).
@@ -147,7 +154,7 @@ export default function ProjectHubPage() {
     if (activeTab !== 'hub' && !visibleTabs.find(t => t.id === activeTab)) {
       setActiveTab('hub');
     }
-  }, [authLoading, canSeeBudget, canSeeTools, canSeeCobranza]);
+  }, [authLoading, canSeeBudget, canSeeTools, canSeeCobranza, canSeeGuias]);
 
   const goToActividades = (section: PmSection) => { setPmSection(section); setActiveTab('actividades'); };
 
@@ -280,6 +287,11 @@ export default function ProjectHubPage() {
                 <ProjectMinutas projectCode={projectId ?? ''} />
                 <ProjectDocuments projectCode={projectId ?? ''} />
                 {project?.id && <ArchivedFilesSection projectId={project.id} />}
+              </div>
+            )}
+            {activeTab === 'guias' && project?.id && (
+              <div className="h-full">
+                <GuiasTab project={{ id: project.id, projectCode: project.projectCode ?? '', fullName: project.fullName, client: project.client }} />
               </div>
             )}
             {activeTab === 'tools'         && <ProjectToolsTab projectId={project?.id} soloSwipe={!tieneTodoTools} />}

@@ -792,3 +792,15 @@ export interface PropuestaArchivosRecordType {
   path?: string;
   createdAt?: string;
 }
+
+export interface GuiasTopicosRecordType {
+  id: string;
+  project?: string[];
+  titulo?: string;
+  estado?: any;
+  version?: number;
+  createdBy?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string;
+}

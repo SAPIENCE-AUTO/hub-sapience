@@ -220,7 +220,7 @@ app.post('/api/:name', async (c) => {
     return c.json(result as object);
   } catch (err) {
     if (err instanceof ZiteError) {
-      return c.json({ message: err.message, code: err.code }, err.status as 400 | 401 | 403 | 404 | 500);
+      return c.json({ message: err.message, code: err.code }, err.status as 400 | 401 | 403 | 404 | 409 | 500);
     }
     // GraphAuthError (server/microsoft/graph.ts) sale legible en vez de "Error
     // interno" para los 7 endpoints que usan Microsoft Graph — un solo lugar

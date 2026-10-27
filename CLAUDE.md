@@ -403,3 +403,4 @@ y no sirve para este volumen.
 - `ARBOL-REAL.md` — los 370 archivos, agrupados por carpeta.
 - `ESQUEMA-BD.md` — las 41 tablas con todos sus campos, tipos y opciones de select.
 - `proyecto/` — el código fuente completo extraído del export.
+- `docs/guias-topicos.md` — guía viva de las **guías de tópicos** (pestaña «Guías» de cada proyecto: roadmap, guía escrita por la IA con la voz de Sapience y Word; skill en `src/serverUtils/guias/skill/`, paquete original en `paquetes/guias-topicos/`).

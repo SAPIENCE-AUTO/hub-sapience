@@ -1,5 +1,7 @@
 # Generador de guías de tópicos — paquete para Hub Sapience (v2)
 
+> **Integrado en el Hub el 2026-10-26** (guía viva: `docs/guias-topicos.md`). Este paquete queda como referencia: la skill completa con las guías reales de ejemplo y la interfaz de Empathy. El código que corre está en `src/serverUtils/guias/`, `src/api/*Guia*`, `src/lib/guias/` y `src/components/guias/`.
+
 Para pasárselo a Claude Code dentro del Hub. Es la versión 2 del paquete original (`~/Downloads/guias-hub`, con su `CONTEXTO.md` y `prototipo.html`). Trae las mejoras que salieron de llevar el generador a Empathy Scale (octubre 2026) y está adaptado a cómo está hecho el Hub: mismo patrón que **Propuestas** (`src/serverUtils/propuestas/`, `src/api/*Propuesta*`, `src/components/propuestas/`).
 
 ## Qué es

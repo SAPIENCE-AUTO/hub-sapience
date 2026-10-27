@@ -895,6 +895,20 @@ export const SCHEMA: Record<string, TableDef> = {
       createdAt: { col: 'created_at', kind: 'datetime' }
     },
   },
+  GuiasTopicos: {
+    table: 'guias_topicos',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      project: { col: 'project_id', kind: 'link', target: 'projects' },
+      titulo: { col: 'titulo', kind: 'text' },
+      estado: { col: 'estado', kind: 'json' },
+      version: { col: 'version', kind: 'number' },
+      createdBy: { col: 'created_by_id', kind: 'link', target: 'users' },
+      createdAt: { col: 'created_at', kind: 'datetime' },
+      updatedAt: { col: 'updated_at', kind: 'datetime' },
+      deletedAt: { col: 'deleted_at', kind: 'datetime' }
+    },
+  },
 };
 
 export const MODEL_NAMES = Object.keys(SCHEMA) as (keyof typeof SCHEMA)[];

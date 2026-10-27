@@ -415,6 +415,17 @@ export const savePropuestaContenido = (input?: any): Promise<any> => call('saveP
 export const savePropuestaDiseno = (input?: any): Promise<any> => call('savePropuestaDiseno', input);
 export const savePropuestaEsqueleto = (input?: any): Promise<any> => call('savePropuestaEsqueleto', input);
 export const uploadPropuestaArchivo = (input?: any): Promise<any> => call('uploadPropuestaArchivo', input);
+// Guías de tópicos (los tres de IA llevan avance)
+export const createGuia = (input?: any): Promise<any> => call('createGuia', input);
+export const getGuias = (input?: any): Promise<any> => call('getGuias', input);
+export const getGuia = (input?: any): Promise<any> => call('getGuia', input);
+export const saveGuia = (input?: any): Promise<any> => call('saveGuia', input);
+export const deleteGuia = (input?: any): Promise<any> => call('deleteGuia', input);
+export const leerArchivoGuia = (input?: any): Promise<any> => call('leerArchivoGuia', input);
+export const getGuiaWord = (input?: any): Promise<any> => call('getGuiaWord', input);
+export const generateGuiaRoadmap = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateGuiaRoadmap', input);
+export const adjustGuiaRoadmap = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('adjustGuiaRoadmap', input);
+export const generateGuiaBloque = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('generateGuiaBloque', input);
 export const importCotizacionesFromCsv = (input?: any): Promise<any> => call('importCotizacionesFromCsv', input);
 export const importDeals = (input?: any): Promise<any> => call('importDeals', input);
 export const importExcelData = (input?: any): Promise<any> => call('importExcelData', input);

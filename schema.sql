@@ -983,6 +983,20 @@ create table propuesta_archivos (
 );
 create trigger propuesta_archivos_set_updated before update on propuesta_archivos for each row execute function set_updated_at();
 
+-- ─── GuiasTopicos ──────────────────────────────────────────────
+create table guias_topicos (
+  id                            uuid primary key default gen_random_uuid(),
+  project_id                    uuid references projects(id) on delete set null,
+  titulo                        text,
+  estado                        jsonb,
+  version                       integer,
+  created_by_id                 uuid references users(id) on delete set null,
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now(),
+  deleted_at                    timestamptz
+);
+create trigger guias_topicos_set_updated before update on guias_topicos for each row execute function set_updated_at();
+
 -- ─── MeetingChatMessages ───────────────────────────────────────
 create table meeting_chat_messages (
   id                            uuid primary key default gen_random_uuid(),
