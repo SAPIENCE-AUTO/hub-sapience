@@ -73,6 +73,7 @@ async function fetchAllPOs(): Promise<PurchaseOrdersRecordType[]> {
   while (true) {
     const result = await PurchaseOrders.findAll({
       fields: ['status', 'projectCode', 'category', 'totalAmount'],
+      sorts: [{ field: 'id', direction: 'asc' }],
       limit: 2000,
       offset,
     });
@@ -88,7 +89,7 @@ async function fetchAllCotizaciones(): Promise<CotizacionesRecordType[]> {
   const all: CotizacionesRecordType[] = [];
   let offset = 0;
   while (true) {
-    const result = await Cotizaciones.findAll({ limit: 2000, offset });
+    const result = await Cotizaciones.findAll({ sorts: [{ field: 'id', direction: 'asc' }], limit: 2000, offset });
     all.push(...result.records);
     if (!result.hasMore || result.records.length === 0) break;
     offset += result.records.length;
@@ -96,20 +97,33 @@ async function fetchAllCotizaciones(): Promise<CotizacionesRecordType[]> {
   return all;
 }
 
-/** Fetch line items by IDs using findAll with id filter (avoids per-record findOne calls) */
-async function fetchLineItemsByIds(ids: string[]): Promise<CotizacionLineItemsRecordType[]> {
-  if (ids.length === 0) return [];
-  const results: CotizacionLineItemsRecordType[] = [];
+/**
+ * Las partidas de cada cotización, buscadas por la llave que guarda la propia partida (a qué cotización
+ * pertenece). Zite además ponía en la cotización la lista de sus partidas (cotizacionLineItems); en Postgres
+ * esa lista no existe, y leerla dejaba el «cotizado» en $0 en todos los proyectos.
+ */
+async function fetchLineItemsByCotizaciones(cotizacionIds: string[]): Promise<Record<string, CotizacionLineItemsRecordType[]>> {
+  const byCotiz: Record<string, CotizacionLineItemsRecordType[]> = {};
   const BATCH = 100;
-  for (let i = 0; i < ids.length; i += BATCH) {
-    const batch = ids.slice(i, i + BATCH);
-    const { records } = await CotizacionLineItems.findAll({
-      filters: { id: { in: batch } },
-      limit: BATCH,
-    });
-    results.push(...records);
+  for (let i = 0; i < cotizacionIds.length; i += BATCH) {
+    const batch = cotizacionIds.slice(i, i + BATCH);
+    let offset = 0;
+    while (true) {
+      const result = await CotizacionLineItems.findAll({
+        filters: { cotizacion: { in: batch } } as never,
+        sorts: [{ field: 'id', direction: 'asc' }],
+        limit: 2000,
+        offset,
+      });
+      for (const li of result.records) {
+        const ids = Array.isArray(li.cotizacion) ? li.cotizacion : li.cotizacion ? [li.cotizacion] : [];
+        for (const cotId of ids) (byCotiz[cotId as string] ??= []).push(li as CotizacionLineItemsRecordType);
+      }
+      if (!result.hasMore || result.records.length === 0) break;
+      offset += result.records.length;
+    }
   }
-  return results;
+  return byCotiz;
 }
 
 export default createEndpoint({
@@ -172,32 +186,12 @@ export default createEndpoint({
       if (dealId) relevantDealIds.add(dealId);
     }
 
-    const liIdSet = new Set<string>();
     const relevantCotizIds = new Set<string>();
     for (const dealId of relevantDealIds) {
-      for (const cot of (cotizByDeal[dealId] ?? []).filter(c => c.included !== false)) {
-        relevantCotizIds.add(cot.id);
-        const liIds = Array.isArray(cot.cotizacionLineItems)
-          ? cot.cotizacionLineItems
-          : cot.cotizacionLineItems ? [cot.cotizacionLineItems] : [];
-        for (const id of liIds) liIdSet.add(id as string);
-      }
+      for (const cot of (cotizByDeal[dealId] ?? []).filter(c => c.included !== false)) relevantCotizIds.add(cot.id);
     }
 
-    const allLineItems = await fetchLineItemsByIds(Array.from(liIdSet));
-
-    const lineItemById: Record<string, CotizacionLineItemsRecordType> = {};
-    for (const li of allLineItems) lineItemById[li.id] = li;
-
-    const lisByCotiz: Record<string, CotizacionLineItemsRecordType[]> = {};
-    for (const cotId of relevantCotizIds) {
-      const cot = allCotizaciones.find(c => c.id === cotId);
-      if (!cot) continue;
-      const liIds = Array.isArray(cot.cotizacionLineItems)
-        ? cot.cotizacionLineItems
-        : cot.cotizacionLineItems ? [cot.cotizacionLineItems] : [];
-      lisByCotiz[cotId] = (liIds as string[]).map(id => lineItemById[id]).filter(Boolean);
-    }
+    const lisByCotiz = await fetchLineItemsByCotizaciones(Array.from(relevantCotizIds));
 
     const projectAnalyses = projectsToAnalyze.map(project => {
       const dealId = Array.isArray(project.dealVinculado) ? project.dealVinculado[0] : project.dealVinculado ?? undefined;
