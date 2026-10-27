@@ -12,6 +12,7 @@ import KpiCardsRow from '@/components/commercial-dashboard/KpiCardsRow';
 import CommercialDashboardFilters from '@/components/commercial-dashboard/CommercialDashboardFilters';
 import DashboardWidgetGrid from '@/components/commercial-dashboard/DashboardWidgetGrid';
 import SavedViewsDropdown from '@/components/commercial-dashboard/SavedViewsDropdown';
+import { esVistaTablero } from '@/lib/tablero/vistas';
 
 type Deal = GetDealsOutputType['deals'][0];
 type ViewOut = GetCommercialViewsOutputType['views'][0];
@@ -101,7 +102,8 @@ export default function CommercialDashboardPage() {
     try {
       const [d, v] = await Promise.all([getDeals({}), getCommercialViews({})]);
       setDeals(d.deals);
-      const parsed = v.views.map(toSavedView);
+      // Las vistas del tablero nuevo (viewId «t2_…») viven en la misma tabla pero tienen otro formato: aquí no se muestran ni se tocan.
+      const parsed = v.views.filter(x => !esVistaTablero(x.viewId)).map(toSavedView);
       setViews(parsed);
       const def = parsed.find(x => x.isDefault) ?? parsed[0] ?? null;
       if (def) applyView(def);

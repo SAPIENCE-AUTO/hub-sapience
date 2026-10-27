@@ -19,6 +19,7 @@ import ProjectHubPage from './pages/ProjectHubPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import CommercialDashboardPage from './pages/CommercialDashboardPage';
 import DealsAnalysisPage from './pages/DealsAnalysisPage';
+import TableroComercialPage from './pages/TableroComercialPage';
 import CobranzaPage from './pages/CobranzaPage';
 import ProjectCostsPage from './pages/ProjectCostsPage';
 import ChatPage from './pages/ChatPage';
@@ -106,6 +107,7 @@ export default function App() {
                 <Route path="comercial/crm"       element={<CommercialPage />} />
                 <Route path="comercial/dashboard" element={<CommercialDashboardPage />} />
                 <Route path="comercial/analisis-ia" element={<DealsAnalysisPage />} />
+                <Route path="comercial/tablero" element={<TableroComercialPage />} />
                 <Route path="comercial/cotizaciones" element={<CotizacionesPage />} />
 
                 <Route path="operacion/proyectos"              element={<ProjectsPage />} />

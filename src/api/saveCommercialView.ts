@@ -23,14 +23,16 @@ export default createEndpoint({
       ? 'Fecha de aprobación'
       : 'Fecha de propuesta';
 
-    // If isDefault=true, unmark all other defaults for this user
+    // If isDefault=true, unmark all other defaults for this user — but only within the same family: the new commercial board (viewId «t2_…», see
+    // src/lib/tablero/vistas.ts) shares this table with the previous dashboard and each keeps its own default.
+    const esDelTablero = (viewId?: string | null) => !!viewId && viewId.startsWith('t2_');
     if (input.isDefault) {
       const existing = await CommercialDashboardViews.findAll({
         filters: { isDefault: true },
       });
       const otherDefaults = existing.records.filter(v => {
         const ownerArr = Array.isArray(v.owner) ? v.owner : v.owner ? [v.owner] : [];
-        return ownerArr.includes(userId);
+        return ownerArr.includes(userId) && esDelTablero(v.viewId) === esDelTablero(input.viewId);
       });
       for (const v of otherDefaults) {
         await CommercialDashboardViews.update({ id: v.id, record: { isDefault: false } });

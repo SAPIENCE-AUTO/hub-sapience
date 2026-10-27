@@ -24,6 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isPageVisible, ROUTE_TO_PAGE_KEY } from '../lib/pageVisibility';
+import { TABLERO_EMAILS } from '../lib/tablero/acceso';
 import { useActivityTracker } from '../hooks/useActivityTracker';
 import PendingSavesBar from './PendingSavesBar';
 import AvatarCropEditor from './AvatarCropEditor';
@@ -117,6 +118,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/comercial/crm',          icon: Briefcase,       label: 'CRM / Deals' },
       { to: '/comercial/dashboard',    icon: BarChart3,       label: 'Dashboard comercial' },
+      { to: '/comercial/tablero',      icon: LayoutDashboard, label: 'Tablero comercial', emails: TABLERO_EMAILS },
       { to: '/comercial/cotizaciones', icon: FileSpreadsheet, label: 'Cotizaciones' },
       { to: '/comercial/analisis-ia',  icon: Sparkles,        label: 'Análisis IA', roles: ['Owner'] },
     ],

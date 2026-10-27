@@ -19,6 +19,11 @@ const DealOut = z.object({
   notes: z.string().optional(),
   empresaOperadora: z.string().optional(),
   exchangeRate: z.number().optional(),
+  // Fechas y datos de la cotización que usa el tablero comercial (src/lib/tablero).
+  fechaDeBrief: z.string().optional(),
+  fechaPerdida: z.string().optional(),
+  statusPropuesta: z.string().optional(),
+  hechaPor: z.string().optional(),
   rowIndex: z.number().optional(),
 });
 
@@ -57,6 +62,10 @@ export default createEndpoint({
         notes: d.notes,
         empresaOperadora: d.empresaOperadora,
         exchangeRate: d.exchangeRate,
+        fechaDeBrief: d.fechaDeBrief,
+        fechaPerdida: d.fechaPerdida,
+        statusPropuesta: d.statusPropuesta,
+        hechaPor: d.hechaPor,
       })),
     };
   },
