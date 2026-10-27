@@ -31,6 +31,7 @@ import { conservarLogica, revisarNombres } from '../../src/serverUtils/formulari
 import { chequeosListo } from '../../src/lib/formularios/listo';
 import { conInicio, SECCION_INICIO } from '../../src/lib/formularios/inicio';
 import { conEstandar } from '../../src/lib/formularios/estandar';
+import { puedeVerFormularios } from '../../src/lib/formularios/acceso';
 import JSZip from 'jszip';
 import { documentoDeFiltro, nombreDocumento, textoDeBloques } from '../../src/lib/formularios/documento';
 import { wordDeDocumento } from '../../src/serverUtils/formularios/documento';
@@ -1505,6 +1506,11 @@ caso('todo filtro lleva las preguntas de siempre: hijos en «Sobre ti»; ingreso
   const vacio = conInicio(definicionVacia());
   assert.equal(conEstandar(vacio), vacio);
   assert.ok(!conEstandar(conInicio({ ...ALONG2, pais: 'PE' })).secciones.some((x) => x.preguntas.some((p) => p.id === 'hogar_ingresos')));
+});
+
+caso('Filtros y la Muestra son para toda la organización: cualquiera que entra al Hub', () => {
+  assert.ok(puedeVerFormularios('persona.prueba@ejemplo.test'));
+  assert.ok(!puedeVerFormularios(undefined) && !puedeVerFormularios(''));
 });
 
 await Promise.all(pendientes);

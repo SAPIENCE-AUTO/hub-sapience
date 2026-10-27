@@ -63,8 +63,8 @@ const ORIGENES: { id: Origen; nombre: string; detalle: string; ia?: boolean }[] 
 const enlace = enlaceDeFormulario;
 
 /**
- * Tools → Formularios: screeners que contestan los consumidores en /f/:codigo.
- * Por ahora solo para Sergio y solo en modo prueba (ver acceso.ts). La lista
+ * Reclutamiento → Filtros: screeners que contestan los consumidores en /f/:codigo.
+ * Para toda la organización desde el 2026-10-26 (ver acceso.ts). La lista
  * de filtros y el filtro abierto van uno tras otro (así caben el documento y
  * su mapa, y se lee bien en pantallas angostas). Un filtro abre en su
  * Documento, que se corrige ahí mismo (editor/, fase 2); sus respuestas se

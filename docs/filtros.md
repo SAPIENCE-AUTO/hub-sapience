@@ -17,7 +17,7 @@ Filtros reemplaza a Fillout dentro del Hub. De las notas de un proyecto sale un 
 - las filas del tablero de Reclutamiento;
 - los registros de la base de participantes.
 
-Usuario: Sergio (`sergio@sapience.com.mx`). **Solo él lo ve hasta la fase 6** (`FORMULARIOS_ALLOWED_EMAILS` en `src/lib/formularios/acceso.ts`; el candado real es del servidor, `exigirAccesoFormularios`).
+Usuarios: **toda la organización desde el 2026-10-26** (cualquiera que entra al Hub; `puedeVerFormularios` en `src/lib/formularios/acceso.ts`, y el candado real es del servidor, `exigirAccesoFormularios`). Antes fue solo para Sergio (`sergio@sapience.com.mx`) mientras se probaba.
 
 ## Lo que ya existe
 
@@ -186,7 +186,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | **Hecha** (`f450a2f`, 2026-10-22) |
 | 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`), Word/PDF (`9b8e584`) y formulario neutro en sharpli.mx (`99571cd`) hechos; faltan captcha, fotos y videos |
 | 5 | Operación: en vivo, nadie se corta por defecto, paso solo al tablero, historial y duplicados, traer respuestas de un filtro anterior, clasificación con IA, pestaña propia | **Hecha** («En vivo» `90cadec`; lo demás `0bd0d7d`, 2026-10-24) |
-| 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | Pendiente |
+| 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | **Abierto a toda la organización** (2026-10-26, sin subir); biblioteca, relanzar e incidencia, pendientes |
 
 ### Fase 1 · Base del screener
 
@@ -848,6 +848,19 @@ Sergio: en todos los filtros, al inicio, si tiene hijos, cuántos, de qué edad 
 
 **Puesto a mano en «SCALE - 02 LOLLIPOPS» (FILTRO V1, en prueba, sin respuestas), a pedido de Sergio:** con `conEstandar` y la revisión del editor, revisión 27 → 28, con una versión guardada antes («Antes de agregar hijos, ingresos, autos y último viaje»). En el editor se leen bien: los hijos al final de «Sobre ti» con su «Solo aparece si contestó Sí» y los del hogar después de «NSE · Cuartos». 95 pruebas.
 
+### Filtros y la Muestra para toda la organización (2026-10-26, sin subir)
+
+Sergio: activarle el apartado de filtros a toda la organización. Un solo candado decidía todo (`puedeVerFormularios`, solo su correo): ahora deja pasar a cualquiera que entra al Hub (hoy 27 usuarios, todos del equipo; sin sesión, nada). Con eso, para todos:
+
+- en Reclutamiento, las pestañas **Muestra · Filtros · Participantes** (abre en Participantes, los tableros de siempre);
+- en el inicio del proyecto, el widget nuevo de Reclutamiento (filtro y participantes contra la muestra);
+- en «Vincular form» del tablero, los filtros del Hub;
+- los 37 endpoints de Filtros y de la Muestra (`exigirAccesoFormularios`).
+
+Cada persona tiene su propio tope de IA (60 llamadas por hora) y el editor avisa si otra persona tiene abierto el mismo filtro. Si se quiere volver a acotar (por rol o por correo), se cambia solo `puedeVerFormularios`.
+
+**Probado (2026-10-26):** `getFormularios` y `getMuestra` llamados como un usuario inventado (`persona.prueba@ejemplo.test`) responden con los filtros y la muestra de SCALE LOLLIPOPS; sin sesión, «Sesión requerida». 96 pruebas.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
@@ -863,7 +876,7 @@ Sergio: en todos los filtros, al inicio, si tiene hijos, cuántos, de qué edad 
 | Columnas al tablero | Todas, con una vista de solo las clave | — |
 | Imágenes de conceptos confidenciales | Caso por caso | — |
 | Pagos, agendar citas y registros de otra base | Fuera hasta que se pidan | — |
-| A quién se abre en la fase 6 | Primero a quien tiene Swipe | — |
+| A quién se abre en la fase 6 | **Resuelto (2026-10-26):** a toda la organización de una vez, sin pasar primero por quien tiene Swipe | — |
 
 ## Bitácora
 

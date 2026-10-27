@@ -1,6 +1,4 @@
-// «Lo meteríamos en Tools sólo para Sergio primero» (Sergio, 2026-10-21): se prueba antes de abrirlo al equipo.
-// El candado real está en el servidor (serverUtils/formularios/acceso.ts); aquí solo decide si se ve la pestaña.
-export const FORMULARIOS_ALLOWED_EMAILS = ['sergio@sapience.com.mx'];
-
-export const puedeVerFormularios = (email?: string | null) =>
-  !!email && FORMULARIOS_ALLOWED_EMAILS.includes(email.toLowerCase());
+// Filtros y la Muestra, para toda la organización (Sergio, 2026-10-26): cualquiera que entra al Hub. Antes
+// fue solo para Sergio («lo meteríamos en Tools sólo para Sergio primero», 2026-10-21), mientras se probaba.
+// El candado real está en el servidor (serverUtils/formularios/acceso.ts); aquí solo decide si se ven las pestañas.
+export const puedeVerFormularios = (email?: string | null) => !!email;
