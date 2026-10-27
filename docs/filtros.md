@@ -836,7 +836,7 @@ Al crear grupos se ponen los dos nombres; al guardar la muestra, el servidor ren
 
 **Probado en local (2026-10-26):** en «3 MAYO PRUEBA 3» (versión 4), sus 3 grupos y el evento de S1 tomaron el nombre nuevo y el externo, con el evento ligado intacto. 94 pruebas. ALONG 2 no tiene grupos (se quitaron para rehacerlos): sus perfiles aún no tienen género, edad ni NSE.
 
-### Preguntas de siempre: hijos, ingresos, autos y último viaje (2026-10-26, `12b7d2c`)
+### Preguntas de siempre: hijos, ingresos, autos y último viaje (2026-10-26, `8fc4cb3`)
 
 Sergio: en todos los filtros, al inicio, si tiene hijos, cuántos, de qué edad y si van a escuela pública o privada; y después del NSE, los ingresos del hogar, el último viaje y los modelos y años de sus autos, como en ALONG 2. Las pone el Hub (`conEstandar` en `lib/formularios/estandar.ts`), como el celular y el correo de «Antes de empezar»: son preguntas normales, el analista las corrige o las quita.
 
