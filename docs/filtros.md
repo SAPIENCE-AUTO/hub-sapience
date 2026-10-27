@@ -186,7 +186,7 @@ Todo depende de esto; cambiarlo afecta a todas las fases.
 | 3 | Generador con IA: insumos, estructura con supuestos, preguntas, comentarios a la IA, tope de uso | **Hecha** (`f450a2f`, 2026-10-22) |
 | 4 | Salidas: Word/PDF humano, formulario neutro en dominio Sharpli, captcha, aviso de privacidad, fotos y videos | **En curso:** aviso (`301e804`), Word/PDF (`9b8e584`) y formulario neutro en sharpli.mx (`99571cd`) hechos; faltan captcha, fotos y videos |
 | 5 | Operación: en vivo, nadie se corta por defecto, paso solo al tablero, historial y duplicados, traer respuestas de un filtro anterior, clasificación con IA, pestaña propia | **Hecha** («En vivo» `90cadec`; lo demás `0bd0d7d`, 2026-10-24) |
-| 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | **Abierto a toda la organización** (2026-10-26, sin subir); biblioteca, relanzar e incidencia, pendientes |
+| 6 | Biblioteca «Filtros», relanzar, incidencia, abrir al equipo | **Abierto a toda la organización** (2026-10-26, `4842fb9`); biblioteca, relanzar e incidencia, pendientes |
 
 ### Fase 1 · Base del screener
 
@@ -848,7 +848,7 @@ Sergio: en todos los filtros, al inicio, si tiene hijos, cuántos, de qué edad 
 
 **Puesto a mano en «SCALE - 02 LOLLIPOPS» (FILTRO V1, en prueba, sin respuestas), a pedido de Sergio:** con `conEstandar` y la revisión del editor, revisión 27 → 28, con una versión guardada antes («Antes de agregar hijos, ingresos, autos y último viaje»). En el editor se leen bien: los hijos al final de «Sobre ti» con su «Solo aparece si contestó Sí» y los del hogar después de «NSE · Cuartos». 95 pruebas.
 
-### Filtros y la Muestra para toda la organización (2026-10-26, sin subir)
+### Filtros y la Muestra para toda la organización (2026-10-26, `4842fb9`)
 
 Sergio: activarle el apartado de filtros a toda la organización. Un solo candado decidía todo (`puedeVerFormularios`, solo su correo): ahora deja pasar a cualquiera que entra al Hub (hoy 27 usuarios, todos del equipo; sin sesión, nada). Con eso, para todos:
 
