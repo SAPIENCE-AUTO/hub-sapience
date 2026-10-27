@@ -11,11 +11,11 @@ Salen de las versiones del screener de ALONG 2 (ejemplo 1) y de cómo trabaja el
 
 0. **Nadie se corta por defecto.** Lo que antes «terminaba» el filtro ahora es «no califica»: se registra el motivo y la persona contesta todo, para no enseñarle dónde se corta. Usa `cortar` solo si el pedido lo dice.
 1. **«Antes de empezar» lo pone el Hub** en todos los filtros: el aviso de privacidad (con «No acepto» que termina), el nombre y la foto de una identificación oficial (quien no quiere darla termina). No los escribas ni los repitas: la estructura empieza en lo que sigue.
-2. **Datos de contacto y perfil básico**: género, edad, código postal o ciudad, cómo es su hogar. El nombre, el celular y el correo ya los pide el Hub en «Antes de empezar»: no los vuelvas a preguntar. Van al inicio para poder recuperar a quien abandona y para cortar pronto por edad o zona.
+2. **Datos de contacto y perfil básico**: género, edad, código postal o ciudad, cómo es su hogar. El nombre, el celular y el correo ya los pide el Hub en «Antes de empezar»: no los vuelvas a preguntar. Van al inicio para poder recuperar a quien abandona y para cortar pronto por edad o zona. **Si tiene hijos** (cuántos, género y edad de cada uno, escuela pública o privada) lo agrega el Hub al final de esta sección: no lo escribas, salvo que el estudio necesite más detalle para filtrar (edad exacta de cada hijo para un perfil de mamás, por ejemplo); entonces escribe el tuyo y el Hub no agrega el suyo.
 3. **Filtros de seguridad**: giros y estudios recientes.
 4. **De lo general a lo particular:** primero las categorías que compra o usa, después los formatos o tipos dentro de la categoría que importa, y **solo dentro de cada uno** el detalle (marcas, aroma o variante, lugar de compra, antigüedad, última compra, foto).
 5. **Marcas que no compraría** (rechazo) después de los bloques, para no sugerir marcas antes.
-6. **NSE** con el cuestionario oficial.
+6. **NSE** con el cuestionario oficial. Después de sus preguntas el Hub agrega los ingresos del hogar, los modelos y años de sus autos y su último viaje de placer: no los escribas.
 7. **Condiciones de participación** al final: lo que implica el estudio (visita, compra acompañada, grabación, sesión en línea con cámara, videollamada de verificación) con su aceptación, y disponibilidad.
 
 ## Abiertas u opciones
@@ -57,6 +57,7 @@ Van en todos los filtros, salvo que los insumos digan otra cosa:
 ## NSE
 
 - Las preguntas las pone el Hub con el cuestionario oficial del país (en México, la regla AMAI vigente). En la estructura solo se marca la sección con `nse: true`.
+- Después del NSE, el Hub agrega en la misma sección los ingresos del hogar (en México), qué modelos y años de autos tienen (si tienen alguno) y su último viaje de placer. Son preguntas de siempre, no filtran: no las escribas ni las pongas en la estructura.
 - **El NSE nunca descarta.** Lo que pide un perfil («C+», «C a D+») va en su condición y, si no coincide, la persona entra con una alerta para que el equipo decida.
 - Si el país no tiene regla cargada en el Hub, no hay sección de NSE: dilo en `supuestos`.
 

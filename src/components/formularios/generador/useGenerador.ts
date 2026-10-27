@@ -8,6 +8,7 @@ import {
   avanceEscritura, firmaSeccion, ponerSeccion, prepararParaEscribir, seccionNse,
   type Generador, type ReunionInsumo,
 } from '@/lib/formularios/generador';
+import { conEstandar } from '@/lib/formularios/estandar';
 import { aplicarParche, type Parche } from '@/lib/formularios/ia';
 import type { Seccion } from '@/lib/formularios/tipos';
 import type { Editor } from '../editor/useEditorFiltro';
@@ -150,6 +151,9 @@ export function useGenerador({ formularioId, editor, inicial, usoInicial }: {
     setLogica('armando');
     setErrorLogica('');
     try {
+      // Con todas las secciones puestas, el Hub agrega las preguntas de siempre (hijos, ingresos, autos, viaje) que falten:
+      // así la lógica ya las ve.
+      editorRef.current.aplicar(conEstandar);
       const r = await seguir(generateFormularioLogica({ formularioId, definicion: editorRef.current.leer() }));
       contarUso();
       editorRef.current.aplicar((d) => aplicarParche(d, r.parche as Parche));

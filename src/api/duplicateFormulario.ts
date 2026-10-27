@@ -6,6 +6,7 @@ import { copiarArchivosInsumo } from '../serverUtils/formularios/insumos';
 import { leerGenerador } from '../lib/formularios/generador';
 import { leerDefinicion } from '../lib/formularios/tipos';
 import { conInicio } from '../lib/formularios/inicio';
+import { conEstandar } from '../lib/formularios/estandar';
 
 /**
  * Duplica un filtro: el mismo screener (y lo de la IA: estructura, supuestos e
@@ -33,7 +34,7 @@ export default createEndpoint({
          values ($1, $2, $3, $4, $5, $6)
          on conflict (codigo) do nothing
          returning id`,
-        [codigo, `${f.titulo} (copia)`, f.plantilla, JSON.stringify(conInicio(leerDefinicion(f.definicion))), f.proyecto_id, context.user!.id],
+        [codigo, `${f.titulo} (copia)`, f.plantilla, JSON.stringify(conEstandar(conInicio(leerDefinicion(f.definicion)))), f.proyecto_id, context.user!.id],
       );
       if (!rows[0]) continue;
       const id = rows[0].id as string;

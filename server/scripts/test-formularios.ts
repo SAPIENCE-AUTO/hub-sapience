@@ -30,6 +30,7 @@ import { errorDeLaIA, systemPrompt } from '../../src/serverUtils/formularios/cla
 import { conservarLogica, revisarNombres } from '../../src/serverUtils/formularios/generar';
 import { chequeosListo } from '../../src/lib/formularios/listo';
 import { conInicio, SECCION_INICIO } from '../../src/lib/formularios/inicio';
+import { conEstandar } from '../../src/lib/formularios/estandar';
 import JSZip from 'jszip';
 import { documentoDeFiltro, nombreDocumento, textoDeBloques } from '../../src/lib/formularios/documento';
 import { wordDeDocumento } from '../../src/serverUtils/formularios/documento';
@@ -655,8 +656,9 @@ caso('la estructura de un filtro escrito se lee completa y da casi los mismos mi
   const giros = e.secciones.find((s) => s.id === 'filtros')!.preguntas.find((p) => p.id === 'giros')!;
   assert.match(giros.logica ?? '', /«Publicidad o marketing»: Si la marca, no califica/);
   // El boceto de la estructura da casi los mismos minutos que el screener escrito (no lleva la bienvenida ni las ayudas).
+  // Los dos cuentan «Antes de empezar» y las preguntas de siempre, que pone el Hub.
   const m = minutosDeEstructura(e).total;
-  const real = duracionEstimada(ALONG2);
+  const real = duracionEstimada(conEstandar(conInicio(ALONG2)));
   assert.ok(Math.abs(m.tipico - real.tipico) <= 1 && Math.abs(m.maximo - real.maximo) <= 1, JSON.stringify({ m, real }));
   const porSeccion = minutosDeEstructura(e).porSeccion;
   assert.ok(porSeccion.aroma_bloque.maximo > porSeccion.aroma_bloque.tipico);
@@ -1473,6 +1475,36 @@ caso('la identificación se compara con lo declarado: nombre, edad y lugar; lo q
   assert.deepEqual(compararIdentificacion({ ...leido, ciudad: null, estado: null }, { nombre: 'Persona Ejemplo', estado: 'Jalisco' }, 'MX', hoy).alertas, []);
   const d = conInicio(ALONG2);
   assert.deepEqual(declaradoDe(d, { hub_nombre: 'Persona Ejemplo', edad: 35 }), { nombre: 'Persona Ejemplo', edad: 35, ciudad: undefined, estado: undefined });
+});
+
+caso('todo filtro lleva las preguntas de siempre: hijos en «Sobre ti»; ingresos, autos y último viaje después del NSE', () => {
+  const d = conEstandar(conInicio(ALONG2));
+  assert.deepEqual(revisarDefinicion(d), []);
+  assert.equal(conEstandar(d), d); // no se ponen dos veces
+  const ids = (id: string) => d.secciones.find((x) => x.id === id)!.preguntas.map((p) => p.id);
+  assert.deepEqual(ids('perfil').slice(-4), ['familia_hijos', 'familia_hijos_cuantos', 'familia_hijos_edades', 'familia_hijos_escuela']);
+  assert.deepEqual(ids('nse').slice(-4), ['nse_cuartos', 'hogar_ingresos', 'hogar_autos', 'hogar_viaje']);
+  // Cuántos hijos y de qué edad, solo si tiene; el modelo de los autos, solo si tiene alguno.
+  const sobreTi = (r: Record<string, string>) => pantallas(d, { hub_aviso: 'acepto', ...r }).find((x) => x.seccion.id === 'perfil')!.preguntas.map((p) => p.clave);
+  assert.ok(!sobreTi({ familia_hijos: 'no' }).includes('familia_hijos_cuantos'));
+  assert.ok(sobreTi({ familia_hijos: 'si' }).includes('familia_hijos_escuela'));
+  const hogar = (r: Record<string, string>) => pantallas(d, { hub_aviso: 'acepto', ...r }).find((x) => x.seccion.id === 'nse')!.preguntas.map((p) => p.clave);
+  assert.ok(!hogar({ nse_autos: '0' }).includes('hogar_autos'));
+  assert.ok(hogar({ nse_autos: '1' }).includes('hogar_autos'));
+  // Lo que el filtro ya pregunta con sus palabras no se repite (las del NSE no cuentan).
+  const conLoSuyo = conEstandar(conInicio({
+    ...ALONG2,
+    secciones: ALONG2.secciones.map((x) => (x.id === 'perfil'
+      ? { ...x, preguntas: [...x.preguntas, { id: 'cuantos_hijos', tipo: 'numero' as const, nombre: 'Hijos', texto: '¿Cuántos hijos tienes?' }] }
+      : x.id === 'nse' ? { ...x, preguntas: [...x.preguntas, { id: 'ingreso', tipo: 'texto' as const, nombre: 'Ingreso', texto: '¿Cuál es el ingreso de tu hogar?' }] } : x)),
+  }));
+  const todas = conLoSuyo.secciones.flatMap((x) => x.preguntas.map((p) => p.id));
+  assert.ok(!todas.includes('familia_hijos') && !todas.includes('hogar_ingresos'));
+  assert.ok(todas.includes('hogar_autos') && todas.includes('hogar_viaje'));
+  // Un filtro con IA antes de escribirse no recibe nada (le llegan al armar la lógica); fuera de México, sin ingresos en pesos.
+  const vacio = conInicio(definicionVacia());
+  assert.equal(conEstandar(vacio), vacio);
+  assert.ok(!conEstandar(conInicio({ ...ALONG2, pais: 'PE' })).secciones.some((x) => x.preguntas.some((p) => p.id === 'hogar_ingresos')));
 });
 
 await Promise.all(pendientes);

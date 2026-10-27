@@ -1,5 +1,6 @@
 import { duracionEstimada, duracionPorSeccion, type Duracion } from './duracion';
 import { idNuevo } from './editar';
+import { conEstandar } from './estandar';
 import { SECCION_INICIO, inicioPrimero, seccionInicio } from './inicio';
 import { preguntasNse, reglaNse } from './nse';
 import { preguntasDeCondicion } from './flujo';
@@ -426,8 +427,8 @@ export function bocetoDeEstructura(e: Estructura): Definicion {
 
 export function minutosDeEstructura(e: Estructura): { total: Duracion; porSeccion: Record<string, Duracion> } {
   const boceto = bocetoDeEstructura(e);
-  // «Antes de empezar» no va en la estructura (la pone el Hub), pero sí cuenta en los minutos.
-  const conInicio = { ...boceto, secciones: [seccionInicio(), ...boceto.secciones] };
+  // «Antes de empezar» y las preguntas de siempre no van en la estructura (las pone el Hub), pero sí cuentan en los minutos.
+  const conInicio = conEstandar({ ...boceto, secciones: [seccionInicio(), ...boceto.secciones] });
   return { total: duracionEstimada(conInicio), porSeccion: duracionPorSeccion(boceto) };
 }
 

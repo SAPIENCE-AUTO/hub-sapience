@@ -7,6 +7,7 @@ import { revisarDefinicion } from '../lib/formularios/revisar';
 import { definicionVacia, generadorNuevo, type Generador } from '../lib/formularios/generador';
 import { leerDefinicion, type Definicion } from '../lib/formularios/tipos';
 import { conInicio } from '../lib/formularios/inicio';
+import { conEstandar } from '../lib/formularios/estandar';
 import { historialDeTraidas, traerRespuestas } from '../serverUtils/formularios/traer';
 
 /**
@@ -55,8 +56,9 @@ export default createEndpoint({
       generador = generadorNuevo(input.origen);
       plantilla = 'ia';
     }
-    // Todo filtro arranca con «Antes de empezar» (aviso, nombre e identificación); lo pone el Hub.
-    definicion = conInicio(definicion);
+    // Todo filtro arranca con «Antes de empezar» (aviso, nombre e identificación) y lleva las preguntas de siempre
+    // (hijos, ingresos, autos y último viaje); las pone el Hub. Uno con IA recibe las de siempre al escribirse.
+    definicion = conEstandar(conInicio(definicion));
     const problemas = revisarDefinicion(definicion);
     if (problemas.length) throw new ZiteError({ code: 'BAD_REQUEST', message: `El screener de partida tiene problemas: ${problemas.join(' ')}` });
 
