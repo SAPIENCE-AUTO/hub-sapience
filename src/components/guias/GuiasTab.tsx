@@ -32,7 +32,7 @@ export interface ProyectoGuias {
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 
-/** Pestaña «Guías» de un proyecto: las guías de tópicos que tiene y, al abrir una, su editor. */
+/** Las guías de tópicos de un proyecto (pestañita «Guías» dentro de Tools): las que tiene y, al abrir una, su editor. */
 export default function GuiasTab({ project }: { project: ProyectoGuias }) {
   const [abierta, setAbierta] = useState<string | null>(null);
   const [guias, setGuias] = useState<ResumenGuia[] | null>(null);

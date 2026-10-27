@@ -11,7 +11,7 @@ import { createRequire } from 'node:module';
 import { PGlite } from '@electric-sql/pglite';
 import { pool } from '../compat';
 import { DATE_OID, NUMERIC_OID, TIMESTAMPTZ_OID, parseDate, parseNumeric, parseTimestamptz } from '../compat/datetimeParsers';
-import { GUIAS_EMAILS, puedeVerGuias } from '../../src/lib/guias/acceso';
+import { puedeVerGuias } from '../../src/lib/guias/acceso';
 import { estadoVacio, minutosRoadmap, realinearGuia, type EstadoGuia } from '../../src/lib/guias/types';
 
 // El tope de uso se lee al cargar el módulo: se fija antes de importar los endpoints.
@@ -80,7 +80,7 @@ const usuario = async (correo: string, role: string, nombre: string, apellido: s
   const id = (await pg.query<{ id: string }>(`insert into users (email, role, first_name, last_name) values ($1, $2, $3, $4) returning id`, [correo, role, nombre, apellido])).rows[0].id;
   return { user: { id, email: correo, role } } as any;
 };
-const sergio = await usuario(GUIAS_EMAILS[0], 'Owner', 'Sergio', 'Prueba');
+const sergio = await usuario('dueno@ejemplo.test', 'Owner', 'Sergio', 'Prueba');
 const ana = await usuario('ana@ejemplo.test', 'Analista', 'Ana', 'Ramos');
 const socio = await usuario('socio@ejemplo.test', 'Socio', 'Luis', 'Socio');
 const proyectoId = (await pg.query<{ id: string }>(`insert into projects (project_code, client) values ('PRUEBA-GUIAS', 'Cliente X') returning id`)).rows[0].id;
@@ -133,38 +133,44 @@ const conRoadmap = (): EstadoGuia => estadoDe({
 
 // ── Permisos ──────────────────────────────────────────────────────────────────
 
-await prueba('sin sesión no entra nadie; con sesión, solo quien está en la lista', async () => {
+await prueba('sin sesión (o sin correo) no entra nadie, y no se le llama a Claude; con sesión entra todo el equipo, sea cual sea su rol', async () => {
   await rechaza(() => crear.run({}, { user: null } as any), 'UNAUTHORIZED', 401);
   await rechaza(() => crear.run({}, { user: { id: ana.user.id, email: '' } } as any), 'UNAUTHORIZED');
-  await rechaza(() => crear.run({}, ana), 'FORBIDDEN', 403);
-  await rechaza(() => listar.run({}, ana), 'FORBIDDEN');
-  await rechaza(() => leerArchivo.run({ nombre: 'a.txt', base64: Buffer.from('hola').toString('base64') }, ana), 'FORBIDDEN');
-  await rechaza(() => roadmapIA.run({ estado: estadoDe() }, ana), 'FORBIDDEN');
-  assert.equal(llamadas.length, 0, 'a Claude no se le debe llamar si no hay permiso');
+  await rechaza(() => listar.run({}, { user: null } as any), 'UNAUTHORIZED');
+  await rechaza(() => leerArchivo.run({ nombre: 'a.txt', base64: Buffer.from('hola').toString('base64') }, { user: null } as any), 'UNAUTHORIZED');
+  await rechaza(() => roadmapIA.run({ estado: estadoDe() }, { user: null } as any), 'UNAUTHORIZED');
+  assert.equal(llamadas.length, 0, 'a Claude no se le debe llamar si no hay sesión');
+  for (const quien of [ana, socio, sergio]) {
+    const g: any = await sinBitacora(() => crear.run({ titulo: 'Para probar el acceso' }, quien));
+    assert.ok(((await sinBitacora(() => listar.run({}, quien))) as any).guias.some((x: any) => x.id === g.id));
+    assert.equal(((await sinBitacora(() => leerArchivo.run({ nombre: 'a.txt', base64: Buffer.from('hola').toString('base64') }, quien))) as any).texto, 'hola');
+    await sinBitacora(() => borrar.run({ id: g.id }, quien));
+  }
 });
 
-await prueba('puedeVerGuias (lo que decide si se ve la pestaña): solo la lista, sin importar mayúsculas ni espacios; sin correo, nadie', () => {
-  assert.equal(puedeVerGuias(GUIAS_EMAILS[0]), true);
-  assert.equal(puedeVerGuias(`  ${GUIAS_EMAILS[0].toUpperCase()} `), true);
-  assert.equal(puedeVerGuias('ana@ejemplo.test'), false);
+await prueba('puedeVerGuias (lo que decide si se ve la pestañita): todo el equipo; sin correo, nadie', () => {
+  assert.equal(puedeVerGuias('ana@ejemplo.test'), true);
+  assert.equal(puedeVerGuias('  OTRA@ejemplo.test '), true);
   assert.equal(puedeVerGuias(''), false);
   assert.equal(puedeVerGuias(null), false);
   assert.equal(puedeVerGuias(undefined), false);
 });
 
-await prueba('GUIAS_ALLOWED_EMAILS cambia la lista sin tocar el código: «*» abre a todo el equipo, y una lista deja pasar solo a esas personas', async () => {
-  process.env.GUIAS_ALLOWED_EMAILS = '*';
+await prueba('GUIAS_ALLOWED_EMAILS puede acotar sin tocar el código: una lista deja pasar solo a esas personas (sin importar mayúsculas) y «*» vuelve a abrir a todo el equipo', async () => {
   try {
-    const g: any = await sinBitacora(() => crear.run({ titulo: 'De Ana' }, ana));
-    await sinBitacora(() => borrar.run({ id: g.id }, ana));
     process.env.GUIAS_ALLOWED_EMAILS = 'otra@ejemplo.test, SOCIO@ejemplo.test';
-    await rechaza(() => crear.run({}, ana), 'FORBIDDEN');
+    await rechaza(() => crear.run({}, ana), 'FORBIDDEN', 403);
     await rechaza(() => crear.run({}, sergio), 'FORBIDDEN');
+    await rechaza(() => listar.run({}, ana), 'FORBIDDEN');
     const g2: any = await sinBitacora(() => crear.run({ titulo: 'Del socio' }, socio));
     await sinBitacora(() => borrar.run({ id: g2.id }, socio));
+    process.env.GUIAS_ALLOWED_EMAILS = '*';
+    const g: any = await sinBitacora(() => crear.run({ titulo: 'De Ana' }, ana));
+    await sinBitacora(() => borrar.run({ id: g.id }, ana));
   } finally {
     delete process.env.GUIAS_ALLOWED_EMAILS;
   }
+  await sinBitacora(async () => { const g: any = await crear.run({ titulo: 'De nuevo todo el equipo' }, ana); await borrar.run({ id: g.id }, ana); });
 });
 
 // ── Crear, abrir, guardar, borrar ─────────────────────────────────────────────
@@ -279,18 +285,13 @@ await prueba('una guía nueva se llama como el proyecto; las repetidas del mismo
 await prueba('borrar: solo quien la creó, un Owner o un Socio; después ya no sale ni se abre', async () => {
   const g: any = await sinBitacora(() => crear.run({ titulo: 'Para borrar', projectId: proyectoId }, sergio));
   assert.equal(((await sinBitacora(() => abrir.run({ id: g.id }, sergio))) as any).puedeBorrar, true);
-  // una Analista ni siquiera entra (no está en la lista); con «*» entra pero no puede borrar la de otra persona
-  process.env.GUIAS_ALLOWED_EMAILS = '*';
-  try {
-    assert.equal(((await sinBitacora(() => abrir.run({ id: g.id }, ana))) as any).puedeBorrar, false);
-    const lista: any = await sinBitacora(() => listar.run({ projectId: proyectoId }, ana));
-    assert.ok(lista.guias.every((x: any) => x.puedeBorrar === false));
-    await rechaza(() => borrar.run({ id: g.id }, ana), 'FORBIDDEN', 403);
-    assert.equal(((await sinBitacora(() => abrir.run({ id: g.id }, socio))) as any).puedeBorrar, true);
-    await sinBitacora(() => borrar.run({ id: g.id }, socio));
-  } finally {
-    delete process.env.GUIAS_ALLOWED_EMAILS;
-  }
+  // una Analista abre y edita la guía de otra persona, pero no la puede borrar; un Socio sí
+  assert.equal(((await sinBitacora(() => abrir.run({ id: g.id }, ana))) as any).puedeBorrar, false);
+  const lista: any = await sinBitacora(() => listar.run({ projectId: proyectoId }, ana));
+  assert.ok(lista.guias.every((x: any) => x.puedeBorrar === false));
+  await rechaza(() => borrar.run({ id: g.id }, ana), 'FORBIDDEN', 403);
+  assert.equal(((await sinBitacora(() => abrir.run({ id: g.id }, socio))) as any).puedeBorrar, true);
+  await sinBitacora(() => borrar.run({ id: g.id }, socio));
   await rechaza(() => abrir.run({ id: g.id }, sergio), 'NOT_FOUND', 404);
   const ids = ((await sinBitacora(() => listar.run({ projectId: proyectoId }, sergio))) as any).guias.map((x: any) => x.id);
   assert.ok(!ids.includes(g.id) && ids.includes(guiaId));
@@ -515,7 +516,9 @@ await prueba('descargar el Word de una guía guardada: es el del último guardad
   const w: any = await sinBitacora(() => wordEndpoint.run({ id: g.id }, sergio));
   const zip = await JSZip.loadAsync(Buffer.from(w.base64, 'base64'));
   assert.ok((await zip.file('word/document.xml').async('string')).includes('Entender cómo hablan'));
-  await rechaza(() => wordEndpoint.run({ id: g.id }, ana), 'FORBIDDEN');
+  // todo el equipo puede bajar el Word de una guía
+  const wAna: any = await sinBitacora(() => wordEndpoint.run({ id: g.id }, ana));
+  assert.equal(wAna.nombre, w.nombre);
   await sinBitacora(() => borrar.run({ id: g.id }, sergio));
   await rechaza(() => wordEndpoint.run({ id: g.id }, sergio), 'NOT_FOUND');
 });

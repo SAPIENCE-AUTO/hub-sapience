@@ -1,8 +1,8 @@
 import { ZiteError } from '../../../server/compat';
 import { puedeVerGuias } from '../../lib/guias/acceso';
 
-// El candado real de las guías de tópicos vive aquí; el de la pestaña es cosmético. Por defecto vale la lista de src/lib/guias/acceso.ts. Con GUIAS_ALLOWED_EMAILS
-// (correos separados por coma, o «*» para todo el equipo) se cambia sin tocar el código; sin esa variable no cambia nada.
+// El candado real de las guías de tópicos vive aquí; el de la pestaña es cosmético. Por defecto entra todo el equipo (src/lib/guias/acceso.ts). Con GUIAS_ALLOWED_EMAILS
+// (correos separados por coma, o «*» para todo el equipo) se puede acotar sin tocar el código; sin esa variable no cambia nada.
 export function exigirAccesoGuias(context: { user?: { email?: string } | null }) {
   const email = (context.user?.email ?? '').toLowerCase();
   if (!email) throw new ZiteError({ code: 'UNAUTHORIZED', message: 'Inicia sesión' });

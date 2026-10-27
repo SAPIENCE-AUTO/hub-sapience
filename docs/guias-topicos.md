@@ -1,12 +1,12 @@
 # Guías de tópicos — guía del módulo
 
-Guía viva del generador de **guías de tópicos** del Hub: pestaña «Guías» dentro de cada proyecto. Cada sesión que trabaje en él: lee esta guía antes de tocar nada y, al terminar, actualiza la bitácora.
+Guía viva del generador de **guías de tópicos** del Hub: pestañita «Guías» dentro de **Tools** de cada proyecto, junto a Swipe, Ejes y Prework. Cada sesión que trabaje en él: lee esta guía antes de tocar nada y, al terminar, actualiza la bitácora.
 
 ## Qué es
 
 Arma la guía de tópicos de una sesión de grupo, mini grupo, tríada o entrevista a profundidad en tres pasos: **Proyecto** (de dónde se parte y los datos), **Roadmap** (bloques con minutos y objetivos) y **Guía** (las preguntas de cada bloque, con la voz de los moderadores de Sapience). Se parte de un roadmap que ya existe, de un brief o solo del tema; también se pueden armar los bloques a mano. La guía se corrige con un clic en cualquier texto y se descarga en Word con la plantilla de la agencia.
 
-Quién la ve: por ahora solo Sergio (`GUIAS_EMAILS` en `src/lib/guias/acceso.ts`; el candado real es `exigirAccesoGuias`, en el servidor). Para abrirla al equipo basta con cambiar `puedeVerGuias` a `!!email`, o fijar `GUIAS_ALLOWED_EMAILS` en Render (correos separados por coma, o `*`).
+Quién la ve: **todo el equipo**, cualquiera que entra al Hub (desde el 2026-10-26; antes fue solo para Sergio mientras se probaba). `puedeVerGuias` en `src/lib/guias/acceso.ts` decide si se ve la pestañita; el candado real es `exigirAccesoGuias`, en el servidor. Se puede volver a acotar sin tocar el código con `GUIAS_ALLOWED_EMAILS` en Render (correos separados por coma, o `*` para todo el equipo). La pestaña Tools del proyecto la ve quien tenga alguna herramienta: Swipe (y Ejes y Prework) según sus listas en `ProjectHubPage.tsx`, o las guías (todo el equipo); quien solo tiene las guías ve únicamente «Guías». La portada del proyecto muestra su tarjeta de Swipe solo a quien tiene Swipe.
 
 ## Dónde está
 
@@ -15,7 +15,7 @@ Quién la ve: por ahora solo Sergio (`GUIAS_EMAILS` en `src/lib/guias/acceso.ts`
   - `claude.ts` (llamadas con zod, un reintento si el JSON no cumple, error claro si la respuesta se corta por largo, «Detener» que llega hasta Claude), `prompts.ts` (el volumen de cada bloque), `esquemas.ts` (topes de lo que entra), `normalizar.ts`, `word.ts`, `archivo.ts` (Word, .txt o .md → texto; las tablas salen como un renglón por fila con « | »), `acceso.ts` (candado y tope de uso de la IA por persona y hora), `datos.ts`.
 - `src/api/` — 10 endpoints: `createGuia` (una guía nueva se llama como el proyecto; las repetidas del mismo proyecto salen como «(2)», «(3)»…), `getGuias`, `getGuia`, `saveGuia`, `deleteGuia`, `leerArchivoGuia`, `getGuiaWord` y los tres de IA con avance (`generateGuiaRoadmap`, `adjustGuiaRoadmap`, `generateGuiaBloque`).
 - `src/lib/guias/` — lo que comparten el servidor y la pantalla (`types.ts`, `acceso.ts`) y los helpers de la pantalla.
-- `src/components/guias/` — la pantalla (`GuiasTab` es la entrada); se monta en `ProjectHubPage.tsx`.
+- `src/components/guias/` — la pantalla (`GuiasTab` es la entrada); se monta como pestañita de `ProjectToolsTab.tsx` (`ProjectHubPage.tsx` le pasa el proyecto y si la persona puede verla).
 - Tabla `guias_topicos` (definida en `generate.py`, EXTRA_TABLES; el CREATE real: `server/scripts/add-guias-topicos-table.ts`, no se ejecuta solo). Todo el estado de una guía va en `estado jsonb` (datos del proyecto, el roadmap o brief pegado, el roadmap armado y la guía escrita): se lee y se escribe entero, nunca se consulta por dentro. `version` sube con cada guardado y evita que dos personas se pisen (409 «Otra persona la cambió»). Borrado suave con `deleted_at`; borra quien la creó, un Owner o un Socio.
 - Pruebas: `server/scripts/test-guias.ts` (contra PGlite con el esquema real y una Claude de mentiras) y `server/scripts/test-guias-ui.ts` (lo puro de la pantalla).
 - El paquete original sigue en `paquetes/guias-topicos/` (README, skill completa con las guías reales, referencia de la UI de Empathy).
@@ -37,4 +37,6 @@ Quién la ve: por ahora solo Sergio (`GUIAS_EMAILS` en `src/lib/guias/acceso.ts`
 ## Bitácora
 
 - **2026-10-26 — integración:** el paquete del 5 de octubre pasó al Hub: servidor, tabla, pantalla como pestaña de cada proyecto y pruebas. Probado de punta a punta con la IA de verdad (tema → roadmap → 6 bloques → Word, en una base en memoria): 1,716 palabras y 124 «¿» para 120 minutos, dentro de lo calibrado.
-- **Siguiente:** abrirla al equipo; prellenar la muestra con la de Reclutamiento → Muestra; usar la transcripción del kick-off de Notetaker como brief; decidir el estilo del Word; probar con los casos reales del paquete original (un roadmap para leer y un brief para proponer) y afinar `redaccion.md` si algo suena genérico.
+- **2026-10-26 (noche) — a Tools:** por pedido de Sergio la pantalla pasó de pestaña propia del proyecto a pestañita de Tools (sin cambios de servidor ni de base).
+- **2026-10-26 (noche) — para todo el equipo:** Sergio pidió que todos tengan acceso: `puedeVerGuias` pasó a «cualquiera que entra al Hub», Tools se muestra a quien tenga alguna herramienta y quien solo tiene las guías ve solo «Guías». Todo el equipo puede abrir, editar y bajar el Word de cualquier guía; borra quien la creó, un Owner o un Socio.
+- **Siguiente:** prellenar la muestra con la de Reclutamiento → Muestra; usar la transcripción del kick-off de Notetaker como brief; decidir el estilo del Word; probar con los casos reales del paquete original (un roadmap para leer y un brief para proponer) y afinar `redaccion.md` si algo suena genérico.
