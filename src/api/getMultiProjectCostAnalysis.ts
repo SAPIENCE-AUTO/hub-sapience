@@ -135,13 +135,13 @@ export default createEndpoint({
   outputSchema: z.object({
     projects: z.array(projectAnalysisSchema),
     grandTotals: totalsSchema,
-    dealsList: z.array(z.object({ id: z.string(), dealName: z.string(), clientPrice: z.number().nullable() })),
+    dealsList: z.array(z.object({ id: z.string(), dealName: z.string(), clientPrice: z.number().nullable(), client: z.string().optional(), phase: z.string().optional() })),
   }),
   execute: async ({ input }) => {
     const [{ records: allProjects }, allPos, { records: allDeals }, allCotizaciones] = await Promise.all([
-      Projects.findAll({ limit: 500 }),
+      Projects.findAll({ limit: 10_000, sorts: [{ field: 'id', direction: 'asc' }] }),
       fetchAllPOs(),
-      Deals.findAll({ limit: 500 }),
+      Deals.findAll({ limit: 10_000, sorts: [{ field: 'id', direction: 'asc' }] }),
       fetchAllCotizaciones(),
     ]);
 
@@ -283,7 +283,7 @@ export default createEndpoint({
     return {
       projects: projectAnalyses,
       grandTotals: makeTotals(grandCot, grandMarkup, grandPC, grandGas),
-      dealsList: allDeals.map(d => ({ id: d.id, dealName: d.dealName ?? '', clientPrice: d.clientPrice ?? null })),
+      dealsList: allDeals.map(d => ({ id: d.id, dealName: d.dealName ?? '', clientPrice: d.clientPrice ?? null, client: d.client ?? undefined, phase: d.phase ?? undefined })),
     };
   },
 });

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { linkProjectDeal, getDeals } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import DealPicker from '@/components/finance/DealPicker';
+import type { DealOpcion } from '@/lib/finance/dealPicker';
 import { Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -20,7 +21,7 @@ interface Props {
 // sus líneas reales — este diálogo solo decide el vínculo en sí.
 export default function LinkProjectDealDialog({ projectId, currentDealId, onLinked }: Props) {
   const [open, setOpen] = useState(false);
-  const [deals, setDeals] = useState<{ id: string; dealName?: string }[]>([]);
+  const [deals, setDeals] = useState<DealOpcion[]>([]);
   const [dealId, setDealId] = useState(currentDealId ?? '');
   const [saving, setSaving] = useState(false);
 
@@ -60,12 +61,7 @@ export default function LinkProjectDealDialog({ projectId, currentDealId, onLink
           </DialogHeader>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Deal</label>
-            <Select value={dealId} onValueChange={setDealId}>
-              <SelectTrigger><SelectValue placeholder="Selecciona un deal..." /></SelectTrigger>
-              <SelectContent>
-                {deals.map(d => <SelectItem key={d.id} value={d.id}>{d.dealName ?? '(sin nombre)'}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <DealPicker deals={deals} value={dealId} onChange={setDealId} className="w-full" />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>

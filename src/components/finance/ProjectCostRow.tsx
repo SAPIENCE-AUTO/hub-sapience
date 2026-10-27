@@ -5,11 +5,11 @@ import { linkProjectDeal } from 'zite-endpoints-sdk';
 import type { GetMultiProjectCostAnalysisOutputType } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import CostPnLTable from './CostPnLTable';
 import CostRubroChart from './CostRubroChart';
+import DealPicker from './DealPicker';
 
 type ProjectAnalysis = GetMultiProjectCostAnalysisOutputType['projects'][0];
 type DealItem = GetMultiProjectCostAnalysisOutputType['dealsList'][0];
@@ -123,12 +123,7 @@ export default function ProjectCostRow({ analysis, dealsList, isExpanded, onTogg
                 ) : (
                   <>
                     <span className="text-sm font-medium">Seleccionar deal:</span>
-                    <Select value={pendingDealId} onValueChange={setPendingDealId}>
-                      <SelectTrigger className="w-72 h-8 text-sm"><SelectValue placeholder="Busca un deal..." /></SelectTrigger>
-                      <SelectContent>
-                        {dealsList.map(d => <SelectItem key={d.id} value={d.id}>{d.dealName}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <DealPicker deals={dealsList} value={pendingDealId} onChange={setPendingDealId} className="w-72 h-8 text-sm" />
                     <Button size="sm" onClick={() => saveDeal(pendingDealId)} disabled={saving || !pendingDealId}>Guardar</Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditingDeal(false)}>Cancelar</Button>
                   </>

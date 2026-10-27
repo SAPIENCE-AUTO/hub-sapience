@@ -1,6 +1,7 @@
 // Pruebas de la pantalla «Costos por proyecto» (src/api/getMultiProjectCostAnalysis.ts) contra una base en memoria (PGlite) con el esquema real.
 // Lo que cuidan: el «cotizado» sale de las partidas de las cotizaciones del deal (una cotización en Borrador cuenta, no hace falta aprobarla; una excluida no),
 // «Costos reales» sale de las órdenes de compra vigentes, y con más de 100 cotizaciones (varios lotes) no se pierde ninguna.
+// También el selector de deals para vincular un proyecto (orden y búsqueda) y que la lista de deals no se corte pasados los 500.
 // Antes de arreglarlo, el cálculo leía la lista de partidas que Zite guardaba en la cotización; en Postgres no existe y todos los proyectos salían con $0 cotizado.
 // Todo con datos inventados.
 // uso: node server/node_modules/.bin/tsx server/scripts/test-costos.ts
@@ -11,6 +12,7 @@ import { pool } from '../compat';
 import { DATE_OID, NUMERIC_OID, TIMESTAMPTZ_OID, parseDate, parseNumeric, parseTimestamptz } from '../compat/datetimeParsers';
 
 const costos = (await import('../../src/api/getMultiProjectCostAnalysis')).default;
+const { buscarDeals, ordenarDeals } = await import('../../src/lib/finance/dealPicker');
 
 let n = 0;
 let fallas = 0;
@@ -130,6 +132,43 @@ await prueba('con más de 100 cotizaciones (varios lotes de búsqueda) todas tra
   assert.equal(lote.length, 120);
   assert.ok(lote.every((p: any) => p.totals.cotizado === 10), 'alguno quedó sin su partida');
   assert.equal(todo.grandTotals.cotizado, 109000 + 120 * 10);
+});
+
+await prueba('selector de deals: orden alfabético en español, sin importar acentos ni mayúsculas, con los números como números', () => {
+  const lista = [{ id: '1', dealName: 'Fase 10' }, { id: '2', dealName: 'BTS 2' }, { id: '3', dealName: 'ñandú' }, { id: '4', dealName: 'BTS' }, { id: '5', dealName: 'Fase 2' }, { id: '6', dealName: 'Óptica' }, { id: '7', dealName: 'Zeta' }, { id: '8' }];
+  assert.deepEqual(ordenarDeals(lista).map((d) => d.dealName ?? ''), ['', 'BTS', 'BTS 2', 'Fase 2', 'Fase 10', 'ñandú', 'Óptica', 'Zeta']);
+});
+
+await prueba('selector de deals: busca por nombre o cliente con todas las palabras, sin acentos ni mayúsculas, y primero salen los que empiezan con lo escrito', () => {
+  const deals = [
+    { id: 'a', dealName: 'BTS 2', client: 'Danone' },
+    { id: 'b', dealName: 'BTS', client: 'Danone' },
+    { id: 'c', dealName: 'Cotización de empaque', client: 'Marca X' },
+    { id: 'd', dealName: 'Lanzamiento', client: 'Grupo BTS Foods' },
+  ];
+  assert.deepEqual(buscarDeals(deals, 'bts').items.map((d) => d.id), ['b', 'a', 'd']);
+  assert.deepEqual(buscarDeals(deals, 'COTIZACION').items.map((d) => d.id), ['c']);
+  assert.deepEqual(buscarDeals(deals, 'danone bts').items.map((d) => d.id), ['b', 'a']);
+  assert.equal(buscarDeals(deals, 'zzz').total, 0);
+  assert.equal(buscarDeals(deals, '  ').total, 4, 'sin texto salen todos');
+  const muchos = Array.from({ length: 450 }, (_, i) => ({ id: String(i), dealName: `Deal ${i}` }));
+  const tope = buscarDeals(muchos, '', 100);
+  assert.equal(tope.items.length, 100);
+  assert.equal(tope.total, 450, 'el total cuenta todos aunque solo se devuelvan 100');
+});
+
+await prueba('la lista para vincular trae todos los deals (también pasados los 500) con su cliente y fase, y un proyecto con un deal reciente no pierde su deal', async () => {
+  await pg.query(`insert into deals (deal_name, phase, client) select 'Relleno ' || g, 'Prospecto', 'Cliente ' || g from generate_series(1, 520) g`);
+  const dealUltimo = await deal('Deal al final', 70000);
+  await pg.query(`update deals set client = 'Cliente Z' where id = $1`, [dealUltimo]);
+  const proyectoUltimo = await proyecto('PRB-Z', dealUltimo);
+  const r = await analizar([proyectoUltimo]);
+  assert.equal(r.projects[0].deal?.dealName, 'Deal al final', 'el deal quedó fuera del análisis');
+  const z = r.dealsList.find((d: any) => d.dealName === 'Deal al final');
+  assert.ok(z, 'falta el deal en la lista para vincular');
+  assert.equal(z.client, 'Cliente Z');
+  assert.equal(z.phase, 'Ganado');
+  assert.ok(r.dealsList.length > 600, `la lista trae ${r.dealsList.length}`);
 });
 
 console.log(`\n${n - fallas} de ${n} pruebas ok`);
