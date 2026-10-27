@@ -836,6 +836,18 @@ Al crear grupos se ponen los dos nombres; al guardar la muestra, el servidor ren
 
 **Probado en local (2026-10-26):** en «3 MAYO PRUEBA 3» (versión 4), sus 3 grupos y el evento de S1 tomaron el nombre nuevo y el externo, con el evento ligado intacto. 94 pruebas. ALONG 2 no tiene grupos (se quitaron para rehacerlos): sus perfiles aún no tienen género, edad ni NSE.
 
+### Preguntas de siempre: hijos, ingresos, autos y último viaje (2026-10-26, `12b7d2c`)
+
+Sergio: en todos los filtros, al inicio, si tiene hijos, cuántos, de qué edad y si van a escuela pública o privada; y después del NSE, los ingresos del hogar, el último viaje y los modelos y años de sus autos, como en ALONG 2. Las pone el Hub (`conEstandar` en `lib/formularios/estandar.ts`), como el celular y el correo de «Antes de empezar»: son preguntas normales, el analista las corrige o las quita.
+
+- **Al final de la primera sección después de «Antes de empezar»** («Sobre ti»; no una que se repite, sale solo a veces o es de puras indicaciones): «¿Tienes hijos?» (Sí / No) y, solo con Sí, cuántos (número, de 1 a 15), el género y la edad de cada uno (texto, «Por ejemplo: niña de 8 años, niño de 5 años») y si van a escuela pública o privada (Pública, Privada, Unos en pública y otros en privada, No van a la escuela). Ids `familia_hijos…`.
+- **Justo después de la última pregunta del NSE**, en su misma sección: ingresos del hogar con los rangos de ALONG 2 (solo en México: van en pesos; el de 80 a 120 mil arranca en 81 mil para no encimarse con el anterior), qué modelos y años de autos tienen (solo si en el NSE dijo que tiene alguno) y su último viaje de placer. Ids `hogar_ingresos`, `hogar_autos`, `hogar_viaje`.
+- **Lo que el filtro ya pregunta no se repite:** si alguna pregunta (fuera del NSE) habla de hijos, ingresos, viajes o modelos de autos, esa parte no se agrega. Así una plantilla, un filtro anterior o un Word que ya las traía no queda con dos.
+- **Cuándo:** al crear un filtro desde una plantilla o un filtro anterior, al duplicar, y en los que escribe la IA justo antes de armar la lógica (ya con todas las secciones puestas, así la lógica las ve). Cuentan en los minutos de la estructura (alrededor de un minuto más). La skill le dice a la IA que no las escriba, salvo que el estudio necesite más detalle para filtrar (la edad exacta de los hijos para un perfil de mamás); entonces escribe la suya y el Hub no agrega la de él.
+- Los filtros que ya existían no cambian solos.
+
+**Puesto a mano en «SCALE - 02 LOLLIPOPS» (FILTRO V1, en prueba, sin respuestas), a pedido de Sergio:** con `conEstandar` y la revisión del editor, revisión 27 → 28, con una versión guardada antes («Antes de agregar hijos, ingresos, autos y último viaje»). En el editor se leen bien: los hijos al final de «Sobre ti» con su «Solo aparece si contestó Sí» y los del hogar después de «NSE · Cuartos». 95 pruebas.
+
 ## Decisiones pendientes (las toma Sergio)
 
 | Decisión | Recomendación | Frena |
