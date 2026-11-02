@@ -288,7 +288,14 @@ export const getCalendarExcelColumns = (input?: any): Promise<any> => call('getC
 export const getCalendarExcelPreview = (input?: any): Promise<any> => call('getCalendarExcelPreview', input);
 export const getCellValues = (input?: any): Promise<any> => call('getCellValues', input);
 export const getChatConversations = (input?: any): Promise<any> => call('getChatConversations', input);
-export const getClientCreditDays = (input?: any): Promise<any> => call('getClientCreditDays', input);
+export const getClientsCatalog = (input?: any): Promise<any> => call('getClientsCatalog', input);
+export const getClientDetail = (input?: any): Promise<any> => call('getClientDetail', input);
+export const createClient = (input?: any): Promise<any> => call('createClient', input);
+export const saveClientEntity = (input?: any): Promise<any> => call('saveClientEntity', input);
+export const setClientEntityActive = (input?: any): Promise<any> => call('setClientEntityActive', input);
+export const saveClientContact = (input?: any): Promise<any> => call('saveClientContact', input);
+export const deleteClientContact = (input?: any): Promise<any> => call('deleteClientContact', input);
+export const getClientCollectionTerms = (input?: any): Promise<any> => call('getClientCollectionTerms', input);
 export const getCollectionAuditLog = (input?: any): Promise<any> => call('getCollectionAuditLog', input);
 export const getCollectionProcessDetail = (input?: any): Promise<any> => call('getCollectionProcessDetail', input);
 export const getCollectionProcesses = (input?: any): Promise<any> => call('getCollectionProcesses', input);

@@ -405,3 +405,4 @@ y no sirve para este volumen.
 - `proyecto/` — el código fuente completo extraído del export.
 - `docs/tablero-comercial.md` — guía viva del **Tablero comercial** (`/comercial/tablero`, el reemplazo del dashboard comercial: motor de bloques en `src/lib/tablero/`, vistas `t2_`, reglas que pidió Sergio).
 - `docs/guias-topicos.md` — guía viva de las **guías de tópicos** (pestañita «Guías» dentro de Tools de cada proyecto: roadmap, guía escrita por la IA con la voz de Sapience y Word; skill en `src/serverUtils/guias/skill/`, paquete original en `paquetes/guias-topicos/`).
+- `docs/clientes.md` — guía viva del **catálogo de clientes** (`/comercial/clientes`: razones sociales con datos para facturar, condiciones y proceso de cobranza por cliente, contactos; Cobranza lee de ahí y la facturación futura saldrá de ahí; tablas `client_entities` / `client_contacts` en `generate.py`, creadas con `server/scripts/add-clientes-ficha-tables.ts`).

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, ZiteError, Projects, Deals, CollectionProcesses, pool } from '../../server/compat';
+import { fasesQueAplican } from '../lib/clientes/fases';
+import { resolverCliente } from '../serverUtils/clientes/resolver';
 
 function firstLinkId(v: unknown): string | undefined {
   if (Array.isArray(v)) return v[0];
@@ -22,6 +24,8 @@ export default createEndpoint({
     creditDays: z.number(),
     fileUrl: z.string().optional(),
     fileName: z.string().optional(),
+    /** Razón social del catálogo de clientes a la que se le factura; de ahí salen los pasos e instrucciones de cobro. */
+    clientEntityId: z.string().optional(),
   }),
   outputSchema: z.object({ success: z.boolean(), collectionProcessId: z.string() }),
   execute: async ({ input, context }) => {
@@ -46,6 +50,20 @@ export default createEndpoint({
       throw new ZiteError({ code: 'BAD_REQUEST', message: 'Este proyecto ya tiene un proceso de cobranza' });
     }
 
+    // Catálogo de clientes (nov 2026): el cliente sale del client_id del proyecto (o de su nombre) y la razón social, si se elige, tiene que ser de ese cliente.
+    const cliente = await resolverCliente({ projectCode: input.projectCode });
+    let entidad: { id: string; client_id: string | null; legal_name: string | null; requires_proforma: boolean | null; requires_portal: boolean | null; requires_gr: boolean | null } | undefined;
+    if (input.clientEntityId) {
+      const { rows } = await pool.query(
+        `select id, client_id, legal_name, requires_proforma, requires_portal, requires_gr from client_entities where id = $1 and deactivated_at is null`,
+        [input.clientEntityId],
+      );
+      entidad = rows[0];
+      if (!entidad) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Esa razón social ya no está disponible' });
+      if (cliente && entidad.client_id !== cliente.id) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Esa razón social no es de este cliente' });
+    }
+    const clientId = cliente?.id ?? entidad?.client_id ?? undefined;
+
     // Mismo criterio que usaba approveDeal.ts: currency/monto salen del deal
     // vinculado (Projects no guarda moneda) — si el proyecto no tiene deal
     // vinculado (casos viejos), se usa el presupuesto del proyecto en MXN.
@@ -61,6 +79,12 @@ export default createEndpoint({
         projectCode: input.projectCode,
         deal: dealId ? [dealId] : undefined,
         client: project.client,
+        clientId: clientId ? [clientId] : undefined,
+        clientEntityId: entidad ? [entidad.id] : undefined,
+        // Los pasos que aplican a ese cliente (portal, GR/Migo, proforma); sin razón social queda vacío y el proceso muestra todos, como antes.
+        applicablePhases: entidad
+          ? JSON.stringify(fasesQueAplican({ requiresProforma: entidad.requires_proforma, requiresPortal: entidad.requires_portal, requiresGr: entidad.requires_gr }))
+          : undefined,
         currency: rawCurrency as never,
         quotedAmount: amount,
         collectionAmount: amount,
@@ -89,18 +113,8 @@ export default createEndpoint({
     await pool.query(
       `insert into collection_audit_log (collection_process_id, action, user_email, user_name, comments, project_code)
        values ($1, 'Creado', $2, $3, $4, $5)`,
-      [record.id, context.user!.email, userName, `Proceso iniciado — factura ${input.invoiceNumber}`, input.projectCode],
+      [record.id, context.user!.email, userName, `Proceso iniciado — factura ${input.invoiceNumber}${entidad?.legal_name ? ` — ${entidad.legal_name}` : ''}`, input.projectCode],
     );
-
-    // Precarga para la próxima vez — mismo cliente, mismos días de crédito
-    // por default, hasta que alguien los cambie manualmente.
-    if (project.client) {
-      await pool.query(
-        `insert into clients (name, credit_days) values ($1, $2)
-         on conflict (lower(name)) do update set credit_days = excluded.credit_days, updated_at = now()`,
-        [project.client, input.creditDays],
-      );
-    }
 
     return { success: true, collectionProcessId: record.id };
   },

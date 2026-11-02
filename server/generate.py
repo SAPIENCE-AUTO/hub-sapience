@@ -79,8 +79,14 @@ EXTRA_COLUMNS = {
     'Deals': [('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
     'CRMItems': [('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
     'Invoices': [('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
+    # Catálogo de clientes (nov 2026): el proceso apunta a la razón social a la
+    # que se le factura (de ahí salen días de crédito, pasos e instrucciones de
+    # cobro). `creditDays` del proceso sigue siendo suyo y editable: la razón
+    # social solo lo sugiere al arrancar. La migración sobre la tabla ya
+    # existente vive en server/scripts/add-clientes-ficha-tables.ts.
     'CollectionProcesses': [('creditDays', 'credit_days', 'integer', 'number'),
-                             ('clientId', 'client_id', 'uuid', 'link', dict(target='clients'))],
+                             ('clientId', 'client_id', 'uuid', 'link', dict(target='clients')),
+                             ('clientEntityId', 'client_entity_id', 'uuid', 'link', dict(target='client_entities'))],
     # Exportar Reclutamiento (sep 2026): alias de columna solo para el encabezado
     # del Excel/CSV exportado — el nombre real de la columna (columnName, lo que
     # se ve en el grid) no cambia. Separado de optionsJson a propósito: esa
@@ -254,6 +260,73 @@ EXTRA_TABLES = {
         notes=[],
         many={},
         name='Clients',
+    ),
+    # Catálogo de clientes (nov 2026): `clients` sigue siendo solo el nombre y el
+    # enlace con Sharpli (no se toca); lo de negocio vive en tablas aparte.
+    # ClientEntities = razones sociales del cliente (a quién se le factura): trae
+    # los datos que pide una factura en México (CFDI 4.0: RFC, código postal
+    # fiscal, régimen fiscal, uso del CFDI, método y forma de pago, correos) y las
+    # condiciones de cobro (días de crédito, si pide ODC, portal, GR/Migo o
+    # proforma, instrucciones) — de las banderas sale qué pasos del proceso de
+    # cobranza aplican a ese cliente. Régimen, uso y forma de pago guardan la
+    # CLAVE del SAT ('601', 'G03', '03'), no la etiqueta; el texto lo pone la UI
+    # (src/lib/clientes/catalogos.ts). Sin defaults de BD a propósito: null en una
+    # bandera es «no», y `deactivatedAt` vacío es «activa». ClientContacts = a quién
+    # se le manda o se le da seguimiento (entityId vacío = contacto del cliente
+    # en general). El CREATE real y los índices viven en
+    # server/scripts/add-clientes-ficha-tables.ts (no se ejecuta solo).
+    'ClientEntities': dict(
+        table='client_entities',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='client', col='client_id', pg='uuid', kind='link', extra=dict(target='clients')),
+            dict(prop='legalName', col='legal_name', pg='text', kind='text', extra=None),
+            dict(prop='rfc', col='rfc', pg='text', kind='text', extra=None),
+            dict(prop='taxRegime', col='tax_regime', pg='text', kind='text', extra=None),
+            dict(prop='postalCode', col='postal_code', pg='text', kind='text', extra=None),
+            dict(prop='cfdiUse', col='cfdi_use', pg='text', kind='text', extra=None),
+            dict(prop='paymentMethod', col='payment_method', pg='text', kind='text', extra=None),
+            dict(prop='paymentForm', col='payment_form', pg='text', kind='text', extra=None),
+            dict(prop='billingEmails', col='billing_emails', pg='text', kind='text', extra=None),
+            dict(prop='creditDays', col='credit_days', pg='integer', kind='number', extra=None),
+            dict(prop='requiresPo', col='requires_po', pg='boolean', kind='boolean', extra=None),
+            dict(prop='requiresPortal', col='requires_portal', pg='boolean', kind='boolean', extra=None),
+            dict(prop='portalUrl', col='portal_url', pg='text', kind='text', extra=None),
+            dict(prop='requiresGr', col='requires_gr', pg='boolean', kind='boolean', extra=None),
+            dict(prop='requiresProforma', col='requires_proforma', pg='boolean', kind='boolean', extra=None),
+            dict(prop='processNotes', col='process_notes', pg='text', kind='text', extra=None),
+            dict(prop='deactivatedAt', col='deactivated_at', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+            dict(prop='updatedAt', col='updated_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[
+            "  constraint client_entities_payment_method_chk check (\"payment_method\" is null or \"payment_method\" in ('PUE', 'PPD'))",
+            "  constraint client_entities_credit_days_chk check (\"credit_days\" is null or \"credit_days\" >= 0)",
+        ],
+        notes=[],
+        many={},
+        name='ClientEntities',
+    ),
+    'ClientContacts': dict(
+        table='client_contacts',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='client', col='client_id', pg='uuid', kind='link', extra=dict(target='clients')),
+            dict(prop='entity', col='entity_id', pg='uuid', kind='link', extra=dict(target='client_entities')),
+            dict(prop='name', col='name', pg='text', kind='text', extra=None),
+            dict(prop='email', col='email', pg='text', kind='text', extra=None),
+            dict(prop='phone', col='phone', pg='text', kind='text', extra=None),
+            dict(prop='role', col='contact_role', pg='text', kind='text', extra=None),
+            dict(prop='notes', col='notes', pg='text', kind='text', extra=None),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+            dict(prop='updatedAt', col='updated_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[
+            "  constraint client_contacts_role_chk check (\"contact_role\" is null or \"contact_role\" in ('Recibe facturas', 'Libera pagos', 'Seguimiento', 'Otro'))",
+        ],
+        notes=[],
+        many={},
+        name='ClientContacts',
     ),
     # Minutas / notetaker (sep 2026): una fila por junta grabada por el bot de
     # Recall.ai (ver src/serverUtils/recallClient.ts). No hay ID de proyecto
@@ -573,6 +646,13 @@ create unique index on users (lower(email));
 -- projects_project_code_uniq: el backfill de clients junta nombres que hoy
 -- solo difieren en mayúsculas/espacios ("Landor" vs "LANDOR").
 create unique index clients_name_uniq on clients (lower(trim(name)));
+-- razones sociales y contactos del catálogo de clientes (nov 2026): un RFC no
+-- se repite dentro del mismo cliente (el mismo RFC sí puede colgar de dos
+-- clientes distintos, p.ej. un grupo que paga por varias marcas).
+create unique index client_entities_client_rfc_uniq on client_entities (client_id, upper(rfc)) where rfc is not null and rfc <> '';
+create index on client_entities (client_id);
+create index on client_contacts (client_id);
+create index on collection_processes (client_entity_id);
 -- meeting_recordings tampoco viene de Zite — único por bot de Recall para
 -- poder hacer upsert (crear la fila al mandar el bot, actualizarla según
 -- avanza vía server/webhooks/recall.ts) sin duplicar la junta.

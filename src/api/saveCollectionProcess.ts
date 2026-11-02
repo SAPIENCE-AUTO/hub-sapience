@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, ZiteError, CollectionProcesses, pool } from '../../server/compat';
+import { fasesQueAplican } from '../lib/clientes/fases';
 
 // Solo 6 de las 10 fases tienen su propio timestamp en Collection Processes
 // (ver schema-map.ts) — 'Pagada' sella "paidAt" en vez de un campo "*At", y
@@ -12,6 +13,11 @@ const PHASE_TIMESTAMP_FIELD: Record<string, string> = {
   'Subida al portal': 'portalUploadedAt',
   'GR / Migo': 'grMigoAt',
 };
+
+function firstLinkId(v: unknown): string | undefined {
+  if (Array.isArray(v)) return v[0];
+  return (v as string | undefined) ?? undefined;
+}
 
 function addDays(iso: string, days: number): string {
   const d = new Date(iso.split('T')[0] + 'T00:00:00Z');
@@ -40,6 +46,8 @@ export default createEndpoint({
     creditDays: z.number().optional(),
     notes: z.string().optional(),
     responsibleUser: z.string().optional(),
+    /** Razón social del catálogo de clientes; un proceso sin días de crédito (los heredados) toma los de la razón social. */
+    clientEntityId: z.string().optional(),
   }),
   outputSchema: z.object({ success: z.boolean() }),
   execute: async ({ input, context }) => {
@@ -58,7 +66,26 @@ export default createEndpoint({
     if (input.scheduledPaymentDate !== undefined) record.scheduledPaymentDate = input.scheduledPaymentDate;
     if (input.invoiceNumber !== undefined) record.invoiceNumber = input.invoiceNumber;
     if (input.invoiceCreatedAt !== undefined) record.invoiceCreatedAt = input.invoiceCreatedAt;
-    if (input.creditDays !== undefined) record.creditDays = input.creditDays;
+    // Catálogo de clientes: asignar la razón social a un proceso. Si el proceso aún no tiene días de crédito (los 20 heredados), los toma de ella;
+    // si ya los tiene (o vienen en este mismo request), no se pisan.
+    let creditDays = input.creditDays;
+    let razonSocialNueva: string | undefined;
+    if (input.clientEntityId !== undefined) {
+      const { rows } = await pool.query(`select id, client_id, legal_name, credit_days, requires_proforma, requires_portal, requires_gr from client_entities where id = $1`, [input.clientEntityId]);
+      const entidad = rows[0];
+      if (!entidad) throw new ZiteError({ code: 'NOT_FOUND', message: 'Razón social no encontrada' });
+      const clienteDelProceso = firstLinkId(current.clientId);
+      if (clienteDelProceso && entidad.client_id !== clienteDelProceso) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Esa razón social no es de este cliente' });
+      if (firstLinkId(current.clientEntityId) !== entidad.id) {
+        record.clientEntityId = [entidad.id];
+        record.applicablePhases = JSON.stringify(fasesQueAplican({ requiresProforma: entidad.requires_proforma, requiresPortal: entidad.requires_portal, requiresGr: entidad.requires_gr }));
+        if (!clienteDelProceso && entidad.client_id) record.clientId = [entidad.client_id];
+        razonSocialNueva = entidad.legal_name ?? undefined;
+      }
+      if (creditDays === undefined && current.creditDays == null && entidad.credit_days != null) creditDays = entidad.credit_days;
+    }
+
+    if (creditDays !== undefined) record.creditDays = creditDays;
     if (input.notes !== undefined) record.notes = input.notes;
     if (input.responsibleUser !== undefined) record.responsibleUser = [input.responsibleUser];
 
@@ -71,9 +98,9 @@ export default createEndpoint({
     // un ajuste manual intencional).
     if (input.scheduledPaymentDate === undefined) {
       const invoiceDate = input.invoiceCreatedAt ?? current.invoiceCreatedAt;
-      const creditDays = input.creditDays ?? current.creditDays;
-      if (invoiceDate && creditDays != null) {
-        record.scheduledPaymentDate = addDays(invoiceDate, creditDays);
+      const dias = creditDays ?? current.creditDays;
+      if (invoiceDate && dias != null) {
+        record.scheduledPaymentDate = addDays(invoiceDate, dias);
       }
     }
 
@@ -123,6 +150,7 @@ export default createEndpoint({
         action: 'Editado',
         userEmail: context.user!.email,
         userName,
+        comments: razonSocialNueva ? `Razón social: ${razonSocialNueva}` : undefined,
         projectCode: current.projectCode,
       });
     }

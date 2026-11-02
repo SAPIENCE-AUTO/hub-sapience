@@ -4,13 +4,16 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { History, Loader2, Save, Landmark } from 'lucide-react';
+import { Building2, ExternalLink, History, Loader2, Save, Landmark } from 'lucide-react';
 import { getCollectionProcesses, getCollectionProcessDetail, saveCollectionProcess, getTeamMembers, GetTeamMembersOutputType } from 'zite-endpoints-sdk';
 import { useAuth } from 'zite-auth-sdk';
 import CollectionAttachmentsSection, { CollectionAttachment } from './CollectionAttachmentsSection';
 import StartCollectionProcessDialog from './StartCollectionProcessDialog';
 import { toast } from 'sonner';
 import { fmtCurrency } from '../../lib/format';
+import { fasesQueAplican } from '@/lib/clientes/fases';
+import { REGIMENES_FISCALES, etiquetaSat } from '@/lib/clientes/catalogos';
+import type { Contacto, Entidad } from '@/components/clientes/tipos';
 
 type TeamMember = GetTeamMembersOutputType['members'][0];
 
@@ -41,35 +44,33 @@ const ACTION_STYLES: Record<string, string> = {
   'Adjunto eliminado': 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
 };
 
-function FlowStepper({ phase }: { phase?: string }) {
+function FlowStepper({ phase, applicable }: { phase?: string; applicable?: string[] }) {
   if (!phase || phase === 'Atrasada') return null;
-  const idx = FLOW_PHASES.indexOf(phase);
+  // Con razón social asignada solo se muestran los pasos que aplican a ese cliente (más el actual, por si el proceso ya iba en otro).
+  const pasos = applicable?.length ? FLOW_PHASES.filter(p => applicable.includes(p) || p === phase) : FLOW_PHASES;
+  const idx = pasos.indexOf(phase);
   if (idx === -1) return null;
   return (
-    <div className="flex items-start w-full overflow-x-auto pb-1">
-      {FLOW_PHASES.map((step, i) => {
-        const state = i < idx ? 'done' : i === idx ? 'active' : 'pending';
-        const isLast = i === FLOW_PHASES.length - 1;
-        return (
-          <div key={step} className="flex items-start flex-1 min-w-[76px]">
-            <div className="flex flex-col items-center flex-shrink-0">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 text-[11px] font-bold transition-colors ${
+    <div className="w-full overflow-x-auto pb-1">
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${pasos.length}, minmax(0, 1fr))`, minWidth: pasos.length * 72 }}>
+        {pasos.map((step, i) => {
+          const state = i < idx ? 'done' : i === idx ? 'active' : 'pending';
+          return (
+            <div key={step} className="relative flex flex-col items-center">
+              {/* La línea va del centro del paso anterior al centro de este: no depende del largo del texto de ninguno de los dos. */}
+              {i > 0 && <div className={`absolute top-[13px] right-1/2 h-0.5 w-full rounded-full transition-colors ${i <= idx ? 'bg-primary' : 'bg-muted-foreground/15'}`} />}
+              <div className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center border-2 text-[11px] font-bold transition-colors ${
                 state === 'done' ? 'bg-primary border-primary text-primary-foreground' :
                 state === 'active' ? 'bg-background border-primary text-primary' :
                 'bg-background border-muted-foreground/25 text-muted-foreground/50'
               }`}>{state === 'done' ? '✓' : i + 1}</div>
-              <span className={`text-[10px] mt-1.5 font-medium text-center leading-tight px-0.5 ${
+              <span className={`text-[10px] mt-1.5 font-medium text-center leading-tight px-1 ${
                 state === 'done' ? 'text-primary' : state === 'active' ? 'text-foreground font-semibold' : 'text-muted-foreground/60'
               }`}>{step}</span>
             </div>
-            {!isLast && (
-              <div className={`flex-1 h-0.5 mt-3.5 mx-1 rounded-full transition-colors ${
-                i < idx ? 'bg-primary' : 'bg-muted-foreground/15'
-              }`} />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -132,6 +133,80 @@ function SectionCard({ title, icon, children }: { title: string; icon?: React.Re
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
       </div>
       <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+interface CatalogoDelCliente { clientId: string; clientName: string; entities: Entidad[]; contacts: Contacto[] }
+
+// Lo que el catálogo de Clientes sabe de este proceso: a quién se le factura, qué pide ese cliente y a quién escribirle.
+function ClienteYRazonSocial({ detail, canEdit, saving, onAssign }: { detail: Detail; canEdit: boolean; saving: boolean; onAssign: (id: string) => void }) {
+  const cat = detail.clientCatalog as CatalogoDelCliente | undefined;
+  const enlace = (id?: string) => `/comercial/clientes${id ? `?cliente=${id}` : ''}`;
+  const verCliente = (id?: string, texto = 'Abrir ficha del cliente') => (
+    <a href={enlace(id)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">{texto}<ExternalLink className="w-3 h-3" /></a>
+  );
+  if (!cat) {
+    return (
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Este cliente todavía no está en el catálogo de Clientes.</p>
+        {verCliente(undefined, 'Abrir Clientes')}
+      </div>
+    );
+  }
+  const e = cat.entities.find(x => x.id === detail.clientEntityId);
+  const contactos = cat.contacts.filter(c => !c.entityId || c.entityId === e?.id);
+  const pasos = e ? fasesQueAplican(e).filter(f => f !== 'Por iniciar') : [];
+  const condiciones = e ? [
+    e.creditDays != null ? `${e.creditDays} días de crédito` : null,
+    e.paymentMethod,
+    e.requiresPo ? 'Pide orden de compra' : null,
+  ].filter(Boolean).join(' · ') : '';
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <InfoRow label="Cliente" value={cat.clientName} />
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Razón social</p>
+          {cat.entities.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin razón social registrada. {verCliente(cat.clientId, 'Registrarla')}</p>
+          ) : (
+            <Select value={e?.id ?? ''} onValueChange={onAssign} disabled={!canEdit || saving}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Elige la razón social" /></SelectTrigger>
+              <SelectContent>
+                {cat.entities.map(x => <SelectItem key={x.id} value={x.id}>{x.legalName || 'Sin nombre'}{x.rfc ? ` · ${x.rfc}` : ''}{x.active ? '' : ' (desactivada)'}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          {cat.entities.length > 0 && !e && <p className="text-[11px] text-muted-foreground">Al elegirla se traen sus días de crédito y sus pasos.</p>}
+        </div>
+      </div>
+
+      {e && (
+        <div className="rounded-lg bg-muted/40 px-3.5 py-3 space-y-1.5 text-sm">
+          {(e.rfc || e.taxRegime) && <p className="text-muted-foreground"><span className="font-mono">{[e.rfc, e.taxRegime ? etiquetaSat(REGIMENES_FISCALES, e.taxRegime) : null].filter(Boolean).join(' · ')}</span></p>}
+          {condiciones && <p>{condiciones}</p>}
+          {e.billingEmails && <p className="text-muted-foreground">Facturas a: {e.billingEmails}</p>}
+          {pasos.length > 0 && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Pasos:</span> {pasos.join(' → ')}</p>}
+          {e.requiresPortal && e.portalUrl && <a href={e.portalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline"><ExternalLink className="w-3.5 h-3.5" />Portal del cliente</a>}
+          {e.processNotes && <p className="whitespace-pre-wrap">{e.processNotes}</p>}
+        </div>
+      )}
+
+      {contactos.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Contactos de cobranza</p>
+          <div className="space-y-1">
+            {contactos.map(c => (
+              <p key={c.id} className="text-sm">
+                <span className="font-medium">{c.name}</span>
+                <span className="text-muted-foreground">{[c.role, c.email, c.phone].filter(Boolean).map(t => ` · ${t}`).join('')}</span>
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+      <div>{verCliente(cat.clientId)}</div>
     </div>
   );
 }
@@ -237,6 +312,20 @@ export default function CollectionProcessTab({ projectCode, client }: Props) {
     setSaving(false);
   };
 
+  // Elegir la razón social trae sus días de crédito y sus pasos al proceso (ver saveCollectionProcess.ts); por eso se guarda al momento y se vuelve a leer todo.
+  const asignarRazonSocial = async (id: string) => {
+    if (!processId) return;
+    setSaving(true);
+    try {
+      await saveCollectionProcess({ id: processId, clientEntityId: id });
+      toast.success('Razón social asignada');
+      await refreshDetail();
+    } catch (err: unknown) {
+      toast.error((err as Error).message ?? 'No se pudo asignar la razón social');
+    }
+    setSaving(false);
+  };
+
   if (processId === undefined) {
     return (
       <div className="p-6 space-y-3 max-w-4xl">
@@ -297,8 +386,12 @@ export default function CollectionProcessTab({ projectCode, client }: Props) {
 
             {/* Stepper */}
             <div className="rounded-xl border border-border bg-card px-5 py-4">
-              <FlowStepper phase={detail.phase} />
+              <FlowStepper phase={detail.phase} applicable={detail.applicablePhases} />
             </div>
+
+            <SectionCard title="Cliente y razón social" icon={<Building2 className="w-3.5 h-3.5 text-muted-foreground" />}>
+              <ClienteYRazonSocial detail={detail} canEdit={canEdit} saving={saving} onAssign={asignarRazonSocial} />
+            </SectionCard>
 
             {/* Resumen de solo lectura */}
             <SectionCard title="Resumen">

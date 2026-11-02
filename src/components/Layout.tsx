@@ -8,7 +8,7 @@ import {
   FolderKanban, ChevronDown, ChevronRight, Search,
   Plus, X, TrendingUp, Building2, DollarSign, LayoutGrid,
   FileText, ShoppingCart, Truck, FileSpreadsheet,
-  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles, Video, Target, HandCoins,
+  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles, Video, Target, HandCoins, Users,
 } from 'lucide-react';
 import { SharpliIcon } from './SharpliIcon';
 import hubMark from '../assets/hub-mark.svg';
@@ -120,6 +120,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/comercial/dashboard',    icon: BarChart3,       label: 'Dashboard comercial' },
       { to: '/comercial/tablero',      icon: LayoutDashboard, label: 'Tablero comercial', emails: TABLERO_EMAILS },
       { to: '/comercial/cotizaciones', icon: FileSpreadsheet, label: 'Cotizaciones' },
+      // Razones sociales, condiciones de cobro y contactos de cada cliente; Cobranza lee de aquí. Mismo criterio de acceso que Cobranza (el candado real está en el servidor).
+      { to: '/comercial/clientes',     icon: Users,           label: 'Clientes', roles: ['Owner'], purchaseLevels: ['Finanzas'] },
       { to: '/comercial/analisis-ia',  icon: Sparkles,        label: 'Análisis IA', roles: ['Owner'] },
     ],
   },

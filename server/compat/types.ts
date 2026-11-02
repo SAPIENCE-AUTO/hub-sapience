@@ -688,6 +688,7 @@ export interface CollectionProcessesRecordType {
   responsibleUser?: string[];
   creditDays?: number;
   clientId?: string[];
+  clientEntityId?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -718,6 +719,42 @@ export interface ClientsRecordType {
   id: string;
   name?: string;
   sharpliClientId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ClientEntitiesRecordType {
+  id: string;
+  client?: string[];
+  legalName?: string;
+  rfc?: string;
+  taxRegime?: string;
+  postalCode?: string;
+  cfdiUse?: string;
+  paymentMethod?: string;
+  paymentForm?: string;
+  billingEmails?: string;
+  creditDays?: number;
+  requiresPo?: boolean;
+  requiresPortal?: boolean;
+  portalUrl?: string;
+  requiresGr?: boolean;
+  requiresProforma?: boolean;
+  processNotes?: string;
+  deactivatedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ClientContactsRecordType {
+  id: string;
+  client?: string[];
+  entity?: string[];
+  name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  notes?: string;
   createdAt?: string;
   updatedAt?: string;
 }

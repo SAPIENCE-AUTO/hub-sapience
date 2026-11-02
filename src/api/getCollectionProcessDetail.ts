@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { createEndpoint, ZiteError, CollectionProcesses, Deals, Users, pool } from '../../server/compat';
+import { leerFasesGuardadas } from '../lib/clientes/fases';
+import { COLUMNAS_CONTACTO, COLUMNAS_ENTIDAD, ContactoOut, EntidadOut, contactoDeFila, entidadDeFila } from '../serverUtils/clientes/esquemas';
+import { resolverCliente } from '../serverUtils/clientes/resolver';
 
 function firstLinkId(v: unknown): string | undefined {
   if (Array.isArray(v)) return v[0];
@@ -66,6 +69,17 @@ export default createEndpoint({
     invoiceSentAt: z.string().optional(),
     portalUploadedAt: z.string().optional(),
     grMigoAt: z.string().optional(),
+    /** Razón social del catálogo de clientes asignada a este proceso. */
+    clientEntityId: z.string().optional(),
+    /** Los pasos que aplican a este proceso según su razón social; vacío = todos. */
+    applicablePhases: z.array(z.string()).optional(),
+    /** El cliente en el catálogo, con sus razones sociales activas (y la asignada aunque ya esté desactivada) y sus contactos. */
+    clientCatalog: z.object({
+      clientId: z.string(),
+      clientName: z.string(),
+      entities: z.array(EntidadOut),
+      contacts: z.array(ContactoOut),
+    }).optional(),
     attachments: z.array(attachmentSchema),
     auditLog: z.array(auditEntrySchema),
   }),
@@ -81,8 +95,10 @@ export default createEndpoint({
 
     const dealId = firstLinkId(record.deal);
     const responsibleUserId = firstLinkId(record.responsibleUser);
+    const clientEntityId = firstLinkId(record.clientEntityId);
+    const cliente = await resolverCliente({ clientId: firstLinkId(record.clientId), client: record.client, projectCode: record.projectCode });
 
-    const [deal, responsibleUser, attachmentsRes, auditLogRes] = await Promise.all([
+    const [deal, responsibleUser, attachmentsRes, auditLogRes, entidadesRes, contactosRes] = await Promise.all([
       dealId ? Deals.findOne({ id: dealId, fields: ['dealName'] }) : Promise.resolve(null),
       responsibleUserId ? Users.findOne({ id: responsibleUserId, fields: ['firstName', 'lastName'] }) : Promise.resolve(null),
       pool.query(
@@ -99,6 +115,15 @@ export default createEndpoint({
          order by "timestamp" desc nulls last`,
         [input.id],
       ),
+      cliente
+        ? pool.query(
+            `select ${COLUMNAS_ENTIDAD} from client_entities e where e.client_id = $1 and (e.deactivated_at is null or e.id = $2::uuid) order by lower(coalesce(e.legal_name, '')), e.created_at`,
+            [cliente.id, clientEntityId ?? null],
+          )
+        : Promise.resolve({ rows: [] as Record<string, any>[] }),
+      cliente
+        ? pool.query(`select ${COLUMNAS_CONTACTO} from client_contacts k where k.client_id = $1 order by k.created_at`, [cliente.id])
+        : Promise.resolve({ rows: [] as Record<string, any>[] }),
     ]);
 
     return {
@@ -127,6 +152,11 @@ export default createEndpoint({
       invoiceSentAt: record.invoiceSentAt,
       portalUploadedAt: record.portalUploadedAt,
       grMigoAt: record.grMigoAt,
+      clientEntityId,
+      applicablePhases: leerFasesGuardadas(record.applicablePhases),
+      clientCatalog: cliente
+        ? { clientId: cliente.id, clientName: cliente.name, entities: entidadesRes.rows.map(entidadDeFila), contacts: contactosRes.rows.map(contactoDeFila) }
+        : undefined,
       attachments: attachmentsRes.rows.map(row => ({
         id: row.id as string,
         docType: row.doc_type as string,

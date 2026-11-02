@@ -2,10 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Landmark, Upload, Loader2, FileCheck } from 'lucide-react';
-import { getClientCreditDays, startCollectionProcess } from 'zite-endpoints-sdk';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Landmark, Upload, Loader2, FileCheck, ExternalLink } from 'lucide-react';
+import { getClientCollectionTerms, startCollectionProcess } from 'zite-endpoints-sdk';
 import { uploadFile } from 'zite-file-upload-sdk';
 import { toast } from 'sonner';
+import { fasesQueAplican } from '@/lib/clientes/fases';
+import Pastilla from '@/components/clientes/Pastilla';
+import type { Entidad } from '@/components/clientes/tipos';
 
 function addDays(iso: string, days: number): string {
   const d = new Date(iso + 'T00:00:00Z');
@@ -16,6 +20,8 @@ function addDays(iso: string, days: number): string {
 function fmtDate(iso: string) {
   return new Date(iso + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
+
+interface Terminos { found: boolean; clientId?: string; clientName?: string; entities: Entidad[] }
 
 interface Props {
   projectCode: string;
@@ -33,12 +39,22 @@ export default function StartCollectionProcessDialog({ projectCode, client, open
   const [fileName, setFileName] = useState('');
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [terminos, setTerminos] = useState<Terminos | null>(null);
+  const [errorTerminos, setErrorTerminos] = useState(false);
+  const [entidadId, setEntidadId] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Se precarga cada vez que se abre, con el cliente del proyecto — mismo
-  // registro que startCollectionProcess.ts actualiza al guardar (por eso la
-  // próxima vez que se arranque un proceso para el mismo cliente ya viene
-  // resuelto solo).
+  const entidades = terminos?.entities ?? [];
+  const entidad = entidades.find(e => e.id === entidadId);
+
+  // Al elegir una razón social, sus días de crédito pasan al campo (siguen siendo editables para este proceso).
+  const elegir = (e: Entidad) => {
+    setEntidadId(e.id);
+    if (e.creditDays != null) setCreditDays(String(e.creditDays));
+  };
+
+  // Se precarga cada vez que se abre: el cliente sale del proyecto y de él las razones sociales del catálogo de Clientes,
+  // de donde vienen los días de crédito, los pasos que aplican y las instrucciones de cobro.
   useEffect(() => {
     if (!open) return;
     setInvoiceNumber('');
@@ -46,12 +62,18 @@ export default function StartCollectionProcessDialog({ projectCode, client, open
     setCreditDays('30');
     setFileUrl('');
     setFileName('');
-    if (client) {
-      getClientCreditDays({ client }).then(d => {
-        if (d.creditDays != null) setCreditDays(String(d.creditDays));
-      }).catch(() => {});
-    }
-  }, [open, client]);
+    setTerminos(null);
+    setErrorTerminos(false);
+    setEntidadId('');
+    let vigente = true;
+    getClientCollectionTerms({ projectCode, client }).then((t: Terminos) => {
+      if (!vigente) return;
+      setTerminos(t);
+      if (t.entities.length === 1) elegir(t.entities[0]);
+    }).catch(() => { if (vigente) { setTerminos({ found: false, entities: [] }); setErrorTerminos(true); } });
+    return () => { vigente = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, projectCode, client]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -73,8 +95,11 @@ export default function StartCollectionProcessDialog({ projectCode, client, open
   };
 
   const daysNum = Number(creditDays);
-  const canSave = invoiceNumber.trim() !== '' && invoiceDate !== '' && Number.isFinite(daysNum) && daysNum >= 0;
+  const faltaRazonSocial = entidades.length > 0 && !entidadId;
+  const canSave = invoiceNumber.trim() !== '' && invoiceDate !== '' && Number.isFinite(daysNum) && daysNum >= 0 && !faltaRazonSocial;
   const scheduledPaymentDate = canSave ? addDays(invoiceDate, daysNum) : null;
+  const pasos = entidad ? fasesQueAplican(entidad).filter(f => f !== 'Por iniciar') : [];
+  const enlaceCatalogo = `/comercial/clientes${terminos?.clientId ? `?cliente=${terminos.clientId}` : ''}`;
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -87,6 +112,7 @@ export default function StartCollectionProcessDialog({ projectCode, client, open
         creditDays: daysNum,
         fileUrl: fileUrl || undefined,
         fileName: fileName || undefined,
+        clientEntityId: entidadId || undefined,
       });
       toast.success('Proceso de cobranza iniciado');
       onCreated();
@@ -99,7 +125,7 @@ export default function StartCollectionProcessDialog({ projectCode, client, open
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Landmark className="w-4 h-4 text-primary" />
@@ -108,6 +134,38 @@ export default function StartCollectionProcessDialog({ projectCode, client, open
         </DialogHeader>
 
         <div className="space-y-4 py-1">
+          {entidades.length > 0 ? (
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Razón social a la que se factura</label>
+              <Select value={entidadId} onValueChange={id => { const e = entidades.find(x => x.id === id); if (e) elegir(e); }}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Elige la razón social" /></SelectTrigger>
+                <SelectContent>
+                  {entidades.map(e => <SelectItem key={e.id} value={e.id}>{e.legalName || 'Sin nombre'}{e.rfc ? ` · ${e.rfc}` : ''}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {entidad && (
+                <div className="rounded-lg bg-muted/40 px-3 py-2.5 space-y-1.5 text-xs">
+                  {pasos.length > 0 && <p className="text-muted-foreground"><span className="font-medium text-foreground">Pasos:</span> {pasos.join(' → ')}</p>}
+                  {entidad.requiresPo && <p className="text-muted-foreground">Pide orden de compra suya.</p>}
+                  {entidad.requiresPortal && entidad.portalUrl && (
+                    <a href={entidad.portalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline"><ExternalLink className="w-3 h-3" />Portal del cliente</a>
+                  )}
+                  {entidad.processNotes && <p className="whitespace-pre-wrap">{entidad.processNotes}</p>}
+                </div>
+              )}
+            </div>
+          ) : terminos && (
+            <div className="rounded-lg border border-border bg-muted/30 px-3.5 py-3 space-y-1.5">
+              <Pastilla tono="alerta">{errorTerminos ? 'Catálogo no disponible' : terminos.found ? 'Sin razón social' : 'Cliente fuera del catálogo'}</Pastilla>
+              <p className="text-xs text-muted-foreground">
+                {errorTerminos
+                  ? 'No se pudo consultar el catálogo de clientes; captura los días de crédito a mano.'
+                  : 'Con la razón social registrada, los días de crédito y los pasos vienen solos al iniciar un proceso.'}
+                {!errorTerminos && <> <a href={enlaceCatalogo} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">Registrarla en Clientes<ExternalLink className="w-3 h-3" /></a></>}
+              </p>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Número de factura</label>
             <Input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="Ej. A-1032" className="h-9" />
@@ -121,6 +179,7 @@ export default function StartCollectionProcessDialog({ projectCode, client, open
             <div className="space-y-1.5">
               <label className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Días de crédito</label>
               <Input type="number" min={0} value={creditDays} onChange={e => setCreditDays(e.target.value)} className="h-9" />
+              {entidad && entidad.creditDays == null && <p className="text-[11px] text-muted-foreground">La razón social no tiene días de crédito registrados.</p>}
             </div>
           </div>
 

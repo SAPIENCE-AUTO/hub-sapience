@@ -720,6 +720,33 @@ create table migration_logs (
 );
 create trigger migration_logs_set_updated before update on migration_logs for each row execute function set_updated_at();
 
+-- ─── ClientEntities ────────────────────────────────────────────
+create table client_entities (
+  id                            uuid primary key default gen_random_uuid(),
+  client_id                     uuid references clients(id) on delete set null,
+  legal_name                    text,
+  rfc                           text,
+  tax_regime                    text,
+  postal_code                   text,
+  cfdi_use                      text,
+  payment_method                text,
+  payment_form                  text,
+  billing_emails                text,
+  credit_days                   integer,
+  requires_po                   boolean,
+  requires_portal               boolean,
+  portal_url                    text,
+  requires_gr                   boolean,
+  requires_proforma             boolean,
+  process_notes                 text,
+  deactivated_at                timestamptz,
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now(),
+  constraint client_entities_payment_method_chk check ("payment_method" is null or "payment_method" in ('PUE', 'PPD')),
+  constraint client_entities_credit_days_chk check ("credit_days" is null or "credit_days" >= 0)
+);
+create trigger client_entities_set_updated before update on client_entities for each row execute function set_updated_at();
+
 -- ─── UserActivity ──────────────────────────────────────────────
 create table user_activity (
   id                            uuid primary key default gen_random_uuid(),
@@ -892,6 +919,7 @@ create table collection_processes (
   responsible_user_id           uuid references users(id) on delete set null,
   credit_days                   integer,
   client_id                     uuid references clients(id) on delete set null,
+  client_entity_id              uuid references client_entities(id) on delete set null,
   created_at                    timestamptz not null default now(),
   updated_at                    timestamptz not null default now(),
   constraint collection_processes_currency_chk check ("currency" is null or "currency" in ('MXN', 'USD', 'EUR')),
@@ -899,6 +927,22 @@ create table collection_processes (
   constraint collection_processes_status_chk check ("status" is null or "status" in ('Al día', 'Atrasado', 'Pagado'))
 );
 create trigger collection_processes_set_updated before update on collection_processes for each row execute function set_updated_at();
+
+-- ─── ClientContacts ────────────────────────────────────────────
+create table client_contacts (
+  id                            uuid primary key default gen_random_uuid(),
+  client_id                     uuid references clients(id) on delete set null,
+  entity_id                     uuid references client_entities(id) on delete set null,
+  name                          text,
+  email                         text,
+  phone                         text,
+  contact_role                  text,
+  notes                         text,
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now(),
+  constraint client_contacts_role_chk check ("contact_role" is null or "contact_role" in ('Recibe facturas', 'Libera pagos', 'Seguimiento', 'Otro'))
+);
+create trigger client_contacts_set_updated before update on client_contacts for each row execute function set_updated_at();
 
 -- ─── Propuestas ────────────────────────────────────────────────
 create table propuestas (
@@ -1096,6 +1140,13 @@ create unique index on users (lower(email));
 -- projects_project_code_uniq: el backfill de clients junta nombres que hoy
 -- solo difieren en mayúsculas/espacios ("Landor" vs "LANDOR").
 create unique index clients_name_uniq on clients (lower(trim(name)));
+-- razones sociales y contactos del catálogo de clientes (nov 2026): un RFC no
+-- se repite dentro del mismo cliente (el mismo RFC sí puede colgar de dos
+-- clientes distintos, p.ej. un grupo que paga por varias marcas).
+create unique index client_entities_client_rfc_uniq on client_entities (client_id, upper(rfc)) where rfc is not null and rfc <> '';
+create index on client_entities (client_id);
+create index on client_contacts (client_id);
+create index on collection_processes (client_entity_id);
 -- meeting_recordings tampoco viene de Zite — único por bot de Recall para
 -- poder hacer upsert (crear la fila al mandar el bot, actualizarla según
 -- avanza vía server/webhooks/recall.ts) sin duplicar la junta.

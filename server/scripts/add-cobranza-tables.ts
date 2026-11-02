@@ -58,23 +58,11 @@ async function main() {
     create index if not exists collection_audit_log_collection_process_id_idx
       on collection_audit_log (collection_process_id);
 
-    -- Cobranza v2: registro mínimo de clientes para precargar días de crédito
-    -- al arrancar un proceso ("Iniciar proceso de cobranza"). Se autocompleta
-    -- con el uso (upsert en startCollectionProcess.ts) — no hay pantalla de
-    -- administración propia todavía. Búsqueda por nombre exacto (trim) porque
-    -- "cliente" en el resto de la app es texto libre sin normalizar.
-    create table if not exists clients (
-      id           uuid primary key default gen_random_uuid(),
-      name         text not null,
-      credit_days  integer,
-      created_at   timestamptz not null default now(),
-      updated_at   timestamptz not null default now()
-    );
-    -- Único por nombre insensible a mayúsculas — "cliente" en el resto de la
-    -- app no normaliza casing, así que el upsert de startCollectionProcess.ts
-    -- y la búsqueda de getClientCreditDays.ts (ambos case-insensitive) deben
-    -- coincidir con la misma noción de "mismo cliente".
-    create unique index if not exists clients_name_lower_uniq on clients (lower(name));
+    -- `clients` ya no se crea aquí: desde el 2026-09-23 es el catálogo homologado con Sharpli
+    -- (server/scripts/add-clients-table.ts, EXTRA_TABLES de generate.py), sin días de crédito.
+    -- Los días de crédito por defecto viven en las razones sociales de cada cliente
+    -- (server/scripts/add-clientes-ficha-tables.ts). Correr este script antes de esos dejaría
+    -- una `clients` con otra forma y rompería el catálogo.
   `);
   console.log('✅ Tablas del módulo Cobranza creadas (o ya existían).');
   await pool.end();

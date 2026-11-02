@@ -70,6 +70,8 @@ export const UserActivity = createModel(pool, 'UserActivity');
 export const Propuestas = createModel(pool, 'Propuestas');
 export const PropuestaArchivos = createModel(pool, 'PropuestaArchivos');
 export const GuiasTopicos = createModel(pool, 'GuiasTopicos');
+export const ClientEntities = createModel(pool, 'ClientEntities');
+export const ClientContacts = createModel(pool, 'ClientContacts');
 
-export const MODELS = { Users, Projects, CRMItems, Participants, RecruitmentRows, Suppliers, PurchaseOrders, POLineItems, Tasks, CalendarEvents, Messages, BoardColumns, CellValues, Invoices, Payments, Documents, Boards, SharedViews, ChatConversations, BillingEntities, SupplierInvoices, ApprovalLimits, POAuditLog, PoAttachments, AppSettings, Deals, Cotizaciones, CotizacionLineItems, DealDocuments, DocumentBlocks, PettyCashFunds, Expenses, ExpenseAuditLog, ExpenseComments, TaskComments, ExpenseLineItems, CommercialDashboardViews, CalendarAuditLog, CollectionProcesses, RubroAssignments, MigrationLog, Clients, MeetingRecordings, MeetingChatMessages, Propuestas, PropuestaArchivos, GuiasTopicos } as const;
+export const MODELS = { Users, Projects, CRMItems, Participants, RecruitmentRows, Suppliers, PurchaseOrders, POLineItems, Tasks, CalendarEvents, Messages, BoardColumns, CellValues, Invoices, Payments, Documents, Boards, SharedViews, ChatConversations, BillingEntities, SupplierInvoices, ApprovalLimits, POAuditLog, PoAttachments, AppSettings, Deals, Cotizaciones, CotizacionLineItems, DealDocuments, DocumentBlocks, PettyCashFunds, Expenses, ExpenseAuditLog, ExpenseComments, TaskComments, ExpenseLineItems, CommercialDashboardViews, CalendarAuditLog, CollectionProcesses, RubroAssignments, MigrationLog, Clients, MeetingRecordings, MeetingChatMessages, Propuestas, PropuestaArchivos, GuiasTopicos, ClientEntities, ClientContacts } as const;
 export type * from './types';
