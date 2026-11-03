@@ -15,6 +15,12 @@ const RowBadgeSchema = z.object({
   sameBoardCount:       z.number(),
   hasHighRisk:          z.boolean(),
   hasInternalDuplicate: z.boolean(),
+  // Los dos motivos de la alerta de elegibilidad, por separado (nov 2026): `signals` los junta en uno solo por prioridad (mismo cliente le gana a reciente),
+  // pero una persona puede cumplir los dos y el tablero pinta un ícono por cada motivo.
+  /** Ya participó en otro proyecto del mismo cliente, sin importar cuándo. */
+  participatedSameClient:  z.boolean(),
+  /** Participó en otro proyecto de cualquier cliente en los 6 meses anteriores (incluye a quien participó con el mismo cliente hace poco). */
+  participatedLast6Months: z.boolean(),
 });
 
 export default createEndpoint({
@@ -68,7 +74,7 @@ export default createEndpoint({
 
     // ── 4. Compute signals (cachea por cluster local y global por separado) ─
     const localCountCache = new Map<string, number>();
-    const globalSignalCache = new Map<string, Set<Signal>>();
+    const globalSignalCache = new Map<string, { signals: Set<Signal>; sameClient: boolean; recent: boolean }>();
 
     const badges: Record<string, z.infer<typeof RowBadgeSchema>> = {};
 
@@ -82,8 +88,13 @@ export default createEndpoint({
 
       const globalId = rowToGlobalCluster.get(boardRow.id);
       let signalSet: Set<Signal>;
+      let participatedSameClient = false;
+      let participatedLast6Months = false;
       if (globalId && globalSignalCache.has(globalId)) {
-        signalSet = new Set(globalSignalCache.get(globalId));
+        const hit = globalSignalCache.get(globalId)!;
+        signalSet = new Set(hit.signals);
+        participatedSameClient = hit.sameClient;
+        participatedLast6Months = hit.recent;
       } else {
         signalSet = new Set<Signal>();
         if (globalId) {
@@ -109,6 +120,9 @@ export default createEndpoint({
             const isSameClient = !!currentClientNorm && !!peerProjData?.client && normClient(peerProjData.client) === currentClientNorm;
             const isRecent = !peerStartDate || peerStartDate > sixMonthsAgo;
 
+            if (rawParticipated && isSameClient) participatedSameClient = true;
+            if (rawParticipated && isRecent) participatedLast6Months = true;
+
             if (rawParticipated && isSameClient) {
               signalSet.add('same_client');
             } else if (rawParticipated && isRecent) {
@@ -119,7 +133,7 @@ export default createEndpoint({
               signalSet.add('registered_only');
             }
           }
-          globalSignalCache.set(globalId, new Set(signalSet));
+          globalSignalCache.set(globalId, { signals: new Set(signalSet), sameClient: participatedSameClient, recent: participatedLast6Months });
         }
       }
 
@@ -131,6 +145,8 @@ export default createEndpoint({
         sameBoardCount,
         hasHighRisk:          primaryBadge === 'same_client' || primaryBadge === 'recent',
         hasInternalDuplicate: sameBoardCount > 1,
+        participatedSameClient,
+        participatedLast6Months,
       };
     }
 

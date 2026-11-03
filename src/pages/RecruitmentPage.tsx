@@ -32,7 +32,7 @@ import { InlineInput } from '../components/table/InlineInput';
 import { GroupPicker } from '../components/table/GroupPicker';
 import { GroupSectionHeader } from '../components/table/GroupSectionHeader';
 import { ExportRecruitmentGroupsDialog, NO_GROUP_KEY, type ExportGroupOption } from '../components/ExportRecruitmentGroupsDialog';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, FileText, X, AlertTriangle, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList, MoreHorizontal, FileSpreadsheet, ListChecks } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, FileText, X, AlertTriangle, CalendarClock, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList, MoreHorizontal, FileSpreadsheet, ListChecks } from 'lucide-react';
 import RecruitmentStatusPanel from '../components/RecruitmentStatusPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
@@ -1095,14 +1095,17 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
               className={`px-1 py-0 h-9 overflow-hidden text-center group-hover:bg-muted ${selectedIds.has(row.id) ? 'bg-primary/5' : 'bg-card'}`}
               style={{ position: 'sticky', left: dupRiskLeft, zIndex: 10, borderBottom: cellBorder, borderLeft: '1px solid hsl(var(--border) / 0.4)' }}
             >
-              {badge?.hasHighRisk && (
-                <button
-                  title={badge.signals.includes('same_client') ? '⚠️ Mismo cliente — restricción siempre aplica' : '⚠️ Participó recientemente (< 6 meses)'}
-                  onClick={() => onDuplicateClick(row)}
-                  className="hover:opacity-70 transition-opacity inline-flex">
-                  <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
-                </button>
-              )}
+              {badge?.hasHighRisk && (() => {
+                // Un ícono por motivo (los dos si aplican); si la respuesta viene de un servidor sin las banderas nuevas, se deducen de las señales de siempre.
+                const mismoCliente = badge.participatedSameClient ?? badge.signals.includes('same_client');
+                const ultimos6Meses = badge.participatedLast6Months ?? badge.signals.includes('recent');
+                return (
+                  <button onClick={() => onDuplicateClick(row)} className="hover:opacity-70 transition-opacity inline-flex items-center gap-1">
+                    {mismoCliente && <span title="⚠️ Mismo cliente — restricción siempre aplica" className="inline-flex"><AlertTriangle className="w-3.5 h-3.5 text-destructive" /></span>}
+                    {ultimos6Meses && <span title="⚠️ Participó recientemente (< 6 meses)" className="inline-flex"><CalendarClock className="w-3.5 h-3.5 text-amber-500" /></span>}
+                  </button>
+                );
+              })()}
             </td>
           )}
 
@@ -1346,12 +1349,12 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
               {([
                 { key: '_dupBoard'   as const, label: 'Este filtro',       icon: Layers,        colW: dupBoardColW,   left: dupBoardLeft },
                 { key: '_dupHistory' as const, label: 'Otros formularios', icon: Clock,         colW: dupHistoryColW, left: dupHistoryLeft },
-                { key: '_dupRisk'    as const, label: 'Elegibilidad',      icon: AlertTriangle, colW: dupRiskColW,    left: dupRiskLeft },
-              ]).filter(col => !hiddenColumns.has(col.key)).map(col => (
+                { key: '_dupRisk'    as const, label: 'Elegibilidad',      icon: AlertTriangle, colW: dupRiskColW,    left: dupRiskLeft, ayuda: 'Elegibilidad — triángulo rojo: ya participó con el mismo cliente · reloj ámbar: participó en los últimos 6 meses (aparecen los dos si aplican)' },
+              ] as { key: '_dupBoard' | '_dupHistory' | '_dupRisk'; label: string; icon: typeof Layers; colW: typeof dupBoardColW; left: number; ayuda?: string }[]).filter(col => !hiddenColumns.has(col.key)).map(col => (
                 <th key={col.key}
                     className="text-center px-1 text-xs font-semibold whitespace-nowrap bg-muted border-b border-border/50 border-l border-border/40 relative group/th select-none"
                     style={{ position: 'sticky', top: 0, left: col.left, zIndex: 40 }}>
-                  <div className="flex items-center justify-center gap-1 group/hdr" title={col.label}>
+                  <div className="flex items-center justify-center gap-1 group/hdr" title={col.ayuda ?? col.label}>
                     <button onClick={() => toggleSort(col.key)} className="flex items-center gap-0.5 hover:bg-muted-foreground/10 transition-colors rounded px-1">
                       <col.icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                       {sortColumn === col.key && (sortDirection === 'asc' ? <ChevronUp className="w-3 h-3 text-primary flex-shrink-0" /> : <ChevronDown className="w-3 h-3 text-primary flex-shrink-0" />)}
