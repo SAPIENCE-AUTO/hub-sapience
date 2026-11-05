@@ -15,6 +15,15 @@ Un envío pasa por: **Enviado** (gris) → **Abrió** (azul: entró a la liga) �
 
 Desde el detalle (clic en el estado): **Ver PDF firmado**, **Copiar liga** (para mandarla por WhatsApp: firmar por ahí también queda registrado), **Reenviar correo** (misma liga), **Mandar de nuevo** (si rechazó) y **Mandar otro** (si ya firmó): los dos crean un envío nuevo con liga nueva y lo anterior queda guardado.
 
+## Vistas externas: el estado, solo para ver (2026-11-05, pedido de Sergio)
+
+La columna «NDA» también se ve en las **vistas externas** (la liga `/shared/<token>` de solo lectura que se comparte fuera del equipo): cada persona sale con su pill (Enviado, Abrió, Firmado, Rechazó; al pasar el cursor, qué significa y la fecha de ese paso) y quien la mira **no puede mandar, reenviar ni cambiar nada** (no hay botón, ni detalle, ni PDF).
+
+- **Quién la muestra:** `getSharedViewData` trata `nda` como una columna fija más (`FIXED_ORDER`, después de «Estado»). Las externas ligadas a una vista interna (401 de 412 al 2026-11-05) copian en vivo sus columnas: si la vista interna **muestra** «NDA», la externa también; si la oculta, la externa tampoco (hoy lo muestran 24, en 9 proyectos; las 377 restantes lo ocultan). Para mostrarla en otra, se muestra la columna «NDA» en su vista interna. Las externas «solas» (Compartir → «Nueva vista») la traen si se marca la casilla «NDA» (nace desmarcada).
+- **Qué sale y qué no:** solo `ndaEstado` y `ndaFecha` por fila (`estadoPublicoDeProyecto` en `servicio.ts`: el último envío de la fila; la fecha es la del último paso). **Nunca** la liga de firma (con ella alguien podría firmar por la persona), el correo del envío, la IP, el dispositivo, la firma, el PDF ni el id del envío. Una fila marcada «enviado» a mano antes del flujo con liga sale como «Enviado». Si la vista no muestra la columna, ni se consulta el NDA.
+- **Si faltan las tablas del NDA** (una base sin el DDL), la vista sigue funcionando con lo marcado a mano, como la tabla del equipo.
+- Pantalla: `SharedViewPage.tsx` (celda `nda`) con el mismo `NdaPill` de la tabla.
+
 ## Qué se guarda (`nda_envios` y `nda_eventos`, ver `server/generate.py` → EXTRA_TABLES)
 
 - Por envío: token, fila, proyecto, nombre y correo con que se mandó, estado y sus fechas, el nombre que la persona confirmó al firmar, la **huella (SHA-256) del texto exacto** que firmó (versión del texto + texto con su nombre), la firma (PNG en base64), IP y dispositivo, ruta y huella del PDF, y quién lo mandó.
@@ -72,3 +81,5 @@ Es el dominio neutro donde contestan los participantes de Filtros (`docs/filtros
 ## Pruebas
 
 `node server/node_modules/.bin/tsx server/scripts/test-nda.ts` (48 pruebas: base en memoria con el esquema real y el SQL real del script, Graph y Storage simulados, la regla de CORS de `sharpli.mx`, las rutas de la página y un PDF real con Chrome leído de vuelta; datos inventados).
+
+`node server/node_modules/.bin/tsx server/scripts/test-vista-externa-nda.ts` (11 pruebas de la columna en vistas externas: ligada a la vista interna o «sola», con y sin la columna, último envío, marca a mano, que no salga nada del envío —ni liga, ni IP, ni firma— y que mirar la vista no cambie nada; también sin las tablas del NDA).

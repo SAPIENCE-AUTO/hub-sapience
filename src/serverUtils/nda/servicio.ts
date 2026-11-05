@@ -320,6 +320,19 @@ export async function estadosDeProyecto(projectCode: string): Promise<EstadoDeFi
   }));
 }
 
+/**
+ * Lo único del NDA que ve una vista externa (la liga de solo lectura que se comparte fuera del equipo): el estado del último envío de cada fila y la fecha de ese paso.
+ * Nunca la liga de firma, el correo del envío, la IP, el dispositivo, la firma ni el PDF: con la liga alguien podría firmar por la persona.
+ */
+export async function estadoPublicoDeProyecto(projectCode: string): Promise<Map<string, { estado: EstadoNda; fecha?: string }>> {
+  const porFila = new Map<string, { estado: EstadoNda; fecha?: string }>();
+  for (const e of await estadosDeProyecto(projectCode)) {
+    const fecha = e.estado === 'firmado' ? e.firmadoAt : e.estado === 'rechazado' ? e.rechazadoAt : e.estado === 'abierto' ? e.abiertoAt : e.enviadoAt;
+    porFila.set(e.rowId, { estado: e.estado, ...(fecha ? { fecha } : {}) });
+  }
+  return porFila;
+}
+
 export async function detalleDeFila(rowId: string) {
   const { rows } = await pool.query<FilaEnvio>(`select ${COLS} from nda_envios where recruitment_row_id = $1 order by n desc`, [rowId]);
   const ids = rows.map((r) => r.id);

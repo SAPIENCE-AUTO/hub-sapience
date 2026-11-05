@@ -34,9 +34,10 @@ const FIXED_VISIBLE = [
   { key: 'phone',           label: 'Teléfono' },
   { key: 'idNumber',        label: 'ID / Doc' },
   { key: 'status',          label: 'Estado' },
+  { key: 'nda',             label: 'NDA' }, // solo el estado (Enviado, Abrió, Firmado, Rechazó); quien ve la liga no puede mandar ni cambiar nada
 ];
 
-const defaultVisibleCols = new Set(FIXED_VISIBLE.filter(c => c.key !== 'idNumber').map(c => c.key));
+const defaultVisibleCols = new Set(FIXED_VISIBLE.filter(c => c.key !== 'idNumber' && c.key !== 'nda').map(c => c.key));
 
 function useViewForm(dynamicColumns: Array<{ id: string; columnName?: string; columnType?: string; optionsJson?: string }>, boardGroups: BoardGroup[]) {
   const [viewName, setViewName] = useState('');

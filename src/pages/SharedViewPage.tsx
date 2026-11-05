@@ -5,6 +5,8 @@ import { StatusBadge } from '../components/StatusBadge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Share2, Users, ChevronDown, ChevronRight, RefreshCw, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { getGroupColor } from '../components/table/tableUtils';
+import { NdaPill } from '@/components/nda/NdaPill';
+import { NDA_AYUDA, fechaMx, type EstadoNda } from '@/lib/nda';
 
 
 type Row = NonNullable<GetSharedViewDataOutputType['rows']>[0];
@@ -21,10 +23,17 @@ const FIXED_COL_LABELS: Record<string, string> = {
   phone: 'Teléfono',
   idNumber: 'ID / Doc',
   status: 'Estado',
+  nda: 'NDA',
 };
 
 function CellValue({ col, row }: { col: string; row: Row; dynCols: DynCol[] }) {
   if (col === 'status') return <StatusBadge status={row.status} />;
+  if (col === 'nda') {
+    // Solo se ve el estado (Enviado, Abrió, Firmado, Rechazó): aquí no hay botón ni detalle, no se puede mandar ni cambiar nada.
+    const estado = row.ndaEstado as EstadoNda | undefined;
+    if (!estado) return null;
+    return <NdaPill estado={estado} title={`${NDA_AYUDA[estado]}${row.ndaFecha ? ` · ${fechaMx(row.ndaFecha)}` : ''}`} />;
+  }
   if (FIXED_COL_LABELS[col]) {
     const val = (row as unknown as Record<string, string | undefined>)[col] ?? '';
     return <span className="text-sm text-foreground truncate">{val}</span>;

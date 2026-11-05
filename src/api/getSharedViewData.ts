@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, SharedViews, RecruitmentRows, BoardColumns, CellValues, CalendarEvents } from '../../server/compat';
 import { resolveBoardId } from '../serverUtils/resolveBoardId';
+import { estadoPublicoDeProyecto } from '../serverUtils/nda/servicio';
 
 type FilterRule = {
   id: string;
@@ -11,7 +12,10 @@ type FilterRule = {
   selectedValues?: string[];
 };
 
-const FIXED_KEYS = new Set(['participantName', 'email', 'phone', 'idNumber', 'status']);
+// Las columnas fijas de la tabla, en su orden. «nda» es el estado del NDA de cada persona (Enviado, Abrió, Firmado, Rechazó): solo se manda si la vista lo muestra
+// y siempre de solo lectura (sin la liga de firma ni nada del envío; ver estadoPublicoDeProyecto).
+const FIXED_ORDER = ['participantName', 'email', 'phone', 'idNumber', 'status', 'nda'];
+const FIXED_KEYS = new Set(FIXED_ORDER);
 
 function matchRule(rowValues: Record<string, string>, rule: FilterRule): boolean {
   const rawVal = rowValues[rule.column] ?? '';
@@ -57,6 +61,9 @@ const rowSchema = z.object({
   status: z.string().optional(),
   dynamicValues: z.record(z.string()).optional(),
   groupId: z.string().optional(),
+  // Estado del NDA y la fecha de ese paso (solo si la vista muestra la columna «NDA»).
+  ndaEstado: z.enum(['enviado', 'abierto', 'firmado', 'rechazado']).optional(),
+  ndaFecha: z.string().optional(),
 });
 
 export default createEndpoint({
@@ -181,8 +188,7 @@ export default createEndpoint({
     // External view fallback: use stored visibleColumnsJson
     let visibleColumns: string[];
     if (usingInternalView) {
-      const fixedCols = ['participantName', 'email', 'phone', 'idNumber', 'status'];
-      const allCols = [...fixedCols, ...allDynColIds];
+      const allCols = [...FIXED_ORDER, ...allDynColIds];
       visibleColumns = hiddenColumns.size > 0
         ? allCols.filter(id => !hiddenColumns.has(id))
         : allCols;
@@ -196,7 +202,6 @@ export default createEndpoint({
     // refleja el orden en que se marcaron los checkboxes al crear la vista, no
     // el orden real de columnas del tablero — se reordena aquí para que la
     // vista externa siempre calce con lo que ve el equipo interno.
-    const FIXED_ORDER = ['participantName', 'email', 'phone', 'idNumber', 'status'];
     visibleColumns = [...visibleColumns].sort((a, b) => {
       const aGroup = FIXED_KEYS.has(a) ? 0 : 1;
       const bGroup = FIXED_KEYS.has(b) ? 0 : 1;
@@ -593,6 +598,20 @@ export default createEndpoint({
     const rowGroupIds = new Set(rows.map(r => rowGroupMap.get(r.id)).filter(Boolean) as string[]);
     const returnedGroups = activeGroupCols.filter(g => rowGroupIds.has(g.id));
 
+    // ── 13a. Estado del NDA de cada persona (solo lectura) ────────────────
+    // Solo si la vista muestra esa columna. Lo que sale es el estado y la fecha de ese paso, nada más.
+    const muestraNda = visibleColumns.includes('nda');
+    let ndaPorFila: Awaited<ReturnType<typeof estadoPublicoDeProyecto>> = new Map();
+    if (muestraNda && externalView.projectCode) {
+      try {
+        ndaPorFila = await estadoPublicoDeProyecto(externalView.projectCode);
+      } catch (e) {
+        // Sin las tablas del NDA la vista sigue igual (solo con lo marcado a mano), como la tabla del equipo.
+        const msg = (e as Error).message;
+        if (!(/nda_envios/.test(msg) && /does not exist|no existe/i.test(msg))) throw e;
+      }
+    }
+
     return {
       found: true,
       viewName: externalView.viewName,
@@ -602,16 +621,23 @@ export default createEndpoint({
       dynamicColumns,
       groups: returnedGroups,
       filters: { filterRules, filterMode, statuses: legacyStatuses },
-      rows: rows.map(r => ({
-        id: r.id,
-        participantName: r.participantName,
-        email: r.email,
-        phone: r.phone,
-        idNumber: r.idNumber,
-        status: r.status,
-        dynamicValues: dynCellMap.get(r.id) ?? {},
-        groupId: rowGroupMap.get(r.id),
-      })),
+      rows: rows.map(r => {
+        // Lo marcado a mano como enviado («NDA ✓» en la tabla del equipo), sin envío con liga, sale como «enviado».
+        const nda = muestraNda
+          ? (ndaPorFila.get(r.id) ?? (r.ndaSent ? { estado: 'enviado' as const, ...(r.ndaSentDate ? { fecha: r.ndaSentDate } : {}) } : undefined))
+          : undefined;
+        return {
+          id: r.id,
+          participantName: r.participantName,
+          email: r.email,
+          phone: r.phone,
+          idNumber: r.idNumber,
+          status: r.status,
+          dynamicValues: dynCellMap.get(r.id) ?? {},
+          groupId: rowGroupMap.get(r.id),
+          ...(nda ? { ndaEstado: nda.estado, ...(nda.fecha ? { ndaFecha: nda.fecha } : {}) } : {}),
+        };
+      }),
     };
   },
 });
