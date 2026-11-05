@@ -36,6 +36,8 @@ Desde el detalle (clic en el estado): **Ver PDF firmado**, **Copiar liga** (para
 
 Está en `src/serverUtils/nda/correo.ts` (`NDA_SECCIONES`), palabra por palabra como lo redactó Sergio. **Si cambia el texto, subir `NDA_TEXTO_VERSION`** (queda guardada con cada firma) y cambiar también `ORIGINAL` en `server/scripts/test-nda.ts`. Conviene que lo revise un abogado.
 
+**El cierre del acuerdo (2026-11-04, pedido de Sergio):** «Declaraciones finales» termina con dos párrafos que agregó él: la **aceptación expresa** («Al firmar, acepto los términos y condiciones de este acuerdo y confirmo que soy mayor de edad, que lo leí y lo entendí, y que la firma que aparece aquí es mía») y el **aviso de privacidad** («Conozco el aviso de privacidad de Asesores Globales Corporativos SC, disponible en sharpli.mx/f/aviso, y acepto que se registren mi nombre, mi firma, la fecha y hora, mi dispositivo y mi dirección IP como constancia de esta firma»). Así la aceptación queda en el texto que se hashea y en el PDF firmado, no solo en la casilla «Leí y acepto» de la página (esa casilla no se guarda ni sale en el PDF). La dirección del aviso es una liga en la página (abre en otra pestaña, para leerlo antes de aceptar) y en el PDF. El aviso publicado es el Word «Aviso de Privacidad AGC» (actualizado 01/01/2026; se cambia con `scripts/subir-aviso-privacidad.ts`): nombra a AGC como responsable y su lista de datos es «enunciativa, no limitativa», pero no nombra firma, IP ni dispositivo; por eso el párrafo lo dice. Versión vigente del texto: `2026-11-04-2`.
+
 ## Piezas
 
 - Servidor: `src/serverUtils/nda/` (`correo.ts` texto y correos · `outlook.ts` envío por Graph · `enviar.ts` fila → envío → correo · `servicio.ts` todo el SQL y el ciclo de vida · `pdf.ts` PDF con Chrome · `storage.ts` bucket). Endpoints: públicos `getNDAPublic`, `signNDA`, `rejectNDA`; del equipo `sendNDAEmail`, `getNDAStatuses`, `getNDADetail`, `getNDAPdfUrl`. `executeButtonAction` (`send_nda`) usa el mismo envío.
@@ -69,4 +71,4 @@ Es el dominio neutro donde contestan los participantes de Filtros (`docs/filtros
 
 ## Pruebas
 
-`node server/node_modules/.bin/tsx server/scripts/test-nda.ts` (38 pruebas: base en memoria con el esquema real y el SQL real del script, Graph y Storage simulados, la regla de CORS de `sharpli.mx`, las rutas de la página y un PDF real con Chrome leído de vuelta; datos inventados).
+`node server/node_modules/.bin/tsx server/scripts/test-nda.ts` (48 pruebas: base en memoria con el esquema real y el SQL real del script, Graph y Storage simulados, la regla de CORS de `sharpli.mx`, las rutas de la página y un PDF real con Chrome leído de vuelta; datos inventados).

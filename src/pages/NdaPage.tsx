@@ -104,6 +104,17 @@ export default function NdaPage() {
   );
 }
 
+/** El párrafo que cita el aviso de privacidad trae su dirección (sharpli.mx/f/aviso): se vuelve liga, para leerlo antes de aceptar. */
+function ConLigaDelAviso({ texto }: { texto: string }) {
+  return (
+    <>
+      {texto.split(/(sharpli\.mx\/f\/aviso)/).map((trozo, i) => trozo === 'sharpli.mx/f/aviso'
+        ? <a key={i} href="/f/aviso" target="_blank" rel="noreferrer" className="font-medium text-[#0e4b5a] underline underline-offset-2">{trozo}</a>
+        : trozo)}
+    </>
+  );
+}
+
 function Mensaje({ icono, titulo, children }: { icono: ReactNode; titulo: string; children?: ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -194,7 +205,7 @@ function Formulario({ token, datos, onFirmado, onRechazado, onYaResuelto }: {
         {texto.secciones.map((s) => (
           <section key={s.titulo}>
             <h3 className="mb-1 mt-4 font-bold text-slate-900">{s.titulo}</h3>
-            {s.parrafos.map((p) => <p key={p} className="mb-2">{p}</p>)}
+            {s.parrafos.map((p) => <p key={p} className="mb-2"><ConLigaDelAviso texto={p} /></p>)}
           </section>
         ))}
       </article>

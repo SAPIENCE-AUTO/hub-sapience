@@ -137,7 +137,8 @@ async function enviado(campos: Parameters<typeof fila>[0] = { nombre: 'Ana Torre
 }
 
 // ═══ El texto y los correos ═════════════════════════════════════════════════
-// Copia del texto que pasó Sergio (2026-11-04), sin las dos líneas de firma y fecha (las hace la página de firma y salen en el PDF).
+// Copia del texto que pasó Sergio (2026-11-04), sin las dos líneas de firma y fecha (las hace la página de firma y salen en el PDF), más los dos párrafos que agregó al final ese mismo día:
+// la aceptación expresa de los términos y el aviso de privacidad de AGC.
 const ORIGINAL = `ACUERDO DE CONFIDENCIALIDAD, CONSENTIMIENTO INFORMADO Y RESPONSIVA
 Yo, ____________ (nombre completo), declaro que:
 1. Confidencialidad
@@ -147,11 +148,24 @@ Entiendo que dicha información es confidencial y no podrá ser divulgada, compa
 Declaro que he sido informado(a) de que durante la sesión tendré acceso a información confidencial que no podré compartir ni divulgar.
 Reconozco que mi participación es completamente voluntaria, y acepto participar en el estudio por mi propia voluntad.
 Declaraciones finales
-Por la presente, confirmo que participo en esta actividad de manera consciente y voluntaria, y que he tenido la oportunidad de resolver todas las dudas relacionadas con mi participación.`;
+Por la presente, confirmo que participo en esta actividad de manera consciente y voluntaria, y que he tenido la oportunidad de resolver todas las dudas relacionadas con mi participación.
+Al firmar, acepto los términos y condiciones de este acuerdo y confirmo que soy mayor de edad, que lo leí y lo entendí, y que la firma que aparece aquí es mía.
+Conozco el aviso de privacidad de Asesores Globales Corporativos SC, disponible en sharpli.mx/f/aviso, y acepto que se registren mi nombre, mi firma, la fecha y hora, mi dispositivo y mi dirección IP como constancia de esta firma.`;
 const lineas = (t: string) => t.split('\n').map((l) => l.trim()).filter(Boolean);
 
 await prueba('el texto del acuerdo es el original, solo con el nombre puesto donde estaba la raya', () => {
   assert.deepEqual(lineas(ndaEnTexto('Ana Torres Ruiz')), lineas(ORIGINAL).map((l) => l.replace('____________', 'Ana Torres Ruiz')));
+});
+
+await prueba('el acuerdo termina con la aceptación expresa y el aviso de privacidad; el aviso lo cita con su dirección y la versión del texto es la nueva', () => {
+  const finales = NDA_SECCIONES[NDA_SECCIONES.length - 1];
+  assert.equal(finales.titulo, 'Declaraciones finales');
+  const [confirmo, acepto, aviso] = finales.parrafos.slice(-3);
+  assert.ok(confirmo.startsWith('Por la presente, confirmo que participo'));
+  assert.equal(acepto, 'Al firmar, acepto los términos y condiciones de este acuerdo y confirmo que soy mayor de edad, que lo leí y lo entendí, y que la firma que aparece aquí es mía.');
+  assert.equal(aviso, 'Conozco el aviso de privacidad de Asesores Globales Corporativos SC, disponible en sharpli.mx/f/aviso, y acepto que se registren mi nombre, mi firma, la fecha y hora, mi dispositivo y mi dirección IP como constancia de esta firma.');
+  assert.ok(ndaEnTexto('Ana Torres Ruiz').trimEnd().endsWith(aviso), 'lo último que se firma es el aviso');
+  assert.equal(NDA_TEXTO_VERSION, '2026-11-04-2', 'si cambia el texto hay que subir la versión');
 });
 
 await prueba('el nombre se limpia: espacios dobles y saltos de línea quedan en una sola línea', () => {
@@ -184,7 +198,15 @@ await prueba('el HTML del PDF lleva el nombre de quien firmó, todo el texto, la
     enviadoAt: new Date('2026-11-04T15:00:00Z'), abiertoAt: new Date('2026-11-04T16:30:00Z'), ip: '203.0.113.9', userAgent: 'Dispositivo de prueba', textoHash: 'ab'.repeat(32),
   });
   assert.ok(html.includes('Yo, <b>Ana &lt;Torres&gt; Ruiz</b> (nombre completo), declaro que:'));
-  for (const s of NDA_SECCIONES) { assert.ok(html.includes(s.titulo)); for (const p of s.parrafos) assert.ok(html.includes(p), p.slice(0, 40)); }
+  for (const s of NDA_SECCIONES) {
+    assert.ok(html.includes(s.titulo));
+    for (const p of s.parrafos) {
+      // la dirección del aviso de privacidad sale como liga: se revisa lo de antes, lo de después y la liga
+      const [antes, despues] = p.split('sharpli.mx/f/aviso');
+      assert.ok(html.includes(antes) && (despues === undefined || html.includes(despues)), p.slice(0, 40));
+    }
+  }
+  assert.ok(html.includes('<a href="https://sharpli.mx/f/aviso"'), 'la dirección del aviso debe ser una liga en el PDF');
   assert.ok(html.includes('data:image/png;base64,AAAA') && html.includes('Firma del participante: Ana &lt;Torres&gt; Ruiz'));
   assert.ok(html.includes('4 de noviembre de 2026 a las 10:42 h'), 'la fecha va en hora de la Ciudad de México (UTC-6 en noviembre)');
   assert.ok(html.includes('Constancia de firma electrónica') && html.includes('203.0.113.9') && html.includes('ab'.repeat(32)) && html.includes('ana@ejemplo.test'));
@@ -942,7 +964,7 @@ await prueba('el PDF real (Chrome) sale con el nombre, el texto, la fecha y la c
   for (let i = 1; i <= doc.numPages; i++) texto += ' ' + (await (await doc.getPage(i)).getTextContent()).items.map((it: any) => it.str).join(' ');
   // el título de la constancia se imprime en mayúsculas (text-transform), así que se compara sin distinguir mayúsculas
   const plano = texto.replace(/\s+/g, ' ').toLowerCase();
-  for (const buscado of ['ACUERDO DE CONFIDENCIALIDAD', 'Ana María Torres Ruiz', 'ASESORES GLOBALES CORPORATIVOS SC', 'Firma del participante', 'Fecha:', '4 de noviembre de 2026', 'Sesión: jueves, 5 de noviembre de 2026, 18:00 h', 'en línea', 'Constancia de firma electrónica', '203.0.113.9', 'ana@ejemplo.test', sha256('texto de prueba').slice(0, 16)]) {
+  for (const buscado of ['ACUERDO DE CONFIDENCIALIDAD', 'Ana María Torres Ruiz', 'ASESORES GLOBALES CORPORATIVOS SC', 'Firma del participante', 'Fecha:', 'acepto los términos y condiciones de este acuerdo', 'Conozco el aviso de privacidad de Asesores Globales Corporativos SC', 'sharpli.mx/f/aviso', '4 de noviembre de 2026', 'Sesión: jueves, 5 de noviembre de 2026, 18:00 h', 'en línea', 'Constancia de firma electrónica', '203.0.113.9', 'ana@ejemplo.test', sha256('texto de prueba').slice(0, 16)]) {
     assert.ok(plano.includes(buscado.toLowerCase()), `el PDF no trae «${buscado}»`);
   }
   assert.ok(doc.numPages >= 1 && doc.numPages <= 3, `páginas: ${doc.numPages}`);

@@ -35,12 +35,15 @@ const fuentesCss = () => (fuentes ??= ([['Regular', 400], ['Bold', 700]] as cons
   .map(([v, peso]) => `@font-face { font-family: Montserrat; font-weight: ${peso}; font-style: normal; src: url(data:font/ttf;base64,${leerMarca(`fuentes/Montserrat-${v}.ttf`).toString('base64')}) format('truetype'); }`)
   .join('\n'));
 
+/** La dirección del aviso de privacidad que cita el último párrafo, como liga (en el PDF se puede tocar). Recibe el párrafo ya escapado. */
+const conLigaDelAviso = (html: string) => html.replace('sharpli.mx/f/aviso', '<a href="https://sharpli.mx/f/aviso" style="color:inherit">sharpli.mx/f/aviso</a>');
+
 const fecha = (d?: Date | null) => (d ? fechaHoraMx(d) : '—');
 
 export function htmlDelPdf(d: DatosPdf): string {
   const nombre = escaparHtml(limpiarNombre(d.nombre));
   const secciones = NDA_SECCIONES.map(
-    (s) => `<h2>${escaparHtml(s.titulo)}</h2>${s.parrafos.map((p) => `<p>${escaparHtml(p)}</p>`).join('')}`,
+    (s) => `<h2>${escaparHtml(s.titulo)}</h2>${s.parrafos.map((p) => `<p>${conLigaDelAviso(escaparHtml(p))}</p>`).join('')}`,
   ).join('');
   const dispositivo = escaparHtml((d.userAgent ?? '').slice(0, 160) || 'No disponible');
   const filas: [string, string][] = [

@@ -3,9 +3,10 @@
 // Las dos líneas del final del documento en papel («Firma del participante» y «Fecha») las hace la página de firma (la firma dibujada y la fecha del momento) y salen en el PDF.
 // Arriba del acuerdo va, si se conoce, el renglón «Sesión: día, hora (y lugar)» para que la persona sepa a qué se compromete (pedido de Sergio, 2026-11-04): nunca el nombre del proyecto,
 // que podría delatar al cliente o la marca antes de firmar. Ese renglón entra en el texto del que sale la huella; sin sesión, el texto es idéntico al original.
+// El aviso de privacidad que cita el último párrafo es el de AGC (el mismo que leen los participantes de Filtros, en sharpli.mx/f/aviso): no nombra firma, IP ni dispositivo, por eso el párrafo lo dice.
 // Para cambiar el texto se edita NDA_SECCIONES y se sube NDA_TEXTO_VERSION (queda guardada con cada firma); la prueba (server/scripts/test-nda.ts) compara contra el original para que no se mueva una coma sin querer.
 
-export const NDA_TEXTO_VERSION = '2026-11-04';
+export const NDA_TEXTO_VERSION = '2026-11-04-2';
 
 export const NDA_TITULO = 'ACUERDO DE CONFIDENCIALIDAD, CONSENTIMIENTO INFORMADO Y RESPONSIVA';
 
@@ -30,6 +31,9 @@ export const NDA_SECCIONES: NdaSeccion[] = [
     titulo: 'Declaraciones finales',
     parrafos: [
       'Por la presente, confirmo que participo en esta actividad de manera consciente y voluntaria, y que he tenido la oportunidad de resolver todas las dudas relacionadas con mi participación.',
+      // Agregados por pedido de Sergio (2026-11-04): la aceptación expresa dentro del texto (así queda en la huella y en el PDF, no solo en la casilla de la página) y el aviso de privacidad de AGC.
+      'Al firmar, acepto los términos y condiciones de este acuerdo y confirmo que soy mayor de edad, que lo leí y lo entendí, y que la firma que aparece aquí es mía.',
+      'Conozco el aviso de privacidad de Asesores Globales Corporativos SC, disponible en sharpli.mx/f/aviso, y acepto que se registren mi nombre, mi firma, la fecha y hora, mi dispositivo y mi dirección IP como constancia de esta firma.',
     ],
   },
 ];
