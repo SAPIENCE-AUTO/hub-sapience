@@ -28,7 +28,7 @@ La columna «NDA» también se ve en las **vistas externas** (la liga `/shared/<
 
 - Por envío: token, fila, proyecto, nombre y correo con que se mandó, estado y sus fechas, el nombre que la persona confirmó al firmar, la **huella (SHA-256) del texto exacto** que firmó (versión del texto + texto con su nombre), la firma (PNG en base64), IP y dispositivo, ruta y huella del PDF, y quién lo mandó.
 - **Bitácora `nda_eventos`**: enviado, reenviado, abierto, firmado, rechazado, pdf_creado, pdf_fallido, copia_enviada, copia_fallida. Solo se agrega: un trigger rechaza UPDATE, DELETE y TRUNCATE (`add-nda-tables.ts`). No tiene FK a `recruitment_rows` a propósito: la evidencia sobrevive aunque borren a la persona del tablero. Las dos tablas traen una secuencia `n` (identity): el último envío de una fila y la línea de tiempo se ordenan por `n` y no por la fecha, para que dos movimientos del mismo instante no queden revueltos.
-- **PDF**: bucket privado `nda` (ruta `<año>/<envío>.pdf`); solo se ve con liga temporal de 10 min (`getNDAPdfUrl`). La IP sale de `X-Forwarded-For` (primer salto) y es aproximada: apoya la constancia, no la prueba por sí sola.
+- **PDF**: bucket privado `nda` (ruta `<año>/<envío>.pdf`); solo se ve con liga temporal de 10 min (`getNDAPdfUrl`). La IP sale de `X-Forwarded-For` (primer salto) y es aproximada: apoya la constancia, no la prueba por sí sola. **Una sola hoja**: el acuerdo, la firma y la constancia van juntos en la misma página (la constancia está en dos columnas para ocupar poco alto). El contenido se mide al ancho real de la hoja y, si pasara del alto, se achica solo lo justo (hasta 80 %; `ajustarAUnaHoja` en `pdf.ts`): lo normal usa ≈ 86 % de la hoja sin achicar y con lo más largo que permiten los límites (nombre de 120 caracteres, lugar de 200) basta achicar ≈ 2 %. Si algún día no cupiera ni a 80 %, sigue en una segunda hoja y la constancia no se parte. Dos pruebas con PDF real cuidan que sea una hoja.
 
 ## Reglas
 
@@ -80,6 +80,6 @@ Es el dominio neutro donde contestan los participantes de Filtros (`docs/filtros
 
 ## Pruebas
 
-`node server/node_modules/.bin/tsx server/scripts/test-nda.ts` (48 pruebas: base en memoria con el esquema real y el SQL real del script, Graph y Storage simulados, la regla de CORS de `sharpli.mx`, las rutas de la página y un PDF real con Chrome leído de vuelta; datos inventados).
+`node server/node_modules/.bin/tsx server/scripts/test-nda.ts` (49 pruebas: base en memoria con el esquema real y el SQL real del script, Graph y Storage simulados, la regla de CORS de `sharpli.mx`, las rutas de la página y un PDF real con Chrome leído de vuelta; datos inventados).
 
 `node server/node_modules/.bin/tsx server/scripts/test-vista-externa-nda.ts` (11 pruebas de la columna en vistas externas: ligada a la vista interna o «sola», con y sin la columna, último envío, marca a mano, que no salga nada del envío —ni liga, ni IP, ni firma— y que mirar la vista no cambie nada; también sin las tablas del NDA).

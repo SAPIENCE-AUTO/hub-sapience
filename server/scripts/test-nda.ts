@@ -942,32 +942,58 @@ await prueba('el script crea las tablas desde cero en una base vacía y se puede
 });
 
 // ═══ Un PDF de verdad, hecho con Chrome y leído de vuelta ═══════════════════
-await prueba('el PDF real (Chrome) sale con el nombre, el texto, la fecha y la constancia, y se lee de vuelta', async () => {
-  let pdf: Buffer;
-  try {
-    pdf = await generarPdfNda({
-      envioId: 'e1e1e1e1-aaaa-bbbb-cccc-000000000001', nombre: 'Ana María Torres Ruiz', correo: 'ana@ejemplo.test', firmaPng: (await firmaPng()).split(',')[1], firmadoAt: new Date('2026-11-04T16:42:00Z'),
-      enviadoAt: new Date('2026-11-04T15:00:00Z'), abiertoAt: new Date('2026-11-04T16:30:00Z'), ip: '203.0.113.9', userAgent: 'Prueba/1.0', textoHash: sha256('texto de prueba'),
-      sesion: SESION_TEXTO,
-    });
-  } catch (e) {
-    if (/Could not find|Failed to launch|browser/i.test((e as Error).message)) { console.log('     (omitida: no hay Chrome en esta máquina)'); n--; return; }
+const pdfjsOpcional = await import('pdfjs-dist/legacy/build/pdf.mjs').catch(() => null);
+async function datosParaPdf(extra: Partial<Parameters<typeof generarPdfNda>[0]> = {}): Promise<Parameters<typeof generarPdfNda>[0]> {
+  return {
+    envioId: 'e1e1e1e1-aaaa-bbbb-cccc-000000000001', nombre: 'Ana María Torres Ruiz', correo: 'ana@ejemplo.test', firmaPng: (await firmaPng()).split(',')[1], firmadoAt: new Date('2026-11-04T16:42:00Z'),
+    enviadoAt: new Date('2026-11-04T15:00:00Z'), abiertoAt: new Date('2026-11-04T16:30:00Z'), ip: '203.0.113.9', userAgent: 'Prueba/1.0', textoHash: sha256('texto de prueba'), sesion: SESION_TEXTO, ...extra,
+  };
+}
+/** El PDF hecho con Chrome, o null si en esta máquina no hay Chrome (la prueba se omite). */
+async function pdfReal(datos: Parameters<typeof generarPdfNda>[0]): Promise<Buffer | null> {
+  try { return await generarPdfNda(datos); } catch (e) {
+    if (/Could not find|Failed to launch|browser/i.test((e as Error).message)) { console.log('     (omitida: no hay Chrome en esta máquina)'); n--; return null; }
     throw e;
   }
-  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
-  assert.ok(pdf.length > 20_000 && pdf.length < 3_000_000, `tamaño raro: ${pdf.length}`);
-  // pdfjs-dist es opcional aquí (no siempre está instalado): sin él solo se comprueba que salió un PDF de tamaño razonable.
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs').catch(() => null);
-  if (!pdfjs) { console.log('     (sin pdfjs-dist: solo se revisó que sea un PDF)'); return; }
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(pdf), useSystemFonts: true }).promise;
+}
+/** Cuántas hojas tiene (con pdfjs si está instalado; si no, contando los objetos «Page» del archivo, que Chrome escribe sin comprimir). */
+async function hojasDe(pdf: Buffer): Promise<number> {
+  if (pdfjsOpcional) return (await pdfjsOpcional.getDocument({ data: new Uint8Array(pdf), useSystemFonts: true }).promise).numPages;
+  return (pdf.toString('latin1').match(/\/Type\s*\/Page(?![s\w])/g) ?? []).length;
+}
+async function textoDe(pdf: Buffer): Promise<string> {
+  if (!pdfjsOpcional) return '';
+  const doc = await pdfjsOpcional.getDocument({ data: new Uint8Array(pdf), useSystemFonts: true }).promise;
   let texto = '';
   for (let i = 1; i <= doc.numPages; i++) texto += ' ' + (await (await doc.getPage(i)).getTextContent()).items.map((it: any) => it.str).join(' ');
   // el título de la constancia se imprime en mayúsculas (text-transform), así que se compara sin distinguir mayúsculas
-  const plano = texto.replace(/\s+/g, ' ').toLowerCase();
+  return texto.replace(/\s+/g, ' ').toLowerCase();
+}
+
+await prueba('el PDF real (Chrome) sale con el nombre, el texto, la fecha y la constancia, TODO en una sola hoja, y se lee de vuelta', async () => {
+  const pdf = await pdfReal(await datosParaPdf());
+  if (!pdf) return;
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+  assert.ok(pdf.length > 20_000 && pdf.length < 3_000_000, `tamaño raro: ${pdf.length}`);
+  assert.equal(await hojasDe(pdf), 1, 'la constancia debe ir en la misma hoja que la firma');
+  if (!pdfjsOpcional) { console.log('     (sin pdfjs-dist: no se leyó el texto, solo el tamaño y las hojas)'); return; }
+  const plano = await textoDe(pdf);
   for (const buscado of ['ACUERDO DE CONFIDENCIALIDAD', 'Ana María Torres Ruiz', 'ASESORES GLOBALES CORPORATIVOS SC', 'Firma del participante', 'Fecha:', 'acepto los términos y condiciones de este acuerdo', 'Conozco el aviso de privacidad de Asesores Globales Corporativos SC', 'sharpli.mx/f/aviso', '4 de noviembre de 2026', 'Sesión: jueves, 5 de noviembre de 2026, 18:00 h', 'en línea', 'Constancia de firma electrónica', '203.0.113.9', 'ana@ejemplo.test', sha256('texto de prueba').slice(0, 16)]) {
     assert.ok(plano.includes(buscado.toLowerCase()), `el PDF no trae «${buscado}»`);
   }
-  assert.ok(doc.numPages >= 1 && doc.numPages <= 3, `páginas: ${doc.numPages}`);
+});
+
+await prueba('con lo más largo que permiten los límites (nombre de 120 caracteres, lugar de 200, correo largo, dispositivo larguísimo, IP v6) el PDF sigue siendo de una sola hoja', async () => {
+  const nombre = 'María de los Ángeles Guadalupe Hernández de la Cruz y Villaseñor de Montenegro Pérez-Gallardo y Santa María del Carmen de la Torre y Alcántara';
+  const lugar = 'Sede Reforma, Paseo de la Reforma 123, piso 4, colonia Juárez, alcaldía Cuauhtémoc, Ciudad de México, entrar por el lobby principal y subir con el elevador azul hasta el piso cuatro, sala Jacaranda';
+  const pdf = await pdfReal(await datosParaPdf({
+    nombre: nombre.slice(0, 120), correo: 'maria.de.los.angeles.hernandez.de.la.cruz.villasenor@correo-de-ejemplo-muy-largo.ejemplo.test',
+    userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-S918B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.122 Mobile Safari/537.36 Instagram 330.0.0.0.0 Android (34/14; 480dpi; 1080x2340; samsung; SM-S918B; dm3q; qcom; es_MX)',
+    ip: '2001:0db8:85a3:0000:0000:8a2e:0370:7334', sesion: describirSesion(desdeHoraMx('2026-11-05T18:00')!, lugar.slice(0, 200)),
+  }));
+  if (!pdf) return;
+  assert.equal(await hojasDe(pdf), 1, 'aun con los datos más largos la constancia debe ir en la misma hoja');
+  if (pdfjsOpcional) assert.ok((await textoDe(pdf)).includes('constancia de firma electrónica'));
 });
 
 console.log(`\n${n - fallas}/${n} pruebas pasan`);
