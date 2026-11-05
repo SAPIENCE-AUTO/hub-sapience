@@ -1,9 +1,11 @@
 /**
  * El dominio donde contestan los participantes (pedido de Sergio, 2026-10-26):
  * sharpli.mx en lugar del dominio del Hub. Es el mismo sitio de Render, pero
- * ahí solo se carga el formulario (main.tsx), nunca el Hub, y el servidor solo
- * le contesta lo que el formulario usa (FORMULARIO_ENDPOINTS en server/index.ts).
- * Los enlaces que ya se mandaron con el dominio del Hub siguen funcionando.
+ * ahí solo se cargan las pantallas de los participantes (main.tsx → SoloFormularios):
+ * el formulario y, desde nov 2026, la página para firmar el NDA (/nda/:token); nunca
+ * el Hub. El servidor solo le contesta lo que esas pantallas usan (FORMULARIO_ENDPOINTS
+ * en server/corsFormularios.ts). Los enlaces que ya se mandaron con el dominio del Hub
+ * siguen funcionando. El enlace del NDA lo arma el servidor (serverUtils/nda/servicio.ts).
  */
 export const URL_FORMULARIOS = 'https://sharpli.mx';
 

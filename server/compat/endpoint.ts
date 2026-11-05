@@ -11,7 +11,8 @@ import { ZiteError } from './errors';
  * es undefined y el endpoint se comporta exactamente igual que antes.
  */
 export interface AuthUser { id: string; email: string; [k: string]: unknown }
-export interface EndpointContext { user: AuthUser | null }
+/** `ip` y `userAgent` salen de las cabeceras de la petición (server/index.ts); los usa la constancia de firma del NDA. */
+export interface EndpointContext { user: AuthUser | null; ip?: string; userAgent?: string }
 export interface StreamWriter {
   write: (chunk: unknown) => void;
   /** Se activa si quien pidió cerró la conexión (p. ej. «Detener»): el trabajo largo puede dejarse ahí. */

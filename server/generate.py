@@ -522,6 +522,84 @@ EXTRA_TABLES = {
         many={},
         name='GuiasTopicos',
     ),
+    # NDA de participantes (nov 2026, ver docs/nda.md): cada vez que se manda el acuerdo a una
+    # fila de Reclutamiento nace un NdaEnvios con su liga personal (token) y sigue estos estados:
+    # enviado → abierto (entró a la liga) → firmado | rechazado. `nombre`/`correo` son los de la
+    # fila al enviarlo; `nombre_firmado` es el que la persona confirmó al firmar (el PDF usa ese).
+    # `sesion_*` es la sesión a la que se compromete la persona (el instante, el lugar y el texto ya armado que se
+    # congela con el envío y sale arriba del acuerdo; nunca el nombre del proyecto). `firma_png` es la firma en base64 (sirve para rehacer el PDF si falló); el PDF firmado vive en
+    # el bucket privado `nda` (pdf_path) y su huella (pdf_hash) se guarda al crearlo; `texto_hash`
+    # es la huella del texto EXACTO que firmó. `recruitment_row_id` NO es FK a propósito: la
+    # evidencia sobrevive aunque borren a la persona del tablero. NdaEventos es la bitácora: solo
+    # se agrega, nunca se edita ni se borra (lo impone un trigger en add-nda-tables.ts). `n` es una secuencia
+    # (identity) en las dos tablas: da el orden estricto de envíos y de eventos aunque dos lleguen en el mismo
+    # instante (el último envío de una fila y la línea de tiempo se ordenan por `n`, no por la fecha).
+    # El CREATE real, los índices, ese trigger y el bucket están en server/scripts/add-nda-tables.ts
+    # (no se ejecuta solo).
+    'NdaEnvios': dict(
+        table='nda_envios',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='n', col='n', pg='bigint', kind='number', extra='identity'),
+            dict(prop='token', col='token', pg='text', kind='text', extra=None),
+            dict(prop='recruitmentRowId', col='recruitment_row_id', pg='uuid', kind='text', extra=None),
+            dict(prop='projectCode', col='project_code', pg='text', kind='text', extra=None),
+            dict(prop='boardId', col='board_id', pg='text', kind='text', extra=None),
+            dict(prop='nombre', col='nombre', pg='text', kind='text', extra=None),
+            dict(prop='correo', col='correo', pg='text', kind='text', extra=None),
+            dict(prop='estado', col='estado', pg='text', kind='text', extra=None),
+            dict(prop='enviadoAt', col='enviado_at', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='ultimoEnvioAt', col='ultimo_envio_at', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='envios', col='envios', pg='integer', kind='number', extra=None),
+            dict(prop='abiertoAt', col='abierto_at', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='firmadoAt', col='firmado_at', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='rechazadoAt', col='rechazado_at', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='motivoRechazo', col='motivo_rechazo', pg='text', kind='text', extra=None),
+            dict(prop='nombreFirmado', col='nombre_firmado', pg='text', kind='text', extra=None),
+            dict(prop='textoVersion', col='texto_version', pg='text', kind='text', extra=None),
+            dict(prop='textoHash', col='texto_hash', pg='text', kind='text', extra=None),
+            dict(prop='firmaPng', col='firma_png', pg='text', kind='text', extra=None),
+            dict(prop='pdfPath', col='pdf_path', pg='text', kind='text', extra=None),
+            dict(prop='pdfHash', col='pdf_hash', pg='text', kind='text', extra=None),
+            dict(prop='pdfAt', col='pdf_at', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='ip', col='ip', pg='text', kind='text', extra=None),
+            dict(prop='userAgent', col='user_agent', pg='text', kind='text', extra=None),
+            dict(prop='enviadoPor', col='enviado_por', pg='text', kind='text', extra=None),
+            dict(prop='sesionAt', col='sesion_at', pg='timestamptz', kind='datetime', extra=None),
+            dict(prop='sesionLugar', col='sesion_lugar', pg='text', kind='text', extra=None),
+            dict(prop='sesionTexto', col='sesion_texto', pg='text', kind='text', extra=None),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+            dict(prop='updatedAt', col='updated_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[
+            "  constraint nda_envios_estado_chk check (\"estado\" in ('enviado', 'abierto', 'firmado', 'rechazado'))",
+            "  constraint nda_envios_token_uniq unique (token)",
+        ],
+        notes=[],
+        many={},
+        name='NdaEnvios',
+    ),
+    'NdaEventos': dict(
+        table='nda_eventos',
+        cols=[
+            dict(prop='id', col='id', pg='uuid', kind='text', extra='pk'),
+            dict(prop='n', col='n', pg='bigint', kind='number', extra='identity'),
+            dict(prop='envioId', col='envio_id', pg='uuid', kind='text', extra=None),
+            dict(prop='tipo', col='tipo', pg='text', kind='text', extra=None),
+            dict(prop='ip', col='ip', pg='text', kind='text', extra=None),
+            dict(prop='userAgent', col='user_agent', pg='text', kind='text', extra=None),
+            dict(prop='detalle', col='detalle', pg='text', kind='text', extra=None),
+            dict(prop='actor', col='actor', pg='text', kind='text', extra=None),
+            dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
+        ],
+        checks=[
+            "  constraint nda_eventos_tipo_chk check (\"tipo\" in ('enviado', 'reenviado', 'abierto', 'firmado', 'rechazado', 'copia_enviada', 'copia_fallida', 'pdf_creado', 'pdf_fallido'))",
+        ],
+        notes=[],
+        many={},
+        append_only=True,
+        name='NdaEventos',
+    ),
 }
 canon.update(EXTRA_TABLES)
 
@@ -570,7 +648,9 @@ for mname, c in order:
     S.append(f"create table {c['table']} (")
     S.append(",\n".join(lines + c['checks']))
     S.append(");")
-    S.append(f"create trigger {c['table']}_set_updated before update on {c['table']} for each row execute function set_updated_at();")
+    # Una bitácora que solo se agrega (append_only, p. ej. nda_eventos) no tiene updated_at ni se edita: sin ese trigger.
+    if not c.get('append_only'):
+        S.append(f"create trigger {c['table']}_set_updated before update on {c['table']} for each row execute function set_updated_at();")
     for note in c['notes']:
         S.append(note)
 

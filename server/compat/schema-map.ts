@@ -950,6 +950,56 @@ export const SCHEMA: Record<string, TableDef> = {
       deletedAt: { col: 'deleted_at', kind: 'datetime' }
     },
   },
+  NdaEnvios: {
+    table: 'nda_envios',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      n: { col: 'n', kind: 'number' },
+      token: { col: 'token', kind: 'text' },
+      recruitmentRowId: { col: 'recruitment_row_id', kind: 'text' },
+      projectCode: { col: 'project_code', kind: 'text' },
+      boardId: { col: 'board_id', kind: 'text' },
+      nombre: { col: 'nombre', kind: 'text' },
+      correo: { col: 'correo', kind: 'text' },
+      estado: { col: 'estado', kind: 'text' },
+      enviadoAt: { col: 'enviado_at', kind: 'datetime' },
+      ultimoEnvioAt: { col: 'ultimo_envio_at', kind: 'datetime' },
+      envios: { col: 'envios', kind: 'number' },
+      abiertoAt: { col: 'abierto_at', kind: 'datetime' },
+      firmadoAt: { col: 'firmado_at', kind: 'datetime' },
+      rechazadoAt: { col: 'rechazado_at', kind: 'datetime' },
+      motivoRechazo: { col: 'motivo_rechazo', kind: 'text' },
+      nombreFirmado: { col: 'nombre_firmado', kind: 'text' },
+      textoVersion: { col: 'texto_version', kind: 'text' },
+      textoHash: { col: 'texto_hash', kind: 'text' },
+      firmaPng: { col: 'firma_png', kind: 'text' },
+      pdfPath: { col: 'pdf_path', kind: 'text' },
+      pdfHash: { col: 'pdf_hash', kind: 'text' },
+      pdfAt: { col: 'pdf_at', kind: 'datetime' },
+      ip: { col: 'ip', kind: 'text' },
+      userAgent: { col: 'user_agent', kind: 'text' },
+      enviadoPor: { col: 'enviado_por', kind: 'text' },
+      sesionAt: { col: 'sesion_at', kind: 'datetime' },
+      sesionLugar: { col: 'sesion_lugar', kind: 'text' },
+      sesionTexto: { col: 'sesion_texto', kind: 'text' },
+      createdAt: { col: 'created_at', kind: 'datetime' },
+      updatedAt: { col: 'updated_at', kind: 'datetime' }
+    },
+  },
+  NdaEventos: {
+    table: 'nda_eventos',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      n: { col: 'n', kind: 'number' },
+      envioId: { col: 'envio_id', kind: 'text' },
+      tipo: { col: 'tipo', kind: 'text' },
+      ip: { col: 'ip', kind: 'text' },
+      userAgent: { col: 'user_agent', kind: 'text' },
+      detalle: { col: 'detalle', kind: 'text' },
+      actor: { col: 'actor', kind: 'text' },
+      createdAt: { col: 'created_at', kind: 'datetime' }
+    },
+  },
 };
 
 export const MODEL_NAMES = Object.keys(SCHEMA) as (keyof typeof SCHEMA)[];

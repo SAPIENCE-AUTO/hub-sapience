@@ -4,7 +4,7 @@ import { useProject } from '../context/ProjectContext';
 import { useRealtimeBoardEvents, BoardFieldUpdatedPayload } from '../hooks/useRealtimeBoardEvents';
 import { useProjectPresence } from '../hooks/useProjectPresence';
 import { ProjectPresenceAvatars } from '../components/ProjectPresenceAvatars';
-import { getRecruitmentRows, saveRecruitmentRow, deleteRecruitmentRow, markNDASent, GetRecruitmentRowsOutputType, getFilloutForms, linkFilloutForm, GetFilloutFormsOutputType, searchParticipantHistory, SearchParticipantHistoryOutputType, syncFilloutResponses, checkNewSubmissions, countFilloutSubmissions, deleteBoard, saveBoard, saveInternalView, getFormularios, vincularFormularioTablero, reorderRecruitmentRows, duplicateRows, duplicateGroup, getLinkedEventsInfo, linkGroupToEvent, saveCalendarEvent, getTasks, getBoardDuplicateBadges, GetBoardDuplicateBadgesOutputType, publishRecruitmentGroupsChanged, publishRecruitmentRowsChanged, renameBoard } from 'zite-endpoints-sdk';
+import { getRecruitmentRows, saveRecruitmentRow, deleteRecruitmentRow, sendNDAEmail, getNDAStatuses, GetRecruitmentRowsOutputType, getFilloutForms, linkFilloutForm, GetFilloutFormsOutputType, searchParticipantHistory, SearchParticipantHistoryOutputType, syncFilloutResponses, checkNewSubmissions, countFilloutSubmissions, deleteBoard, saveBoard, saveInternalView, getFormularios, vincularFormularioTablero, reorderRecruitmentRows, duplicateRows, duplicateGroup, getLinkedEventsInfo, linkGroupToEvent, saveCalendarEvent, getTasks, getBoardDuplicateBadges, GetBoardDuplicateBadgesOutputType, publishRecruitmentGroupsChanged, publishRecruitmentRowsChanged, renameBoard } from 'zite-endpoints-sdk';
 import { CreateEventDialog } from '../components/CreateEventDialog';
 import { TrashSheet } from '../components/TrashSheet';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,9 @@ import RecruitmentStatusPanel from '../components/RecruitmentStatusPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
+import { NdaPill } from '@/components/nda/NdaPill';
+import { NdaDetailDialog } from '@/components/nda/NdaDetailDialog';
+import { NDA_AYUDA, fechaDelEstado, fechaMx, sesionInicial, type NdaDeFila } from '@/lib/nda';
 import { puedeVerFormularios } from '../lib/formularios/acceso';
 import { SharedViewDialog } from '../components/SharedViewDialog';
 import { ExcelImportDialog } from '../components/ExcelImportDialog';
@@ -388,7 +391,7 @@ async function exportRecruitmentExcel(
 }
 
 // ── Recruitment Table ─────────────────────────────────────────────────────────
-const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSaveField, onEdit, onDelete, onBulkDelete, onUpdateStatus, onSendNDA, onQuickCreate, onCreateGroup, dynCols, groupDynCols, columnFilters, setColFilter, colUniqueValues, onDuplicateClick, badgeMap, hiddenColumns, onRowsChange, sortColumn, sortDirection, toggleSort, onDuplicateGroup, onGroupStructureChanged, onRefresh, linkedEventsMap, projectCode, recruitmentBoardId, onLinkedEventsRefresh, onCreateEventForGroup, expandedGroups, setExpandedGroups, activeGroupFilter, pendingRowGroup }: {
+const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSaveField, onEdit, onDelete, onBulkDelete, onUpdateStatus, onSendNDA, ndaMap, onNdaOpen, onQuickCreate, onCreateGroup, dynCols, groupDynCols, columnFilters, setColFilter, colUniqueValues, onDuplicateClick, badgeMap, hiddenColumns, onRowsChange, sortColumn, sortDirection, toggleSort, onDuplicateGroup, onGroupStructureChanged, onRefresh, linkedEventsMap, projectCode, recruitmentBoardId, onLinkedEventsRefresh, onCreateEventForGroup, expandedGroups, setExpandedGroups, activeGroupFilter, pendingRowGroup }: {
   rows: Row[];
   pendingRowGroup: Record<string, string>;
   onSaveName: (id: string, name: string) => void;
@@ -398,6 +401,9 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   onBulkDelete: (ids: string[]) => void;
   onUpdateStatus: (id: string, status: string) => void;
   onSendNDA: (id: string) => void;
+  // último envío del NDA de cada fila (getNDAStatuses) y abrir su detalle
+  ndaMap: Record<string, NdaDeFila>;
+  onNdaOpen: (id: string) => void;
   onQuickCreate: (name: string, groupId?: string) => void;
   onCreateGroup: () => void;
   dynCols: DynCols; groupDynCols: DynCols;
@@ -1164,12 +1170,29 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
           {!hiddenColumns.has('nda') && (
             <td className={`px-2 py-0 h-9 overflow-hidden border-l border-border/30 ${selectedIds.has(row.id) ? 'bg-primary/5' : 'bg-card'}`} style={{ borderBottom: cellBorder }}>
               <div className="flex items-center h-full">
-                {row.ndaSent
-                  ? <Badge variant="outline" className="text-xs border-green-300 text-green-700">NDA ✓</Badge>
-                  : <button onClick={() => onSendNDA(row.id)} className="text-muted-foreground hover:text-primary text-xs px-1.5 py-0.5 rounded hover:bg-muted flex items-center gap-1 transition-colors">
+                {(() => {
+                  // 1) ya hay un envío con liga: su estado como pill (clic = detalle); 2) marcado a mano antes (sin liga): «NDA ✓» que ofrece mandarlo; 3) nada: botón «NDA»
+                  const nda = ndaMap[row.id];
+                  if (nda) {
+                    return (
+                      <button onClick={() => onNdaOpen(row.id)} title={`${NDA_AYUDA[nda.estado]} · ${fechaMx(fechaDelEstado(nda))}`} className="rounded hover:opacity-80 transition-opacity">
+                        <NdaPill estado={nda.estado} />
+                      </button>
+                    );
+                  }
+                  if (row.ndaSent) {
+                    return (
+                      <button onClick={() => onSendNDA(row.id)} title={`${row.ndaSentDate ? `Marcado como enviado el ${new Date(row.ndaSentDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}. ` : ''}Clic para mandarlo con liga para firmar`} className="rounded hover:opacity-80 transition-opacity">
+                        <Badge variant="outline" className="text-xs border-green-300 text-green-700 cursor-pointer">NDA ✓</Badge>
+                      </button>
+                    );
+                  }
+                  return (
+                    <button onClick={() => onSendNDA(row.id)} className="text-muted-foreground hover:text-primary text-xs px-1.5 py-0.5 rounded hover:bg-muted flex items-center gap-1 transition-colors">
                       <FileText className="w-3 h-3" /> NDA
                     </button>
-                }
+                  );
+                })()}
               </div>
             </td>
           )}
@@ -2311,6 +2334,17 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
   const [open,        setOpen]        = useState(false);
   const [editing,     setEditing]     = useState<Row | null>(null);
   const [deleting,    setDeleting]    = useState<string | null>(null);
+  // «NDA»: confirma antes de mandar el correo (si ya se mandó, dice cuándo) y no deja mandarlo dos veces mientras sale.
+  // (los datos de la persona se quedan guardados al cerrar para que el diálogo no se vacíe mientras se desvanece)
+  const [ndaConfirm,  setNdaConfirm]  = useState<{ id: string; nombre: string; correo: string; modo: 'primero' | 'reenviar' | 'nuevo'; fecha?: string } | null>(null);
+  const [ndaAbierto,  setNdaAbierto]  = useState(false);
+  // Día y hora de la sesión (hora de la Ciudad de México) y lugar: salen arriba del acuerdo; el nombre del proyecto no, porque podría delatar al cliente.
+  const [ndaSesion,   setNdaSesion]   = useState({ fecha: '', lugar: '' });
+  const [ndaSesionError, setNdaSesionError] = useState('');
+  const [ndaEnviando, setNdaEnviando] = useState(false);
+  // Último envío del NDA de cada fila del proyecto (enviado / abrió / firmado / rechazó) y la fila cuyo detalle está abierto.
+  const [ndaMap,        setNdaMap]        = useState<Record<string, NdaDeFila>>({});
+  const [ndaDetalleId,  setNdaDetalleId]  = useState<string | null>(null);
   const [bulkDeletingIds, setBulkDeletingIds] = useState<string[]>([]);
   const [form,        setForm]        = useState({ ...emptyForm });
   const [saving,      setSaving]      = useState(false);
@@ -3017,7 +3051,45 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
     setBadgeVersion(v => v + 1);
   };
 
-  const sendNDA = async (id: string) => { await markNDASent({ id }); toast.success('NDA marcado como enviado'); silentReload(); };
+  // El botón «NDA» manda el correo con el acuerdo (nombre y correo salen de la fila; ver serverUtils/nda y docs/nda.md). Antes solo marcaba la fila.
+  // `modo`: 'reenviar' = el mismo envío pendiente (misma liga); 'nuevo' = otro envío con liga nueva (si ya firmó o rechazó); sin modo = el primero.
+  const sendNDA = (id: string, modo?: 'reenviar' | 'nuevo') => {
+    const row = rows.find(r => r.id === id);
+    const correo = (row?.email ?? '').trim();
+    if (!correo) { toast.error('Este participante no tiene correo.'); return; }
+    setNdaConfirm({ id, nombre: (row?.participantName || row?.rowName || '').trim(), correo, modo: modo ?? 'primero', fecha: !modo && row?.ndaSent ? row.ndaSentDate : undefined });
+    // La sesión viene llena de lo que ya se sabe: la del envío (al reenviar) o el evento del calendario al que está ligado el grupo de la persona; si no hay, se escribe.
+    const grupo = groupDynCols.columns.find(g => groupDynCols.getCellVal(id, g.id)?.textValue === '1');
+    setNdaSesion(sesionInicial(modo ?? 'primero', ndaMap[id], grupo?.optionsJson, linkedEventsMap));
+    setNdaSesionError('');
+    setNdaAbierto(true);
+  };
+  // Los estados del NDA se preguntan al abrir el proyecto, al volver a la pestaña y cada 45 s mientras se ve: quien firma desde su celular aparece aquí sin recargar.
+  const refreshNda = useCallback(() => {
+    if (!selectedProject) return Promise.resolve();
+    return getNDAStatuses({ projectCode: selectedProject })
+      .then((d: { items: NdaDeFila[] }) => setNdaMap(Object.fromEntries(d.items.map(i => [i.rowId, i]))))
+      .catch(() => { /* sin estados por ahora: la tabla muestra el botón de siempre */ });
+  }, [selectedProject]);
+  useEffect(() => {
+    setNdaMap({});
+    void refreshNda();
+    const cada = setInterval(() => { if (!document.hidden) void refreshNda(); }, 45_000);
+    const alVolver = () => { void refreshNda(); };
+    window.addEventListener('focus', alVolver);
+    return () => { clearInterval(cada); window.removeEventListener('focus', alVolver); };
+  }, [refreshNda]);
+  const confirmSendNDA = async () => {
+    const c = ndaConfirm;
+    if (!c || ndaEnviando) return;
+    if (!ndaSesion.fecha) { setNdaSesionError('Falta el día y la hora de la sesión.'); return; }
+    setNdaEnviando(true);
+    try {
+      const r = await sendNDAEmail({ id: c.id, nuevo: c.modo === 'nuevo', sesion: { fecha: ndaSesion.fecha, lugar: ndaSesion.lugar.trim() || undefined } });
+      if (r.success) toast.success(r.message); else toast.error(r.message);
+    } catch { toast.error('No se pudo enviar el NDA. Inténtalo de nuevo.'); }
+    finally { setNdaEnviando(false); setNdaAbierto(false); void refreshNda(); silentReload(); }
+  };
 
   const handleCreateEventForGroup = async (groupId: string) => {
     if (!selectedProject) return;
@@ -3465,6 +3537,8 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
             onBulkDelete={ids => setBulkDeletingIds(ids)}
             onUpdateStatus={updateStatus}
             onSendNDA={sendNDA}
+            ndaMap={ndaMap}
+            onNdaOpen={setNdaDetalleId}
             onQuickCreate={quickCreate}
             pendingRowGroup={pendingRowGroup}
             onCreateGroup={createGroup}
@@ -3566,6 +3640,38 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
             <AlertDialogAction onClick={confirmDeleteBoard} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Eliminar tablero
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <NdaDetailDialog rowId={ndaDetalleId} open={!!ndaDetalleId} onOpenChange={o => { if (!o) setNdaDetalleId(null); }} onReenviar={(id, modo) => { setNdaDetalleId(null); sendNDA(id, modo); }} />
+
+      <AlertDialog open={ndaAbierto} onOpenChange={o => { if (!o && !ndaEnviando) setNdaAbierto(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{ndaConfirm?.modo === 'reenviar' ? '¿Volver a enviar el correo?' : ndaConfirm?.modo === 'nuevo' ? '¿Mandar un NDA nuevo?' : '¿Enviar el NDA?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se manda a <b>{ndaConfirm?.correo}</b> con {ndaConfirm?.nombre ? <>el nombre <b>{ndaConfirm.nombre}</b></> : 'su nombre'} y una liga personal para firmar.
+              {ndaConfirm?.modo === 'reenviar' && ' Es la misma liga del envío anterior.'}
+              {ndaConfirm?.modo === 'nuevo' && ' Se crea una liga nueva; lo anterior queda guardado.'}
+              {ndaConfirm?.fecha && <> Estaba marcado como enviado el {fechaMx(ndaConfirm.fecha)}.</>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <label htmlFor="nda-sesion" className="mb-1 block text-sm font-medium">Día y hora de la sesión <span className="font-normal text-muted-foreground">(hora de la Ciudad de México)</span></label>
+              <Input id="nda-sesion" type="datetime-local" value={ndaSesion.fecha} disabled={ndaEnviando} onChange={e => { setNdaSesion(s => ({ ...s, fecha: e.target.value })); setNdaSesionError(''); }} aria-invalid={!!ndaSesionError} />
+              {ndaSesionError && <p className="mt-1 text-sm text-destructive">{ndaSesionError}</p>}
+            </div>
+            <div>
+              <label htmlFor="nda-lugar" className="mb-1 block text-sm font-medium">Lugar <span className="font-normal text-muted-foreground">(opcional)</span></label>
+              <Input id="nda-lugar" value={ndaSesion.lugar} disabled={ndaEnviando} maxLength={200} placeholder="En línea, la sede…" onChange={e => setNdaSesion(s => ({ ...s, lugar: e.target.value }))} />
+            </div>
+            <p className="text-xs text-muted-foreground">Sale arriba del acuerdo, en el correo y en el PDF, para que la persona sepa a qué se compromete.{ndaConfirm?.modo === 'reenviar' && ' Si la sesión cambió, corrígela aquí: el correo sale con la nueva.'}</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={ndaEnviando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={ndaEnviando} onClick={e => { e.preventDefault(); void confirmSendNDA(); }}>{ndaEnviando ? 'Enviando…' : ndaConfirm?.modo === 'reenviar' ? 'Reenviar' : ndaConfirm?.modo === 'nuevo' ? 'Mandar nuevo' : 'Enviar NDA'}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

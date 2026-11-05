@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, BoardColumns, RecruitmentRows } from '../../server/compat';
 import { resolveWriteBoardId, smartWriteCellValue } from '../serverUtils/smartWrite';
 import { provisionObservationSession } from '../serverUtils/provisionObservationSession';
+import { enviarNdaDeFila } from '../serverUtils/nda/enviar';
 import { OBSERVATION_ZOOM_LINK_COLUMN, OBSERVATION_ROOM_LINK_COLUMN } from '../serverUtils/calendarDefaults';
 
 export default createEndpoint({
@@ -55,15 +56,10 @@ export default createEndpoint({
     const action = config.action;
 
     // ── send_nda ──────────────────────────────────────────────
+    // Manda el correo del NDA a la persona de la fila (nombre y correo salen de la fila) y la marca como enviada.
     if (action === 'send_nda') {
-      await RecruitmentRows.update({
-        id: rowId,
-        record: {
-          ndaSent: true,
-          ndaSentDate: new Date().toISOString(),
-        },
-      });
-      return { success: true, message: 'NDA marcado como enviado.' };
+      const r = await enviarNdaDeFila(rowId);
+      return { success: r.enviado, message: r.mensaje };
     }
 
     // ── change_status ─────────────────────────────────────────

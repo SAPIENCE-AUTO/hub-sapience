@@ -736,8 +736,8 @@ Pedido de Sergio: que el enlace de los participantes sea de Sharpli y no de Sapi
 
 **Qué se construyó:**
 
-- **En sharpli.mx solo se carga el formulario** (`main.tsx` → `SoloFormularios.tsx`, dominios en `lib/formularios/dominio.ts`): `/f/:codigo` y `/f/aviso`; cualquier otra dirección dice «Este enlace no existe». El código del Hub (inicio de sesión, pantallas, menús) ni se descarga.
-- **El servidor solo le contesta lo del formulario** (`FORMULARIO_ORIGINS` y `FORMULARIO_ENDPOINTS` en `server/index.ts`): desde sharpli.mx el navegador puede llamar el formulario, su envío, el aviso, el código postal, la dirección y la foto; todo lo demás se rechaza, y de todos modos pide inicio de sesión. Va aparte de `ZITE_APP_URL` porque esa variable también arma enlaces de vistas compartidas y correos de ODC.
+- **En sharpli.mx solo se carga el formulario** (`main.tsx` → `SoloFormularios.tsx`, dominios en `lib/formularios/dominio.ts`): `/f/:codigo` y `/f/aviso` y, desde nov 2026, `/nda/:token` (la página para firmar el NDA, ver `docs/nda.md`); cualquier otra dirección dice «Este enlace no existe». El código del Hub (inicio de sesión, pantallas, menús) ni se descarga.
+- **El servidor solo le contesta lo del formulario** (`FORMULARIO_ORIGINS` y `FORMULARIO_ENDPOINTS` en `server/corsFormularios.ts`, que `server/index.ts` usa para CORS; ahí están también los tres servicios públicos del NDA): desde sharpli.mx el navegador puede llamar el formulario, su envío, el aviso, el código postal, la dirección y la foto; todo lo demás se rechaza, y de todos modos pide inicio de sesión. Va aparte de `ZITE_APP_URL` porque esa variable también arma enlaces de vistas compartidas y correos de ODC.
 - **Neutro:** sin logo de Sapience (la barra oscura se volvió una línea de avance), pestaña «Cuestionario» sin ícono, e `index.html` sin título ni ícono (las vistas previas de WhatsApp los leen sin correr nada; el Hub los pone en `marcaDelHub.ts`).
 - **El enlace de Filtros** ya da `https://sharpli.mx/f/…` (en la Mac, el local). Los enlaces que ya se mandaron con el dominio del Hub siguen funcionando.
 

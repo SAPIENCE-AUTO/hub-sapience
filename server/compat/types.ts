@@ -841,3 +841,49 @@ export interface GuiasTopicosRecordType {
   updatedAt?: string;
   deletedAt?: string;
 }
+
+export interface NdaEnviosRecordType {
+  id: string;
+  n?: number;
+  token?: string;
+  recruitmentRowId?: string;
+  projectCode?: string;
+  boardId?: string;
+  nombre?: string;
+  correo?: string;
+  estado?: string;
+  enviadoAt?: string;
+  ultimoEnvioAt?: string;
+  envios?: number;
+  abiertoAt?: string;
+  firmadoAt?: string;
+  rechazadoAt?: string;
+  motivoRechazo?: string;
+  nombreFirmado?: string;
+  textoVersion?: string;
+  textoHash?: string;
+  firmaPng?: string;
+  pdfPath?: string;
+  pdfHash?: string;
+  pdfAt?: string;
+  ip?: string;
+  userAgent?: string;
+  enviadoPor?: string;
+  sesionAt?: string;
+  sesionLugar?: string;
+  sesionTexto?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface NdaEventosRecordType {
+  id: string;
+  n?: number;
+  envioId?: string;
+  tipo?: string;
+  ip?: string;
+  userAgent?: string;
+  detalle?: string;
+  actor?: string;
+  createdAt?: string;
+}

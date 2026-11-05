@@ -14,6 +14,7 @@ import { muxWebhookApp } from './webhooks/mux';
 import { zoomWebhookApp } from './webhooks/zoom';
 import { recallWebhookApp } from './webhooks/recall';
 import { checkRateLimit, clientIp } from './rateLimit';
+import { origenPermitido } from './corsFormularios';
 import type { CompiledEndpoint } from './compat/endpoint';
 
 /**
@@ -96,24 +97,16 @@ const allowedOrigins = (process.env.ZITE_APP_URL ?? 'http://localhost:5173')
   .map((s) => s.trim())
   .filter(Boolean);
 
-// El dominio de Sharpli donde contestan los participantes los filtros (oct 2026,
-// ver src/lib/formularios/dominio.ts): ese sitio solo sirve el formulario, y
-// desde ahí el navegador solo puede llamar lo que el formulario usa. Va aparte
-// de ZITE_APP_URL porque esa también arma enlaces de vistas compartidas y ODC.
-const FORMULARIO_ORIGINS = ['https://sharpli.mx', 'https://www.sharpli.mx'];
-const FORMULARIO_ENDPOINTS = new Set([
-  'getFormularioPublico', 'submitFormularioRespuesta', 'getAvisoPrivacidad',
-  'getCodigoPostal', 'sugerirDireccion', 'detalleDireccion', 'upload',
-]);
+// El dominio de Sharpli donde contestan los participantes (filtros y NDA; ver
+// src/lib/formularios/dominio.ts y server/corsFormularios.ts): ese sitio solo sirve
+// lo que ven los participantes, y desde ahí el navegador solo puede llamar lo que
+// esas pantallas usan. Va aparte de ZITE_APP_URL porque esa también arma enlaces de
+// vistas compartidas y ODC.
 
 app.use(
   '/api/*',
   cors({
-    origin: (origin, c) => {
-      if (allowedOrigins.includes(origin)) return origin;
-      if (FORMULARIO_ORIGINS.includes(origin) && FORMULARIO_ENDPOINTS.has(c.req.path.split('/').pop() ?? '')) return origin;
-      return null;
-    },
+    origin: (origin, c) => origenPermitido(origin, c.req.path.split('/').pop() ?? '', allowedOrigins),
     allowMethods: ['POST', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -149,6 +142,10 @@ const PUBLIC_RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = 
   // link de cliente del archivo de grabaciones: tope contra fuerza bruta de tokens
   getSharedArchivedFile: { limit: 30, windowMs: 60_000 },
   getSharedArchivedFileUrl: { limit: 60, windowMs: 60_000 },
+  // liga personal del NDA de participantes: ver la página, firmar y rechazar (docs/nda.md)
+  getNDAPublic: { limit: 60, windowMs: 60_000 },
+  signNDA: { limit: 10, windowMs: 60_000 },
+  rejectNDA: { limit: 10, windowMs: 60_000 },
 };
 
 app.post('/api/:name', async (c) => {
@@ -156,9 +153,10 @@ app.post('/api/:name', async (c) => {
   const endpoint = ENDPOINTS[name];
   if (!endpoint) return c.json({ message: `Endpoint no montado todavía: ${name}` }, 404);
 
+  const ip = clientIp(c.req.header('x-forwarded-for'));
+  const userAgent = c.req.header('user-agent');
   const rateLimit = PUBLIC_RATE_LIMITS[name];
   if (rateLimit) {
-    const ip = clientIp(c.req.header('x-forwarded-for'));
     if (!checkRateLimit(`${name}:${ip}`, rateLimit.limit, rateLimit.windowMs)) {
       return c.json({ message: 'Demasiadas peticiones, intenta de nuevo en un momento.' }, 429);
     }
@@ -198,7 +196,7 @@ app.post('/api/:name', async (c) => {
       const corte = new AbortController();
       stream.onAbort(() => corte.abort());
       try {
-        const result = await endpoint.run(input, { user }, (chunk) => {
+        const result = await endpoint.run(input, { user, ip, userAgent }, (chunk) => {
           void stream.writeSSE({ data: JSON.stringify({ type: 'progress', ...(chunk as object) }) });
         }, corte.signal);
         await stream.writeSSE({ data: JSON.stringify({ type: 'done', result }) });
@@ -216,7 +214,7 @@ app.post('/api/:name', async (c) => {
   }
 
   try {
-    const result = await endpoint.run(input, { user });
+    const result = await endpoint.run(input, { user, ip, userAgent });
     return c.json(result as object);
   } catch (err) {
     if (err instanceof ZiteError) {
