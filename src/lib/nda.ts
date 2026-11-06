@@ -68,3 +68,54 @@ export function sesionInicial(
 /** La fecha más reciente del envío (la del último paso que dio la persona). */
 export const fechaDelEstado = (n: Pick<NdaDeFila, 'estado' | 'enviadoAt' | 'abiertoAt' | 'firmadoAt' | 'rechazadoAt'>) =>
   n.estado === 'firmado' ? n.firmadoAt : n.estado === 'rechazado' ? n.rechazadoAt : n.estado === 'abierto' ? n.abiertoAt : n.enviadoAt;
+
+// ── Mandar el NDA a varias personas a la vez (por grupo o por selección) ──────────────────────────────
+
+export type MotivoDeLote = 'sin-correo' | 'firmado' | 'rechazado' | 'pendiente' | 'marcado';
+
+/**
+ * Qué pasa con cada persona al mandar el NDA en lote: si se puede marcar y si viene marcada de entrada.
+ * - Sin correo, ya firmó o rechazó: no se puede marcar (para mandarle otro, desde el detalle de su fila: es una decisión que se toma de una en una).
+ * - Ya tiene un envío sin firmar (Enviado o Abrió): se puede marcar, pero viene sin marcar; si se marca, el servidor le reenvía el mismo correo con la misma liga.
+ * - Marcada a mano como enviada antes del flujo con liga: igual, sin marcar de entrada.
+ * - Sin nada: viene marcada.
+ */
+export function clasificarParaLote(
+  persona: { correo?: string | null; ndaSent?: boolean | null },
+  nda?: Pick<NdaDeFila, 'estado'>,
+): { puede: boolean; marcada: boolean; motivo?: MotivoDeLote } {
+  if (!(persona.correo ?? '').trim()) return { puede: false, marcada: false, motivo: 'sin-correo' };
+  if (nda?.estado === 'firmado') return { puede: false, marcada: false, motivo: 'firmado' };
+  if (nda?.estado === 'rechazado') return { puede: false, marcada: false, motivo: 'rechazado' };
+  if (nda) return { puede: true, marcada: false, motivo: 'pendiente' };
+  if (persona.ndaSent) return { puede: true, marcada: false, motivo: 'marcado' };
+  return { puede: true, marcada: true };
+}
+
+export interface ResultadoDeLote { id: string; ok: boolean; mensaje: string; omitido?: boolean }
+
+/**
+ * Manda de una en una, en orden y esperando a que termine cada una (así Outlook no recibe una avalancha y el avance es real). Si una falla, sigue con las demás;
+ * si se pide `detener`, las que faltan no se mandan y quedan anotadas como omitidas. Siempre devuelve un resultado por persona, en el mismo orden.
+ */
+export async function enviarEnLote(
+  ids: string[],
+  enviarUno: (id: string) => Promise<{ success: boolean; message: string }>,
+  opciones: { alAvanzar?: (hechos: number, total: number) => void; detener?: () => boolean } = {},
+): Promise<ResultadoDeLote[]> {
+  const resultados: ResultadoDeLote[] = [];
+  for (const id of ids) {
+    if (opciones.detener?.()) {
+      resultados.push({ id, ok: false, omitido: true, mensaje: 'No se mandó: se detuvo el envío.' });
+      continue;
+    }
+    try {
+      const r = await enviarUno(id);
+      resultados.push({ id, ok: !!r.success, mensaje: r.message });
+    } catch {
+      resultados.push({ id, ok: false, mensaje: 'No se pudo enviar. Inténtalo de nuevo.' });
+    }
+    opciones.alAvanzar?.(resultados.length, ids.length);
+  }
+  return resultados;
+}

@@ -15,6 +15,16 @@ Un envío pasa por: **Enviado** (gris) → **Abrió** (azul: entró a la liga) �
 
 Desde el detalle (clic en el estado): **Ver PDF firmado**, **Copiar liga** (para mandarla por WhatsApp: firmar por ahí también queda registrado), **Reenviar correo** (misma liga), **Mandar de nuevo** (si rechazó) y **Mandar otro** (si ya firmó): los dos crean un envío nuevo con liga nueva y lo anterior queda guardado.
 
+## Mandar el NDA a varias personas a la vez (2026-11-05, pedido de Sergio)
+
+Dos entradas, el mismo cuadro (`NdaLoteDialog`): el menú de tres puntos de un **grupo** → «Enviar NDA al grupo…» (las personas del grupo que se ven en la tabla, con los filtros puestos) y el botón **«NDA»** de la barra que sale al **seleccionar filas**.
+
+- **Una sola sesión para todas** (día, hora y lugar; el día y la hora son obligatorios): viene llena del evento del calendario al que está ligado el grupo (con filas seleccionadas, solo si todas son del mismo grupo; si no, se escribe).
+- **Quién viene marcado:** solo quien todavía no tiene nada. No se puede marcar a quien no tiene correo, ya firmó o rechazó (otro NDA se manda de una en una desde su detalle: «Mandar otro» / «Mandar de nuevo»). Quien ya tiene un envío sin firmar (Enviado, Abrió) o está marcado a mano viene sin marcar; si se marca, se le reenvía el mismo correo con la misma liga (`clasificarParaLote`). Botones «Solo las que faltan» y «Ninguna».
+- **Cómo sale:** de una en una, en orden, por el mismo `sendNDAEmail` del botón de la fila (no hay endpoint nuevo ni cambios en la base), esperando a que termine cada correo; si uno falla sigue con los demás; «Detener» deja sin mandar a las que faltan. Al terminar, un resumen con cada persona (✓, ✗ con el motivo o sin mandar) y se vuelven a pedir los estados (`enviarEnLote`).
+- Código: `src/components/nda/NdaLoteDialog.tsx`, `clasificarParaLote` y `enviarEnLote` en `src/lib/nda.ts`, el menú en `GroupSectionHeader.tsx` y la barra en `RecruitmentPage.tsx`.
+- Probado en local con `window.fetch` parchado (ver «Cuidado al probar en local»): ningún correo real salió.
+
 ## Vistas externas: el estado, solo para ver (2026-11-05, pedido de Sergio)
 
 La columna «NDA» también se ve en las **vistas externas** (la liga `/shared/<token>` de solo lectura que se comparte fuera del equipo): cada persona sale con su pill (Enviado, Abrió, Firmado, Rechazó; al pasar el cursor, qué significa y la fecha de ese paso) y quien la mira **no puede mandar, reenviar ni cambiar nada** (no hay botón, ni detalle, ni PDF).
@@ -52,7 +62,7 @@ Está en `src/serverUtils/nda/correo.ts` (`NDA_SECCIONES`), palabra por palabra 
 ## Piezas
 
 - Servidor: `src/serverUtils/nda/` (`correo.ts` texto y correos · `outlook.ts` envío por Graph · `enviar.ts` fila → envío → correo · `servicio.ts` todo el SQL y el ciclo de vida · `pdf.ts` PDF con Chrome · `storage.ts` bucket). Endpoints: públicos `getNDAPublic`, `signNDA`, `rejectNDA`; del equipo `sendNDAEmail`, `getNDAStatuses`, `getNDADetail`, `getNDAPdfUrl`. `executeButtonAction` (`send_nda`) usa el mismo envío.
-- Front: página pública `src/pages/NdaPage.tsx` (ruta `/nda/:token`, hermana de `<Layout>`), `src/components/nda/` (`SignaturePad`, `NdaPill`, `NdaDetailDialog`), la celda «NDA» y el diálogo de confirmación en `RecruitmentPage.tsx`, y `src/lib/nda.ts`.
+- Front: página pública `src/pages/NdaPage.tsx` (ruta `/nda/:token`, hermana de `<Layout>`), `src/components/nda/` (`SignaturePad`, `NdaPill`, `NdaDetailDialog`, `NdaLoteDialog`), la celda «NDA» y el diálogo de confirmación en `RecruitmentPage.tsx`, y `src/lib/nda.ts`.
 - Correo: sale de `sesiones@sapience.com.mx` (el buzón de Prework; `NDA_SEND_AS_EMAIL` lo cambia) y deja copia en «Enviados»; el correo sí lleva el logo y el nombre de Sapience, la página de firma no. La liga es del dominio de los participantes (ver abajo); `NDA_PUBLIC_URL` la cambia.
 
 ## La liga vive en sharpli.mx (pedido de Sergio, 2026-11-04)
@@ -76,7 +86,7 @@ Es el dominio neutro donde contestan los participantes de Filtros (`docs/filtros
 ## Lo que todavía no hace
 
 - Escribir el resultado en las columnas «Status NDA» / «NDA Firmado» de cada tablero (hoy el estado vive en la columna fija «NDA»).
-- Filtrar o agrupar la tabla por estado del NDA; mandar a varias filas de una vez; recordatorios a quien no ha firmado.
+- Filtrar o agrupar la tabla por estado del NDA; recordatorios automáticos a quien no ha firmado (a mano, el envío en lote reenvía a quienes siguen pendientes).
 - Firma con validación de identidad y sello NOM-151 (proveedor): el paso de firma es una sola página (`NdaPage` + `signNDA`) y se puede cambiar por proyecto; ver la memoria `project_nda_participantes`.
 - Confirmar mayoría de edad; revisión del texto por abogado.
 
@@ -85,3 +95,5 @@ Es el dominio neutro donde contestan los participantes de Filtros (`docs/filtros
 `node server/node_modules/.bin/tsx server/scripts/test-nda.ts` (49 pruebas: base en memoria con el esquema real y el SQL real del script, Graph y Storage simulados, la regla de CORS de `sharpli.mx`, las rutas de la página y un PDF real con Chrome leído de vuelta; datos inventados).
 
 `node server/node_modules/.bin/tsx server/scripts/test-vista-externa-nda.ts` (11 pruebas de la columna en vistas externas: ligada a la vista interna o «sola», con y sin la columna, último envío, marca a mano, que no salga nada del envío —ni liga, ni IP, ni firma— y que mirar la vista no cambie nada; también sin las tablas del NDA).
+
+`node server/node_modules/.bin/tsx server/scripts/test-nda-lote.ts` (10 pruebas del envío en lote: a quién se puede marcar y quién viene marcado, que vaya de una en una, que siga si una falla, que se pueda detener; solo la lógica, no manda nada).

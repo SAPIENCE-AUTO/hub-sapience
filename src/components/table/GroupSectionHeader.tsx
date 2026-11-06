@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-import { Pencil, Trash2, ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Copy, BarChart2, Loader2, ExternalLink, Eye, RefreshCw, CalendarDays, Unlink, Plus } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Copy, BarChart2, Loader2, ExternalLink, Eye, RefreshCw, CalendarDays, Unlink, Plus, FileText } from 'lucide-react';
 import { LinkEventDialog } from './LinkEventDialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -50,6 +50,8 @@ interface Props {
   onLinkEvent?: (calBoardId: string, eventId: string) => Promise<void>;
   onUnlinkEvent?: () => Promise<void>;
   onCreateEventForGroup?: () => Promise<void>;
+  /** Mandar el NDA a las personas del grupo (solo en el tablero de reclutamiento). */
+  onSendNda?: () => void;
   onSendTimeline?: () => void;
   onPreviewTimeline?: () => void;
   timelineStatus?: string;
@@ -62,7 +64,7 @@ export function GroupSectionHeader({
   groupId, name, colorId, optionsJson, itemCount, isExpanded, isNone,
   onToggle, groupDynCols, colSpan, itemIds, selectedIds, onToggleSelectAll,
   onDragStart, onDragOver, onDragEnd, onDrop, isDragOver, insertSide, onDuplicateGroup, onGroupStructureChanged,
-  linkedEventInfo, projectCode, onLinkEvent, onUnlinkEvent, onCreateEventForGroup,
+  linkedEventInfo, projectCode, onLinkEvent, onUnlinkEvent, onCreateEventForGroup, onSendNda,
   onSendTimeline, onPreviewTimeline, timelineStatus, timelineUrl, timelineLoading,
   showPublicName = false, tableType,
 }: Props) {
@@ -413,6 +415,15 @@ export function GroupSectionHeader({
                       )}
                     </>
                   )}
+                </>
+              )}
+
+              {onSendNda && (
+                <>
+                  <div className="my-1 border-t border-border/40" />
+                  <DropdownMenuItem className="text-xs gap-2 cursor-pointer" onClick={() => onSendNda()}>
+                    <FileText className="w-3.5 h-3.5 text-muted-foreground" /> Enviar NDA al grupo…
+                  </DropdownMenuItem>
                 </>
               )}
 

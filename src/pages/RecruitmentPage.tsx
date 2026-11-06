@@ -39,6 +39,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { NdaPill } from '@/components/nda/NdaPill';
 import { NdaDetailDialog } from '@/components/nda/NdaDetailDialog';
+import { NdaLoteDialog, type PersonaDeLote } from '@/components/nda/NdaLoteDialog';
 import { NDA_AYUDA, fechaDelEstado, fechaMx, sesionInicial, type NdaDeFila } from '@/lib/nda';
 import { puedeVerFormularios } from '../lib/formularios/acceso';
 import { SharedViewDialog } from '../components/SharedViewDialog';
@@ -391,7 +392,7 @@ async function exportRecruitmentExcel(
 }
 
 // ── Recruitment Table ─────────────────────────────────────────────────────────
-const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSaveField, onEdit, onDelete, onBulkDelete, onUpdateStatus, onSendNDA, ndaMap, onNdaOpen, onQuickCreate, onCreateGroup, dynCols, groupDynCols, columnFilters, setColFilter, colUniqueValues, onDuplicateClick, badgeMap, hiddenColumns, onRowsChange, sortColumn, sortDirection, toggleSort, onDuplicateGroup, onGroupStructureChanged, onRefresh, linkedEventsMap, projectCode, recruitmentBoardId, onLinkedEventsRefresh, onCreateEventForGroup, expandedGroups, setExpandedGroups, activeGroupFilter, pendingRowGroup }: {
+const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSaveField, onEdit, onDelete, onBulkDelete, onUpdateStatus, onSendNDA, ndaMap, onNdaOpen, onQuickCreate, onCreateGroup, dynCols, groupDynCols, columnFilters, setColFilter, colUniqueValues, onDuplicateClick, badgeMap, hiddenColumns, onRowsChange, sortColumn, sortDirection, toggleSort, onDuplicateGroup, onGroupStructureChanged, onRefresh, linkedEventsMap, projectCode, recruitmentBoardId, onLinkedEventsRefresh, onCreateEventForGroup, onSendNdaToGroup, onSendNdaToSelected, expandedGroups, setExpandedGroups, activeGroupFilter, pendingRowGroup }: {
   rows: Row[];
   pendingRowGroup: Record<string, string>;
   onSaveName: (id: string, name: string) => void;
@@ -425,6 +426,9 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   recruitmentBoardId?: string;
   onLinkedEventsRefresh?: () => void;
   onCreateEventForGroup?: (groupId: string) => Promise<void>;
+  // mandar el NDA a varias personas a la vez: las del grupo (menú del grupo) o las seleccionadas (barra de selección)
+  onSendNdaToGroup?: (groupId: string, ids: string[]) => void;
+  onSendNdaToSelected?: (ids: string[]) => void;
   expandedGroups: Set<string>;
   setExpandedGroups: React.Dispatch<React.SetStateAction<Set<string>>>;
   activeGroupFilter: Set<string> | null;
@@ -1273,6 +1277,11 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            {onSendNdaToSelected && (
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 bg-primary-foreground/15 border-primary-foreground/25 text-primary-foreground hover:bg-primary-foreground/25" onClick={() => onSendNdaToSelected([...selectedIds])}>
+                <FileText className="w-3 h-3" /> NDA
+              </Button>
+            )}
             <Button
               size="sm" variant="outline"
               className="h-7 text-xs gap-1 bg-primary-foreground/15 border-primary-foreground/25 text-primary-foreground hover:bg-primary-foreground/25"
@@ -1498,6 +1507,7 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
                     })()}
                     projectCode={projectCode}
                     onCreateEventForGroup={!isNone && onCreateEventForGroup ? async () => { await onCreateEventForGroup(g.id); } : undefined}
+                    onSendNda={!isNone && onSendNdaToGroup && rowsInGroup.length > 0 ? () => onSendNdaToGroup(g.id, rowsInGroup.map(r => r.id)) : undefined}
                     onLinkEvent={!isNone ? async (calBoardId, eventId) => {
                       await linkGroupToEvent({ groupColumnId: g.id, recruitmentBoardId: recruitmentBoardId ?? '', calendarBoardId: calBoardId, eventId });
                       try {
@@ -2345,6 +2355,9 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
   // Último envío del NDA de cada fila del proyecto (enviado / abrió / firmado / rechazó) y la fila cuyo detalle está abierto.
   const [ndaMap,        setNdaMap]        = useState<Record<string, NdaDeFila>>({});
   const [ndaDetalleId,  setNdaDetalleId]  = useState<string | null>(null);
+  // Mandar el NDA a varias personas a la vez (las de un grupo o las seleccionadas): quiénes, para quién se dice y la sesión que viene del evento del grupo (se queda guardado al cerrar, como ndaConfirm).
+  const [ndaLote,        setNdaLote]        = useState<{ titulo: string; personas: PersonaDeLote[]; sesion: { fecha: string; lugar: string } } | null>(null);
+  const [ndaLoteAbierto, setNdaLoteAbierto] = useState(false);
   const [bulkDeletingIds, setBulkDeletingIds] = useState<string[]>([]);
   const [form,        setForm]        = useState({ ...emptyForm });
   const [saving,      setSaving]      = useState(false);
@@ -3090,6 +3103,23 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
     } catch { toast.error('No se pudo enviar el NDA. Inténtalo de nuevo.'); }
     finally { setNdaEnviando(false); setNdaAbierto(false); void refreshNda(); silentReload(); }
   };
+  // Mandar el NDA a varias personas: las de un grupo (menú del grupo, en el orden de la tabla) o las seleccionadas. La sesión viene del evento del calendario al que está ligado el grupo
+  // (con una selección, solo si todas son del mismo grupo; si no, se escribe). Cada correo sale por sendNDAEmail, igual que el botón «NDA» de la fila (NdaLoteDialog, docs/nda.md).
+  const abrirNdaLote = (ids: string[], grupoId?: string) => {
+    const quiere = new Set(ids);
+    const filas = grupoId ? ids.map(id => rows.find(r => r.id === id)).filter((r): r is NonNullable<typeof r> => !!r) : rows.filter(r => quiere.has(r.id));
+    if (filas.length === 0) return;
+    const grupoDe = (id: string) => groupDynCols.columns.find(g => groupDynCols.getCellVal(id, g.id)?.textValue === '1');
+    const grupo = grupoId
+      ? groupDynCols.columns.find(g => g.id === grupoId)
+      : new Set(filas.map(f => grupoDe(f.id)?.id ?? '')).size === 1 ? grupoDe(filas[0].id) : undefined;
+    setNdaLote({
+      titulo: grupoId && grupo ? `el grupo «${grupo.columnName}»` : filas.length === 1 ? 'la persona seleccionada' : 'las personas seleccionadas',
+      personas: filas.map(f => ({ id: f.id, nombre: (f.participantName || f.rowName || '').trim(), correo: (f.email ?? '').trim(), ndaSent: !!f.ndaSent })),
+      sesion: sesionInicial('primero', undefined, grupo?.optionsJson, linkedEventsMap),
+    });
+    setNdaLoteAbierto(true);
+  };
 
   const handleCreateEventForGroup = async (groupId: string) => {
     if (!selectedProject) return;
@@ -3537,6 +3567,8 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
             onBulkDelete={ids => setBulkDeletingIds(ids)}
             onUpdateStatus={updateStatus}
             onSendNDA={sendNDA}
+            onSendNdaToGroup={(groupId, ids) => abrirNdaLote(ids, groupId)}
+            onSendNdaToSelected={ids => abrirNdaLote(ids)}
             ndaMap={ndaMap}
             onNdaOpen={setNdaDetalleId}
             onQuickCreate={quickCreate}
@@ -3645,6 +3677,11 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
       </AlertDialog>
 
       <NdaDetailDialog rowId={ndaDetalleId} open={!!ndaDetalleId} onOpenChange={o => { if (!o) setNdaDetalleId(null); }} onReenviar={(id, modo) => { setNdaDetalleId(null); sendNDA(id, modo); }} />
+
+      {ndaLote && (
+        <NdaLoteDialog open={ndaLoteAbierto} onOpenChange={setNdaLoteAbierto} titulo={ndaLote.titulo} personas={ndaLote.personas} ndaMap={ndaMap} sesionInicial={ndaLote.sesion}
+          onTerminado={() => { void refreshNda(); silentReload(); }} />
+      )}
 
       <AlertDialog open={ndaAbierto} onOpenChange={o => { if (!o && !ndaEnviando) setNdaAbierto(false); }}>
         <AlertDialogContent>
