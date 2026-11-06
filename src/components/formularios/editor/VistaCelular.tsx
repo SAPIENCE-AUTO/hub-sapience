@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ALERTA, EXITO, PELIGRO, TEAL } from '@/lib/toolColors';
 import { evaluar, explicarResultado } from '@/lib/formularios/motor';
 import type { Definicion, Resultado } from '@/lib/formularios/tipos';
+import { conPasosDelHub } from '@/lib/formularios/pasos';
 import { Participante } from '../Participante';
 import { marcoTelefono } from './MuestraCelular';
 
@@ -13,7 +14,9 @@ import { marcoTelefono } from './MuestraCelular';
  * terminar, el resultado se calcula aquí mismo con el motor (el mismo que usa
  * el servidor) y se dice si calificaría y por qué.
  */
-export function VistaCelular({ def, conProblemas }: { def: Definicion; conProblemas: boolean }) {
+export function VistaCelular({ def: definicionDelEditor, conProblemas }: { def: Definicion; conProblemas: boolean }) {
+  // Como lo ve el participante: con el aviso de privacidad primero y el acuerdo de confidencialidad al final (pasos.ts).
+  const def = useMemo(() => conPasosDelHub(definicionDelEditor), [definicionDelEditor]);
   const [vuelta, setVuelta] = useState(0);
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const semilla = useMemo(() => `editor-${vuelta}-${Math.random()}`, [vuelta]);

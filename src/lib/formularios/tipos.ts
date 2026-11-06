@@ -252,6 +252,8 @@ export interface Resultado {
   frentes: string[];
   alertas: string[];
   incompleto: boolean;
+  /** Aceptó el acuerdo de confidencialidad al final del filtro (acuerdo.ts): versión del texto, su huella, cuándo y desde qué dispositivo (la constancia; lo escribe submitFormularioRespuesta). */
+  acuerdo?: { version: string; hash: string; at: string; ip?: string; dispositivo?: string };
   // ── lo que se agrega después de recibirla (serverUtils/formularios/alRecibir.ts) ──
   /** Califica, pero todos sus perfiles ya llenaron su cuota: se queda en Filtros de respaldo. */
   perfilLleno?: boolean;

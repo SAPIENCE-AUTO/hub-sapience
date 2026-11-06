@@ -2,8 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { pantallas, terminacion, validarPantalla, type Pantalla } from '@/lib/formularios/motor';
 import type { Definicion, Respuestas, Valor } from '@/lib/formularios/tipos';
+import { ID_AVISO, ID_NOMBRE, SECCION_INICIO } from '@/lib/formularios/inicio';
+import { ID_ACUERDO, pasoLegalDe } from '@/lib/formularios/pasos';
 import { CampoPregunta } from './CampoPregunta';
 import { EnlaceAviso } from './AvisoPrivacidad';
+import { PasoLegal, RecordatorioAviso } from './PasoLegal';
 import { TextoConFormato } from './TextoConFormato';
 
 type Fase = 'bienvenida' | 'preguntas' | 'enviando' | 'gracias' | 'nocalifica';
@@ -50,9 +53,11 @@ interface Props {
  * prueba en el editor es lo mismo que verá la gente.
  */
 export function Participante({ def, prueba, codigo, semilla, modo = 'pagina', inicial, onAvance, onEnviar, onOtraVez }: Props) {
-  const [fase, setFase] = useState<Fase>(inicial?.pantallaId ? 'preguntas' : 'bienvenida');
+  // Lo guardado en el celular solo se retoma si ya aceptó el aviso (todo filtro empieza por ahí): si no, vuelve a empezar y lo contestado se conserva.
+  const retomar = !!inicial?.pantallaId && inicial.respuestas?.[ID_AVISO] === 'acepto';
+  const [fase, setFase] = useState<Fase>(retomar ? 'preguntas' : 'bienvenida');
   const [resp, setResp] = useState<Respuestas>(inicial?.respuestas ?? {});
-  const [actualId, setActualId] = useState<string | undefined>(inicial?.pantallaId);
+  const [actualId, setActualId] = useState<string | undefined>(retomar ? inicial?.pantallaId : undefined);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [falla, setFalla] = useState('');
   const inicio = useRef(inicial?.inicio ?? Date.now());
@@ -78,11 +83,11 @@ export function Participante({ def, prueba, codigo, semilla, modo = 'pagina', in
     setErrores((e) => { const n = { ...e }; delete n[clave]; delete n[clave.split('#')[0]]; return n; });
   };
 
-  const enviar = async (final: 'gracias' | 'nocalifica') => {
+  const enviar = async (final: 'gracias' | 'nocalifica', respuestas: Respuestas = resp) => {
     setFase('enviando');
     setFalla('');
     try {
-      await onEnviar(soloVisibles(def, resp), Math.round((Date.now() - inicio.current) / 1000));
+      await onEnviar(soloVisibles(def, respuestas), Math.round((Date.now() - inicio.current) / 1000));
       setFase(final);
     } catch (err) {
       setFalla((err as Error).message || 'No se pudo enviar. Revisa tu conexión e intenta otra vez.');
@@ -90,16 +95,29 @@ export function Participante({ def, prueba, codigo, semilla, modo = 'pagina', in
     }
   };
 
-  const siguiente = () => {
-    if (!pantalla) return;
-    const e = validarPantalla(pantalla, resp, def.pais);
+  // `r`: las respuestas con las que se avanza (al tocar «Acepto» del aviso o del acuerdo ya vienen con esa respuesta, que todavía no está en `resp`).
+  const avanzar = (r: Respuestas) => {
+    const l = pantallas(def, r, semilla);
+    const i = Math.max(0, l.findIndex((p) => p.id === actualId));
+    const actual = l[i];
+    if (!actual) return;
+    const e = validarPantalla(actual, r, def.pais);
     setErrores(e);
     if (Object.keys(e).length) return;
-    if (terminacion(def, resp, lista)) return enviar('nocalifica');
-    const sig = lista[indice + 1];
-    if (!sig) return enviar('gracias');
+    if (terminacion(def, r, l)) return enviar('nocalifica', r);
+    const sig = l[i + 1];
+    if (!sig) return enviar('gracias', r);
     setActualId(sig.id);
     arriba();
+  };
+  const siguiente = () => avanzar(resp);
+
+  // Las pantallas de ley (aviso y acuerdo): el botón contesta y avanza de una vez; «No acepto» termina el filtro como siempre.
+  const elegirLegal = (clave: string, acepta: boolean) => {
+    const r = { ...resp, [clave]: acepta ? 'acepto' : 'no_acepto' };
+    setResp(r);
+    setErrores({});
+    avanzar(r);
   };
 
   const atras = () => {
@@ -130,9 +148,22 @@ export function Participante({ def, prueba, codigo, semilla, modo = 'pagina', in
   }
 
   const progreso = lista.length ? Math.round(((indice + 1) / lista.length) * 100) : 0;
+  const paso = pantalla ? pasoLegalDe(pantalla.seccion.id) : undefined;
+  if (paso) {
+    const nombre = typeof resp[ID_NOMBRE] === 'string' ? (resp[ID_NOMBRE] as string).replace(/\s+/g, ' ').trim() : '';
+    return marco(
+      <PasoLegal
+        tipo={paso} nombre={nombre || undefined} enMarco={enMarco} enviando={fase === 'enviando'} falla={falla}
+        onElegir={(acepta) => elegirLegal(paso === 'aviso' ? ID_AVISO : ID_ACUERDO, acepta)}
+        onAtras={paso === 'acuerdo' ? atras : undefined}
+      />,
+      progreso,
+    );
+  }
   return marco(
     <>
       <CuerpoPantalla pantalla={pantalla} enMarco={enMarco}>
+        {pantalla?.seccion.id === SECCION_INICIO && <RecordatorioAviso />}
         {pantalla?.preguntas.map((pv) => (
           <CampoPregunta key={pv.clave} pv={pv} resp={resp} error={errores[pv.clave]} codigo={codigo} pais={def.pais} simular={enMarco} onChange={cambiar} />
         ))}

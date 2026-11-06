@@ -470,6 +470,11 @@ function RespuestaDialog({ formularioId, definicion, tablero, fila, onClose, onP
                 {fila.duracionSeg !== undefined && ` · ${Math.round(fila.duracionSeg / 60)} min`}
               </p>
               {fila.motivo && <p className="mt-1 text-muted-foreground">{fila.motivo}</p>}
+              {datos.resultado.acuerdo && (
+                <p className="mt-1 text-muted-foreground">
+                  Aceptó el acuerdo de confidencialidad el {new Date(datos.resultado.acuerdo.at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City', dateStyle: 'medium', timeStyle: 'short' })} (versión {datos.resultado.acuerdo.version}).
+                </p>
+              )}
               {datos.resultado.alertas.map((a) => <p key={a} className="mt-1" style={{ color: ALERTA }}>⚠ {a}</p>)}
               {datos.resultado.traida && <p className="mt-1" style={{ color: INFO }}>Traída de «{datos.resultado.traida.titulo}»{datos.resultado.traida.proyecto ? ` (${datos.resultado.traida.proyecto})` : ''}: contestó el {fecha(datos.resultado.traida.fecha)}. Conviene reconfirmar sus datos.</p>}
               {datos.resultado.perfilLleno && <p className="mt-1" style={{ color: ALERTA }}>Califica, pero sus perfiles ya llenaron la cuota: se quedó de respaldo y no pasó sola al tablero.</p>}
