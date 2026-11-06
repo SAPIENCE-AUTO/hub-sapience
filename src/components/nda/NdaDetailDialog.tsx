@@ -5,6 +5,7 @@ import { getNDADetail, getNDAPdfUrl } from 'zite-endpoints-sdk';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { NdaPill } from '@/components/nda/NdaPill';
+import { NdaComprobacion } from '@/components/nda/NdaComprobacion';
 import { NDA_AYUDA, fechaMx, type EstadoNda } from '@/lib/nda';
 import { ALERTA, EXITO, GRIS, INFO, PELIGRO } from '@/lib/toolColors';
 
@@ -70,7 +71,7 @@ export function NdaDetailDialog({ rowId, open, onOpenChange, onReenviar }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>NDA</DialogTitle>
           <DialogDescription className="sr-only">Estado del acuerdo de confidencialidad de este participante</DialogDescription>
@@ -116,6 +117,8 @@ export function NdaDetailDialog({ rowId, open, onOpenChange, onReenviar }: {
                 {actual.userAgent && <p className="break-words">Dispositivo: {actual.userAgent}</p>}
               </div>
             )}
+
+            {actual.estado === 'firmado' && <NdaComprobacion envioId={actual.id} />}
 
             <div className="flex flex-wrap gap-2">
               {actual.estado === 'firmado' && (

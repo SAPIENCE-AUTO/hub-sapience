@@ -148,6 +148,7 @@ export const createFormularioVersion = (input?: any): Promise<any> => call('crea
 export const getFormularioVersion = (input?: any): Promise<any> => call('getFormularioVersion', input);
 export const getFormularioVersiones = (input?: any): Promise<any> => call('getFormularioVersiones', input);
 export const getCodigoPostal = (input?: any): Promise<any> => call('getCodigoPostal', input);
+export const checkNDAIdentificacion = (input?: any): Promise<any> => call('checkNDAIdentificacion', input);
 export const getNDADetail = (input?: any): Promise<any> => call('getNDADetail', input);
 export const getNDAPdfUrl = (input?: any): Promise<any> => call('getNDAPdfUrl', input);
 export const getNDAPublic = (input?: any): Promise<any> => call('getNDAPublic', input);
@@ -674,6 +675,7 @@ export type GetLinkedParticipantsOutputType = any;
 export type GetMessagesOutputType = any;
 export type GetMigrationLogsOutputType = any;
 export type GetMyMeetingsTodayOutputType = any;
+export type CheckNDAIdentificacionOutputType = any;
 export type GetNDADetailOutputType = any;
 export type GetNDAPdfUrlOutputType = any;
 export type GetNDAPublicOutputType = any;

@@ -63,6 +63,18 @@ function estadoNormal(t: string, pais: string): string {
 }
 
 /**
+ * ¿El nombre declarado está en el de la identificación? Sí si al menos dos palabras del declarado (o la única) están en el de la identificación
+ * («Ana López» con «ANA MARÍA LÓPEZ GARCÍA»), sin acentos ni mayúsculas. Sin palabras que comparar no hay motivo para dudar. Lo usan la revisión de la
+ * identificación (contra lo que declaró en el filtro) y la comprobación del NDA (contra el nombre con que firmó).
+ */
+export function nombreCoincide(declarado: string, leido: string): boolean {
+  const suyas = palabras(declarado);
+  const enId = new Set(palabras(leido));
+  const comunes = suyas.filter((p) => enId.has(p)).length;
+  return !(suyas.length && comunes < Math.min(2, suyas.length));
+}
+
+/**
  * Compara lo leído de la identificación con lo declarado. El nombre coincide
  * si al menos dos palabras del declarado (o la única) están en el de la
  * identificación («Ana López» con «ANA MARÍA LÓPEZ GARCÍA»); la edad, con un
@@ -76,12 +88,7 @@ export function compararIdentificacion(leido: LeidoIdentificacion, declarado: De
   if (!leido.esIdentificacion) { alertas.push('La foto no parece una identificación oficial'); return revision; }
   if (!leido.legible) { alertas.push('No se alcanza a leer la identificación'); return revision; }
 
-  if (declarado.nombre && leido.nombre) {
-    const suyas = palabras(declarado.nombre);
-    const enId = new Set(palabras(leido.nombre));
-    const comunes = suyas.filter((p) => enId.has(p)).length;
-    if (suyas.length && comunes < Math.min(2, suyas.length)) alertas.push(`La identificación dice otro nombre: «${leido.nombre}»`);
-  }
+  if (declarado.nombre && leido.nombre && !nombreCoincide(declarado.nombre, leido.nombre)) alertas.push(`La identificación dice otro nombre: «${leido.nombre}»`);
   if (declarado.edad !== undefined && edad !== undefined && Math.abs(declarado.edad - edad) > 1) {
     alertas.push(`Edad distinta en la identificación: ${edad} años`);
   }

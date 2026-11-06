@@ -34,6 +34,18 @@ La columna «NDA» también se ve en las **vistas externas** (la liga `/shared/<
 - **Si faltan las tablas del NDA** (una base sin el DDL), la vista sigue funcionando con lo marcado a mano, como la tabla del equipo.
 - Pantalla: `SharedViewPage.tsx` (celda `nda`) con el mismo `NdaPill` de la tabla.
 
+## Comprobar a la persona contra su identificación (2026-11-06, pedido de Sergio)
+
+En el detalle de un NDA **firmado** (clic en «Firmado») sale el bloque **«Identificación»** (`NdaComprobacion.tsx`, endpoint `checkNDAIdentificacion`). Es **solo apoyo para que una persona del equipo decida**: no descarta, no rechaza ni cambia nada, no guarda nada, y la IA solo corre cuando alguien pulsa el botón.
+
+- **Nombre (sin IA):** el nombre con que firmó contra el nombre que la IA ya leyó de la identificación cuando la persona la subió en el filtro (`resultado.identificacion.nombre`): «Coincide con el que firmó» (al menos dos palabras en común, sin acentos ni mayúsculas: `nombreCoincide`, la misma regla de la revisión de la identificación), «Distinto al que firmó» o «No se alcanzó a leer». Se ve al abrir el detalle.
+- **Firma (IA, botón «Comparar firmas con IA»):** la firma del NDA y la de la identificación **lado a lado**, con «Parecidas», «Distintas» o «No concluyente» y una frase de por qué (`src/serverUtils/nda/identificacion.ts`). A la IA (Sonnet 5.5, esfuerzo bajo) se le mandan dos imágenes: la firma del NDA sobre fondo blanco (el trazo es oscuro sobre transparente: sobre negro no se vería) y la foto de la identificación reducida a 1600 px. La IA marca también dónde está la firma en la foto y el Hub la recorta con un margen (`cajaValida`: descarta cajas que no son de 4 números, muy chicas o casi toda la foto; acepta fracciones o píxeles). Si la IA no ve la firma en la foto, el resultado es siempre «No concluyente». La frase no transcribe el nombre que se lea en la firma. Cuesta menos de un centavo de dólar y tarda unos 5 segundos.
+- **Qué la hace útil y qué no:** una firma con el dedo en el celular casi nunca se parece a la de la credencial (pluma, chiquita, en una foto), la misma persona firma distinto cada vez y la IA no es perito caligráfico. Por eso es una opinión orientativa, no una prueba de identidad, y el Hub lo dice en pantalla («Opinión de la IA, solo de apoyo. No prueba quién firmó.»). El prompt la manda a no castigar por el instrumento y a decir «No concluyente» ante la duda.
+- **Prueba de control (2026-11-06, muestra chica: 4 personas reales con su firma y su identificación):** con la misma persona, 3 «Parecidas» y 1 «No concluyente» (firma abreviada); cruzando las firmas de personas distintas (12 pares), ninguna «Parecidas»: 3 «Distintas» y 9 «No concluyente». Los recortes salieron bien encuadrados en los 4 casos.
+- **De dónde sale la identificación:** `recruitment_rows.source_form` («Formulario Hub · título|id de la respuesta») → `formulario_respuestas` (`respuestas.hub_id_foto[0].ruta` en el bucket de Filtros y `resultado.identificacion`). Solo existe para quien llegó por un filtro del Hub y subió la foto; a los demás el bloque les dice por qué no hay con qué comparar. Al 2026-11-06 eran 42 de los 61 firmados.
+- **Pendiente del abogado:** ni el aviso de privacidad ni el NDA dicen hoy que la firma se compara con la identificación; si se usa, conviene agregar la frase.
+- Código: `src/serverUtils/nda/identificacion.ts` (todo el SQL y la IA, con `DepsIdentificacion` para las pruebas), `src/api/checkNDAIdentificacion.ts` (pide sesión), `NdaComprobacion.tsx` dentro de `NdaDetailDialog.tsx` (que ahora tiene scroll interno), `nombreCoincide` exportada de `formularios/identificacion.ts` y `llamarConImagen` con `imagenes` (varias) en `formularios/claude.ts`.
+
 ## Qué se guarda (`nda_envios` y `nda_eventos`, ver `server/generate.py` → EXTRA_TABLES)
 
 - Por envío: token, fila, proyecto, nombre y correo con que se mandó, estado y sus fechas, el nombre que la persona confirmó al firmar, la **huella (SHA-256) del texto exacto** que firmó (versión del texto + texto con su nombre), la firma (PNG en base64), IP y dispositivo, ruta y huella del PDF, y quién lo mandó.
@@ -62,7 +74,7 @@ Está en `src/serverUtils/nda/correo.ts` (`NDA_SECCIONES`), palabra por palabra 
 ## Piezas
 
 - Servidor: `src/serverUtils/nda/` (`correo.ts` texto y correos · `outlook.ts` envío por Graph · `enviar.ts` fila → envío → correo · `servicio.ts` todo el SQL y el ciclo de vida · `pdf.ts` PDF con Chrome · `storage.ts` bucket). Endpoints: públicos `getNDAPublic`, `signNDA`, `rejectNDA`; del equipo `sendNDAEmail`, `getNDAStatuses`, `getNDADetail`, `getNDAPdfUrl`. `executeButtonAction` (`send_nda`) usa el mismo envío.
-- Front: página pública `src/pages/NdaPage.tsx` (ruta `/nda/:token`, hermana de `<Layout>`), `src/components/nda/` (`SignaturePad`, `NdaPill`, `NdaDetailDialog`, `NdaLoteDialog`), la celda «NDA» y el diálogo de confirmación en `RecruitmentPage.tsx`, y `src/lib/nda.ts`.
+- Front: página pública `src/pages/NdaPage.tsx` (ruta `/nda/:token`, hermana de `<Layout>`), `src/components/nda/` (`SignaturePad`, `NdaPill`, `NdaDetailDialog`, `NdaLoteDialog`, `NdaComprobacion`), la celda «NDA» y el diálogo de confirmación en `RecruitmentPage.tsx`, y `src/lib/nda.ts`.
 - Correo: sale de `sesiones@sapience.com.mx` (el buzón de Prework; `NDA_SEND_AS_EMAIL` lo cambia) y deja copia en «Enviados»; el correo sí lleva el logo y el nombre de Sapience, la página de firma no. La liga es del dominio de los participantes (ver abajo); `NDA_PUBLIC_URL` la cambia.
 
 ## La liga vive en sharpli.mx (pedido de Sergio, 2026-11-04)
@@ -97,3 +109,5 @@ Es el dominio neutro donde contestan los participantes de Filtros (`docs/filtros
 `node server/node_modules/.bin/tsx server/scripts/test-vista-externa-nda.ts` (11 pruebas de la columna en vistas externas: ligada a la vista interna o «sola», con y sin la columna, último envío, marca a mano, que no salga nada del envío —ni liga, ni IP, ni firma— y que mirar la vista no cambie nada; también sin las tablas del NDA).
 
 `node server/node_modules/.bin/tsx server/scripts/test-nda-lote.ts` (10 pruebas del envío en lote: a quién se puede marcar y quién viene marcado, que vaya de una en una, que siga si una falla, que se pueda detener; solo la lógica, no manda nada).
+
+`node server/node_modules/.bin/tsx server/scripts/test-nda-identificacion.ts` (24 pruebas de la comprobación contra la identificación: sin firma o sin filtro del Hub, nombre que coincide, distinto o sin dato, que la firma vaya sobre blanco, el recorte, cajas malas o en píxeles, errores de la IA sin filtrar detalles, que no salga nada de más ni se escriba nada, y que el endpoint pida sesión; Storage y la IA simulados).

@@ -180,6 +180,8 @@ export async function llamarConImagen<S extends z.ZodTypeAny>(opts: {
   contexto?: string;
   texto: string;
   imagen?: { datos: Buffer; tipo: 'image/jpeg' | 'image/png' | 'image/webp' };
+  /** Varias imágenes, en este orden, antes del texto (la comparación de firmas manda dos). Se suman a `imagen` si también viene. */
+  imagenes?: { datos: Buffer; tipo: 'image/jpeg' | 'image/png' | 'image/webp' }[];
   esquema: S;
   modelo: string;
   esfuerzo: Esfuerzo;
@@ -197,7 +199,7 @@ export async function llamarConImagen<S extends z.ZodTypeAny>(opts: {
       messages: [{
         role: 'user',
         content: [
-          ...(opts.imagen ? [{ type: 'image', source: { type: 'base64', media_type: opts.imagen.tipo, data: opts.imagen.datos.toString('base64') } }] : []),
+          ...[...(opts.imagen ? [opts.imagen] : []), ...(opts.imagenes ?? [])].map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.tipo, data: i.datos.toString('base64') } })),
           { type: 'text', text: opts.texto },
         ],
       }],
