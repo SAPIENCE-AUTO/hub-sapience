@@ -22,6 +22,19 @@ export const ID_CORREO = 'contacto_correo';
 
 export const esDelInicio = (preguntaId: string) => preguntaId.startsWith('hub_');
 
+/** Lo que dice la hoja del aviso de privacidad (pedido de Sergio, 2026-11-06: el aviso ya incluye las condiciones de participación). */
+export const AYUDA_AVISO = 'Te invitamos a revisar nuestro aviso de privacidad, donde encontrarás cómo cuidamos tus datos personales y las condiciones de participación.';
+
+/**
+ * La pregunta del aviso lleva siempre el texto vigente del Hub, aunque el filtro se haya creado antes de que cambiara la redacción: es una pregunta fija, la pone el Hub y nadie la edita.
+ * Así un cambio de redacción llega a todos los filtros (también a los que ya están en vivo) sin tocar lo guardado; se aplica al leer la definición (`leerDefinicion`).
+ * Si el texto ya es el vigente devuelve la misma definición.
+ */
+export function conTextosDelInicio<T extends { secciones: Seccion[] }>(def: T): T {
+  if (!def.secciones?.some((s) => s.preguntas.some((p) => p.id === ID_AVISO && p.ayuda !== AYUDA_AVISO))) return def;
+  return { ...def, secciones: def.secciones.map((s) => ({ ...s, preguntas: s.preguntas.map((p) => (p.id === ID_AVISO ? { ...p, ayuda: AYUDA_AVISO } : p)) })) };
+}
+
 /** `contacto`: qué datos de contacto se ponen (los que el filtro todavía no pide). */
 export function seccionInicio(contacto: { celular?: boolean; correo?: boolean } = { celular: true, correo: true }): Seccion {
   const acepto = { pregunta: ID_AVISO, incluye: ['acepto'] };
@@ -31,7 +44,7 @@ export function seccionInicio(contacto: { celular?: boolean; correo?: boolean } 
     preguntas: [
       {
         id: ID_AVISO, tipo: 'unica', nombre: 'Aviso de privacidad', texto: 'Aviso de privacidad', enlaceAviso: true,
-        ayuda: 'Te invitamos a revisar nuestro aviso de privacidad, donde encontrarás cómo cuidamos tus datos personales.',
+        ayuda: AYUDA_AVISO,
         opciones: [
           { id: 'acepto', label: 'He leído y acepto el aviso de privacidad' },
           { id: 'no_acepto', label: 'No acepto', termina: 'No aceptó el aviso de privacidad', cortar: true },

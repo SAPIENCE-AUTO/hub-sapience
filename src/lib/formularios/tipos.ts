@@ -10,6 +10,8 @@
  * Lo guardado en versión 1 se lee con leerDefinicion() (al final).
  */
 
+import { conTextosDelInicio } from './inicio';
+
 export type TipoPregunta =
   // se escriben
   | 'texto' | 'texto_largo' | 'numero' | 'telefono' | 'correo' | 'direccion'
@@ -304,13 +306,14 @@ interface DefinicionV1 extends Omit<Definicion, 'version' | 'pais'> { version: 1
  */
 export function leerDefinicion(guardada: unknown): Definicion {
   const d = guardada as Definicion | DefinicionV1;
-  if (d.version === 2) return d;
-  return {
+  // La pregunta fija del aviso lleva siempre el texto vigente del Hub (ver conTextosDelInicio).
+  if (d.version === 2) return conTextosDelInicio(d);
+  return conTextosDelInicio({
     ...d,
     version: 2,
     pais: 'MX',
     nse: d.nse ? { regla: 'AMAI 2018', ...d.nse } : undefined,
-  };
+  });
 }
 
 /** Fotos por pregunta: 3 si no se dice, hasta 10 (pedido de Sergio, 2026-10-26). */
