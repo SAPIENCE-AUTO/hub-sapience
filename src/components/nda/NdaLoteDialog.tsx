@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { NdaPill } from '@/components/nda/NdaPill';
-import { NDA_AYUDA, clasificarParaLote, enviarEnLote, type NdaDeFila, type ResultadoDeLote } from '@/lib/nda';
+import { ayudaDe, clasificarParaLote, enviarEnLote, estadoVisible, type NdaDeFila, type ResultadoDeLote } from '@/lib/nda';
 
 export interface PersonaDeLote { id: string; nombre: string; correo: string; ndaSent?: boolean }
 
@@ -129,7 +129,7 @@ export function NdaLoteDialog({ open, onOpenChange, titulo, personas, ndaMap, se
                       </label>
                       <span className="flex flex-shrink-0 items-center gap-2">
                         {c.motivo === 'pendiente' && marcadas.has(p.id) && <span className="text-xs text-muted-foreground">se reenvía</span>}
-                        {nda && <NdaPill estado={nda.estado} title={NDA_AYUDA[nda.estado]} />}
+                        {nda && <NdaPill estado={estadoVisible(nda)} title={ayudaDe(nda)} />}
                         {!nda && c.motivo === 'marcado' && <Badge variant="outline" className="border-green-300 text-xs text-green-700" title="Marcado a mano como enviado">NDA ✓</Badge>}
                         {c.motivo === 'sin-correo' && <span className="text-xs text-destructive">Sin correo</span>}
                       </span>

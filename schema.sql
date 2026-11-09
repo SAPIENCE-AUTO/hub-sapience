@@ -586,7 +586,7 @@ create table nda_eventos (
   detalle                       text,
   actor                         text,
   created_at                    timestamptz not null default now(),
-  constraint nda_eventos_tipo_chk check ("tipo" in ('enviado', 'reenviado', 'abierto', 'firmado', 'rechazado', 'copia_enviada', 'copia_fallida', 'pdf_creado', 'pdf_fallido'))
+  constraint nda_eventos_tipo_chk check ("tipo" in ('enviado', 'reenviado', 'abierto', 'firmado', 'rechazado', 'copia_enviada', 'copia_fallida', 'pdf_creado', 'pdf_fallido', 'rebotado', 'copia_rebotada'))
 );
 
 -- ─── CRM Items ─────────────────────────────────────────────────

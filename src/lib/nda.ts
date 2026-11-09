@@ -1,7 +1,12 @@
 // Lo que comparten la tabla de Reclutamiento y el detalle del NDA: los estados, sus colores del sistema del Hub (src/lib/toolColors.tsx: mismo color, mismo significado) y cómo se escriben las fechas.
-import { EXITO, INFO, NEUTRAL, PELIGRO } from '@/lib/toolColors';
+import { ALERTA, EXITO, INFO, NEUTRAL, PELIGRO } from '@/lib/toolColors';
 
 export type EstadoNda = 'enviado' | 'abierto' | 'firmado' | 'rechazado';
+/** Lo que se pinta: los cuatro estados y «No llegó» (el último correo rebotó y la persona todavía no abre la liga). */
+export type EstadoVisible = EstadoNda | 'no_llego';
+
+/** Un correo del NDA que el servidor de la persona devolvió: cuándo llegó el aviso y por qué, en palabras (guía: docs/nda.md → «Si el correo no llega»). */
+export interface ReboteNda { at: string; motivo: string; codigo?: string }
 
 /** El último envío de una fila, como lo devuelve getNDAStatuses. */
 export interface NdaDeFila {
@@ -16,18 +21,28 @@ export interface NdaDeFila {
   /** La sesión con que se mandó (para llenar de nuevo el diálogo de reenvío). */
   sesionAt?: string;
   sesionLugar?: string;
+  /** Solo en «enviado»: el último correo rebotó y la persona todavía no abre la liga. */
+  rebote?: ReboteNda;
 }
 
-export const NDA_ETIQUETA: Record<EstadoNda, string> = { enviado: 'Enviado', abierto: 'Abrió', firmado: 'Firmado', rechazado: 'Rechazó' };
-export const NDA_COLOR: Record<EstadoNda, string> = { enviado: NEUTRAL, abierto: INFO, firmado: EXITO, rechazado: PELIGRO };
+export const NDA_ETIQUETA: Record<EstadoVisible, string> = { enviado: 'Enviado', abierto: 'Abrió', firmado: 'Firmado', rechazado: 'Rechazó', no_llego: 'No llegó' };
+export const NDA_COLOR: Record<EstadoVisible, string> = { enviado: NEUTRAL, abierto: INFO, firmado: EXITO, rechazado: PELIGRO, no_llego: ALERTA };
 
 /** Lo que se lee al pasar el cursor por la etiqueta: qué quiere decir cada estado. */
-export const NDA_AYUDA: Record<EstadoNda, string> = {
+export const NDA_AYUDA: Record<EstadoVisible, string> = {
   enviado: 'Se mandó el correo; todavía no abre la liga',
   abierto: 'Ya abrió la liga; falta que firme',
   firmado: 'Firmó el acuerdo',
   rechazado: 'No aceptó el acuerdo',
+  no_llego: 'El correo rebotó y no le llegó',
 };
+
+/** «No llegó» solo mientras la persona no haya abierto la liga (por WhatsApp, por ejemplo): si ya abrió, firmó o rechazó, el correo ya no importa. */
+export const estadoVisible = (n: { estado: EstadoNda; rebote?: ReboteNda }): EstadoVisible => (n.estado === 'enviado' && n.rebote ? 'no_llego' : n.estado);
+
+/** Lo que se lee al pasar el cursor: qué quiere decir el estado y, si el correo rebotó, por qué. */
+export const ayudaDe = (n: { estado: EstadoNda; rebote?: ReboteNda }): string =>
+  estadoVisible(n) === 'no_llego' ? `El correo rebotó: ${n.rebote!.motivo.charAt(0).toLowerCase()}${n.rebote!.motivo.slice(1)}` : NDA_AYUDA[n.estado];
 
 const formato = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Mexico_City', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -66,8 +81,8 @@ export function sesionInicial(
 }
 
 /** La fecha más reciente del envío (la del último paso que dio la persona). */
-export const fechaDelEstado = (n: Pick<NdaDeFila, 'estado' | 'enviadoAt' | 'abiertoAt' | 'firmadoAt' | 'rechazadoAt'>) =>
-  n.estado === 'firmado' ? n.firmadoAt : n.estado === 'rechazado' ? n.rechazadoAt : n.estado === 'abierto' ? n.abiertoAt : n.enviadoAt;
+export const fechaDelEstado = (n: Pick<NdaDeFila, 'estado' | 'enviadoAt' | 'abiertoAt' | 'firmadoAt' | 'rechazadoAt' | 'rebote'>) =>
+  n.estado === 'firmado' ? n.firmadoAt : n.estado === 'rechazado' ? n.rechazadoAt : n.estado === 'abierto' ? n.abiertoAt : n.rebote ? n.rebote.at : n.enviadoAt;
 
 // ── Mandar el NDA a varias personas a la vez (por grupo o por selección) ──────────────────────────────
 

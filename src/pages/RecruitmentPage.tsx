@@ -40,7 +40,7 @@ import { toast } from 'sonner';
 import { NdaPill } from '@/components/nda/NdaPill';
 import { NdaDetailDialog } from '@/components/nda/NdaDetailDialog';
 import { NdaLoteDialog, type PersonaDeLote } from '@/components/nda/NdaLoteDialog';
-import { NDA_AYUDA, fechaDelEstado, fechaMx, sesionInicial, type NdaDeFila } from '@/lib/nda';
+import { ayudaDe, estadoVisible, fechaDelEstado, fechaMx, sesionInicial, type NdaDeFila } from '@/lib/nda';
 import { puedeVerFormularios } from '../lib/formularios/acceso';
 import { SharedViewDialog } from '../components/SharedViewDialog';
 import { ExcelImportDialog } from '../components/ExcelImportDialog';
@@ -1179,8 +1179,8 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
                   const nda = ndaMap[row.id];
                   if (nda) {
                     return (
-                      <button onClick={() => onNdaOpen(row.id)} title={`${NDA_AYUDA[nda.estado]} · ${fechaMx(fechaDelEstado(nda))}`} className="rounded hover:opacity-80 transition-opacity">
-                        <NdaPill estado={nda.estado} />
+                      <button onClick={() => onNdaOpen(row.id)} title={`${ayudaDe(nda)} · ${fechaMx(fechaDelEstado(nda))}`} className="rounded hover:opacity-80 transition-opacity">
+                        <NdaPill estado={estadoVisible(nda)} />
                       </button>
                     );
                   }

@@ -16,6 +16,8 @@ process.env.STRICT_OUTPUT = 'true';
 // Un dominio de Hub de mentira: las ligas del NDA NO deben salir de ahí sino del dominio de los participantes (sharpli.mx).
 process.env.ZITE_APP_URL = 'https://hub.ejemplo.test,https://otro.ejemplo.test';
 delete process.env.NDA_PUBLIC_URL;
+// La tabla (getNDAStatuses) dispara la revisión de los correos que rebotaron; aquí no debe salir a leer el buzón (se prueba en test-nda-rebotes.ts).
+process.env.NDA_REBOTES = 'no';
 
 const correo = await import('../../src/serverUtils/nda/correo');
 const { construirCorreoNda, construirCorreoCopia, ndaEnTexto, limpiarNombre, describirSesion, desdeHoraMx, NDA_ASUNTO, NDA_SECCIONES, NDA_TEXTO_VERSION } = correo;

@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { createEndpoint } from '../../server/compat';
 import { estadosDeProyecto } from '../serverUtils/nda/servicio';
+import { revisarRebotesSiToca } from '../serverUtils/nda/rebotes';
 
 // Lo que pinta la columna «NDA» de Reclutamiento: el último envío de cada fila del proyecto. Si las tablas del NDA todavía no existen devuelve vacío (la tabla muestra el botón de siempre).
+// De paso dispara (sin esperarla, como mucho cada 5 minutos) la revisión de los correos que rebotaron: `rebote` sale cuando el último correo no llegó y la persona todavía no abre la liga.
 export default createEndpoint({
   authenticated: true,
   description: 'Latest NDA status per recruitment row of a project (sent / opened / signed / rejected)',
@@ -19,9 +21,11 @@ export default createEndpoint({
       tienePdf: z.boolean(),
       sesionAt: z.string().optional(),
       sesionLugar: z.string().optional(),
+      rebote: z.object({ at: z.string(), motivo: z.string(), codigo: z.string().optional() }).optional(),
     })),
   }),
   execute: async ({ input }) => {
+    revisarRebotesSiToca();
     try {
       return { items: await estadosDeProyecto(input.projectCode) };
     } catch (e) {

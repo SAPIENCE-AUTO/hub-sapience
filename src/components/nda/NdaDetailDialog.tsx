@@ -6,14 +6,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { NdaPill } from '@/components/nda/NdaPill';
 import { NdaComprobacion } from '@/components/nda/NdaComprobacion';
-import { NDA_AYUDA, fechaMx, type EstadoNda } from '@/lib/nda';
+import { ayudaDe, estadoVisible, fechaMx, type EstadoNda, type ReboteNda } from '@/lib/nda';
 import { ALERTA, EXITO, GRIS, INFO, PELIGRO } from '@/lib/toolColors';
 
 interface Evento { tipo: string; at: string; actor?: string; detalle?: string }
 interface Envio {
   id: string; estado: EstadoNda; nombre: string; nombreFirmado?: string; correo: string; enlace: string; envios: number; tienePdf: boolean;
   enviadoAt?: string; ultimoEnvioAt?: string; abiertoAt?: string; firmadoAt?: string; rechazadoAt?: string;
-  motivoRechazo?: string; enviadoPor?: string; ip?: string; userAgent?: string; sesion?: string; eventos: Evento[];
+  motivoRechazo?: string; enviadoPor?: string; ip?: string; userAgent?: string; sesion?: string; rebote?: ReboteNda; eventos: Evento[];
 }
 
 const EVENTO: Record<string, { texto: string; color: string }> = {
@@ -26,9 +26,11 @@ const EVENTO: Record<string, { texto: string; color: string }> = {
   pdf_fallido: { texto: 'No se pudo guardar el PDF', color: ALERTA },
   copia_enviada: { texto: 'Copia enviada a la persona', color: GRIS },
   copia_fallida: { texto: 'No se pudo mandar la copia a la persona', color: ALERTA },
+  rebotado: { texto: 'El correo rebotó: no le llegó', color: ALERTA },
+  copia_rebotada: { texto: 'La copia por correo rebotó: no le llegó', color: ALERTA },
 };
 // De estos eventos el detalle sí se lee (el motivo, el error); en los demás es un dato técnico (correo, huella) que ya está en otra parte.
-const CON_DETALLE = new Set(['rechazado', 'pdf_fallido', 'copia_fallida']);
+const CON_DETALLE = new Set(['rechazado', 'pdf_fallido', 'copia_fallida', 'rebotado', 'copia_rebotada']);
 
 /**
  * Detalle del NDA de una fila (patrón DetailDialog de los módulos financieros): el estado, la línea de tiempo con fechas y lo que se puede hacer —
@@ -88,10 +90,17 @@ export function NdaDetailDialog({ rowId, open, onOpenChange, onReenviar }: {
                 <p className="truncate font-semibold">{actual.nombreFirmado ?? actual.nombre}</p>
                 <p className="truncate text-sm text-muted-foreground">{actual.correo}</p>
               </div>
-              <NdaPill estado={actual.estado} title={NDA_AYUDA[actual.estado]} />
+              <NdaPill estado={estadoVisible(actual)} title={ayudaDe(actual)} />
             </div>
 
             {actual.sesion && <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs leading-relaxed"><span className="font-medium">Sesión:</span> {actual.sesion}</p>}
+
+            {actual.rebote && (
+              <div className="rounded-lg border px-3 py-2 text-xs leading-relaxed" style={{ borderColor: `${ALERTA}66`, backgroundColor: `${ALERTA}14` }}>
+                <p className="font-medium">El correo no le llegó a {actual.correo}</p>
+                <p className="mt-0.5">{actual.rebote.motivo}. Corrige el correo en la fila de la tabla y toca «Reenviar correo», o copia la liga y mándasela por WhatsApp.</p>
+              </div>
+            )}
 
             {actual.nombreFirmado && actual.nombreFirmado !== actual.nombre && (
               <p className="text-xs text-muted-foreground">En el tablero está como «{actual.nombre}»; firmó como «{actual.nombreFirmado}».</p>

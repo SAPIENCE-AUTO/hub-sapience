@@ -29,6 +29,7 @@ export default createEndpoint({
       sesion: z.string().optional(),
       sesionAt: z.string().optional(),
       sesionLugar: z.string().optional(),
+      rebote: z.object({ at: z.string(), motivo: z.string(), codigo: z.string().optional() }).optional(),
       eventos: z.array(z.object({ tipo: z.string(), at: z.string(), actor: z.string().optional(), detalle: z.string().optional() })),
     })),
   }),

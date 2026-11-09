@@ -10,6 +10,10 @@ import { getSupabaseAdmin } from '../supabaseAdmin';
 
 export const BUCKET = process.env.NDA_BUCKET ?? 'nda';
 
+/** Los tipos de evento de la bitácora. `rebotado` y `copia_rebotada` (nov 2026): un correo del NDA que el servidor de la persona devolvió (ver src/serverUtils/nda/rebotes.ts). */
+const TIPOS_DE_EVENTO = ['enviado', 'reenviado', 'abierto', 'firmado', 'rechazado', 'copia_enviada', 'copia_fallida', 'pdf_creado', 'pdf_fallido', 'rebotado', 'copia_rebotada'];
+const CHECK_TIPO = `check ("tipo" in (${TIPOS_DE_EVENTO.map((t) => `'${t}'`).join(', ')}))`;
+
 /** Todo el SQL, en orden. Se exporta para que la prueba (server/scripts/test-nda.ts) aplique exactamente lo mismo. */
 export const SQL_NDA: string[] = [
   `create table if not exists nda_envios (
@@ -59,9 +63,11 @@ export const SQL_NDA: string[] = [
     detalle    text,
     actor      text,
     created_at timestamptz not null default now(),
-    constraint nda_eventos_tipo_chk check ("tipo" in ('enviado', 'reenviado', 'abierto', 'firmado', 'rechazado', 'copia_enviada', 'copia_fallida', 'pdf_creado', 'pdf_fallido'))
+    constraint nda_eventos_tipo_chk ${CHECK_TIPO}
   )`,
   `create index if not exists nda_eventos_envio_idx on nda_eventos (envio_id, created_at)`,
+  // Para la base que ya tenía la tabla (el CREATE de arriba no la toca): se amplía la restricción de los tipos. Una sola sentencia, así que nunca queda sin ella.
+  `alter table nda_eventos drop constraint if exists nda_eventos_tipo_chk, add constraint nda_eventos_tipo_chk ${CHECK_TIPO}`,
   // La bitácora solo se agrega: cualquier intento de editarla, borrarla o vaciarla truena.
   `create or replace function nda_eventos_inmutable() returns trigger as $$
    begin raise exception 'nda_eventos es una bitácora: no se edita ni se borra'; end;

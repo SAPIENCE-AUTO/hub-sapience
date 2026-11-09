@@ -12,6 +12,7 @@ import {
 } from './correo';
 import { enviarPorOutlook, remitenteNda, type EnvioCorreo } from './outlook';
 import { generarPdfNda, sha256, type DatosPdf } from './pdf';
+import { motivoDeAnotacion, rebotesVigentes, type ReboteDeEnvio } from './rebotes';
 import { almacenSupabase, type AlmacenNda } from './storage';
 
 export type EstadoNda = 'enviado' | 'abierto' | 'firmado' | 'rechazado';
@@ -303,6 +304,8 @@ export type EstadoDeFila = {
   enviadoAt?: string; abiertoAt?: string; firmadoAt?: string; rechazadoAt?: string; tienePdf: boolean;
   /** Para llenar de nuevo el diálogo de reenvío con la sesión que ya tenía el envío. */
   sesionAt?: string; sesionLugar?: string;
+  /** Solo en «enviado»: el último correo rebotó y la persona todavía no abre la liga (la tabla lo muestra como «No llegó»). */
+  rebote?: ReboteDeEnvio;
 };
 
 /** El último envío de cada fila de un proyecto (lo que pinta la columna «NDA» de la tabla). */
@@ -312,11 +315,14 @@ export async function estadosDeProyecto(projectCode: string): Promise<EstadoDeFi
        from nda_envios where project_code = $1 order by recruitment_row_id, n desc`,
     [projectCode],
   );
+  // Un rebote solo cuenta mientras la persona no haya abierto la liga (por WhatsApp, por ejemplo): con «Abrió», «Firmado» o «Rechazó» el correo ya no importa.
+  const rebotes = await rebotesVigentes(rows.filter((r) => r.estado === 'enviado').map((r) => r.id));
   return rows.map((r) => ({
     rowId: r.recruitment_row_id, envioId: r.id, estado: r.estado, tienePdf: r.tiene_pdf,
     ...(r.enviado_at ? { enviadoAt: iso(r.enviado_at) } : {}), ...(r.abierto_at ? { abiertoAt: iso(r.abierto_at) } : {}),
     ...(r.firmado_at ? { firmadoAt: iso(r.firmado_at) } : {}), ...(r.rechazado_at ? { rechazadoAt: iso(r.rechazado_at) } : {}),
     ...(r.sesion_at ? { sesionAt: iso(r.sesion_at) } : {}), ...(r.sesion_lugar ? { sesionLugar: r.sesion_lugar } : {}),
+    ...(rebotes.has(r.id) ? { rebote: rebotes.get(r.id) } : {}),
   }));
 }
 
@@ -341,15 +347,21 @@ export async function detalleDeFila(rowId: string) {
         `select envio_id, tipo, created_at, actor, detalle from nda_eventos where envio_id = any($1::uuid[]) order by n`, [ids],
       )).rows
     : [];
+  const rebotes = await rebotesVigentes(rows.filter((r) => r.estado === 'enviado').map((r) => r.id));
   return rows.map((r) => ({
     id: r.id, estado: r.estado, nombre: r.nombre ?? '', correo: r.correo ?? '', enlace: enlaceDe(r.token), envios: r.envios ?? 0, tienePdf: !!r.pdf_path,
+    ...(rebotes.has(r.id) ? { rebote: rebotes.get(r.id) } : {}),
     ...(r.nombre_firmado ? { nombreFirmado: r.nombre_firmado } : {}),
     ...(r.enviado_at ? { enviadoAt: iso(r.enviado_at) } : {}), ...(r.ultimo_envio_at ? { ultimoEnvioAt: iso(r.ultimo_envio_at) } : {}),
     ...(r.abierto_at ? { abiertoAt: iso(r.abierto_at) } : {}), ...(r.firmado_at ? { firmadoAt: iso(r.firmado_at) } : {}), ...(r.rechazado_at ? { rechazadoAt: iso(r.rechazado_at) } : {}),
     ...(r.motivo_rechazo ? { motivoRechazo: r.motivo_rechazo } : {}), ...(r.enviado_por ? { enviadoPor: r.enviado_por } : {}),
     ...(r.ip ? { ip: r.ip } : {}), ...(r.user_agent ? { userAgent: r.user_agent } : {}),
     ...(r.sesion_texto ? { sesion: r.sesion_texto } : {}), ...(r.sesion_at ? { sesionAt: iso(r.sesion_at) } : {}), ...(r.sesion_lugar ? { sesionLugar: r.sesion_lugar } : {}),
-    eventos: ev.filter((e) => e.envio_id === r.id).map((e) => ({ tipo: e.tipo, at: iso(e.created_at)!, ...(e.actor ? { actor: e.actor } : {}), ...(e.detalle ? { detalle: e.detalle } : {}) })),
+    // De un rebote se muestra el motivo en palabras, no el registro técnico (la clave del aviso, la salida que rebotó).
+    eventos: ev.filter((e) => e.envio_id === r.id).map((e) => {
+      const detalle = e.tipo === 'rebotado' || e.tipo === 'copia_rebotada' ? motivoDeAnotacion(e.detalle) : e.detalle;
+      return { tipo: e.tipo, at: iso(e.created_at)!, ...(e.actor ? { actor: e.actor } : {}), ...(detalle ? { detalle } : {}) };
+    }),
   }));
 }
 

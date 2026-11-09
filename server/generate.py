@@ -593,7 +593,7 @@ EXTRA_TABLES = {
             dict(prop='createdAt', col='created_at', pg='timestamptz', kind='datetime', extra='now'),
         ],
         checks=[
-            "  constraint nda_eventos_tipo_chk check (\"tipo\" in ('enviado', 'reenviado', 'abierto', 'firmado', 'rechazado', 'copia_enviada', 'copia_fallida', 'pdf_creado', 'pdf_fallido'))",
+            "  constraint nda_eventos_tipo_chk check (\"tipo\" in ('enviado', 'reenviado', 'abierto', 'firmado', 'rechazado', 'copia_enviada', 'copia_fallida', 'pdf_creado', 'pdf_fallido', 'rebotado', 'copia_rebotada'))",
         ],
         notes=[],
         many={},

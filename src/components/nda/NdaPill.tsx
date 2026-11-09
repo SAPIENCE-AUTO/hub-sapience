@@ -1,7 +1,7 @@
-import { NDA_COLOR, NDA_ETIQUETA, type EstadoNda } from '@/lib/nda';
+import { NDA_COLOR, NDA_ETIQUETA, type EstadoVisible } from '@/lib/nda';
 
-/** Pill «sólido chico» del sistema del Hub (relleno de color, texto blanco, esquinas de 6 px, puntito blanco), como EstadoPill pero con los estados del NDA. */
-export function NdaPill({ estado, title }: { estado: EstadoNda; title?: string }) {
+/** Pill «sólido chico» del sistema del Hub (relleno de color, texto blanco, esquinas de 6 px, puntito blanco), como EstadoPill pero con los estados del NDA (y «No llegó», en ámbar, cuando el correo rebotó). */
+export function NdaPill({ estado, title }: { estado: EstadoVisible; title?: string }) {
   return (
     <span
       title={title}
