@@ -19,6 +19,8 @@ export default createEndpoint({
       createdAt: z.string(),
       respuestasPrueba: z.number(),
       respuestasReales: z.number(),
+      /** De las reales, las que impiden borrar el filtro: las que llegaron por su enlace y, si ya tiene tablero vinculado, también las traídas de otro filtro. */
+      respuestasQueImpidenBorrar: z.number(),
       califican: z.number(),
       /** Para decir en qué paso va: la etapa del generador (si salió de la IA), la cuota total y lo real. */
       etapa: z.string().optional(),
@@ -40,6 +42,7 @@ export default createEndpoint({
               (select coalesce(sum((fr->>'meta')::int), 0) from jsonb_array_elements(coalesce(f.definicion->'frentes', '[]'::jsonb)) fr)::int as meta,
               count(r.id) filter (where r.es_prueba)::int as prueba,
               count(r.id) filter (where not r.es_prueba)::int as reales,
+              count(r.id) filter (where not r.es_prueba and (not (r.resultado ? 'traida') or f.vinculo is not null))::int as impiden_borrar,
               count(r.id) filter (where r.califica)::int as califican,
               count(r.id) filter (where r.califica and not r.es_prueba)::int as califican_reales
        from formularios f
@@ -55,7 +58,7 @@ export default createEndpoint({
       formularios: rows.map((f) => ({
         id: f.id, codigo: f.codigo, titulo: f.titulo, estado: f.estado,
         createdAt: new Date(f.created_at).toISOString(),
-        respuestasPrueba: f.prueba, respuestasReales: f.reales, califican: f.califican, proyecto: f.proyecto ?? undefined,
+        respuestasPrueba: f.prueba, respuestasReales: f.reales, respuestasQueImpidenBorrar: f.impiden_borrar, califican: f.califican, proyecto: f.proyecto ?? undefined,
         etapa: f.etapa ?? undefined, meta: f.meta, calificanReales: f.califican_reales, cambiosPendientes: !!f.cambios_pendientes,
         tableroId: f.tablero_id ?? undefined, tableroNombre: f.tablero_nombre ?? undefined,
       })),

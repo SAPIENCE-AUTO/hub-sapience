@@ -36,7 +36,7 @@ import { MarcaIA } from './generador/comun';
 import { enlaceDeFormulario } from '@/lib/formularios/dominio';
 
 interface FormularioRow {
-  id: string; codigo: string; titulo: string; estado: string; respuestasPrueba: number; respuestasReales: number; califican: number; proyecto?: string;
+  id: string; codigo: string; titulo: string; estado: string; respuestasPrueba: number; respuestasReales: number; respuestasQueImpidenBorrar: number; califican: number; proyecto?: string;
   etapa?: string; meta: number; calificanReales: number; cambiosPendientes: boolean;
 }
 
@@ -207,11 +207,11 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
                   <DropdownMenuContent align="end" className="w-60">
                     <DropdownMenuItem onSelect={() => void duplicar(f.id)}><CopyPlus className="mr-2 h-4 w-4" />Duplicar</DropdownMenuItem>
                     <DropdownMenuItem
-                      disabled={f.respuestasReales > 0}
+                      disabled={f.respuestasQueImpidenBorrar > 0}
                       className="text-[#D32222] focus:text-[#D32222]"
                       onSelect={() => setConfirmar({ que: 'formulario', id: f.id, titulo: f.titulo })}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />{f.respuestasReales > 0 ? 'Tiene respuestas reales: ciérralo' : 'Borrar'}
+                      <Trash2 className="mr-2 h-4 w-4" />{f.respuestasQueImpidenBorrar > 0 ? 'Tiene respuestas reales: ciérralo' : 'Borrar'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -307,7 +307,7 @@ export function FormulariosPanel({ proyectoId }: { proyectoId?: string }) {
             <AlertDialogDescription>
               {confirmar?.que === 'pruebas'
                 ? 'Se borran todas las respuestas marcadas como prueba y sus fotos. No se puede deshacer.'
-                : 'Se borra el formulario, sus versiones, sus respuestas de prueba y sus fotos. El enlace deja de funcionar. No se puede deshacer.'}
+                : 'Se borra el formulario, sus versiones, sus respuestas de prueba y sus fotos. Si trajo personas de otro filtro, se borran esas copias y las respuestas del filtro de origen quedan como estaban. El enlace deja de funcionar. No se puede deshacer.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -363,6 +363,8 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
   );
   const def = detalle.definicion;
   const hayReales = detalle.respuestas.some((r) => !r.esPrueba);
+  // Las traídas de un filtro anterior son copias: no impiden borrar el filtro mientras no tenga tablero vinculado (con tablero esas personas ya son del proyecto).
+  const hayRealesQueImpidenBorrar = detalle.respuestas.some((r) => !r.esPrueba && (!r.traida || !!detalle.tablero));
 
   // Un solo camino: Insumos · Estructura · Preguntas · Probar · Reclutar.
   const pasos = pasosDe(!!gen.g);
@@ -468,7 +470,7 @@ function DetalleFiltro({ detalle, proyectoId, onVolver, onEstado, onRecargar, on
               onVersiones={() => setVersiones(true)}
               onDuplicar={onDuplicar}
               onDescargar={descargar}
-              onBorrar={hayReales ? undefined : onBorrarFormulario}
+              onBorrar={hayRealesQueImpidenBorrar ? undefined : onBorrarFormulario}
             />
           </div>
         </div>
