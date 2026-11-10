@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { asegurarColumnas, columnasParaTablero, type Vinculo } from '../serverUtils/formularios/reclutamiento';
+import { iniciarCargaDeTraidas } from '../serverUtils/formularios/traidasAlTablero';
 import { leerDefinicion } from '../lib/formularios/tipos';
 
 /**
@@ -9,12 +10,15 @@ import { leerDefinicion } from '../lib/formularios/tipos';
  * de una vez todas las columnas del screener, aunque nadie haya contestado
  * (como al vincular un formulario de Fillout). Volver a elegir el mismo
  * tablero conserva sus columnas y solo agrega las que falten.
+ * Si el filtro trae personas de un filtro anterior, las carga al tablero solas
+ * (en segundo plano: son cientos) y dice cuántas son; volver a vincular el mismo
+ * tablero retoma lo que falte sin repetir ni volver a pasar a quien se quitó.
  */
 export default createEndpoint({
   authenticated: true,
   description: 'Vincula un formulario a un tablero de reclutamiento',
   inputSchema: z.object({ formularioId: z.string(), boardId: z.string() }),
-  outputSchema: z.object({ ok: z.boolean(), columnasCreadas: z.number() }),
+  outputSchema: z.object({ ok: z.boolean(), columnasCreadas: z.number(), traidasPorCargar: z.number().optional() }),
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
     const { rows: [b] } = await pool.query(
@@ -33,6 +37,7 @@ export default createEndpoint({
       nombres: mismo ? mismo.nombres : {},
     };
     const { creadas } = await asegurarColumnas(input.formularioId, vinculo, columnasParaTablero(leerDefinicion(f.definicion)), leerDefinicion(f.definicion));
-    return { ok: true, columnasCreadas: creadas };
+    const traidasPorCargar = await iniciarCargaDeTraidas(input.formularioId, b.id as string);
+    return { ok: true, columnasCreadas: creadas, traidasPorCargar };
   },
 });

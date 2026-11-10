@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, Boards, pool, ZiteError } from '../../server/compat';
 import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
 import { asegurarColumnas, columnasParaTablero, type Vinculo } from '../serverUtils/formularios/reclutamiento';
+import { iniciarCargaDeTraidas } from '../serverUtils/formularios/traidasAlTablero';
 import { leerDefinicion } from '../lib/formularios/tipos';
 
 /**
@@ -11,12 +12,14 @@ import { leerDefinicion } from '../lib/formularios/tipos';
  * recruitment. Nace con todas las columnas del screener.
  * Si el nombre ya existe en el proyecto se le agrega «(2)»: dos tableros vivos
  * con el mismo nombre confunden a la resolución por nombre (ver CLAUDE.md §6).
+ * Si el filtro trae personas de un filtro anterior, las carga al tablero nuevo
+ * solas, en segundo plano (ver traidasAlTablero.ts).
  */
 export default createEndpoint({
   authenticated: true,
   description: 'Crea un tablero de reclutamiento nuevo y le vincula el formulario',
   inputSchema: z.object({ formularioId: z.string(), nombre: z.string().min(1) }),
-  outputSchema: z.object({ id: z.string(), nombre: z.string(), columnasCreadas: z.number() }),
+  outputSchema: z.object({ id: z.string(), nombre: z.string(), columnasCreadas: z.number(), traidasPorCargar: z.number().optional() }),
   execute: async ({ input, context }) => {
     exigirAccesoFormularios(context);
     const { rows: [f] } = await pool.query(
@@ -40,6 +43,7 @@ export default createEndpoint({
     });
     const vinculo: Vinculo = { boardId: tablero.id, boardName: nombre, projectCode: f.project_code, columnas: {} };
     const { creadas } = await asegurarColumnas(f.id, vinculo, columnasParaTablero(leerDefinicion(f.definicion)), leerDefinicion(f.definicion));
-    return { id: tablero.id, nombre, columnasCreadas: creadas };
+    const traidasPorCargar = await iniciarCargaDeTraidas(f.id as string, tablero.id as string);
+    return { id: tablero.id, nombre, columnasCreadas: creadas, traidasPorCargar };
   },
 });

@@ -37,6 +37,10 @@ export interface Detalle {
   cambios?: Definicion;
 }
 
+/** Al vincular el tablero, las personas traídas de otro filtro se cargan solas en segundo plano. */
+const avisoTraidas = (n: number) =>
+  `${n === 1 ? 'Se está pasando al tablero 1 persona traída' : `Se están pasando al tablero ${n} personas traídas`} de otro filtro: van apareciendo en unos minutos.`;
+
 const fecha = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleString('es-MX', { day: 'numeric', month: 'short', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined, hour: '2-digit', minute: '2-digit' });
@@ -311,7 +315,7 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
   const [creando, setCreando] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState(detalle.titulo);
   const [trabajando, setTrabajando] = useState(false);
-  // Todas pasan (en el tablero se califican); las traídas, una por una.
+  // Todas pasan (en el tablero se califican). Las traídas de un filtro anterior pasan solas al vincular el tablero (traidasAlTablero.ts).
   const pendientes = detalle.respuestas.filter((r) => !r.enReclutamiento && !r.traida).length;
   const mostrarSelector = !detalle.tablero || cambiando;
 
@@ -329,6 +333,7 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
     try {
       const r = await vincularFormularioTablero({ formularioId: detalle.id, boardId: elegido });
       if (r.columnasCreadas) toast.success(`Se agregaron ${r.columnasCreadas} columnas al tablero`);
+      if (r.traidasPorCargar) toast.success(avisoTraidas(r.traidasPorCargar));
       setCambiando(false);
       onCambio();
     } catch (err) {
@@ -344,6 +349,7 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
     try {
       const r = await crearTableroParaFormulario({ formularioId: detalle.id, nombre: nombreNuevo.trim() });
       toast.success(`Tablero «${r.nombre}» creado y vinculado, con ${r.columnasCreadas} columnas`);
+      if (r.traidasPorCargar) toast.success(avisoTraidas(r.traidasPorCargar));
       setCreando(false);
       setCambiando(false);
       setTableros(null);
@@ -409,7 +415,7 @@ function TarjetaReclutamiento({ detalle, proyectoId, onCambio }: { detalle: Deta
             <Button size="sm" variant="ghost" onClick={() => { setTableros(null); setCambiando(true); }}>Cambiar tablero</Button>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">En vivo, todas las respuestas pasan solas al tablero, como «Pendiente», con su historial en las notas, y ahí se califican en sus columnas (Califica, Perfil, IA, Sugerido). Pasar dos veces no duplica.</p>
+        <p className="text-xs text-muted-foreground">En vivo, todas las respuestas pasan solas al tablero, como «Pendiente», con su historial en las notas, y ahí se califican en sus columnas (Califica, Perfil, IA, Sugerido). Pasar dos veces no duplica.{detalle.respuestas.some((r) => r.traida) && ' Las personas traídas de un filtro anterior pasan solas en cuanto se vincula el tablero; si no llegaron todas, vuelve a vincularlo y sigue donde se quedó.'}</p>
       </CardContent>
     </Card>
   );
