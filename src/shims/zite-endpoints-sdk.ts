@@ -199,6 +199,7 @@ export const backfillExchangeRates = (input?: any): Promise<any> => call('backfi
 export const bulkDeletePayments = (input?: any): Promise<any> => call('bulkDeletePayments', input);
 export const bulkUpdatePayments = (input?: any): Promise<any> => call('bulkUpdatePayments', input);
 export const calcularIndicadoresReclutamiento = (input?: any): Promise<any> => call('calcularIndicadoresReclutamiento', input);
+export const calcularReclutadoresEstadistica = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('calcularReclutadoresEstadistica', input);
 export const cancelPurchaseOrder = (input?: any): Promise<any> => call('cancelPurchaseOrder', input);
 export const chatDealsAnalysis = (input?: any): Promise<any> => call('chatDealsAnalysis', input);
 export const chatWithMeetingTranscript = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('chatWithMeetingTranscript', input);
@@ -251,6 +252,7 @@ export const deletePoAttachment = (input?: any): Promise<any> => call('deletePoA
 export const deleteProject = (input?: any): Promise<any> => call('deleteProject', input);
 export const deletePurchaseOrder = (input?: any): Promise<any> => call('deletePurchaseOrder', input);
 export const deleteRecruitmentRow = (input?: any): Promise<any> => call('deleteRecruitmentRow', input);
+export const deleteReclutador = (input?: any): Promise<any> => call('deleteReclutador', input);
 export const deleteSharedView = (input?: any): Promise<any> => call('deleteSharedView', input);
 export const deleteSwipeCapitulo = (input?: any): Promise<any> => call('deleteSwipeCapitulo', input);
 export const deleteSwipeIdea = (input?: any): Promise<any> => call('deleteSwipeIdea', input);
@@ -387,6 +389,7 @@ export const getRecruitmentGroups = (input?: any): Promise<any> => call('getRecr
 export const getRecruitmentRows = (input?: any): Promise<any> => call('getRecruitmentRows', input);
 export const getRecruitmentSummary = (input?: any): Promise<any> => call('getRecruitmentSummary', input);
 export const getReferenceOptions = (input?: any): Promise<any> => call('getReferenceOptions', input);
+export const getReclutadoresEstadistica = (input?: any): Promise<any> => call('getReclutadoresEstadistica', input);
 export const getRubroAssignments = (input?: any): Promise<any> => call('getRubroAssignments', input);
 export const getSharedArchivedFile = (input?: any): Promise<any> => call('getSharedArchivedFile', input);
 export const getSharedArchivedFileUrl = (input?: any): Promise<any> => call('getSharedArchivedFileUrl', input);
@@ -530,6 +533,8 @@ export const saveProject = (input?: any): Promise<any> => call('saveProject', in
 export const savePurchaseOrder = (input?: any): Promise<any> => call('savePurchaseOrder', input);
 export const saveQuotationLineItems = (input?: any): Promise<any> => call('saveQuotationLineItems', input);
 export const saveRecruitmentRow = (input?: any): Promise<any> => call('saveRecruitmentRow', input);
+export const saveReclutador = (input?: any): Promise<any> => call('saveReclutador', input);
+export const saveReclutadorAsignacion = (input?: any): Promise<any> => call('saveReclutadorAsignacion', input);
 export const saveRubroAssignment = (input?: any): Promise<any> => call('saveRubroAssignment', input);
 export const saveSupplier = (input?: any): Promise<any> => call('saveSupplier', input);
 export const saveTask = (input?: any): Promise<any> => call('saveTask', input);

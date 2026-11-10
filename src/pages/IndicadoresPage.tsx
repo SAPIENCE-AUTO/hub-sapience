@@ -11,6 +11,7 @@ import { TarjetaIndicador } from '@/components/indicadores/TarjetaIndicador';
 import { TarjetaVeces } from '@/components/indicadores/TarjetaVeces';
 import { TendenciaTrimestral } from '@/components/indicadores/TendenciaTrimestral';
 import { TablaProyectos } from '@/components/indicadores/TablaProyectos';
+import { PorReclutador } from '@/components/indicadores/PorReclutador';
 import { colorVeces } from '@/components/indicadores/colores';
 import { fmtInstante, fmtNum } from '@/components/indicadores/formato';
 import {
@@ -40,6 +41,7 @@ export default function IndicadoresPage() {
   const [calculando, setCalculando] = useState(false);
   const [periodo, setPeriodo] = useState<Periodo>('12m');
   const [graficar, setGraficar] = useState<ClaveGrafica>('noElegibles');
+  const [vista, setVista] = useState<'resumen' | 'reclutadores'>('resumen');
 
   const aplicar = (r: { datos?: DatosReclutamiento; calculadoEn?: string; metas?: Record<string, number> }) => {
     setDatos(r.datos);
@@ -118,10 +120,10 @@ export default function IndicadoresPage() {
         <div>
           <h1 className="text-[22px] font-bold leading-tight tracking-tight">Metas por área</h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {cargando ? 'Cargando…' : calculadoEn ? `Calculado el ${fmtInstante(calculadoEn)}` : 'Todavía sin calcular'}
+            {vista === 'reclutadores' ? 'Quién trajo a cada participante, y cuántos eran nuevos o repetidos' : cargando ? 'Cargando…' : calculadoEn ? `Calculado el ${fmtInstante(calculadoEn)}` : 'Todavía sin calcular'}
           </p>
         </div>
-        {datos && (
+        {vista === 'resumen' && datos && (
           <button type="button" onClick={calcular} disabled={calculando} className={CLASE_BOTON_SUAVE}>
             {calculando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             {calculando ? 'Calculando… hasta 1 minuto' : 'Actualizar'}
@@ -143,14 +145,25 @@ export default function IndicadoresPage() {
         ))}
       </div>
 
-      {cargando && (
+      <div className="mb-4">
+        <Segmentado<'resumen' | 'reclutadores'>
+          etiqueta="Vista"
+          valor={vista}
+          onCambio={setVista}
+          opciones={[{ valor: 'resumen', etiqueta: 'Resumen' }, { valor: 'reclutadores', etiqueta: 'Por reclutador' }]}
+        />
+      </div>
+
+      {vista === 'reclutadores' && <PorReclutador />}
+
+      {vista === 'resumen' && cargando && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-[190px] rounded-xl" />)}</div>
           <Skeleton className="h-64 rounded-xl" />
         </div>
       )}
 
-      {!cargando && !datos && (
+      {vista === 'resumen' && !cargando && !datos && (
         <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-6 py-14 text-center">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ backgroundColor: TEAL }}><Target className="h-5 w-5 text-white" /></div>
           <p className="text-sm font-semibold">Todavía no se han calculado los indicadores de Reclutamiento</p>
@@ -162,7 +175,7 @@ export default function IndicadoresPage() {
         </div>
       )}
 
-      {!cargando && datos && (
+      {vista === 'resumen' && !cargando && datos && (
         <>
           <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2.5">
             <Segmentado<Periodo> etiqueta="Periodo" valor={periodo} onCambio={setPeriodo} opciones={PERIODOS.map((p) => ({ valor: p.valor, etiqueta: p.etiqueta }))} />
