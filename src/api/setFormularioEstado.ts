@@ -7,6 +7,10 @@ import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
  * cuenta como real, el formulario ya no dice «Prueba» y «Borrar pruebas» no lo
  * toca. Con respuestas reales ya no regresa a borrador ni a prueba (lo nuevo
  * quedaría como prueba y se podría borrar): solo se cierra o se reabre en vivo.
+ * «Reales» son las que contestaron por el enlace de este filtro. Las TRAÍDAS de
+ * un filtro anterior no cuentan: llegan al crear la copia, cuando todavía es
+ * borrador, y contadas como reales la copia no podía pasar a prueba (ni, desde
+ * ahí, abrirse en vivo ni vincular su tablero en Reclutar): quedaba sin salida.
  */
 export default createEndpoint({
   authenticated: true,
@@ -20,7 +24,7 @@ export default createEndpoint({
     exigirAccesoFormularios(context);
     if (input.estado === 'borrador' || input.estado === 'prueba') {
       const { rows: [r] } = await pool.query(
-        `select exists (select 1 from formulario_respuestas where formulario_id = $1 and not es_prueba) as hay`,
+        `select exists (select 1 from formulario_respuestas where formulario_id = $1 and not es_prueba and not (resultado ? 'traida')) as hay`,
         [input.formularioId],
       );
       if (r?.hay) throw new ZiteError({ code: 'BAD_REQUEST', message: 'Este filtro ya tiene respuestas reales: solo se puede cerrar o reabrir en vivo.' });
