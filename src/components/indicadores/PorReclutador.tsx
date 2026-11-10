@@ -8,7 +8,7 @@ import { Segmentado } from '@/components/payments/Segmentado';
 import { CLASE_BOTON_SUAVE, ESTILO_BOTON_PRIMARIO } from '@/components/payments/estilos';
 import { PERIODOS } from '../../lib/indicadores/reclutamiento';
 import {
-  conteoCero, normalizarNombre, reclutadorParecido, repartir, sugerirGrupos,
+  conteoCero, normalizarNombre, reclutadorParecido, repartir, sugerirGrupos, traeElegibilidad,
   type Asignacion, type DatosReclutadores, type GrupoSugerido, type Periodo, type Reclutador, type SalidaReclutadores,
 } from '../../lib/indicadores/reclutadores';
 import { TEAL } from '../../lib/toolColors';
@@ -98,6 +98,7 @@ export function PorReclutador() {
   const asignaciones = useMemo(() => new Map(Object.entries(alias)), [alias]);
   const reparto = useMemo(() => (datos ? repartir(datos, periodo, asignaciones) : null), [datos, periodo, asignaciones]);
   const consulta = normalizarNombre(busqueda);
+  const conElegibilidad = traeElegibilidad(datos);
 
   const filasReclutadores = useMemo<FilaReclutador[]>(() => reclutadores
     .map((r) => ({ id: r.id, nombre: r.nombre, conteo: reparto?.porReclutador.get(r.id)?.conteo ?? conteoCero(), claves: reparto?.porReclutador.get(r.id)?.claves ?? [] }))
@@ -257,6 +258,12 @@ export function PorReclutador() {
         </div>
       )}
 
+      {!conElegibilidad && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-950">
+          Este conteo es de la versión anterior y todavía no trae «no elegibles», «entraron a un grupo» ni las repetidas hasta «8 o más» proyectos antes. Pulsa «Actualizar» para verlos.
+        </div>
+      )}
+
       {resumen && (
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Cifra titulo="Con reclutador" valor={pct(resumen.asignadas)} detalle={`${fmtNum(resumen.asignadas)} de ${fmtNum(resumen.total)} respuestas, con ${fmtNum(reclutadores.length)} ${reclutadores.length === 1 ? 'reclutador' : 'reclutadores'}`} color="#257E55" />
@@ -272,6 +279,7 @@ export function PorReclutador() {
           filas={filasReclutadores}
           escrituras={escrituras}
           periodo={periodo}
+          conElegibilidad={conElegibilidad}
           seleccion={seleccion}
           expandidos={expandidos}
           onSeleccionar={marcar}
@@ -295,6 +303,7 @@ export function PorReclutador() {
         <TablaSinAsignar
           filas={filasSinAsignar}
           periodo={periodo}
+          conElegibilidad={conElegibilidad}
           seleccion={seleccion}
           onSeleccionar={marcar}
           onSeleccionarTodas={marcarVarias}
@@ -315,8 +324,9 @@ export function PorReclutador() {
       </div>
 
       <div className="mt-6 space-y-1 text-[11px] leading-relaxed text-muted-foreground">
-        <p><b>Respuesta:</b> una vez que alguien llenó un filtro; si la misma respuesta está copiada en varios tableros, cuenta una sola vez. <b>Nueva:</b> esa persona no tenía ninguna respuesta en un proyecto anterior. <b>Repetida:</b> ya tenía una, y el color dice en cuántos proyectos anteriores (se ordenan por su fecha de inicio). Las respuestas del mismo proyecto que la primera cuentan como nuevas: son pasos del mismo reclutamiento.</p>
+        <p><b>Aquí se cuentan respuestas, no personas que asistieron.</b> <b>Respuesta:</b> una vez que alguien llenó un filtro; si la misma respuesta está copiada en varios tableros, cuenta una sola vez, y quien llenó tres filtros aporta tres respuestas (haya asistido o no). <b>Nueva:</b> esa persona no tenía ninguna respuesta en un proyecto anterior. <b>Repetida:</b> ya tenía una, y el color dice en cuántos proyectos anteriores (de 1 a 7, u 8 o más; se cuentan proyectos, no respuestas, y se ordenan por su fecha de inicio). Las respuestas del mismo proyecto que la primera cuentan como nuevas: son pasos del mismo reclutamiento.</p>
         <p><b>Contacto compartido:</b> un correo o teléfono con varios nombres distintos y cinco o más respuestas (quien recluta en campo llena por el participante): no es una persona que repite, así que no cuenta como nueva ni como repetida. <b>Sin nombre:</b> la respuesta no trae el nombre de quien invitó, o dice «nadie» o «no sé».</p>
+        <p><b>No elegible:</b> la persona ya había participado con el mismo cliente, o en cualquier proyecto en los 6 meses anteriores al inicio del proyecto donde se recibió la respuesta (la misma regla de los íconos del tablero y de Metas por área); se mide sobre las respuestas sin contar el contacto compartido. <b>Entró a un grupo:</b> en alguno de los tableros donde está la respuesta, asistió o está en un grupo con estatus vacío, pendiente o confirmado. Las respuestas de proyectos recientes todavía pueden entrar a un grupo, así que en periodos cortos «entraron» sale más bajo.</p>
         <p>El nombre lo escribe el participante: sirve como termómetro, no como calificación exacta. Reclutar gente que ya conocíamos no siempre es malo (por ejemplo, en tableros de rescatados o con perfiles escasos), por eso se muestran las dos cifras. Los periodos se miden con la fecha de inicio del proyecto de cada respuesta.</p>
         {datos.sinFecha > 0 && <p>{fmtNum(datos.sinFecha)} respuestas quedaron fuera por no haber ninguna fecha de su proyecto.</p>}
         {datos.contactosCompartidos > 0 && <p>{fmtNum(datos.contactosCompartidos)} «personas» se trataron como un contacto compartido.</p>}

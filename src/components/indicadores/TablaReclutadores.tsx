@@ -1,18 +1,20 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, ChevronUp, Pencil, Trash2, X } from 'lucide-react';
 import { resumenDe, type Conteo, type Escritura, type Periodo } from '../../lib/indicadores/reclutadores';
-import { BarraNuevasRepetidas, CifraConPct } from './BarraNuevasRepetidas';
+import { BarraNuevasRepetidas, CifraConPct, CifraEntraron, CifraNoElegibles } from './BarraNuevasRepetidas';
 import { fmtNum } from './formato';
 
 export interface FilaReclutador { id: string; nombre: string; conteo: Conteo; claves: string[] }
 
-type Columna = 'nombre' | 'total' | 'nuevas' | 'repetidas';
+type Columna = 'nombre' | 'total' | 'nuevas' | 'repetidas' | 'avisos' | 'entraron';
 
 /** Los reclutadores ya juntados, cada uno con lo que suman sus formas de escribir el nombre. Se abre cada fila para ver (y separar) esas formas. */
-export function TablaReclutadores({ filas, escrituras, periodo, seleccion, expandidos, onSeleccionar, onExpandir, onRenombrar, onEliminar, onSeparar, deshabilitado }: {
+export function TablaReclutadores({ filas, escrituras, periodo, conElegibilidad, seleccion, expandidos, onSeleccionar, onExpandir, onRenombrar, onEliminar, onSeparar, deshabilitado }: {
   filas: FilaReclutador[];
   escrituras: ReadonlyMap<string, Escritura>;
   periodo: Periodo;
+  /** El cálculo guardado ya trae «no elegibles» y «entraron a un grupo» (versión 2). */
+  conElegibilidad: boolean;
   seleccion: ReadonlySet<string>;
   expandidos: ReadonlySet<string>;
   onSeleccionar: (clave: string, marcada: boolean) => void;
@@ -29,7 +31,8 @@ export function TablaReclutadores({ filas, escrituras, periodo, seleccion, expan
   const ordenadas = useMemo(() => {
     const valor = (f: FilaReclutador): string | number => {
       const r = resumenDe(f.conteo);
-      return orden.col === 'nombre' ? f.nombre.toLowerCase() : orden.col === 'total' ? r.total : orden.col === 'nuevas' ? r.pctNuevas ?? -1 : r.pctRepetidas ?? -1;
+      return orden.col === 'nombre' ? f.nombre.toLowerCase() : orden.col === 'total' ? r.total : orden.col === 'nuevas' ? r.pctNuevas ?? -1
+        : orden.col === 'repetidas' ? r.pctRepetidas ?? -1 : orden.col === 'avisos' ? r.pctAvisos ?? -1 : r.pctEntraron ?? -1;
     };
     return [...filas].sort((a, b) => {
       const x = valor(a), y = valor(b);
@@ -58,14 +61,15 @@ export function TablaReclutadores({ filas, escrituras, periodo, seleccion, expan
 
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
-      <table className="w-full min-w-[820px] border-collapse text-[13px]">
+      <table className="w-full border-collapse text-[13px]" style={{ minWidth: conElegibilidad ? 900 : 680 }}>
         <thead className="border-b bg-muted/30">
           <tr>
-            {encabezado('nombre', 'Reclutador', false)}
+            {encabezado('nombre', 'Reclutador y cómo se reparten sus respuestas', false)}
             {encabezado('total', 'Respuestas')}
             {encabezado('nuevas', 'Nuevas')}
             {encabezado('repetidas', 'Repetidas')}
-            <th scope="col" className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Cómo se reparten</th>
+            {conElegibilidad && encabezado('avisos', 'No elegibles')}
+            {conElegibilidad && encabezado('entraron', 'Entraron a un grupo')}
             <th scope="col" className="w-20 px-3 py-2"><span className="sr-only">Acciones</span></th>
           </tr>
         </thead>
@@ -77,7 +81,7 @@ export function TablaReclutadores({ filas, escrituras, periodo, seleccion, expan
             return (
               <Fragment key={f.id}>
                 <tr className="border-b hover:bg-muted/40" data-reclutador={f.id}>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2.5 align-top">
                     {editando?.id === f.id ? (
                       <span className="inline-flex items-center gap-1">
                         <input
@@ -99,15 +103,17 @@ export function TablaReclutadores({ filas, escrituras, periodo, seleccion, expan
                         <span className="text-xs font-normal text-muted-foreground">{f.claves.length} {f.claves.length === 1 ? 'forma' : 'formas'} de escribirlo</span>
                       </button>
                     )}
+                    <div className="mt-1.5 pl-5"><BarraNuevasRepetidas conteo={f.conteo} /></div>
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(r.total)}</td>
-                  <td className="px-3 py-2 text-right"><CifraConPct n={r.nuevas} pct={r.pctNuevas} /></td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-2.5 text-right align-top tabular-nums">{fmtNum(r.total)}</td>
+                  <td className="px-3 py-2.5 text-right align-top"><CifraConPct n={r.nuevas} pct={r.pctNuevas} /></td>
+                  <td className="px-3 py-2.5 text-right align-top">
                     <CifraConPct n={r.repetidas} pct={r.pctRepetidas} />
-                    {r.compartido > 0 && <span className="ml-1.5 text-[11px] text-muted-foreground" title="Respuestas de un correo o teléfono compartido: no cuentan como nuevas ni repetidas">+{fmtNum(r.compartido)} compartido</span>}
+                    {r.compartido > 0 && <span className="block text-[11px] text-muted-foreground" title="Respuestas de un correo o teléfono compartido: no cuentan como nuevas ni repetidas">+{fmtNum(r.compartido)} compartido</span>}
                   </td>
-                  <td className="px-3 py-2"><BarraNuevasRepetidas conteo={f.conteo} /></td>
-                  <td className="px-3 py-2 text-right">
+                  {conElegibilidad && <td className="px-3 py-2.5 text-right align-top"><CifraNoElegibles r={r} /></td>}
+                  {conElegibilidad && <td className="px-3 py-2.5 text-right align-top"><CifraEntraron r={r} /></td>}
+                  <td className="px-3 py-2 text-right align-top">
                     {confirmando === f.id ? (
                       <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs">
                         ¿Borrar?
@@ -124,7 +130,7 @@ export function TablaReclutadores({ filas, escrituras, periodo, seleccion, expan
                 </tr>
                 {abierto && (
                   <tr className="border-b bg-muted/20">
-                    <td colSpan={6} className="px-3 py-2">
+                    <td colSpan={conElegibilidad ? 7 : 5} className="px-3 py-2">
                       <table className="w-full border-collapse text-xs">
                         <thead>
                           <tr className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -133,6 +139,8 @@ export function TablaReclutadores({ filas, escrituras, periodo, seleccion, expan
                             <th className="py-1 text-right font-semibold">Respuestas</th>
                             <th className="py-1 text-right font-semibold">Nuevas</th>
                             <th className="py-1 text-right font-semibold">Repetidas</th>
+                            {conElegibilidad && <th className="py-1 text-right font-semibold">No elegibles</th>}
+                            {conElegibilidad && <th className="py-1 text-right font-semibold">Entraron</th>}
                             <th className="w-24 py-1" />
                           </tr>
                         </thead>
@@ -148,6 +156,8 @@ export function TablaReclutadores({ filas, escrituras, periodo, seleccion, expan
                                 <td className="py-1.5 text-right tabular-nums">{fmtNum(x.total)}</td>
                                 <td className="py-1.5 text-right"><CifraConPct n={x.nuevas} pct={x.pctNuevas} /></td>
                                 <td className="py-1.5 text-right"><CifraConPct n={x.repetidas} pct={x.pctRepetidas} /></td>
+                                {conElegibilidad && <td className="py-1.5 text-right"><CifraNoElegibles r={x} /></td>}
+                                {conElegibilidad && <td className="py-1.5 text-right"><CifraEntraron r={x} /></td>}
                                 <td className="py-1.5 text-right"><button type="button" disabled={deshabilitado} onClick={() => onSeparar([clave])} className="rounded px-2 py-0.5 font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40">Separar</button></td>
                               </tr>
                             );

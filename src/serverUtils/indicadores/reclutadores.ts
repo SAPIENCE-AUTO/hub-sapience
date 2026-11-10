@@ -4,10 +4,10 @@
 // Dos pasos: leer el nombre que escribió cada participante (de lo que cada tablero ya guarda por fila) y contar sobre lo que ya carga
 // getGlobalIdentityData (todas las filas de reclutamiento y sus identidades). Solo lee: no escribe nada en reclutamiento.
 import type { GlobalIdentityData } from '../../lib/globalIdentityCache';
-import { normalizeName, type IdentityRow } from '../../lib/duplicateIdentity';
+import { normalizeName, participoEnProyecto, type IdentityRow } from '../../lib/duplicateIdentity';
 import { respuestaDe } from '../../lib/respuestaFillout';
 import {
-  PERIODOS_RECLUTADOR, conteoCero, esSinNombre, normalizarNombre, type Conteo, type DatosReclutadores, type Escritura, type Periodo,
+  MAX_TRAMO, PERIODOS_RECLUTADOR, POSICION_TRAMO, conteoCero, esSinNombre, normalizarNombre, type Conteo, type DatosReclutadores, type Escritura, type Periodo,
 } from '../../lib/indicadores/reclutadores';
 import { restarMeses } from '../../lib/indicadores/reclutamiento';
 import type { Consulta } from './almacen';
@@ -84,6 +84,40 @@ export async function leerNombresReclutador(
 }
 
 // ── 2. Contar ───────────────────────────────────────────────────────────────
+const norm = (s?: string | null) => (s ?? '').toLowerCase().trim();
+const participo = (r: IdentityRow) => participoEnProyecto(r as { status?: string | null; group?: string | null });
+
+/**
+ * ¿Esta persona era «no elegible» para el proyecto `codigo`? Es la regla de los íconos del tablero (getBoardDuplicateBadges) y de Metas por
+ * área (calcularReclutamiento) aplicada contra la fecha de inicio de ese proyecto: ya había participado con el mismo cliente, o en cualquier
+ * proyecto en los 6 meses anteriores. Solo cuenta haber PARTICIPADO (participoEnProyecto), no haber estado registrado; un proyecto que empieza
+ * después no cuenta. `filas` son todas las filas de la persona. Sin fecha de inicio del proyecto no hay con qué medir: no.
+ */
+export function eraNoElegible(
+  filas: ReadonlyArray<IdentityRow>,
+  codigo: string,
+  projectMap: ReadonlyMap<string, { client?: string; startDate?: string }>,
+): boolean {
+  const inicio = projectMap.get(codigo)?.startDate;
+  if (!inicio) return false;
+  const ref = new Date(inicio);
+  const seisMeses = new Date(ref);
+  seisMeses.setMonth(seisMeses.getMonth() - 6);
+  const cliente = norm(projectMap.get(codigo)?.client);
+  for (const otra of filas) {
+    const codigoOtra = typeof otra.projectCode === 'string' ? otra.projectCode : '';
+    if (!codigoOtra || codigoOtra === codigo) continue;
+    const info = projectMap.get(codigoOtra);
+    const fechaOtra = info?.startDate ? new Date(info.startDate) : null;
+    if (fechaOtra && fechaOtra > ref) continue;
+    if (!participo(otra)) continue;
+    const clienteOtra = norm(info?.client);
+    if (cliente && clienteOtra && cliente === clienteOtra) return true;
+    if (!fechaOtra || fechaOtra > seisMeses) return true;
+  }
+  return false;
+}
+
 const porPeriodo = (): Record<Periodo, Conteo> => ({ '12m': conteoCero(), '6m': conteoCero(), anio: conteoCero(), todo: conteoCero() });
 
 /**
@@ -91,6 +125,10 @@ const porPeriodo = (): Record<Periodo, Conteo> => ({ '12m': conteoCero(), '6m': 
  * inicio de su proyecto: la primera es «nueva» y las de proyectos posteriores son «repetidas», con el número de proyectos anteriores en que ya
  * tenía una. Las respuestas del mismo proyecto que la primera cuentan como nuevas (son pasos del mismo reclutamiento). El nombre de
  * la respuesta es el de su copia más antigua que lo trae.
+ *
+ * Además de nuevas y repetidas, de cada respuesta se anota: si era «no elegible» (medido contra el proyecto de su copia más antigua, que es donde
+ * se recibió: `eraNoElegible`), si terminó en un grupo en alguno de sus tableros (`participoEnProyecto`) y si entró siendo no elegible (medido
+ * contra el proyecto donde entró, como hace Metas por área). Ninguna elegibilidad se mide en un contacto compartido.
  */
 export function calcularReclutadores(
   datos: Pick<GlobalIdentityData, 'activeRows' | 'projectMap' | 'globalClusters'>,
@@ -119,17 +157,19 @@ export function calcularReclutadores(
       const fa = fechaDe(a.projectCode) ?? '9999', fb = fechaDe(b.projectCode) ?? '9999';
       return fa < fb ? -1 : fa > fb ? 1 : String(a.id) < String(b.id) ? -1 : 1;
     });
-    const respuestas = new Map<string, { fecha: string | null; proyectos: Set<string>; nombre: string }>();
+    const respuestas = new Map<string, { fecha: string | null; proyectos: Set<string>; nombre: string; copias: IdentityRow[]; origen: string }>();
     const nombresDeLaPersona = new Set<string>();
     for (const f of ordenadas) {
       const clave = respuestaDe(f) ?? `fila:${f.id}`;
       let r = respuestas.get(clave);
-      if (!r) { r = { fecha: null, proyectos: new Set(), nombre: '' }; respuestas.set(clave, r); }
+      if (!r) { r = { fecha: null, proyectos: new Set(), nombre: '', copias: [], origen: '' }; respuestas.set(clave, r); }
+      r.copias.push(f);
       const codigo = typeof f.projectCode === 'string' ? f.projectCode : '';
       if (codigo) {
         r.proyectos.add(codigo);
+        // Las filas vienen de la más antigua a la más nueva: la primera con fecha da la fecha y el proyecto de origen de la respuesta.
         const fecha = fechaDe(codigo);
-        if (fecha && (r.fecha === null || fecha < r.fecha)) r.fecha = fecha;
+        if (fecha && r.fecha === null) { r.fecha = fecha; r.origen = codigo; }
       }
       if (!r.nombre) r.nombre = (nombres.get(f.id) ?? '').trim();
       const n = normalizeName(f.participantName as string | undefined);
@@ -145,26 +185,41 @@ export function calcularReclutadores(
       if (!r.fecha || primera === null) { sinFecha++; continue; }
       if (r.fecha > hoy) continue; // el proyecto aún no empieza: igual que en el resto de Indicadores
 
-      // Posición en el conteo: 1 nuevas, 2 a 5 repetidas con 1, 2, 3 y 4 o más proyectos anteriores, 6 contacto compartido.
+      // Posición en el conteo: 1 nuevas, 6 contacto compartido y, para las repetidas, la de su tramo (1 a 8 o más proyectos anteriores: POSICION_TRAMO).
       let posicion: number;
       if (compartido) posicion = 6;
       else if (r.fecha === primera) posicion = 1;
       else {
         const anteriores = new Set<string>();
         for (const o of respuestas.values()) if (o.fecha && o.fecha < r.fecha) for (const p of o.proyectos) anteriores.add(p);
-        posicion = 1 + Math.max(1, Math.min(anteriores.size, 4));
+        posicion = POSICION_TRAMO[Math.max(1, Math.min(anteriores.size, MAX_TRAMO)) - 1];
+      }
+
+      // Posiciones 7, 8 y 9: no elegible (al recibirse la respuesta), entró a un grupo, entró siendo no elegible (en el proyecto donde entró).
+      const entro = r.copias.some(participo);
+      const aviso = !compartido && r.origen !== '' && eraNoElegible(filas, r.origen, projectMap);
+      let entroConAviso = false;
+      if (!compartido && entro) {
+        const vistos = new Set<string>();
+        for (const copia of r.copias) {
+          const donde = typeof copia.projectCode === 'string' ? copia.projectCode : '';
+          if (!donde || vistos.has(donde) || !participo(copia)) continue;
+          vistos.add(donde);
+          if (eraNoElegible(filas, donde, projectMap)) { entroConAviso = true; break; }
+        }
       }
 
       const periodos = PERIODOS_RECLUTADOR.filter((p) => r.fecha! >= desde[p]);
       const clave = normalizarNombre(r.nombre);
+      const sumar = (c: Conteo) => { c[0]++; c[posicion]++; if (aviso) c[7]++; if (entro) c[8]++; if (entroConAviso) c[9]++; };
       if (esSinNombre(clave)) {
-        for (const p of periodos) { sinNombre[p][0]++; sinNombre[p][posicion]++; }
+        for (const p of periodos) sumar(sinNombre[p]);
         continue;
       }
       let e = porClave.get(clave);
       if (!e) { e = { formas: new Map(), c: porPeriodo() }; porClave.set(clave, e); }
       e.formas.set(r.nombre, (e.formas.get(r.nombre) ?? 0) + 1);
-      for (const p of periodos) { e.c[p][0]++; e.c[p][posicion]++; }
+      for (const p of periodos) sumar(e.c[p]);
     }
   }
 
@@ -172,5 +227,5 @@ export function calcularReclutadores(
     const formas = [...e.formas.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     return { clave, nombre: formas[0][0], formas: formas.slice(0, 6), c: e.c };
   }).sort((a, b) => b.c.todo[0] - a.c.todo[0] || a.clave.localeCompare(b.clave));
-  return { version: 1, hoy, escrituras, sinNombre, sinFecha, contactosCompartidos };
+  return { version: 2, hoy, escrituras, sinNombre, sinFecha, contactosCompartidos };
 }

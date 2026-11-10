@@ -3,7 +3,7 @@
 // server/scripts/add-reclutadores-tables.ts, fuera del pipeline de generate.py como las de Indicadores).
 import { z } from 'zod';
 import { pool, ZiteError } from '../../../server/compat';
-import type { DatosReclutadores } from '../../lib/indicadores/reclutadores';
+import { TAMANO_CONTEO, type DatosReclutadores } from '../../lib/indicadores/reclutadores';
 import { faltaLaTabla, type Consulta } from './almacen';
 
 export const AREA_RECLUTADORES = 'reclutadores';
@@ -35,11 +35,11 @@ export const SQL_TABLAS_RECLUTADORES = `
 `;
 
 // ── Formas de lo que viaja ───────────────────────────────────────────────────
-const ConteoSchema = z.array(z.number()).length(7);
+const ConteoSchema = z.array(z.number()).length(TAMANO_CONTEO);
 const PorPeriodoSchema = z.object({ '12m': ConteoSchema, '6m': ConteoSchema, anio: ConteoSchema, todo: ConteoSchema });
 
 export const DatosReclutadoresSchema = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   hoy: z.string(),
   escrituras: z.array(z.object({
     clave: z.string(),
@@ -76,6 +76,18 @@ export const DestinoSchema = z.discriminatedUnion('tipo', [
 ]);
 export type Destino = z.infer<typeof DestinoSchema>;
 
+/** Los cálculos viejos traen menos números por conteo (7 los de la versión 1, 10 los primeros de la 2); se rellenan con ceros hasta los 14 de ahora (la pantalla sabe, por la versión, que esos ceros no son datos). */
+export function rellenar(crudo: any): any {
+  const relleno = (c: unknown) => (Array.isArray(c) && c.length < TAMANO_CONTEO ? [...c, ...new Array<number>(TAMANO_CONTEO - c.length).fill(0)] : c);
+  const periodos = (o: any) => (o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, relleno(v)])) : o);
+  if (!crudo || typeof crudo !== 'object') return crudo;
+  return {
+    ...crudo,
+    escrituras: Array.isArray(crudo.escrituras) ? crudo.escrituras.map((e: any) => ({ ...e, c: periodos(e?.c) })) : crudo.escrituras,
+    sinNombre: periodos(crudo.sinNombre),
+  };
+}
+
 const isoDe = (v: unknown) => (v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString());
 
 /** «  ana   gómez » → «ana gómez»; vacío o demasiado largo no vale. */
@@ -93,7 +105,7 @@ export async function leerReclutadores(db: Consulta = pool): Promise<SalidaReclu
     if (faltaLaTabla(err)) return { rows: [] as any[] };
     throw err;
   });
-  if (rows[0]) calculo = { calculadoEn: isoDe(rows[0].calculado_en), datos: DatosReclutadoresSchema.parse(rows[0].datos) as DatosReclutadores };
+  if (rows[0]) calculo = { calculadoEn: isoDe(rows[0].calculado_en), datos: DatosReclutadoresSchema.parse(rellenar(rows[0].datos)) as DatosReclutadores };
 
   try {
     const reclutadores = await db.query(`select id::text as id, nombre from reclutadores order by lower(nombre)`);

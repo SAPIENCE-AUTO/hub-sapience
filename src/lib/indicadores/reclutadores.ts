@@ -3,25 +3,37 @@
 // y sumar al instante). Ver docs/reclutadores.md.
 //
 // Una RESPUESTA es una vez que alguien llenó un filtro: las copias de la misma respuesta en varios tableros cuentan una sola vez
-// (src/lib/respuestaFillout.ts). «Nueva»: la persona no tenía ninguna respuesta en un proyecto anterior; «repetida»: ya tenía una, y se
-// cuenta en cuántos proyectos anteriores (1, 2, 3 o 4 o más). El orden de los proyectos es el de su fecha de inicio, como en el resto de Indicadores.
+// (src/lib/respuestaFillout.ts). Lo que se cuenta son respuestas, no personas que asistieron: quien llenó tres filtros aporta tres respuestas.
+// «Nueva»: la persona no tenía ninguna respuesta en un proyecto anterior; «repetida»: ya tenía una, y se cuenta en cuántos proyectos anteriores
+// (de 1 a 7, u 8 o más). El orden de los proyectos es el de su fecha de inicio, como en el resto de Indicadores.
+// «No elegible»: la persona ya había participado con el mismo cliente, o en cualquier proyecto en los 6 meses anteriores al inicio del proyecto
+// donde se recibió la respuesta (la regla de los íconos del tablero y de Metas por área). «Entró a un grupo»: en alguno de los tableros donde está
+// la respuesta, asistió o está en un grupo (participoEnProyecto).
 import type { Periodo } from './reclutamiento';
 
 export type { Periodo };
 export const PERIODOS_RECLUTADOR: Periodo[] = ['12m', '6m', 'anio', 'todo'];
 
-/** Proyectos anteriores con los que se parte la barra de las repetidas: 1, 2, 3 y 4 o más. */
-export const TRAMOS_REPETIDAS = [1, 2, 3, 4] as const;
-export const etiquetaTramo = (t: number) => (t >= 4 ? '4 o más proyectos antes' : t === 1 ? '1 proyecto antes' : `${t} proyectos antes`);
+/** Proyectos anteriores con los que se parte la barra de las repetidas: 1, 2, 3 … 7 y 8 o más (hasta el 2026-11-10 eran solo 1, 2, 3 y 4 o más). */
+export const TRAMOS_REPETIDAS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+export const MAX_TRAMO = 8;
+export const etiquetaTramo = (t: number) => (t >= MAX_TRAMO ? `${MAX_TRAMO} o más proyectos antes` : t === 1 ? '1 proyecto antes' : `${t} proyectos antes`);
+/** Dónde está cada tramo (1 a 8 o más) dentro del conteo: los de 1 a 4 en el sitio de siempre y los de 5 a 8 al final, así lo ya guardado se lee igual. */
+export const POSICION_TRAMO = [2, 3, 4, 5, 10, 11, 12, 13] as const;
+export const TAMANO_CONTEO = 14;
 
 /**
  * Contadores de un conjunto de respuestas, en este orden:
- * [total, nuevas, repetidas con 1, 2, 3 y 4 o más proyectos anteriores, de un contacto compartido].
+ * [total, nuevas, repetidas con 1, 2, 3 y 4 proyectos anteriores, de un contacto compartido, no elegibles, entraron a un grupo,
+ * entraron siendo no elegibles, repetidas con 5, 6, 7 y 8 o más proyectos anteriores] (`POSICION_TRAMO` dice dónde va cada tramo; los cálculos
+ * viejos, de 7 o 10 números, se rellenan con ceros al leerlos). «No elegibles» se mide en el proyecto donde se recibió la respuesta; «entraron siendo no elegibles», en el
+ * proyecto donde entraron al grupo (la cifra de Metas por área): puede no ser un subconjunto de los primeros si entraron en otro proyecto.
  * Un «contacto compartido» es un correo o teléfono que usa quien recluta en campo para llenar por el participante: no es una persona que
- * repite, así que esas respuestas no cuentan ni como nuevas ni como repetidas.
+ * repite, así que esas respuestas no cuentan ni como nuevas ni como repetidas, ni se les mide la elegibilidad (de quién sería el historial);
+ * lo de «entró a un grupo» sí, porque sale de la fila misma. Lo de elegibilidad y los tramos de 5 a 8 solo vienen en los cálculos de la versión 2.
  */
-export type Conteo = [number, number, number, number, number, number, number];
-export const conteoCero = (): Conteo => [0, 0, 0, 0, 0, 0, 0];
+export type Conteo = number[];
+export const conteoCero = (): Conteo => new Array<number>(TAMANO_CONTEO).fill(0);
 
 /** Suma `b` dentro de `a` (y devuelve `a`). */
 export function sumarEn(a: Conteo, b: ReadonlyArray<number>): Conteo {
@@ -34,23 +46,43 @@ export interface ResumenConteo {
   nuevas: number;
   /** Todas las repetidas, sin importar con cuántos proyectos anteriores. */
   repetidas: number;
-  /** Las repetidas partidas en 1, 2, 3 y 4 o más proyectos anteriores. */
-  repetidasPorTramo: [number, number, number, number];
+  /** Las repetidas partidas en 1, 2 … 7 y 8 o más proyectos anteriores (`TRAMOS_REPETIDAS`). */
+  repetidasPorTramo: number[];
   compartido: number;
   /** Nuevas más repetidas: sobre este total se sacan los porcentajes (el contacto compartido queda fuera). */
   clasificadas: number;
   pctNuevas: number | null;
   pctRepetidas: number | null;
+  /** Respuestas de personas no elegibles (ya habían participado con el mismo cliente, o en los 6 meses anteriores al proyecto). */
+  avisos: number;
+  /** Respuestas que terminaron en un grupo. */
+  entraron: number;
+  /** De las que entraron, cuántas eran no elegibles en el proyecto donde entraron (la cifra de «No elegibles que entraron» de Metas por área). */
+  avisosQueEntraron: number;
+  /** El total sin el contacto compartido: sobre esto se saca el porcentaje de no elegibles (de ese contacto no se sabe quién es la persona). */
+  evaluables: number;
+  pctAvisos: number | null;
+  /** Sobre el total de respuestas. */
+  pctEntraron: number | null;
+  /** Sobre las que entraron. */
+  pctAvisosQueEntraron: number | null;
 }
 
 export function resumenDe(c: ReadonlyArray<number>): ResumenConteo {
-  const [total, nuevas, r1, r2, r3, r4, compartido] = [c[0] ?? 0, c[1] ?? 0, c[2] ?? 0, c[3] ?? 0, c[4] ?? 0, c[5] ?? 0, c[6] ?? 0];
-  const repetidas = r1 + r2 + r3 + r4;
+  const [total, nuevas, compartido] = [c[0] ?? 0, c[1] ?? 0, c[6] ?? 0];
+  const [avisos, entraron, avisosQueEntraron] = [c[7] ?? 0, c[8] ?? 0, c[9] ?? 0];
+  const repetidasPorTramo = POSICION_TRAMO.map((p) => c[p] ?? 0);
+  const repetidas = repetidasPorTramo.reduce((suma, n) => suma + n, 0);
   const clasificadas = nuevas + repetidas;
+  const evaluables = total - compartido;
   return {
-    total, nuevas, repetidas, repetidasPorTramo: [r1, r2, r3, r4], compartido, clasificadas,
+    total, nuevas, repetidas, repetidasPorTramo, compartido, clasificadas,
     pctNuevas: clasificadas > 0 ? (100 * nuevas) / clasificadas : null,
     pctRepetidas: clasificadas > 0 ? (100 * repetidas) / clasificadas : null,
+    avisos, entraron, avisosQueEntraron, evaluables,
+    pctAvisos: evaluables > 0 ? (100 * avisos) / evaluables : null,
+    pctEntraron: total > 0 ? (100 * entraron) / total : null,
+    pctAvisosQueEntraron: entraron > 0 ? (100 * avisosQueEntraron) / entraron : null,
   };
 }
 
@@ -66,7 +98,8 @@ export interface Escritura {
 
 /** Lo que se guarda en indicadores_calculos (área «reclutadores»). */
 export interface DatosReclutadores {
-  version: 1;
+  /** 1: sin elegibilidad ni entradas a grupo y con las repetidas partidas hasta «4 o más» (los conteos traen 7 números; se rellenan con ceros al leerlos). 2: con ellas y con las repetidas partidas hasta «8 o más» (14 números). */
+  version: 1 | 2;
   /** AAAA-MM-DD en que se contó: contra esta fecha se arman los periodos. */
   hoy: string;
   escrituras: Escritura[];
@@ -205,6 +238,9 @@ export function repartir(datos: DatosReclutadores, periodo: Periodo, asignacione
   }
   return r;
 }
+
+/** ¿El cálculo guardado ya trae «no elegibles» y «entraron a un grupo»? Los de la primera versión no. */
+export const traeElegibilidad = (datos: Pick<DatosReclutadores, 'version'> | undefined): boolean => (datos?.version ?? 1) >= 2;
 
 // ── Lo que viaja entre el servidor y la pantalla ─────────────────────────────
 export interface Reclutador { id: string; nombre: string }

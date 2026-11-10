@@ -10,10 +10,11 @@ import { pool } from '../compat';
 import { DATE_OID, NUMERIC_OID, TIMESTAMPTZ_OID, parseDate, parseNumeric, parseTimestamptz } from '../compat/datetimeParsers';
 import { buildIdentityClusters, type IdentityRow } from '../../src/lib/duplicateIdentity';
 import {
-  conteoCero, esSinNombre, normalizarNombre, podrianSerLaMisma, reclutadorParecido, repartir, resumenDe, sugerirGrupos,
+  POSICION_TRAMO, TAMANO_CONTEO, TRAMOS_REPETIDAS, conteoCero, esSinNombre, normalizarNombre, podrianSerLaMisma, reclutadorParecido, repartir, resumenDe, sugerirGrupos, traeElegibilidad,
   type Asignacion, type Conteo, type DatosReclutadores, type Periodo,
 } from '../../src/lib/indicadores/reclutadores';
-import { calcularReclutadores, leerNombresReclutador } from '../../src/serverUtils/indicadores/reclutadores';
+import { calcularReclutadores, eraNoElegible, leerNombresReclutador } from '../../src/serverUtils/indicadores/reclutadores';
+import { calcularReclutamiento } from '../../src/serverUtils/indicadores/reclutamiento';
 import { SQL_TABLAS_RECLUTADORES } from '../../src/serverUtils/indicadores/reclutadoresAlmacen';
 
 process.env.STRICT_OUTPUT = 'true';
@@ -110,7 +111,7 @@ await prueba('reclutadorParecido: sugiere un reclutador solo si hay uno que enca
 });
 
 // ── sumar por reclutador ─────────────────────────────────────────────────────
-const c = (...v: number[]): Conteo => [v[0], v[1], v[2] ?? 0, v[3] ?? 0, v[4] ?? 0, v[5] ?? 0, v[6] ?? 0];
+const c = (...v: number[]): Conteo => Array.from({ length: TAMANO_CONTEO }, (_, i) => v[i] ?? 0);
 const periodos = (todo: Conteo): Record<Periodo, Conteo> => ({ '12m': [...todo] as Conteo, '6m': conteoCero(), anio: [...todo] as Conteo, todo });
 const datosA: DatosReclutadores = {
   version: 1, hoy: '2026-10-20', sinFecha: 0, contactosCompartidos: 0,
@@ -128,7 +129,7 @@ await prueba('resumenDe: los porcentajes salen de nuevas más repetidas; el cont
   assert.equal(r.total, 6);
   assert.equal(r.nuevas, 2);
   assert.equal(r.repetidas, 3);
-  assert.deepEqual(r.repetidasPorTramo, [0, 0, 0, 3]);
+  assert.deepEqual(r.repetidasPorTramo, [0, 0, 0, 3, 0, 0, 0, 0]);
   assert.equal(r.compartido, 1);
   assert.equal(r.clasificadas, 5);
   assert.equal(r.pctNuevas, 40);
@@ -154,6 +155,31 @@ await prueba('repartir: suma las formas de cada reclutador, aparta las ignoradas
   const sinNada = repartir(datosA, 'todo', new Map());
   assert.equal(sinNada.porReclutador.size, 0);
   assert.equal(sinNada.sinAsignar.claves.length, 5);
+});
+
+await prueba('resumenDe: «no elegibles» sale de las respuestas sin contacto compartido, «entraron» del total y «no elegibles que entraron» de las que entraron', () => {
+  const r = resumenDe(c(10, 4, 2, 1, 1, 0, 2, 3, 5, 2));
+  assert.equal(r.evaluables, 8);
+  assert.equal(r.avisos, 3);
+  assert.equal(r.pctAvisos, 37.5);
+  assert.equal(r.entraron, 5);
+  assert.equal(r.pctEntraron, 50);
+  assert.equal(r.avisosQueEntraron, 2);
+  assert.equal(r.pctAvisosQueEntraron, 40);
+  const vacio = resumenDe(conteoCero());
+  assert.deepEqual([vacio.pctAvisos, vacio.pctEntraron, vacio.pctAvisosQueEntraron], [null, null, null]);
+  assert.equal(resumenDe([5, 3, 1, 1, 0, 0, 0]).entraron, 0, 'un conteo de la versión 1 (7 números): lo que falta cuenta cero');
+});
+await prueba('repartir: suma también los no elegibles y los que entraron', () => {
+  const datosB: DatosReclutadores = {
+    ...datosA,
+    escrituras: [
+      { clave: 'a', nombre: 'A', formas: [['A', 1]], c: periodos(c(4, 2, 1, 1, 0, 0, 0, 2, 3, 1)) },
+      { clave: 'b', nombre: 'B', formas: [['B', 1]], c: periodos(c(6, 3, 2, 0, 0, 0, 1, 1, 4, 1)) },
+    ],
+  };
+  const r = repartir(datosB, 'todo', new Map<string, Asignacion>([['a', { reclutadorId: 'R1', ignorar: false }], ['b', { reclutadorId: 'R1', ignorar: false }]]));
+  assert.deepEqual(r.porReclutador.get('R1')!.conteo, c(10, 5, 3, 1, 0, 0, 1, 3, 7, 2));
 });
 
 // ── contar nuevas y repetidas ────────────────────────────────────────────────
@@ -240,8 +266,9 @@ await prueba('contar: los periodos suman solo lo que cae en ellos (12 meses, 6 m
   assert.deepEqual(lalo.c.anio, c(1, 1, 0, 0, 0, 0, 0));
 });
 await prueba('contar: en cada forma y periodo el total es la suma de sus partes', () => {
-  for (const e of calculo.escrituras) for (const p of ['12m', '6m', 'anio', 'todo'] as Periodo[]) assert.equal(e.c[p][0], e.c[p].slice(1).reduce((s, v) => s + v, 0), `${e.clave} ${p}`);
-  for (const p of ['12m', '6m', 'anio', 'todo'] as Periodo[]) assert.equal(calculo.sinNombre[p][0], calculo.sinNombre[p].slice(1).reduce((s, v) => s + v, 0), `sin nombre ${p}`);
+  const partes = (x: Conteo) => { const r = resumenDe(x); return r.nuevas + r.repetidas + r.compartido; };
+  for (const e of calculo.escrituras) for (const p of ['12m', '6m', 'anio', 'todo'] as Periodo[]) assert.equal(e.c[p][0], partes(e.c[p]), `${e.clave} ${p}`);
+  for (const p of ['12m', '6m', 'anio', 'todo'] as Periodo[]) assert.equal(calculo.sinNombre[p][0], partes(calculo.sinNombre[p]), `sin nombre ${p}`);
 });
 await prueba('contar: ordena de más a menos respuestas y guarda la forma más común tal como la escribieron', () => {
   const totales = calculo.escrituras.map((e) => e.c.todo[0]);
@@ -252,6 +279,171 @@ await prueba('contar: sin filas no hay nada que contar', () => {
   const vacio = calcularReclutadores({ activeRows: [], projectMap, globalClusters: new Map() }, new Map(), HOY);
   assert.deepEqual(vacio.escrituras, []);
   assert.deepEqual(vacio.sinNombre.todo, conteoCero());
+});
+
+// ── repetidas con 1 a 8 o más proyectos antes ────────────────────────────────
+await prueba('los 8 tramos: cada uno tiene su lugar en el conteo, sin pisar al total, nuevas, contacto compartido ni elegibilidad', () => {
+  assert.equal(TRAMOS_REPETIDAS.length, 8);
+  assert.equal(POSICION_TRAMO.length, 8);
+  assert.equal(new Set(POSICION_TRAMO).size, 8);
+  assert.ok(POSICION_TRAMO.every((p) => p < TAMANO_CONTEO && ![0, 1, 6, 7, 8, 9].includes(p)));
+  assert.deepEqual(POSICION_TRAMO.slice(0, 4), [2, 3, 4, 5], 'los de 1 a 4 siguen donde siempre, para leer lo ya guardado');
+});
+await prueba('resumenDe: reparte las repetidas en los 8 tramos y las suma todas', () => {
+  const r = resumenDe(c(30, 6, 1, 2, 3, 4, 2, 0, 0, 0, 5, 3, 2, 2));
+  assert.deepEqual(r.repetidasPorTramo, [1, 2, 3, 4, 5, 3, 2, 2]);
+  assert.equal(r.repetidas, 22);
+  assert.equal(r.clasificadas, 28);
+  assert.equal(r.compartido, 2);
+  assert.equal(r.total, r.nuevas + r.repetidas + r.compartido);
+});
+await prueba('repartir: suma también los tramos de 5 a 8 o más', () => {
+  const datos: DatosReclutadores = {
+    version: 2, hoy: '2026-10-20', sinFecha: 0, contactosCompartidos: 0, sinNombre: periodos(conteoCero()),
+    escrituras: [
+      { clave: 'a', nombre: 'A', formas: [['A', 1]], c: periodos(c(6, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 1)) },
+      { clave: 'b', nombre: 'B', formas: [['B', 1]], c: periodos(c(4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 2)) },
+    ],
+  };
+  const r = repartir(datos, 'todo', new Map<string, Asignacion>([['a', { reclutadorId: 'R1', ignorar: false }], ['b', { reclutadorId: 'R1', ignorar: false }]]));
+  assert.deepEqual(r.porReclutador.get('R1')!.conteo, c(10, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3));
+  assert.deepEqual(resumenDe(r.porReclutador.get('R1')!.conteo).repetidasPorTramo, [0, 0, 0, 0, 3, 1, 2, 3]);
+});
+
+// Otro juego de casos: una persona con respuestas en 10 proyectos distintos, para llegar a «8 o más».
+const PROYECTOS3: Record<string, string> = {
+  T01: '2024-01-10', T02: '2024-03-10', T03: '2024-05-10', T04: '2024-07-10', T05: '2024-09-10', T06: '2024-11-10', T07: '2025-01-10', T08: '2025-03-10', T09: '2025-05-10', T10: '2025-07-10',
+};
+const projectMap3 = new Map(Object.entries(PROYECTOS3).map(([k3, v]) => [k3, { client: 'Cliente Alfa', startDate: v }]));
+const armar3 = (filas: IdentityRow[]) => {
+  const globalClusters = buildIdentityClusters(filas, { mode: 'strict' });
+  const rowToGlobalCluster = new Map<string, string>();
+  for (const [cid, cl] of globalClusters) for (const id of cl.rowIds) rowToGlobalCluster.set(id, cid);
+  return { activeRows: filas, projectMap: projectMap3, globalClusters, rowToGlobalCluster };
+};
+const persona3 = (letra: string, n: number) => ({ email: `${letra}3@ejemplo.test`, phone: `55000030${String(n).padStart(2, '0')}`, participantName: `Persona ${letra.toUpperCase()}3` });
+await prueba('contar: con 10 proyectos distintos llega a cada tramo, y del 8.º en adelante todo cae en «8 o más»', () => {
+  const V = persona3('v', 1);
+  const filasV: IdentityRow[] = Object.keys(PROYECTOS3).map((p, i) => ({ id: `v${i + 1}`, ...V, projectCode: p, boardName: 'Tablero', sourceForm: `Filtro|r-v${i + 1}` }));
+  const calc = calcularReclutadores(armar3(filasV), new Map(filasV.map((f) => [f.id, 'Wanda'])), HOY);
+  const w = calc.escrituras.find((e) => e.clave === 'wanda')!.c.todo;
+  assert.deepEqual(w, c(10, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 2), 'T01 nueva; T02 a T10 con 1, 2, 3, 4, 5, 6, 7, 8 y 9 proyectos antes (8 y 9 van juntos en «8 o más»)');
+  assert.deepEqual(resumenDe(w).repetidasPorTramo, [1, 1, 1, 1, 1, 1, 1, 2]);
+});
+await prueba('contar: el tramo cuenta proyectos anteriores distintos, no respuestas: tres respuestas en el mismo proyecto son un solo proyecto antes', () => {
+  const X = persona3('x', 2);
+  const filasX: IdentityRow[] = [
+    { id: 'x1', ...X, projectCode: 'T01', boardName: 'Tablero', sourceForm: 'Filtro|r-x1' }, { id: 'x2', ...X, projectCode: 'T01', boardName: 'Tablero', sourceForm: 'Filtro|r-x2' },
+    { id: 'x3', ...X, projectCode: 'T01', boardName: 'Tablero', sourceForm: 'Filtro|r-x3' }, { id: 'x4', ...X, projectCode: 'T02', boardName: 'Tablero', sourceForm: 'Filtro|r-x4' },
+  ];
+  const calc = calcularReclutadores(armar3(filasX), new Map(filasX.map((f) => [f.id, 'Ximena Prueba'])), HOY);
+  assert.deepEqual(calc.escrituras.find((e) => e.clave === 'ximena prueba')!.c.todo, c(4, 3, 1));
+});
+
+// ── no elegibles y entraron a un grupo ───────────────────────────────────────
+// Otro juego de casos, con clientes y con estatus. «Hoy» es el mismo.
+const PROYECTOS2: Record<string, { cliente: string; inicio?: string }> = {
+  Q1: { cliente: 'Cliente Alfa', inicio: '2025-02-01' }, Q2: { cliente: 'Cliente Alfa', inicio: '2025-08-01' },
+  Q3: { cliente: 'Cliente Beta', inicio: '2026-03-01' }, Q4: { cliente: 'Cliente Beta', inicio: '2026-09-01' },
+  Q5: { cliente: 'Cliente Gama', inicio: '2026-09-15' }, Q6: { cliente: 'Cliente Alfa', inicio: '2026-10-01' },
+  SINF: { cliente: 'Cliente Alfa' },
+};
+const projectMap2 = new Map(Object.entries(PROYECTOS2).map(([k2, v]) => [k2, { client: v.cliente, ...(v.inicio ? { startDate: v.inicio } : {}) }]));
+let n2 = 0;
+const persona2 = (letra: string) => { n2++; return { email: `${letra}2@ejemplo.test`, phone: `55000020${String(n2).padStart(2, '0')}`, participantName: `Persona ${letra.toUpperCase()}2` }; };
+const filas2: IdentityRow[] = [];
+const nombres2 = new Map<string, string>();
+const fila2 = (id: string, p: ReturnType<typeof persona2>, proyecto: string, respuesta: string, nombre?: string, status?: string, group?: string) => {
+  filas2.push({ id, ...p, projectCode: proyecto, boardName: 'Tablero', sourceForm: `Filtro|${respuesta}`, ...(status !== undefined ? { status } : {}), ...(group !== undefined ? { group } : {}) });
+  if (nombre !== undefined) nombres2.set(id, nombre);
+};
+// K: participó en Q1 y vuelve a llenar en Q2 con el mismo cliente → la segunda es no elegible; no entró.
+const K = persona2('k'); fila2('k1', K, 'Q1', 'r-k1', 'Rosa', 'Asistió'); fila2('k2', K, 'Q2', 'r-k2', 'Rosa', 'Pendiente');
+// L: participó en Q4 (Cliente Beta) y llena en Q5 (Cliente Gama) dos semanas después: otro cliente pero en los 6 meses anteriores → no elegible; entró.
+const L = persona2('l'); fila2('l1', L, 'Q4', 'r-l1', 'Sara', 'Asistió'); fila2('l2', L, 'Q5', 'r-l2', 'Sara', 'Asistió');
+// M: participó en Q1 (Cliente Alfa) y llena en Q4 (Cliente Beta) año y medio después: ni el mismo cliente ni los 6 meses → elegible.
+const M = persona2('m'); fila2('m1', M, 'Q1', 'r-m1', 'Tomas', 'Asistió'); fila2('m2', M, 'Q4', 'r-m2', 'Tomas', 'Asistió');
+// N: solo estuvo registrada, nunca participó → no hay aviso aunque sea el mismo cliente.
+const N = persona2('n'); fila2('n1', N, 'Q1', 'r-n1', 'Uriel', 'Pendiente'); fila2('n2', N, 'Q2', 'r-n2', 'Uriel', 'Pendiente');
+// O: en un grupo con el estatus vacío → cuenta como que entró.
+const O = persona2('o'); fila2('o1', O, 'Q1', 'r-o1', 'Vera', '', 'Grupo 1');
+// P: la MISMA respuesta en dos proyectos; solo en la copia de Q2 asistió → la respuesta entró; la copia posterior no cuenta como historial de la primera.
+const P = persona2('p'); fila2('p1', P, 'Q1', 'r-p', 'Wendy', 'Pendiente'); fila2('p2', P, 'Q2', 'r-p', undefined, 'Asistió');
+// R: un correo y teléfono compartidos con 5 respuestas: no se les mide la elegibilidad, pero lo de entrar a un grupo sí.
+const R = persona2('r');
+const nombresR = ['Uno Dos', 'Tres Cuatro', 'Cinco Seis', 'Uno Dos', 'Tres Cuatro'];
+(['Q1', 'Q2', 'Q3', 'Q4', 'Q6'] as const).forEach((proyecto, i) => fila2(`r${i + 1}`, { ...R, participantName: nombresR[i] }, proyecto, `r-r${i + 1}`, 'Ximena', i === 0 || i === 3 ? 'Asistió' : 'Pendiente'));
+// S: participó en un proyecto SIN fecha y llena después en Q4: sin fecha cuenta como reciente (igual que en Metas por área); la del proyecto sin fecha no se puede ubicar.
+const S = persona2('s'); fila2('s1', S, 'SINF', 'r-s1', 'Yolanda', 'Asistió'); fila2('s2', S, 'Q4', 'r-s2', 'Yolanda', 'Asistió');
+// T: el proyecto que viene después no cuenta: la primera respuesta no es no elegible aunque en Q6 sí participó.
+const T = persona2('t'); fila2('t1', T, 'Q2', 'r-t1', 'Zoe', 'Pendiente'); fila2('t2', T, 'Q6', 'r-t2', 'Zoe', 'Asistió');
+
+const armar = (filas: IdentityRow[]) => {
+  const globalClusters = buildIdentityClusters(filas, { mode: 'strict' });
+  const rowToGlobalCluster = new Map<string, string>();
+  for (const [cid, cl] of globalClusters) for (const id of cl.rowIds) rowToGlobalCluster.set(id, cid);
+  return { activeRows: filas, projectMap: projectMap2, globalClusters, rowToGlobalCluster };
+};
+const calculo2 = calcularReclutadores(armar(filas2), nombres2, HOY);
+const esc2 = (clave: string) => calculo2.escrituras.find((e) => e.clave === clave)!.c.todo;
+
+await prueba('elegibilidad: con el mismo cliente o en los 6 meses anteriores es no elegible; con otro cliente y hace tiempo, no', () => {
+  assert.deepEqual(esc2('rosa'), c(2, 1, 1, 0, 0, 0, 0, 1, 1, 0), 'K: la segunda es no elegible y no entró; la primera entró');
+  assert.deepEqual(esc2('sara'), c(2, 1, 1, 0, 0, 0, 0, 1, 2, 1), 'L: la segunda es no elegible (reciente) y entró');
+  assert.deepEqual(esc2('tomas'), c(2, 1, 1, 0, 0, 0, 0, 0, 2, 0), 'M: hace más de 6 meses y con otro cliente: elegible');
+});
+await prueba('elegibilidad: solo cuenta haber participado, no haber estado registrada; un proyecto posterior no cuenta', () => {
+  assert.deepEqual(esc2('uriel'), c(2, 1, 1, 0, 0, 0, 0, 0, 0, 0), 'N: nunca participó');
+  assert.deepEqual(esc2('zoe'), c(2, 1, 1, 0, 0, 0, 0, 0, 1, 0), 'T: lo que viene después no hace no elegible a la primera');
+});
+await prueba('entrar a un grupo: asistir, o estar en un grupo con estatus vacío; en una respuesta copiada basta con una copia', () => {
+  assert.deepEqual(esc2('vera'), c(1, 1, 0, 0, 0, 0, 0, 0, 1, 0));
+  assert.deepEqual(esc2('wendy'), c(1, 1, 0, 0, 0, 0, 0, 0, 1, 0), 'P: una respuesta, dos tableros, entró en uno');
+});
+await prueba('contacto compartido: no se mide la elegibilidad, pero sí cuántas entraron a un grupo', () => {
+  assert.deepEqual(esc2('ximena'), c(5, 0, 0, 0, 0, 0, 5, 0, 2, 0));
+});
+await prueba('elegibilidad: un proyecto previo sin fecha cuenta como reciente (igual que en Metas por área), y la respuesta de ese proyecto no se ubica', () => {
+  assert.deepEqual(esc2('yolanda'), c(1, 1, 0, 0, 0, 0, 0, 1, 1, 1));
+  assert.equal(calculo2.sinFecha, 1);
+  assert.equal(calculo2.version, 2);
+});
+await prueba('eraNoElegible: la misma regla de los íconos, contra un proyecto en concreto', () => {
+  const deK = filas2.filter((f) => f.email === K.email);
+  assert.equal(eraNoElegible(deK, 'Q2', projectMap2), true);
+  assert.equal(eraNoElegible(deK, 'Q1', projectMap2), false, 'en Q1 todavía no había participado');
+  assert.equal(eraNoElegible(deK, 'SINF', projectMap2), false, 'sin fecha de inicio no hay con qué medir');
+  assert.equal(eraNoElegible([], 'Q2', projectMap2), false);
+});
+await prueba('elegibilidad: coincide con Metas por área (mismos que entraron y mismos no elegibles que entraron)', () => {
+  // Sin el contacto compartido (Metas por área sí le mide el aviso a esa «persona» y este conteo no), con una respuesta por persona y proyecto.
+  const sinR = filas2.filter((f) => f.email !== R.email);
+  const metas = calcularReclutamiento(armar(sinR));
+  const mio = calcularReclutadores(armar(sinR), nombres2, HOY);
+  const suma = (i: number) => mio.escrituras.reduce((s, e) => s + e.c.todo[i], 0) + mio.sinNombre.todo[i];
+  assert.equal(suma(8), metas.proyectos.reduce((s, p) => s + p.participaron, 0), 'entraron');
+  assert.equal(suma(9), metas.proyectos.reduce((s, p) => s + p.noElegibles, 0), 'no elegibles que entraron');
+  assert.equal(suma(8), 9);
+  assert.equal(suma(9), 2);
+});
+await prueba('en cada forma y periodo: los que entraron siendo no elegibles no pasan de los que entraron, y estos ni los no elegibles pasan del total', () => {
+  for (const e of calculo2.escrituras) for (const p of ['12m', '6m', 'anio', 'todo'] as Periodo[]) {
+    const x = e.c[p];
+    assert.ok(x[9] <= x[8] && x[8] <= x[0] && x[7] <= x[0], `${e.clave} ${p}`);
+  }
+});
+await prueba('entrar siendo no elegible se mide en el proyecto donde entró: una respuesta elegible al recibirse puede entrar en otro proyecto ya siendo no elegible', () => {
+  // U: la misma respuesta en Q1 y Q2 (mismo cliente), asistió a los dos. Al recibirse (Q1) era elegible; al entrar a Q2 ya había participado en Q1 con el mismo cliente.
+  const U = persona2('u');
+  const filasU: IdentityRow[] = [
+    { id: 'u1', ...U, projectCode: 'Q1', boardName: 'Tablero', sourceForm: 'Filtro|r-u', status: 'Asistió' },
+    { id: 'u2', ...U, projectCode: 'Q2', boardName: 'Tablero', sourceForm: 'Filtro|r-u', status: 'Asistió' },
+  ];
+  const calc = calcularReclutadores(armar(filasU), new Map([['u1', 'Ulises']]), HOY);
+  assert.deepEqual(calc.escrituras.find((e) => e.clave === 'ulises')!.c.todo, c(1, 1, 0, 0, 0, 0, 0, 0, 1, 1), 'no elegible al recibirse: 0; entró: 1; entró siendo no elegible: 1');
+  // Metas por área cuenta las dos entradas (Q1 y Q2) y la de Q2 como no elegible que entró.
+  const metas = calcularReclutamiento(armar(filasU));
+  assert.equal(metas.proyectos.reduce((s, p) => s + p.noElegibles, 0), 1);
 });
 
 // ── contra una base en memoria con el esquema real ───────────────────────────
@@ -395,31 +587,54 @@ await prueba('borrar: sus formas de escribir el nombre quedan sin asignar y las 
   await falla(() => deleteReclutador.run({ id: idLalo }, SERGIO) as Promise<unknown>, /ya no existe/);
 });
 
+await prueba('un cálculo guardado de la versión 1 (7 números por conteo) se sigue leyendo, rellenado con ceros, y se sabe que no trae elegibilidad', async () => {
+  const siete = (total: number, nuevas: number): number[] => [total, nuevas, 0, 0, 0, 0, 0];
+  const porPeriodo = (t: number, nn: number) => ({ '12m': siete(t, nn), '6m': siete(t, nn), anio: siete(t, nn), todo: siete(t, nn) });
+  const viejo = { version: 1, hoy: '2026-10-20', escrituras: [{ clave: 'ana', nombre: 'Ana', formas: [['Ana', 3]], c: porPeriodo(3, 3) }], sinNombre: porPeriodo(0, 0), sinFecha: 0, contactosCompartidos: 0 };
+  await pg.query(`insert into indicadores_calculos (area, calculado_por, datos) values ('reclutadores', 'prueba', $1::jsonb) on conflict (area) do update set datos = excluded.datos`, [JSON.stringify(viejo)]);
+  const r = await estado();
+  assert.equal(r.datos.version, 1);
+  assert.deepEqual(r.datos.escrituras[0].c.todo, c(3, 3));
+  assert.equal(r.datos.sinNombre.todo.length, TAMANO_CONTEO);
+  assert.equal(traeElegibilidad(r.datos), false);
+});
+await prueba('un cálculo guardado con 10 números por conteo (el primer borrador de la versión 2) también se rellena con ceros hasta los 14, sin mover nada', async () => {
+  const diez = [10, 4, 2, 1, 1, 0, 2, 3, 5, 2];
+  const porPeriodo = { '12m': diez, '6m': diez, anio: diez, todo: diez };
+  const guardado = { version: 2, hoy: '2026-10-20', escrituras: [{ clave: 'ana', nombre: 'Ana', formas: [['Ana', 10]], c: porPeriodo }], sinNombre: porPeriodo, sinFecha: 0, contactosCompartidos: 0 };
+  await pg.query(`update indicadores_calculos set datos = $1::jsonb where area = 'reclutadores'`, [JSON.stringify(guardado)]);
+  const r = await estado();
+  assert.deepEqual(r.datos.escrituras[0].c.todo, [...diez, 0, 0, 0, 0]);
+  assert.deepEqual(resumenDe(r.datos.escrituras[0].c.todo).repetidasPorTramo, [2, 1, 1, 0, 0, 0, 0, 0]);
+});
+
 await prueba('calcular de punta a punta: lee el nombre de las filas, cuenta, guarda y avisa el avance; la pantalla lo recibe junto con los reclutadores', async () => {
   await pg.exec(`insert into projects (project_code, client, start_date) values ('Q1', 'Cliente Alfa', '2025-02-01'), ('Q2', 'Cliente Alfa', '2025-08-01')`);
   const tb = await tablero('Tablero de prueba'); const col = await columna(tb, 'NR');
-  const insertar = (proyecto: string, nombre: string, correo: string, tel: string, respuesta: string, nr: string) =>
+  const insertar = (proyecto: string, nombre: string, correo: string, tel: string, respuesta: string, nr: string, status: string | null = null) =>
     pg.query(
-      `insert into recruitment_rows (board_id, project_code, board_name, participant_name, email, phone, source_form, cell_data) values ($1, $2, 'Tablero de prueba', $3, $4, $5, $6, $7)`,
-      [tb, proyecto, nombre, correo, tel, `Filtro|${respuesta}`, texto(col, nr)],
+      `insert into recruitment_rows (board_id, project_code, board_name, participant_name, email, phone, source_form, cell_data, status) values ($1, $2, 'Tablero de prueba', $3, $4, $5, $6, $7, $8)`,
+      [tb, proyecto, nombre, correo, tel, `Filtro|${respuesta}`, texto(col, nr), status],
     );
   await insertar('Q1', 'Ana Prueba', 'ana@ejemplo.test', '5500002001', 'resp-1', 'Mateo');
-  await insertar('Q2', 'Ana Prueba', 'ana@ejemplo.test', '5500002001', 'resp-2', 'mateo medina');
+  await insertar('Q2', 'Ana Prueba', 'ana@ejemplo.test', '5500002001', 'resp-2', 'mateo medina', 'Asistió');
   await insertar('Q2', 'Beto Prueba', 'beto@ejemplo.test', '5500002002', 'resp-3', 'Lalo');
   const chunks: any[] = [];
   const r = (await calcularReclutadoresEstadistica.run({}, SERGIO, (ch) => chunks.push(ch))) as any;
   assert.ok(chunks.length >= 2, 'transmite el avance');
   assert.ok(chunks.some((ch) => /Leyendo/.test(ch.paso)) && chunks.some((ch) => /Contando/.test(ch.paso)));
   const e = (clave: string) => r.datos.escrituras.find((x: any) => x.clave === clave);
-  assert.deepEqual(e('mateo').c.todo, [1, 1, 0, 0, 0, 0, 0], 'la primera respuesta de Ana: nueva');
-  assert.deepEqual(e('mateo medina').c.todo, [1, 0, 1, 0, 0, 0, 0], 'la segunda: repetida con 1 proyecto antes');
-  assert.deepEqual(e('lalo').c.todo, [1, 1, 0, 0, 0, 0, 0]);
+  assert.deepEqual(e('mateo').c.todo, c(1, 1), 'la primera respuesta de Ana: nueva');
+  assert.deepEqual(e('mateo medina').c.todo, c(1, 0, 1, 0, 0, 0, 0, 0, 1, 0), 'la segunda: repetida con 1 proyecto antes, y entró a un grupo (asistió)');
+  assert.deepEqual(e('lalo').c.todo, c(1, 1));
+  assert.equal(r.datos.version, 2);
   assert.ok(r.calculadoEn);
   assert.ok(r.reclutadores.some((x: any) => x.nombre === 'Mateo Medina'), 'trae los reclutadores ya juntados');
   assert.ok(r.alias.length > 0);
   const leido = await estado();
   assert.equal(leido.calculadoEn, r.calculadoEn);
   assert.deepEqual(leido.datos.escrituras.map((x: any) => x.clave), r.datos.escrituras.map((x: any) => x.clave));
+  assert.equal(traeElegibilidad(leido.datos), true, 'al actualizar se reemplaza el cálculo de la versión 1');
 });
 
 await prueba('calcular dos veces a la vez: la segunda se cuelga de la primera', async () => {

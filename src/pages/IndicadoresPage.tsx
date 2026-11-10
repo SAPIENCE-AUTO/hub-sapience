@@ -120,7 +120,7 @@ export default function IndicadoresPage() {
         <div>
           <h1 className="text-[22px] font-bold leading-tight tracking-tight">Metas por área</h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {vista === 'reclutadores' ? 'Quién trajo a cada participante, y cuántos eran nuevos o repetidos' : cargando ? 'Cargando…' : calculadoEn ? `Calculado el ${fmtInstante(calculadoEn)}` : 'Todavía sin calcular'}
+            {vista === 'reclutadores' ? 'Quién trajo cada respuesta a los filtros, y cuántas eran de gente nueva o repetida (se cuentan respuestas, no asistentes)' : cargando ? 'Cargando…' : calculadoEn ? `Calculado el ${fmtInstante(calculadoEn)}` : 'Todavía sin calcular'}
           </p>
         </div>
         {vista === 'resumen' && datos && (
