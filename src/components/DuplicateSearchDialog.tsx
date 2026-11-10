@@ -10,6 +10,13 @@ import { searchParticipantHistory, SearchParticipantHistoryOutputType } from 'zi
 
 type Result = SearchParticipantHistoryOutputType['results'][0];
 type HistoryEntry = Result['history'][0];
+type Lugar = { projectCode: string; boardName?: string };
+
+/** «PROYECTO (Tablero), PROYECTO (Tablero) y 3 más»: los tableros donde está copiada la misma respuesta de un formulario. */
+function listaDeLugares(lugares: Lugar[], max = 6): string {
+  const mostrados = lugares.slice(0, max).map(l => (l.boardName ? `${l.projectCode} (${l.boardName})` : l.projectCode)).join(', ');
+  return lugares.length > max ? `${mostrados} y ${lugares.length - max} más` : mostrados;
+}
 
 interface Props {
   open: boolean;
@@ -112,6 +119,11 @@ function EntryCard({ h }: { h: HistoryEntry }) {
               </span>
             )}
           </div>
+          {(((h as any).tambienEn?.length ?? 0) > 0) && (
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              Esta misma respuesta también está en: {listaDeLugares((h as any).tambienEn)}.
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -232,6 +244,14 @@ export function DuplicateSearchDialog({ open, onOpenChange, projectCode, boardNa
                       <div className="mb-2">
                         <MatchedByBadges matchedBy={r.matchedBy} />
                       </div>
+                    )}
+
+                    {/* La misma respuesta copiada a otros tableros (un formulario vinculado a varios): no es haber llenado otro filtro */}
+                    {(((r as any).mismaRespuestaEn?.length ?? 0) > 0) && (
+                      <p className="mb-2 rounded-md bg-muted/60 px-2.5 py-1.5 text-[10px] text-muted-foreground">
+                        <span className="font-semibold text-foreground/70">Esta misma respuesta también está en otros tableros.</span>{' '}
+                        El mismo formulario está vinculado a ellos, así que no cuenta como haber llenado otro filtro: {listaDeLugares((r as any).mismaRespuestaEn)}.
+                      </p>
                     )}
 
                     {/* Same project section */}

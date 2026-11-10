@@ -1762,6 +1762,11 @@ function HistoryEntryCard({ h, isCurrentBoard }: { h: HistoryEntry; isCurrentBoa
               </span>
             )}
           </div>
+          {(((h as any).tambienEn?.length ?? 0) > 0) && (
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              Esta misma respuesta también está en: {listaDeLugares((h as any).tambienEn)}.
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1798,6 +1803,8 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
   const hasRecentParticip  = results[0]?.primaryBadge === 'recent';
   const hasOldParticip     = results[0]?.primaryBadge === 'old';
   const totalProjects = new Set(allEntries.filter(h => !h.sameBoard).map(h => h.projectCode)).size;
+  // Tableros de otros proyectos con una copia de la misma respuesta que ya está en este tablero (el servidor no los cuenta como apariciones).
+  const copiasDeLaRespuesta = results.flatMap(r => ((r as any).mismaRespuestaEn ?? []) as { projectCode: string; boardName?: string }[]);
 
   // Identity — use the first result that matches
   const primaryResult = results[0];
@@ -1887,6 +1894,14 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
                 </div>
               </div>
 
+              {/* ── La misma respuesta copiada a otros tableros (un formulario vinculado a varios): no es haber llenado otro filtro ── */}
+              {copiasDeLaRespuesta.length > 0 && (
+                <div className="rounded-md bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-foreground/70">Esta misma respuesta también está en otros tableros.</span>{' '}
+                  El mismo formulario está vinculado a ellos, así que no cuenta como haber llenado otro filtro: {listaDeLugares(copiasDeLaRespuesta)}.
+                </div>
+              )}
+
               {/* ── Section: Este tablero (current board) ── */}
               {currentBoardEntries.length > 0 && (
                 <HistorySection
@@ -1943,6 +1958,12 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
 function MatchedByBadgesInline({ matchedBy }: { matchedBy: string[] }) {
   const labels: Record<string, string> = { email: 'email', name: 'nombre', phone: 'teléfono' };
   return <span className="text-muted-foreground">{matchedBy.map(k => labels[k] ?? k).join(', ')}</span>;
+}
+
+/** «PROYECTO (Tablero), PROYECTO (Tablero) y 3 más», para la nota de la misma respuesta copiada a otros tableros. */
+function listaDeLugares(lugares: { projectCode: string; boardName?: string }[], max = 6): string {
+  const mostrados = lugares.slice(0, max).map(l => (l.boardName ? `${l.projectCode} (${l.boardName})` : l.projectCode)).join(', ');
+  return lugares.length > max ? `${mostrados} y ${lugares.length - max} más` : mostrados;
 }
 
 function HistorySection({ label, dotColor, entries, isCurrentBoard }: {

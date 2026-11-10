@@ -5,6 +5,7 @@ import {
   Signal, IdentityRow, participoEnProyecto,
 } from '../lib/duplicateIdentity';
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
+import { respuestaDe, respuestasEnTablero } from '../lib/respuestaFillout';
 
 const normClient = (s?: string) => (s ?? '').toLowerCase().trim();
 
@@ -103,6 +104,10 @@ export default createEndpoint({
             .map(id => rowById.get(id))
             .filter((r): r is IdentityRow => !!r);
 
+          // Las respuestas de Fillout que esta persona ya tiene en ESTE tablero: si el mismo formulario está vinculado a varios tableros, su
+          // respuesta se copia a cada uno, y esas copias no son «otros formularios» (ver respuestaFillout.ts).
+          const respuestasAqui = respuestasEnTablero(peerRows, projectCode, boardName);
+
           for (const peer of peerRows) {
             if (!peer.projectCode) continue;
 
@@ -117,6 +122,10 @@ export default createEndpoint({
             if (peerStartDate && peerStartDate > referenceDate) continue;
 
             const rawParticipated = participoEnProyecto(peer);
+            // Copia de la misma respuesta en otro proyecto, sin haber participado ahí: no es haber llenado otro filtro, no suma señal.
+            // Si participó con esa copia, sí es historial real y sigue contando como siempre.
+            const respuestaPeer = respuestaDe(peer);
+            if (!rawParticipated && respuestaPeer && respuestasAqui.has(respuestaPeer)) continue;
             const isSameClient = !!currentClientNorm && !!peerProjData?.client && normClient(peerProjData.client) === currentClientNorm;
             const isRecent = !peerStartDate || peerStartDate > sixMonthsAgo;
 

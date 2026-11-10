@@ -126,5 +126,110 @@ await prueba('toda persona con alerta tiene al menos uno de los dos motivos, y v
   }
 });
 
+// ── Un mismo formulario de Fillout vinculado a varios tableros copia cada respuesta a todos ellos: esas copias son UNA vez que la persona llenó el filtro ──
+// (no «otros formularios»). Se reconocen por el id de la respuesta (lo que va después de la barra en source_form). Si participó con una copia, sigue siendo historial real.
+const historial = (await import('../../src/api/searchParticipantHistory')).default;
+const filaConRespuesta = (clave: string, proyectoCodigo: string, tablero: string, estatus: string, origen: string | null, grupo: string | null = null) =>
+  id(`insert into recruitment_rows (project_code, board_name, participant_name, email, phone, status, "group", source_form) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+    [proyectoCodigo, tablero, personas[clave].nombre, personas[clave].email, personas[clave].telefono, estatus, grupo, origen]);
+
+// q1: llenó UNA vez «Filtro Compartido» (respuesta r-1); el formulario está vinculado a su tablero y a otros dos proyectos, sin participar en ninguno.
+persona('q1', 'Persona Diez');
+const q1 = await filaConRespuesta('q1', 'ALF-ACTUAL', 'Tablero', 'Pendiente', 'Filtro Compartido|r-1');
+await filaConRespuesta('q1', 'BET-SEP', 'Tablero', 'Pendiente', 'Filtro Compartido|r-1');
+await filaConRespuesta('q1', 'BET-VIEJO', 'Tablero B', 'Pendiente', 'Filtro Compartido|r-1');
+// q2: la misma respuesta copiada, y con una de las copias SÍ participó (Asistió): es historial real.
+persona('q2', 'Persona Once');
+const q2 = await filaConRespuesta('q2', 'ALF-ACTUAL', 'Tablero', 'Pendiente', 'Filtro Compartido|r-2');
+await filaConRespuesta('q2', 'BET-SEP', 'Tablero', 'Asistió', 'Filtro Compartido|r-2');
+// q3: además de la respuesta copiada, llenó OTRO formulario distinto en otro proyecto: eso sí es «otros formularios».
+persona('q3', 'Persona Doce');
+const q3 = await filaConRespuesta('q3', 'ALF-ACTUAL', 'Tablero', 'Pendiente', 'Filtro Compartido|r-3');
+await filaConRespuesta('q3', 'BET-SEP', 'Tablero', 'Pendiente', 'Filtro Compartido|r-3');
+await filaConRespuesta('q3', 'BET-VIEJO', 'Tablero', 'Pendiente', 'Otro Filtro|r-3-otra');
+// q4: la copia está en otro tablero del MISMO proyecto: se sigue mostrando como siempre.
+persona('q4', 'Persona Trece');
+const q4 = await filaConRespuesta('q4', 'ALF-ACTUAL', 'Tablero', 'Pendiente', 'Filtro Compartido|r-4');
+await filaConRespuesta('q4', 'ALF-ACTUAL', 'Tablero Dos', 'Pendiente', 'Filtro Compartido|r-4');
+// q5: la fila de este tablero se capturó a mano (sin respuesta); la misma respuesta está copiada en dos tableros de otros proyectos.
+persona('q5', 'Persona Catorce');
+const q5 = await filaConRespuesta('q5', 'ALF-ACTUAL', 'Tablero', 'Pendiente', null);
+await filaConRespuesta('q5', 'BET-SEP', 'Tablero', 'Pendiente', 'Filtro Compartido|r-5');
+await filaConRespuesta('q5', 'BET-VIEJO', 'Tablero', 'Pendiente', 'Filtro Compartido|r-5');
+// q6: la misma respuesta quedó DOS veces en un mismo tablero de otro proyecto (el doble registro de una importación simultánea): sigue siendo una sola respuesta.
+persona('q6', 'Persona Quince');
+const q6 = await filaConRespuesta('q6', 'ALF-ACTUAL', 'Tablero', 'Pendiente', 'Filtro Compartido|r-6');
+await filaConRespuesta('q6', 'BET-SEP', 'Tablero', 'Pendiente', 'Filtro Compartido|r-6');
+await filaConRespuesta('q6', 'BET-SEP', 'Tablero', 'Pendiente', 'Filtro Compartido|r-6');
+
+await getGlobalIdentityData({ fresco: true });
+const r2 = (await badges.run({ projectCode: 'ALF-ACTUAL', boardName: 'Tablero' }, ctx)) as any;
+const insignia = (fila: string) => r2.badges[fila];
+const historiaDe = async (fila: string) =>
+  ((await historial.run({ seedRowId: fila, projectCode: 'ALF-ACTUAL', boardName: 'Tablero', rowId: fila, currentClient: 'Cliente Alfa' }, ctx)) as any).results[0];
+const lugar = (l: any) => `${l.projectCode}/${l.boardName}`;
+
+await prueba('la misma respuesta copiada a otros proyectos sin participar NO enciende «registrado en otro estudio» (íconos del tablero)', () => {
+  assert.deepEqual(insignia(q1).signals, [], 'sin señales');
+  assert.equal(insignia(q1).primaryBadge, null);
+  assert.equal(insignia(q1).hasHighRisk, false);
+  assert.equal(insignia(q6).primaryBadge, null, 'aunque la copia esté repetida dentro de su tablero');
+});
+await prueba('si participó con una de las copias, sigue siendo historial real: la alerta se mantiene', () => {
+  assert.equal(insignia(q2).primaryBadge, 'recent');
+  assert.equal(insignia(q2).participatedLast6Months, true);
+  assert.equal(insignia(q2).hasHighRisk, true);
+});
+await prueba('llenar OTRO formulario distinto en otro proyecto sí sigue contando como «registrado en otro estudio»', () => {
+  assert.ok(insignia(q3).signals.includes('registered_only'));
+});
+await prueba('sin un id de respuesta en este tablero no se puede saber si es copia: las otras filas cuentan como siempre', () => {
+  assert.ok(insignia(q5).signals.includes('registered_only'));
+});
+
+await prueba('historial: la persona con la respuesta copiada en dos proyectos tiene UNA sola aparición, y las copias salen de nota', async () => {
+  const h = await historiaDe(q1);
+  assert.equal(h.history.length, 1, 'solo la fila de este tablero');
+  assert.equal(h.history[0].isCurrentRow, true);
+  assert.deepEqual(h.mismaRespuestaEn.map(lugar).sort(), ['BET-SEP/Tablero', 'BET-VIEJO/Tablero B']);
+  assert.deepEqual(h.signals, []);
+  assert.equal(h.primaryBadge, null);
+});
+await prueba('historial: la copia donde sí participó se queda como entrada con su alerta, y no se lista de nota', async () => {
+  const h = await historiaDe(q2);
+  const otra = h.history.find((e: any) => e.projectCode === 'BET-SEP');
+  assert.ok(otra, 'sigue la entrada de BET-SEP');
+  assert.equal(otra.warningLevel, 'recent');
+  assert.equal(otra.participated, true);
+  assert.equal(h.mismaRespuestaEn, undefined);
+  assert.equal(h.primaryBadge, 'recent');
+});
+await prueba('historial: otro formulario distinto sigue como entrada propia; solo la copia de la respuesta de este tablero sale de nota', async () => {
+  const h = await historiaDe(q3);
+  assert.deepEqual(h.history.map((e: any) => e.projectCode).sort(), ['ALF-ACTUAL', 'BET-VIEJO']);
+  assert.deepEqual(h.mismaRespuestaEn.map(lugar), ['BET-SEP/Tablero']);
+  assert.ok(h.signals.includes('registered_only'));
+});
+await prueba('historial: una copia en otro tablero del MISMO proyecto se sigue mostrando como siempre', async () => {
+  const h = await historiaDe(q4);
+  const mismoProyecto = h.history.filter((e: any) => e.sameProject && !e.sameBoard);
+  assert.equal(mismoProyecto.length, 1);
+  assert.equal(mismoProyecto[0].boardName, 'Tablero Dos');
+  assert.equal(h.mismaRespuestaEn, undefined);
+});
+await prueba('historial: una respuesta que solo está en otros proyectos sale en UNA entrada, con los demás tableros de nota', async () => {
+  const h = await historiaDe(q5);
+  const otras = h.history.filter((e: any) => !e.sameProject);
+  assert.equal(otras.length, 1, 'una sola entrada para las dos copias');
+  assert.equal(otras[0].tambienEn.length, 1);
+  assert.equal(h.mismaRespuestaEn, undefined);
+  assert.ok(h.signals.includes('registered_only'));
+});
+await prueba('historial: la copia repetida dos veces en un mismo tablero ajeno cuenta una sola vez en la nota', async () => {
+  const h = await historiaDe(q6);
+  assert.deepEqual(h.mismaRespuestaEn.map(lugar), ['BET-SEP/Tablero']);
+  assert.equal(h.history.length, 1);
+});
+
 console.log(`\n${n - fallas}/${n} pruebas pasan`);
 process.exit(fallas ? 1 : 0);

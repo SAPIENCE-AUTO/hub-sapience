@@ -6,12 +6,16 @@ import {
 } from '../lib/duplicateIdentity';
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
 import { getInferredStartDates } from '../lib/projectStartFallback';
+import { respuestaDe, respuestasEnTablero } from '../lib/respuestaFillout';
 
 const normalizeClient = (s?: string) => (s ?? '').toLowerCase().trim();
 
 const STATUS_PRIORITY = ['Asistió', 'Confirmado', 'Contactado', 'Pendiente', 'Descartado', 'No show'];
 
 // ── History entry shape ─────────────────────────────────────────────────────
+// Un tablero (proyecto + nombre) donde está la misma respuesta de Fillout; ver respuestaFillout.ts.
+const LugarSchema = z.object({ projectCode: z.string(), boardName: z.string().optional() });
+
 const HistoryEntrySchema = z.object({
   rowId:            z.string().optional(),
   projectCode:      z.string(),
@@ -28,6 +32,8 @@ const HistoryEntrySchema = z.object({
   sameClient:       z.boolean(),
   isRecent:         z.boolean(),
   warningLevel:     z.enum(['same_client', 'recent', 'old', 'same_board']).nullable(),
+  /** Otros tableros donde está copiada esta misma respuesta de Fillout (no son otras veces que llenó el filtro). */
+  tambienEn:        z.array(LugarSchema).optional(),
 });
 
 type EntryShape = z.infer<typeof HistoryEntrySchema>;
@@ -47,6 +53,8 @@ const ResultSchema = z.object({
   identityClusterId:    z.string(),
   identityMatchReasons: z.array(z.enum(['email', 'name', 'phone'])),
   history:              z.array(HistoryEntrySchema),
+  /** Tableros de OTROS proyectos donde está copiada una respuesta que la persona ya tiene en el tablero que se está viendo: no cuentan como apariciones. */
+  mismaRespuestaEn:     z.array(LugarSchema).optional(),
 });
 
 // ── Shared: build history + signals from a set of rows ──────────────────────
@@ -78,6 +86,40 @@ function buildPersonResult(
 
   const sameBoardEntries: EntryShape[] = [];
   const crossBoardMap = new Map<string, EntryShape>();
+  const claveTablero = (row: IdentityRow) => `${row.projectCode}||${row.boardName ?? ''}`;
+
+  // Una fila de otro tablero entra al mapa por tablero; si ya había una de ese tablero se fusionan (el mejor estatus, la peor alerta).
+  const agregarCruzada = (row: IdentityRow, entry: EntryShape) => {
+    const boardKey = claveTablero(row);
+    const existing = crossBoardMap.get(boardKey);
+    if (!existing) {
+      crossBoardMap.set(boardKey, entry);
+      return;
+    }
+    const curIdx  = STATUS_PRIORITY.indexOf(row.status ?? '');
+    const prevIdx = STATUS_PRIORITY.indexOf(existing.status ?? '');
+    const betterStatus = (curIdx !== -1 && (prevIdx === -1 || curIdx < prevIdx)) ? row.status : existing.status;
+    const levelRank = (l: EntryShape['warningLevel']) =>
+      l === 'same_client' ? 4 : l === 'recent' ? 3 : l === 'old' ? 2 : l === 'same_board' ? 1 : 0;
+    const worstWarning = levelRank(entry.warningLevel) >= levelRank(existing.warningLevel)
+      ? entry.warningLevel : existing.warningLevel;
+    const finalParticipated = worstWarning === 'same_client' || worstWarning === 'recent';
+    crossBoardMap.set(boardKey, {
+      ...existing,
+      status: betterStatus,
+      group: existing.group || row.group,
+      sourceForm: existing.sourceForm || row.sourceForm,
+      participated: finalParticipated,
+      warningLevel: worstWarning,
+      sameClient: existing.sameClient || entry.sameClient,
+    });
+  };
+
+  // Un mismo formulario vinculado a varios tableros copia cada respuesta a todos ellos: esas copias son UNA vez que la persona llenó el filtro,
+  // no «otros formularios» (ver respuestaFillout.ts). Las copias en otros proyectos donde no participó se agrupan por respuesta y, más abajo,
+  // o van a la nota «misma respuesta en…» (si la persona ya tiene esa respuesta en este tablero) o quedan en una sola entrada.
+  const respuestasAqui = respuestasEnTablero(personRows, projectCode, boardName);
+  const copias = new Map<string, { row: IdentityRow; entry: EntryShape }[]>();
 
   for (const row of personRows) {
     if (!row.projectCode) continue;
@@ -124,32 +166,42 @@ function buildPersonResult(
 
     if (sameBoard) {
       sameBoardEntries.push(entry);
-    } else {
-      const boardKey = `${row.projectCode}||${row.boardName ?? ''}`;
-      const existing = crossBoardMap.get(boardKey);
-      if (!existing) {
-        crossBoardMap.set(boardKey, entry);
-      } else {
-        const curIdx  = STATUS_PRIORITY.indexOf(row.status ?? '');
-        const prevIdx = STATUS_PRIORITY.indexOf(existing.status ?? '');
-        const betterStatus = (curIdx !== -1 && (prevIdx === -1 || curIdx < prevIdx)) ? row.status : existing.status;
-        const levelRank = (l: EntryShape['warningLevel']) =>
-          l === 'same_client' ? 4 : l === 'recent' ? 3 : l === 'old' ? 2 : l === 'same_board' ? 1 : 0;
-        const worstWarning = levelRank(entry.warningLevel) >= levelRank(existing.warningLevel)
-          ? entry.warningLevel : existing.warningLevel;
-        const finalParticipated = worstWarning === 'same_client' || worstWarning === 'recent';
-        crossBoardMap.set(boardKey, {
-          ...existing,
-          status: betterStatus,
-          group: existing.group || row.group,
-          sourceForm: existing.sourceForm || row.sourceForm,
-          participated: finalParticipated,
-          warningLevel: worstWarning,
-          sameClient: existing.sameClient || entry.sameClient,
-        });
-      }
+      continue;
+    }
+
+    // Copia de una respuesta de Fillout en OTRO proyecto, sin haber participado ahí: se resuelve después del ciclo. Si participó con esa copia
+    // es historial real y entra como siempre; y las copias en otro tablero del MISMO proyecto también se muestran como siempre.
+    const respuesta = respuestaDe(row);
+    if (!sameProject && respuesta && !rawParticipated) {
+      const grupo = copias.get(respuesta);
+      if (grupo) grupo.push({ row, entry }); else copias.set(respuesta, [{ row, entry }]);
+      continue;
+    }
+    agregarCruzada(row, entry);
+  }
+
+  const lugarDe = (row: IdentityRow) => ({ projectCode: row.projectCode as string, boardName: row.boardName });
+  const sinRepetir = (filas: IdentityRow[]) => {
+    const vistos = new Set<string>();
+    return filas.filter(f => { const k = claveTablero(f); if (vistos.has(k)) return false; vistos.add(k); return true; }).map(lugarDe);
+  };
+  const mismaRespuestaFilas: IdentityRow[] = [];
+  for (const [respuesta, grupo] of copias) {
+    if (respuestasAqui.has(respuesta)) {
+      // La misma respuesta que ya tiene en este tablero: solo una nota, no cuenta como otra aparición ni como «solo registrado».
+      for (const { row } of grupo) mismaRespuestaFilas.push(row);
+      continue;
+    }
+    // Una respuesta que solo está en otros proyectos: una sola entrada (la primera) y, de nota, los demás tableros donde está.
+    const [primera, ...otras] = grupo;
+    agregarCruzada(primera.row, primera.entry);
+    const lugares = sinRepetir(otras.map(o => o.row).filter(r => claveTablero(r) !== claveTablero(primera.row)));
+    if (lugares.length > 0) {
+      const e = crossBoardMap.get(claveTablero(primera.row))!;
+      e.tambienEn = [...(e.tambienEn ?? []), ...lugares];
     }
   }
+  const mismaRespuestaEn = sinRepetir(mismaRespuestaFilas);
 
   sameBoardEntries.sort((a, b) => {
     if (a.isCurrentRow && !b.isCurrentRow) return -1;
@@ -191,6 +243,7 @@ function buildPersonResult(
     identityClusterId:    opts.clusterId,
     identityMatchReasons: opts.clusterReasons,
     history,
+    mismaRespuestaEn:     mismaRespuestaEn.length > 0 ? mismaRespuestaEn : undefined,
   };
 }
 
