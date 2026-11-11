@@ -5,7 +5,7 @@
 // Un filtro llenado es UNA respuesta (src/lib/respuestaFillout.ts): si el mismo filtro está vinculado a varios tableros, su respuesta se copia a cada uno y esas filas cuentan una sola vez.
 // Las filas sin id de respuesta (capturadas a mano, importadas de Excel) no se pueden reconocer como un filtro llenado: no cuentan, y se avisa cuántas son.
 import { isPlaceholderName, normalizeEmail, normalizeName, normalizePhone, type IdentityRow } from './duplicateIdentity';
-import { respuestaDe } from './respuestaFillout';
+import { esFilaDeTraida, respuestaDe, type MapaTraidas } from './respuestaFillout';
 
 /** Una «persona» con al menos tantas respuestas y tantos nombres distintos es, casi seguro, un correo o teléfono compartido (quien recluta en campo llena por varios). */
 export const MIN_RESPUESTAS_COMPARTIDO = 5;
@@ -44,13 +44,13 @@ function llavesDeLaFila(f: IdentityRow): { email?: string; name?: string; phone?
   return llaves;
 }
 
-export function contarFiltrosLlenados(filas: ReadonlyArray<IdentityRow>): ResumenFiltros {
+export function contarFiltrosLlenados(filas: ReadonlyArray<IdentityRow>, traidas?: MapaTraidas): ResumenFiltros {
   const respuestas = new Set<string>();
   let sinFiltro = 0;
   const nombres = new Set<string>();
   const telefonos = new Set<string>(), correos = new Set<string>(), nombresClave = new Set<string>();
   for (const f of filas) {
-    const id = respuestaDe(f);
+    const id = respuestaDe(f, traidas);
     if (id) respuestas.add(id); else sinFiltro++;
     const n = nombreDe(f);
     if (n) nombres.add(n);
@@ -95,10 +95,10 @@ export function nombreDelFiltro(sourceForm?: string | null): string | undefined 
 }
 
 /** Los filtros que llenó la persona, uno por respuesta distinta, del más reciente al más antiguo. `fechaDe` da la fecha de inicio de un proyecto. */
-export function filtrosLlenadosDe(filas: ReadonlyArray<IdentityRow>, fechaDe: (codigoProyecto: string) => string | undefined): FiltroLlenado[] {
+export function filtrosLlenadosDe(filas: ReadonlyArray<IdentityRow>, fechaDe: (codigoProyecto: string) => string | undefined, traidas?: MapaTraidas): FiltroLlenado[] {
   const grupos = new Map<string, IdentityRow[]>();
   for (const f of filas) {
-    const id = respuestaDe(f);
+    const id = respuestaDe(f, traidas);
     if (!id) continue;
     const grupo = grupos.get(id);
     if (grupo) grupo.push(f); else grupos.set(id, [f]);
@@ -106,9 +106,9 @@ export function filtrosLlenadosDe(filas: ReadonlyArray<IdentityRow>, fechaDe: (c
   const fecha = (f: IdentityRow) => { const x = fechaDe(typeof f.projectCode === 'string' ? f.projectCode : ''); return x ? String(x).slice(0, 10) : undefined; };
   const lista: FiltroLlenado[] = [];
   for (const [respuestaId, copias] of grupos) {
-    // La copia más antigua (la primera con fecha) es donde se recibió la respuesta.
+    // La copia más antigua (la primera con fecha) es donde se recibió la respuesta; si hay una traída junto con su original, manda la original.
     const ordenadas = [...copias].sort((a, b) => (fecha(a) ?? '9999').localeCompare(fecha(b) ?? '9999') || String(a.id).localeCompare(String(b.id)));
-    const origen = ordenadas[0];
+    const origen = ordenadas.find((c) => !esFilaDeTraida(c, traidas)) ?? ordenadas[0];
     const tableros = new Set(copias.map((c) => `${c.projectCode ?? ''}||${c.boardName ?? ''}`));
     lista.push({
       respuestaId,

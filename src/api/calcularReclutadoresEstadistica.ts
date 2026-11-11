@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
+import { mapaDeTraidas } from '../serverUtils/formularios/traidasMapa';
 import { exigirAccesoIndicadores } from '../serverUtils/indicadores/acceso';
 import { calcularReclutadores, leerNombresReclutador } from '../serverUtils/indicadores/reclutadores';
 import {
@@ -30,7 +31,9 @@ export default createEndpoint({
           });
           stream?.write({ paso: 'Contando respuestas nuevas y repetidas…', hechos: 0, total: 0 });
           const identidades = await getGlobalIdentityData({ fresco: true });
-          const datos = calcularReclutadores(identidades, nombres, new Date().toISOString().slice(0, 10));
+          // Una traída (persona traída de otro filtro) es la misma respuesta que su original: no cuenta como respuesta repetida más.
+          const traidas = await mapaDeTraidas(pool);
+          const datos = calcularReclutadores(identidades, nombres, new Date().toISOString().slice(0, 10), traidas);
           await guardarCalculoReclutadores(datos, quien);
           return await leerReclutadores();
         } catch (err) {

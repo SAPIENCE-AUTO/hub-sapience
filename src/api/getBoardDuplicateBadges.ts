@@ -5,6 +5,7 @@ import {
   Signal, IdentityRow, participoEnProyecto,
 } from '../lib/duplicateIdentity';
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
+import { mapaDeTraidasReciente } from '../serverUtils/formularios/traidasMapa';
 import { respuestaDe, respuestasEnTablero } from '../lib/respuestaFillout';
 import { contarFiltrosLlenados, type ResumenFiltros } from '../lib/filtrosLlenados';
 
@@ -52,6 +53,8 @@ export default createEndpoint({
     // distintas aquí; hace falta que coincidan 2 de 3 señales. Compartido con
     // searchParticipantHistory.ts (modal de historial) — ver globalIdentityCache.ts.
     const { activeRows, projectMap, globalClusters, rowToGlobalCluster } = await getGlobalIdentityData();
+    // Una traída (persona traída de un filtro anterior) es la MISMA respuesta que su original: no es otro formulario ni otro filtro llenado (ver respuestaFillout.ts).
+    const traidas = await mapaDeTraidasReciente();
 
     const currentProjData = projectMap.get(projectCode);
     // La fecha de respaldo de un proyecto sin fecha NO se usa como referencia del proyecto actual: se sigue midiendo contra hoy.
@@ -116,7 +119,7 @@ export default createEndpoint({
 
           // Las respuestas de Fillout que esta persona ya tiene en ESTE tablero: si el mismo formulario está vinculado a varios tableros, su
           // respuesta se copia a cada uno, y esas copias no son «otros formularios» (ver respuestaFillout.ts).
-          const respuestasAqui = respuestasEnTablero(peerRows, projectCode, boardName);
+          const respuestasAqui = respuestasEnTablero(peerRows, projectCode, boardName, traidas);
 
           for (const peer of peerRows) {
             if (!peer.projectCode) continue;
@@ -134,7 +137,7 @@ export default createEndpoint({
             const rawParticipated = participoEnProyecto(peer);
             // Copia de la misma respuesta en otro proyecto, sin haber participado ahí: no es haber llenado otro filtro, no suma señal.
             // Si participó con esa copia, sí es historial real y sigue contando como siempre.
-            const respuestaPeer = respuestaDe(peer);
+            const respuestaPeer = respuestaDe(peer, traidas);
             if (!rawParticipated && respuestaPeer && respuestasAqui.has(respuestaPeer)) continue;
             const isSameClient = !!currentClientNorm && !!peerProjData?.client && normClient(peerProjData.client) === currentClientNorm;
             const isRecent = !peerStartDate || peerStartDate > sixMonthsAgo;
@@ -164,7 +167,7 @@ export default createEndpoint({
         const filasDeLaPersona = globalId
           ? globalClusters.get(globalId)!.rowIds.map(id => rowById.get(id)).filter((r): r is IdentityRow => !!r)
           : [boardRow];
-        filtros = contarFiltrosLlenados(filasDeLaPersona);
+        filtros = contarFiltrosLlenados(filasDeLaPersona, traidas);
         if (globalId) filtrosCache.set(globalId, filtros);
       }
 

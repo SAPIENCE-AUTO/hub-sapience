@@ -9,6 +9,7 @@ Sergio (2026-11-10, viendo «Por reclutador»): «que a mi equipo le aparezca cu
 ## Definiciones (no cambiar sin avisar)
 
 - **Filtro llenado = una respuesta.** El id de la respuesta es lo que va después de la última barra de `source_form` (`respuestaDe` en `src/lib/respuestaFillout.ts`). Si el mismo filtro está vinculado a varios tableros, su respuesta se copia a cada uno y esas filas cuentan **una sola vez**. Contar filas sale 45 % más alto (medido el 2026-11-10: 88,580 filas con id contra 61,165 respuestas distintas). Dos respuestas distintas del mismo filtro son dos veces que lo llenó.
+- **Una traída cuenta como su respuesta original** (2026-11-11): quien se trae de un filtro anterior al de ahora tiene otra respuesta con id propio, pero es la misma vez que llenó el filtro. `respuestaDe`, `respuestasEnTablero`, `contarFiltrosLlenados` y `filtrosLlenadosDe` reciben el mapa de traídas (`mapaDeTraidas`, `src/serverUtils/formularios/traidasMapa.ts`): la traída se junta con su original, sale como «copiada en un tablero más» y el filtro que se muestra es el de la original. Antes sumaba un filtro llenado de más (y la copia de su misma respuesta salía como «registrado en otro estudio»). Si la persona participó con la original, su alerta de elegibilidad sigue igual. Los endpoints `getBoardDuplicateBadges` y `searchParticipantHistory` piden el mapa con un minuto de vigencia (`mapaDeTraidasReciente`: consulta todas las respuestas de filtros y se piden cada vez que se abre un tablero).
 - **Filas sin id de respuesta** (capturadas a mano, importadas de Excel; el 14.5 % de las filas): no se pueden reconocer como un filtro llenado, **no cuentan** y se avisa cuántas son («+N filas sin filtro»). Quien solo tiene filas así tiene 0 y se ve «—».
 - **Persona:** el grupo de identidad global en modo **estricto** (`getGlobalIdentityData`: 2 de 3 datos iguales entre correo, teléfono y nombre), el mismo de los íconos de elegibilidad. No usar el cierre lenient para contar: encadenaba identidades y llegó a mostrar un ×26 falso.
 - **Contacto compartido:** 5 o más respuestas y 3 o más nombres distintos (`esContactoCompartido`; ahí se cuenta cada fila sin id como una respuesta). **No lleva número** (`filtrosLlenados: null`): se ve un ícono de personas y, en el historial, la lista de lo que llenó con ese contacto. Es la misma definición de «Por reclutador»: vive una sola vez en `src/lib/filtrosLlenados.ts` (`serverUtils/indicadores/reclutadores.ts` la reexporta).
@@ -34,6 +35,8 @@ A mayor número, menos seguro. Por abajo (el número real sería mayor): 483 per
 
 ## Pruebas
 
+Lo de las traídas lo prueba `server/scripts/test-traidas-cuentan-como-original.ts` (15, ver `docs/reclutadores.md`).
+
 `node server/node_modules/.bin/tsx server/scripts/test-filtros-llenados.ts` (24): la cuenta sola (copias en varios tableros, respuestas distintas, filas sin id, contacto compartido y sus umbrales, la confianza, el nombre del filtro, la lista) y contra PGlite con el esquema real el tablero y el historial (X con una respuesta copiada, Y con una fila a mano, el compartido, W con tres teléfonos, quien llenó una vez, quien solo tiene una fila a mano; el mismo número en el tablero y en el historial). 4 de ellas fallan si se cuentan filas en vez de respuestas.
 
 ## Ideas y pendientes
@@ -45,3 +48,4 @@ A mayor número, menos seguro. Por abajo (el número real sería mayor): 483 per
 ## Bitácora
 
 - **2026-11-10:** primera versión, con su sí a la propuesta: número en la columna «Otros formularios» (renombrada «Filtros llenados»), marca de confianza, lista con los datos usados en el historial, contacto compartido sin número, orden por la columna. La definición de contacto compartido pasó a `src/lib/filtrosLlenados.ts`.
+- **2026-11-11:** las traídas cuentan como su respuesta original (ver la definición de arriba). Lo notó Sergio al ver noviembre con 544 respuestas y 0 nuevas en «Por reclutador»: era la misma causa. Afecta a las personas que se trajeron de otro filtro (544 con fila en un tablero ese día): su número baja en uno si la respuesta original también está en un tablero.

@@ -5,8 +5,9 @@ import {
   resolveSignals, DuplicateSignalEnum, Signal, IdentityRow, participoEnProyecto,
 } from '../lib/duplicateIdentity';
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
+import { mapaDeTraidasReciente } from '../serverUtils/formularios/traidasMapa';
 import { getInferredStartDates } from '../lib/projectStartFallback';
-import { respuestaDe, respuestasEnTablero } from '../lib/respuestaFillout';
+import { respuestaDe, respuestasEnTablero, type MapaTraidas } from '../lib/respuestaFillout';
 import { contarFiltrosLlenados, filtrosLlenadosDe } from '../lib/filtrosLlenados';
 
 const normalizeClient = (s?: string) => (s ?? '').toLowerCase().trim();
@@ -90,9 +91,11 @@ function buildPersonResult(
     matchedBy: string[];
     /** Agrega cuántos filtros ha llenado la persona (solo cuando `personRows` son todas sus filas). */
     conFiltros?: boolean;
+    /** Las traídas (id de la copia → id de la respuesta original): una traída es la misma respuesta que su original (ver respuestaFillout.ts). */
+    traidas?: MapaTraidas;
   },
 ) {
-  const { projectCode, boardName, rowId, currentClientNorm, referenceDate, sixMonthsAgo, projectMap } = opts;
+  const { projectCode, boardName, rowId, currentClientNorm, referenceDate, sixMonthsAgo, projectMap, traidas } = opts;
 
   let fullName: string | undefined;
   let email: string | undefined;
@@ -137,7 +140,7 @@ function buildPersonResult(
   // Un mismo formulario vinculado a varios tableros copia cada respuesta a todos ellos: esas copias son UNA vez que la persona llenó el filtro,
   // no «otros formularios» (ver respuestaFillout.ts). Las copias en otros proyectos donde no participó se agrupan por respuesta y, más abajo,
   // o van a la nota «misma respuesta en…» (si la persona ya tiene esa respuesta en este tablero) o quedan en una sola entrada.
-  const respuestasAqui = respuestasEnTablero(personRows, projectCode, boardName);
+  const respuestasAqui = respuestasEnTablero(personRows, projectCode, boardName, traidas);
   const copias = new Map<string, { row: IdentityRow; entry: EntryShape }[]>();
 
   for (const row of personRows) {
@@ -190,7 +193,7 @@ function buildPersonResult(
 
     // Copia de una respuesta de Fillout en OTRO proyecto, sin haber participado ahí: se resuelve después del ciclo. Si participó con esa copia
     // es historial real y entra como siempre; y las copias en otro tablero del MISMO proyecto también se muestran como siempre.
-    const respuesta = respuestaDe(row);
+    const respuesta = respuestaDe(row, traidas);
     if (!sameProject && respuesta && !rawParticipated) {
       const grupo = copias.get(respuesta);
       if (grupo) grupo.push({ row, entry }); else copias.set(respuesta, [{ row, entry }]);
@@ -246,7 +249,7 @@ function buildPersonResult(
   if (sameBoardCount > 1) signalSet.add('same_board_duplicate');
 
   const { signals, primaryBadge, secondaryBadges } = resolveSignals(signalSet);
-  const filtros = opts.conFiltros ? contarFiltrosLlenados(personRows) : undefined;
+  const filtros = opts.conFiltros ? contarFiltrosLlenados(personRows, traidas) : undefined;
 
   return {
     id:                   opts.clusterId,
@@ -269,7 +272,7 @@ function buildPersonResult(
       filasSinFiltro:  filtros.filasSinFiltro,
       compartido:      filtros.compartido,
       confianza:       filtros.confianza,
-      llenados:        filtrosLlenadosDe(personRows, (codigo) => projectMap.get(codigo)?.startDate),
+      llenados:        filtrosLlenadosDe(personRows, (codigo) => projectMap.get(codigo)?.startDate, traidas),
     } : {}),
   };
 }
@@ -313,6 +316,7 @@ export default createEndpoint({
 
   execute: async ({ input }) => {
     const isSeedMode = !!input.seedRowId;
+    const traidas = await mapaDeTraidasReciente();
 
     // ═══════════════════════════════════════════════════════════════════════
     // SEED MODE — canonical, complete identity resolution
@@ -351,6 +355,7 @@ export default createEndpoint({
         clusterReasons,
         matchedBy: clusterReasons,
         conFiltros: true,
+        traidas,
       });
 
       return { results: [result] };

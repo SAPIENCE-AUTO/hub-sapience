@@ -5,7 +5,7 @@
 // getGlobalIdentityData (todas las filas de reclutamiento y sus identidades). Solo lee: no escribe nada en reclutamiento.
 import type { GlobalIdentityData } from '../../lib/globalIdentityCache';
 import { normalizeName, participoEnProyecto, type IdentityRow } from '../../lib/duplicateIdentity';
-import { respuestaDe } from '../../lib/respuestaFillout';
+import { esFilaDeTraida, respuestaDe, type MapaTraidas } from '../../lib/respuestaFillout';
 import {
   MAX_TRAMO, PERIODOS_RECLUTADOR, POSICION_TRAMO, conteoCero, esSinNombre, normalizarNombre, type Conteo, type DatosReclutadores, type Escritura, type Meses, type Periodo,
 } from '../../lib/indicadores/reclutadores';
@@ -130,11 +130,15 @@ const porPeriodo = (): Record<Periodo, Conteo> => ({ '12m': conteoCero(), '6m': 
  * Además de nuevas y repetidas, de cada respuesta se anota: si era «no elegible» (medido contra el proyecto de su copia más antigua, que es donde
  * se recibió: `eraNoElegible`), si terminó en un grupo en alguno de sus tableros (`participoEnProyecto`) y si entró siendo no elegible (medido
  * contra el proyecto donde entró, como hace Metas por área). Ninguna elegibilidad se mide en un contacto compartido.
+ *
+ * Una traída (persona traída de un filtro anterior) es la misma respuesta que su original: con `traidas` (id de la copia → id de la original, `mapaDeTraidas`) se junta con ella y no
+ * cuenta como una respuesta repetida más; la fecha, el proyecto y el nombre de la respuesta salen de la original cuando está en un tablero.
  */
 export function calcularReclutadores(
   datos: Pick<GlobalIdentityData, 'activeRows' | 'projectMap' | 'globalClusters'>,
   nombres: ReadonlyMap<string, string>,
   hoy: string,
+  traidas: MapaTraidas = new Map(),
 ): DatosReclutadores {
   const { activeRows, projectMap, globalClusters } = datos;
   const filaPorId = new Map<string, IdentityRow>(activeRows.map((r) => [r.id, r]));
@@ -159,21 +163,27 @@ export function calcularReclutadores(
       const fa = fechaDe(a.projectCode) ?? '9999', fb = fechaDe(b.projectCode) ?? '9999';
       return fa < fb ? -1 : fa > fb ? 1 : String(a.id) < String(b.id) ? -1 : 1;
     });
-    const respuestas = new Map<string, { fecha: string | null; proyectos: Set<string>; nombre: string; copias: IdentityRow[]; origen: string }>();
+    const respuestas = new Map<string, {
+      fecha: string | null; proyectos: Set<string>; proyectosDeTraida: Set<string>; proyectosOriginales: Set<string>; nombre: string; copias: IdentityRow[]; origen: string; fechaDeTraida: boolean; nombreDeTraida: boolean;
+    }>();
     const nombresDeLaPersona = new Set<string>();
     for (const f of ordenadas) {
-      const clave = respuestaDe(f) ?? `fila:${f.id}`;
+      const clave = respuestaDe(f, traidas) ?? `fila:${f.id}`;
       let r = respuestas.get(clave);
-      if (!r) { r = { fecha: null, proyectos: new Set(), nombre: '', copias: [], origen: '' }; respuestas.set(clave, r); }
+      if (!r) { r = { fecha: null, proyectos: new Set(), proyectosDeTraida: new Set(), proyectosOriginales: new Set(), nombre: '', copias: [], origen: '', fechaDeTraida: false, nombreDeTraida: false }; respuestas.set(clave, r); }
       r.copias.push(f);
+      const traida = esFilaDeTraida(f, traidas);
       const codigo = typeof f.projectCode === 'string' ? f.projectCode : '';
       if (codigo) {
         r.proyectos.add(codigo);
-        // Las filas vienen de la más antigua a la más nueva: la primera con fecha da la fecha y el proyecto de origen de la respuesta.
+        (traida ? r.proyectosDeTraida : r.proyectosOriginales).add(codigo);
+        // Las filas vienen de la más antigua a la más nueva: la primera con fecha da la fecha y el proyecto de origen de la respuesta; si esa primera es una traída y después
+        // aparece su original, manda la original (la respuesta se recibió en el filtro de origen).
         const fecha = fechaDe(codigo);
-        if (fecha && r.fecha === null) { r.fecha = fecha; r.origen = codigo; }
+        if (fecha && (r.fecha === null || (r.fechaDeTraida && !traida))) { r.fecha = fecha; r.origen = codigo; r.fechaDeTraida = traida; }
       }
-      if (!r.nombre) r.nombre = (nombres.get(f.id) ?? '').trim();
+      const nombreDeLaFila = (nombres.get(f.id) ?? '').trim();
+      if (nombreDeLaFila && (!r.nombre || (r.nombreDeTraida && !traida))) { r.nombre = nombreDeLaFila; r.nombreDeTraida = traida; }
       const n = normalizeName(f.participantName as string | undefined);
       if (n) nombresDeLaPersona.add(n);
     }
@@ -193,7 +203,14 @@ export function calcularReclutadores(
       else if (r.fecha === primera) posicion = 1;
       else {
         const anteriores = new Set<string>();
-        for (const o of respuestas.values()) if (o.fecha && o.fecha < r.fecha) for (const p of o.proyectos) anteriores.add(p);
+        for (const o of respuestas.values()) {
+          if (!o.fecha || o.fecha >= r.fecha) continue;
+          for (const p of o.proyectos) {
+            // Una traída vive en un proyecto POSTERIOR al de su original: solo cuenta como proyecto anterior si ya había empezado cuando se recibió esta respuesta.
+            if (o.proyectosDeTraida.has(p) && !o.proyectosOriginales.has(p)) { const inicio = fechaDe(p); if (inicio === null || inicio >= r.fecha) continue; }
+            anteriores.add(p);
+          }
+        }
         posicion = POSICION_TRAMO[Math.max(1, Math.min(anteriores.size, MAX_TRAMO)) - 1];
       }
 
