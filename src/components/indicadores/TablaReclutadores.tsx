@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, ChevronUp, Pencil, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, ChevronUp, Pencil, Trash2, TrendingUp, X } from 'lucide-react';
 import { resumenDe, type Conteo, type Escritura, type Periodo } from '../../lib/indicadores/reclutadores';
 import { BarraNuevasRepetidas, CifraConPct, CifraEntraron, CifraNoElegibles } from './BarraNuevasRepetidas';
 import { fmtNum } from './formato';
@@ -9,12 +9,15 @@ export interface FilaReclutador { id: string; nombre: string; conteo: Conteo; cl
 type Columna = 'nombre' | 'total' | 'nuevas' | 'repetidas' | 'avisos' | 'entraron';
 
 /** Los reclutadores ya juntados, cada uno con lo que suman sus formas de escribir el nombre. Se abre cada fila para ver (y separar) esas formas. */
-export function TablaReclutadores({ filas, escrituras, periodo, conElegibilidad, seleccion, expandidos, onSeleccionar, onExpandir, onRenombrar, onEliminar, onSeparar, deshabilitado }: {
+export function TablaReclutadores({ filas, escrituras, periodo, conElegibilidad, conEvolucion, onEvolucion, seleccion, expandidos, onSeleccionar, onExpandir, onRenombrar, onEliminar, onSeparar, deshabilitado }: {
   filas: FilaReclutador[];
   escrituras: ReadonlyMap<string, Escritura>;
   periodo: Periodo;
   /** El cálculo guardado ya trae «no elegibles» y «entraron a un grupo» (versión 2). */
   conElegibilidad: boolean;
+  /** El cálculo guardado ya trae el conteo mes por mes (versión 3): sin él, el botón de la evolución sale apagado y dice qué hacer. */
+  conEvolucion: boolean;
+  onEvolucion: (id: string) => void;
   seleccion: ReadonlySet<string>;
   expandidos: ReadonlySet<string>;
   onSeleccionar: (clave: string, marcada: boolean) => void;
@@ -70,7 +73,7 @@ export function TablaReclutadores({ filas, escrituras, periodo, conElegibilidad,
             {encabezado('repetidas', 'Repetidas')}
             {conElegibilidad && encabezado('avisos', 'No elegibles')}
             {conElegibilidad && encabezado('entraron', 'Entraron a un grupo')}
-            <th scope="col" className="w-20 px-3 py-2"><span className="sr-only">Acciones</span></th>
+            <th scope="col" className="w-28 px-3 py-2"><span className="sr-only">Acciones</span></th>
           </tr>
         </thead>
         <tbody>
@@ -122,6 +125,7 @@ export function TablaReclutadores({ filas, escrituras, periodo, conElegibilidad,
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-0.5">
+                        <button type="button" disabled={!conEvolucion} aria-label={`Ver la evolución de ${f.nombre}`} title={conEvolucion ? 'Ver su evolución mes por mes' : 'Pulsa «Actualizar» para ver la evolución mes por mes'} onClick={() => onEvolucion(f.id)} className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"><TrendingUp className="h-3.5 w-3.5" /></button>
                         <button type="button" disabled={deshabilitado} aria-label={`Cambiar el nombre de ${f.nombre}`} title="Cambiar el nombre" onClick={() => setEditando({ id: f.id, texto: f.nombre })} className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"><Pencil className="h-3.5 w-3.5" /></button>
                         <button type="button" disabled={deshabilitado} aria-label={`Borrar a ${f.nombre}`} title="Borrar al reclutador (sus formas quedan sin asignar)" onClick={() => setConfirmando(f.id)} className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /></button>
                       </span>

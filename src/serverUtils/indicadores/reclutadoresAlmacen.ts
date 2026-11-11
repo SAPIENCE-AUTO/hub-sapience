@@ -37,17 +37,20 @@ export const SQL_TABLAS_RECLUTADORES = `
 // ── Formas de lo que viaja ───────────────────────────────────────────────────
 const ConteoSchema = z.array(z.number()).length(TAMANO_CONTEO);
 const PorPeriodoSchema = z.object({ '12m': ConteoSchema, '6m': ConteoSchema, anio: ConteoSchema, todo: ConteoSchema });
+const MesesSchema = z.record(z.string(), ConteoSchema);
 
 export const DatosReclutadoresSchema = z.object({
-  version: z.union([z.literal(1), z.literal(2)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   hoy: z.string(),
   escrituras: z.array(z.object({
     clave: z.string(),
     nombre: z.string(),
     formas: z.array(z.tuple([z.string(), z.number()])),
     c: PorPeriodoSchema,
+    meses: MesesSchema.optional(),
   })),
   sinNombre: PorPeriodoSchema,
+  sinNombreMeses: MesesSchema.optional(),
   sinFecha: z.number(),
   contactosCompartidos: z.number(),
 });
@@ -83,8 +86,9 @@ export function rellenar(crudo: any): any {
   if (!crudo || typeof crudo !== 'object') return crudo;
   return {
     ...crudo,
-    escrituras: Array.isArray(crudo.escrituras) ? crudo.escrituras.map((e: any) => ({ ...e, c: periodos(e?.c) })) : crudo.escrituras,
+    escrituras: Array.isArray(crudo.escrituras) ? crudo.escrituras.map((e: any) => ({ ...e, c: periodos(e?.c), ...(e?.meses ? { meses: periodos(e.meses) } : {}) })) : crudo.escrituras,
     sinNombre: periodos(crudo.sinNombre),
+    ...(crudo.sinNombreMeses ? { sinNombreMeses: periodos(crudo.sinNombreMeses) } : {}),
   };
 }
 

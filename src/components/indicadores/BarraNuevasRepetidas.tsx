@@ -3,7 +3,7 @@ import { fmtNum, fmtPct } from './formato';
 import { COLORES_REPETIDA, COLOR_COMPARTIDO, COLOR_NUEVA } from './reclutadoresColores';
 
 /**
- * Una barra al 100 %: lo verde son las nuevas, lo ámbar las repetidas (más oscuro, más proyectos anteriores: de 1 a 8 o más) y lo gris el contacto compartido.
+ * Una barra al 100 %: lo morado son las nuevas, lo ámbar las repetidas (más oscuro, más proyectos anteriores: de 1 a 8 o más) y lo gris el contacto compartido.
  * Delgada, con un hueco de 2 px entre las partes (no un borde) y todo el ancho de la celda donde va (debajo del nombre), entre un mínimo y un máximo.
  */
 export function BarraNuevasRepetidas({ conteo, ancho = 'w-full min-w-[16rem] max-w-[34rem]' }: { conteo: ReadonlyArray<number>; ancho?: string }) {

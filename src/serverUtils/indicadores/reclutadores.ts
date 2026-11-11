@@ -7,7 +7,7 @@ import type { GlobalIdentityData } from '../../lib/globalIdentityCache';
 import { normalizeName, participoEnProyecto, type IdentityRow } from '../../lib/duplicateIdentity';
 import { respuestaDe } from '../../lib/respuestaFillout';
 import {
-  MAX_TRAMO, PERIODOS_RECLUTADOR, POSICION_TRAMO, conteoCero, esSinNombre, normalizarNombre, type Conteo, type DatosReclutadores, type Escritura, type Periodo,
+  MAX_TRAMO, PERIODOS_RECLUTADOR, POSICION_TRAMO, conteoCero, esSinNombre, normalizarNombre, type Conteo, type DatosReclutadores, type Escritura, type Meses, type Periodo,
 } from '../../lib/indicadores/reclutadores';
 import { restarMeses } from '../../lib/indicadores/reclutamiento';
 import { esContactoCompartido } from '../../lib/filtrosLlenados';
@@ -144,8 +144,9 @@ export function calcularReclutadores(
   };
   const desde: Record<Periodo, string> = { '12m': restarMeses(hoy, 12), '6m': restarMeses(hoy, 6), anio: `${hoy.slice(0, 4)}-01-01`, todo: '' };
 
-  const porClave = new Map<string, { formas: Map<string, number>; c: Record<Periodo, Conteo> }>();
+  const porClave = new Map<string, { formas: Map<string, number>; c: Record<Periodo, Conteo>; meses: Meses }>();
   const sinNombre = porPeriodo();
+  const sinNombreMeses: Meses = {};
   let sinFecha = 0;
   let contactosCompartidos = 0;
 
@@ -213,20 +214,24 @@ export function calcularReclutadores(
       const periodos = PERIODOS_RECLUTADOR.filter((p) => r.fecha! >= desde[p]);
       const clave = normalizarNombre(r.nombre);
       const sumar = (c: Conteo) => { c[0]++; c[posicion]++; if (aviso) c[7]++; if (entro) c[8]++; if (entroConAviso) c[9]++; };
+      // El mes de inicio del proyecto donde se recibió la respuesta: para ver la evolución mes por mes.
+      const mes = r.fecha.slice(0, 7);
       if (esSinNombre(clave)) {
         for (const p of periodos) sumar(sinNombre[p]);
+        sumar(sinNombreMeses[mes] ??= conteoCero());
         continue;
       }
       let e = porClave.get(clave);
-      if (!e) { e = { formas: new Map(), c: porPeriodo() }; porClave.set(clave, e); }
+      if (!e) { e = { formas: new Map(), c: porPeriodo(), meses: {} }; porClave.set(clave, e); }
       e.formas.set(r.nombre, (e.formas.get(r.nombre) ?? 0) + 1);
       for (const p of periodos) sumar(e.c[p]);
+      sumar(e.meses[mes] ??= conteoCero());
     }
   }
 
   const escrituras: Escritura[] = [...porClave.entries()].map(([clave, e]) => {
     const formas = [...e.formas.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    return { clave, nombre: formas[0][0], formas: formas.slice(0, 6), c: e.c };
+    return { clave, nombre: formas[0][0], formas: formas.slice(0, 6), c: e.c, meses: e.meses };
   }).sort((a, b) => b.c.todo[0] - a.c.todo[0] || a.clave.localeCompare(b.clave));
-  return { version: 2, hoy, escrituras, sinNombre, sinFecha, contactosCompartidos };
+  return { version: 3, hoy, escrituras, sinNombre, sinNombreMeses, sinFecha, contactosCompartidos };
 }

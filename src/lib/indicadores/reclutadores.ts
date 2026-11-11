@@ -86,6 +86,9 @@ export function resumenDe(c: ReadonlyArray<number>): ResumenConteo {
   };
 }
 
+/** Los conteos de un mes de inicio de proyecto («2026-10»): solo están los meses que tienen respuestas. */
+export type Meses = Record<string, Conteo>;
+
 /** Una forma de escribir el nombre (ya sin mayúsculas, acentos ni signos) con sus conteos por periodo. */
 export interface Escritura {
   clave: string;
@@ -94,17 +97,24 @@ export interface Escritura {
   /** Las formas originales más comunes, con cuántas respuestas trae cada una. */
   formas: Array<[string, number]>;
   c: Record<Periodo, Conteo>;
+  /** Lo mismo, mes por mes (el mes de inicio del proyecto donde se recibió cada respuesta), para ver la evolución. Solo en los cálculos de la versión 3. */
+  meses?: Meses;
 }
 
 /** Lo que se guarda en indicadores_calculos (área «reclutadores»). */
 export interface DatosReclutadores {
-  /** 1: sin elegibilidad ni entradas a grupo y con las repetidas partidas hasta «4 o más» (los conteos traen 7 números; se rellenan con ceros al leerlos). 2: con ellas y con las repetidas partidas hasta «8 o más» (14 números). */
-  version: 1 | 2;
+  /**
+   * 1: sin elegibilidad ni entradas a grupo y con las repetidas partidas hasta «4 o más» (los conteos traen 7 números; se rellenan con ceros al leerlos). 2: con ellas y con las repetidas
+   * partidas hasta «8 o más» (14 números). 3: además, el conteo mes por mes (`meses` en cada forma y `sinNombreMeses`), para la evolución en el tiempo.
+   */
+  version: 1 | 2 | 3;
   /** AAAA-MM-DD en que se contó: contra esta fecha se arman los periodos. */
   hoy: string;
   escrituras: Escritura[];
   /** Respuestas sin nombre (vacío, «nadie», «no sé»…): se cuentan aparte. */
   sinNombre: Record<Periodo, Conteo>;
+  /** Lo mismo, mes por mes (versión 3). */
+  sinNombreMeses?: Meses;
   /** Respuestas que no se pudieron ubicar porque su proyecto no tiene ninguna fecha. */
   sinFecha: number;
   /** Cuántas «personas» se trataron como contacto compartido. */
@@ -241,6 +251,58 @@ export function repartir(datos: DatosReclutadores, periodo: Periodo, asignacione
 
 /** ¿El cálculo guardado ya trae «no elegibles» y «entraron a un grupo»? Los de la primera versión no. */
 export const traeElegibilidad = (datos: Pick<DatosReclutadores, 'version'> | undefined): boolean => (datos?.version ?? 1) >= 2;
+
+/** ¿El cálculo guardado ya trae el conteo mes por mes? Solo los de la versión 3. */
+export const traeEvolucion = (datos: Pick<DatosReclutadores, 'version'> | undefined): boolean => (datos?.version ?? 1) >= 3;
+
+// ── Evolución en el tiempo ───────────────────────────────────────────────────
+/** Los dos «sujetos» de la evolución que no son una persona: lo que suman todos los reclutadores ya juntados, y toda la base (con y sin nombre). */
+export const SUJETO_TODOS = '__todos';
+export const SUJETO_BASE = '__base';
+
+const aNumeroDeMes = (mes: string): number => Number(mes.slice(0, 4)) * 12 + Number(mes.slice(5, 7)) - 1;
+const deNumeroDeMes = (n: number): string => `${Math.floor(n / 12)}-${String((n % 12) + 1).padStart(2, '0')}`;
+
+/** El primer mes (AAAA-MM) con respuestas en todo el cálculo, o `undefined` si no hay ninguno. */
+export function primerMesConDatos(datos: Pick<DatosReclutadores, 'escrituras' | 'sinNombreMeses'>): string | undefined {
+  let primero: string | undefined;
+  const ver = (m?: Meses) => { for (const mes of Object.keys(m ?? {})) if (primero === undefined || mes < primero) primero = mes; };
+  for (const e of datos.escrituras) ver(e.meses);
+  ver(datos.sinNombreMeses);
+  return primero;
+}
+
+/**
+ * Los meses (AAAA-MM) de un rango, del más viejo al más nuevo, terminando en el mes de `hoy` (que va incompleto): 6 o 12 meses, el año en curso, o desde `primerMes` (todo).
+ * Es por mes completo: no usa el día exacto como los periodos de la tabla.
+ */
+export function mesesDelRango(hoy: string, periodo: Periodo, primerMes?: string): string[] {
+  const fin = aNumeroDeMes(hoy);
+  const inicio = periodo === '6m' ? fin - 5 : periodo === '12m' ? fin - 11 : periodo === 'anio' ? Math.floor(fin / 12) * 12 : (primerMes ? Math.min(aNumeroDeMes(primerMes), fin) : fin);
+  return Array.from({ length: fin - inicio + 1 }, (_, i) => deNumeroDeMes(inicio + i));
+}
+
+/**
+ * Suma, mes por mes, lo de las formas de escribir el nombre dadas (`'todas'` = todas las formas) y, si se pide, lo que no trae nombre. Los meses sin respuestas salen en ceros, para que el
+ * eje de la gráfica no tenga huecos. Una clave que no existe no suma nada.
+ */
+export function serieMensual(
+  datos: Pick<DatosReclutadores, 'escrituras' | 'sinNombreMeses'>,
+  claves: Iterable<string> | 'todas',
+  meses: ReadonlyArray<string>,
+  opciones: { incluirSinNombre?: boolean } = {},
+): Array<{ mes: string; conteo: Conteo }> {
+  const serie = meses.map((mes) => ({ mes, conteo: conteoCero() }));
+  const posicion = new Map(meses.map((m, i) => [m, i]));
+  const sumarMeses = (m?: Meses) => { for (const [mes, c] of Object.entries(m ?? {})) { const i = posicion.get(mes); if (i !== undefined) sumarEn(serie[i].conteo, c); } };
+  if (claves === 'todas') for (const e of datos.escrituras) sumarMeses(e.meses);
+  else {
+    const quiero = new Set(claves);
+    for (const e of datos.escrituras) if (quiero.has(e.clave)) sumarMeses(e.meses);
+  }
+  if (opciones.incluirSinNombre) sumarMeses(datos.sinNombreMeses);
+  return serie;
+}
 
 // ── Lo que viaja entre el servidor y la pantalla ─────────────────────────────
 export interface Reclutador { id: string; nombre: string }

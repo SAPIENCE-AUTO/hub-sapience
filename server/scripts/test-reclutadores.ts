@@ -10,7 +10,7 @@ import { pool } from '../compat';
 import { DATE_OID, NUMERIC_OID, TIMESTAMPTZ_OID, parseDate, parseNumeric, parseTimestamptz } from '../compat/datetimeParsers';
 import { buildIdentityClusters, type IdentityRow } from '../../src/lib/duplicateIdentity';
 import {
-  POSICION_TRAMO, TAMANO_CONTEO, TRAMOS_REPETIDAS, conteoCero, esSinNombre, normalizarNombre, podrianSerLaMisma, reclutadorParecido, repartir, resumenDe, sugerirGrupos, traeElegibilidad,
+  POSICION_TRAMO, TAMANO_CONTEO, TRAMOS_REPETIDAS, conteoCero, mesesDelRango, primerMesConDatos, serieMensual, traeEvolucion, esSinNombre, normalizarNombre, podrianSerLaMisma, reclutadorParecido, repartir, resumenDe, sugerirGrupos, traeElegibilidad,
   type Asignacion, type Conteo, type DatosReclutadores, type Periodo,
 } from '../../src/lib/indicadores/reclutadores';
 import { calcularReclutadores, eraNoElegible, leerNombresReclutador } from '../../src/serverUtils/indicadores/reclutadores';
@@ -340,6 +340,63 @@ await prueba('contar: el tramo cuenta proyectos anteriores distintos, no respues
   assert.deepEqual(calc.escrituras.find((e) => e.clave === 'ximena prueba')!.c.todo, c(4, 3, 1));
 });
 
+// ── evolución mes por mes ────────────────────────────────────────────────────
+await prueba('mesesDelRango: 6 y 12 meses terminan en el mes de hoy (cruzando el año), el año empieza en enero y «todo» en el primer mes con datos', () => {
+  assert.deepEqual(mesesDelRango('2026-10-20', '6m'), ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10']);
+  assert.deepEqual(mesesDelRango('2026-02-03', '12m'), ['2025-03', '2025-04', '2025-05', '2025-06', '2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02']);
+  assert.deepEqual(mesesDelRango('2026-03-31', 'anio'), ['2026-01', '2026-02', '2026-03']);
+  assert.deepEqual(mesesDelRango('2026-11-10', 'todo', '2026-08'), ['2026-08', '2026-09', '2026-10', '2026-11']);
+  assert.deepEqual(mesesDelRango('2026-11-10', 'todo'), ['2026-11'], 'sin datos, solo el mes en curso');
+  assert.deepEqual(mesesDelRango('2026-11-10', 'todo', '2030-01'), ['2026-11'], 'un primer mes en el futuro no alarga el rango');
+});
+await prueba('contar: cada respuesta cae en el mes de inicio de su proyecto, y la suma de los meses es lo mismo que «todo»', () => {
+  assert.deepEqual(esc('mateo medina').meses, { '2025-01': c(1, 1), '2026-09': c(1, 0, 0, 1) });
+  assert.deepEqual(esc('mateo').meses, { '2026-03': c(1, 0, 1) });
+  assert.deepEqual(esc('lalo').meses, { '2026-03': c(1, 1) });
+  assert.deepEqual(esc('ana rios').meses, { '2025-01': c(2, 2), '2025-06': c(1, 0, 1) });
+  for (const e of calculo.escrituras) {
+    const suma = conteoCero();
+    for (const m of Object.values(e.meses ?? {})) m.forEach((x, i) => { suma[i] += x; });
+    assert.deepEqual(suma, e.c.todo, e.clave);
+  }
+  assert.deepEqual(calculo.sinNombreMeses, { '2026-09': c(2, 2) });
+  assert.equal(calculo.version, 3);
+});
+await prueba('contar: los meses sin respuestas no se guardan (solo los que tienen)', () => {
+  for (const e of calculo.escrituras) for (const m of Object.values(e.meses ?? {})) assert.ok(m[0] > 0, e.clave);
+});
+await prueba('primerMesConDatos: el más viejo entre todas las formas y lo que no trae nombre', () => {
+  assert.equal(primerMesConDatos(calculo), '2025-01');
+  assert.equal(primerMesConDatos({ escrituras: [], sinNombreMeses: { '2024-08': c(1, 1) } }), '2024-08');
+  assert.equal(primerMesConDatos({ escrituras: [] }), undefined);
+});
+await prueba('serieMensual: suma por mes las formas pedidas, deja ceros en los meses sin respuestas y no suma lo que no pide', () => {
+  const meses = mesesDelRango('2026-10-20', '12m');
+  const s = serieMensual(calculo, ['mateo medina', 'mateo'], meses);
+  assert.equal(s.length, 12);
+  assert.deepEqual(s.map((x) => x.mes), meses);
+  const de = (mes: string) => s.find((x) => x.mes === mes)!.conteo;
+  assert.deepEqual(de('2026-03'), c(1, 0, 1), 'solo lo de «mateo»');
+  assert.deepEqual(de('2026-09'), c(1, 0, 0, 1));
+  assert.deepEqual(de('2026-05'), conteoCero(), 'un mes sin respuestas sale en ceros');
+  assert.deepEqual(serieMensual(calculo, ['no existe'], meses).map((x) => x.conteo[0]), new Array(12).fill(0));
+});
+await prueba('serieMensual: «todas» suma toda la base, con o sin lo que no trae nombre; los meses fuera del rango no cuentan', () => {
+  const meses = mesesDelRango('2026-10-20', '12m');
+  const todas = serieMensual(calculo, 'todas', meses);
+  const conSinNombre = serieMensual(calculo, 'todas', meses, { incluirSinNombre: true });
+  const total = (s: typeof todas) => s.reduce((suma, x) => suma + x.conteo[0], 0);
+  assert.equal(total(conSinNombre) - total(todas), 2, 'G y H, sin nombre, en 2026-09');
+  const dentro = calculo.escrituras.reduce((suma, e) => suma + Object.entries(e.meses ?? {}).filter(([mes]) => meses.includes(mes)).reduce((s2, [, m]) => s2 + m[0], 0), 0);
+  assert.equal(total(todas), dentro, 'solo lo que cae en los 12 meses (el resto es de antes de octubre de 2025)');
+});
+await prueba('traeEvolucion: solo los cálculos de la versión 3', () => {
+  assert.equal(traeEvolucion({ version: 3 }), true);
+  assert.equal(traeEvolucion({ version: 2 }), false);
+  assert.equal(traeEvolucion({ version: 1 }), false);
+  assert.equal(traeEvolucion(undefined), false);
+});
+
 // ── no elegibles y entraron a un grupo ───────────────────────────────────────
 // Otro juego de casos, con clientes y con estatus. «Hoy» es el mismo.
 const PROYECTOS2: Record<string, { cliente: string; inicio?: string }> = {
@@ -406,7 +463,7 @@ await prueba('contacto compartido: no se mide la elegibilidad, pero sí cuántas
 await prueba('elegibilidad: un proyecto previo sin fecha cuenta como reciente (igual que en Metas por área), y la respuesta de ese proyecto no se ubica', () => {
   assert.deepEqual(esc2('yolanda'), c(1, 1, 0, 0, 0, 0, 0, 1, 1, 1));
   assert.equal(calculo2.sinFecha, 1);
-  assert.equal(calculo2.version, 2);
+  assert.equal(calculo2.version, 3);
 });
 await prueba('eraNoElegible: la misma regla de los íconos, contra un proyecto en concreto', () => {
   const deK = filas2.filter((f) => f.email === K.email);
@@ -627,7 +684,7 @@ await prueba('calcular de punta a punta: lee el nombre de las filas, cuenta, gua
   assert.deepEqual(e('mateo').c.todo, c(1, 1), 'la primera respuesta de Ana: nueva');
   assert.deepEqual(e('mateo medina').c.todo, c(1, 0, 1, 0, 0, 0, 0, 0, 1, 0), 'la segunda: repetida con 1 proyecto antes, y entró a un grupo (asistió)');
   assert.deepEqual(e('lalo').c.todo, c(1, 1));
-  assert.equal(r.datos.version, 2);
+  assert.equal(r.datos.version, 3);
   assert.ok(r.calculadoEn);
   assert.ok(r.reclutadores.some((x: any) => x.nombre === 'Mateo Medina'), 'trae los reclutadores ya juntados');
   assert.ok(r.alias.length > 0);
@@ -635,6 +692,21 @@ await prueba('calcular de punta a punta: lee el nombre de las filas, cuenta, gua
   assert.equal(leido.calculadoEn, r.calculadoEn);
   assert.deepEqual(leido.datos.escrituras.map((x: any) => x.clave), r.datos.escrituras.map((x: any) => x.clave));
   assert.equal(traeElegibilidad(leido.datos), true, 'al actualizar se reemplaza el cálculo de la versión 1');
+});
+
+await prueba('el cálculo guardado conserva el conteo por mes, y uno de la versión 2 (sin meses) se sigue leyendo, sin evolución', async () => {
+  const leido = await estado();
+  assert.equal(traeEvolucion(leido.datos), true);
+  const mateo = leido.datos.escrituras.find((x: any) => x.clave === 'mateo medina');
+  assert.deepEqual(mateo.meses, { '2025-08': c(1, 0, 1, 0, 0, 0, 0, 0, 1, 0) });
+  const diez = [10, 4, 2, 1, 1, 0, 2, 3, 5, 2];
+  const porPeriodo = { '12m': diez, '6m': diez, anio: diez, todo: diez };
+  const v2 = { version: 2, hoy: '2026-10-20', escrituras: [{ clave: 'ana', nombre: 'Ana', formas: [['Ana', 10]], c: porPeriodo }], sinNombre: porPeriodo, sinFecha: 0, contactosCompartidos: 0 };
+  await pg.query(`update indicadores_calculos set datos = $1::jsonb where area = 'reclutadores'`, [JSON.stringify(v2)]);
+  const viejo = await estado();
+  assert.equal(traeEvolucion(viejo.datos), false);
+  assert.equal(viejo.datos.escrituras[0].meses, undefined);
+  assert.equal(viejo.datos.sinNombreMeses, undefined);
 });
 
 await prueba('calcular dos veces a la vez: la segunda se cuelga de la primera', async () => {

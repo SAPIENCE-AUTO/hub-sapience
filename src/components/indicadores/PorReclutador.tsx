@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { calcularReclutadoresEstadistica, deleteReclutador, getReclutadoresEstadistica, saveReclutador, saveReclutadorAsignacion } from 'zite-endpoints-sdk';
 import { toast } from 'sonner';
-import { Loader2, RefreshCw, Search, Sparkles, Users } from 'lucide-react';
+import { Loader2, RefreshCw, Search, Sparkles, TrendingUp, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Segmentado } from '@/components/payments/Segmentado';
 import { CLASE_BOTON_SUAVE, ESTILO_BOTON_PRIMARIO } from '@/components/payments/estilos';
 import { PERIODOS } from '../../lib/indicadores/reclutamiento';
 import {
-  conteoCero, normalizarNombre, reclutadorParecido, repartir, sugerirGrupos, traeElegibilidad,
+  SUJETO_TODOS, conteoCero, normalizarNombre, reclutadorParecido, repartir, sugerirGrupos, traeElegibilidad, traeEvolucion,
   type Asignacion, type DatosReclutadores, type GrupoSugerido, type Periodo, type Reclutador, type SalidaReclutadores,
 } from '../../lib/indicadores/reclutadores';
 import { TEAL } from '../../lib/toolColors';
 import { LeyendaBarra } from './BarraNuevasRepetidas';
+import { EvolucionReclutador } from './EvolucionReclutador';
 import { fmtInstante, fmtNum, fmtPct } from './formato';
 import { SugerenciasReclutadores } from './SugerenciasReclutadores';
 import { TablaReclutadores, type FilaReclutador } from './TablaReclutadores';
@@ -59,6 +60,8 @@ export function PorReclutador() {
   const [destinoSel, setDestinoSel] = useState('');
   const [nombreNuevo, setNombreNuevo] = useState('');
   const [grupos, setGrupos] = useState<GrupoSugerido[] | null>(null);
+  /** A quién se le está viendo la evolución mes por mes (el id del reclutador, o `SUJETO_TODOS`); `null` si la ventana está cerrada. */
+  const [evolucion, setEvolucion] = useState<string | null>(null);
 
   const aplicar = (r: SalidaReclutadores) => {
     setDatos(r.datos);
@@ -99,6 +102,9 @@ export function PorReclutador() {
   const reparto = useMemo(() => (datos ? repartir(datos, periodo, asignaciones) : null), [datos, periodo, asignaciones]);
   const consulta = normalizarNombre(busqueda);
   const conElegibilidad = traeElegibilidad(datos);
+  const conEvolucion = traeEvolucion(datos);
+  /** Las formas de escribir el nombre de cada reclutador (no cambian con el periodo): con ellas la evolución suma sus meses. */
+  const clavesPorReclutador = useMemo(() => new Map(reclutadores.map((r) => [r.id, reparto?.porReclutador.get(r.id)?.claves ?? []] as const)), [reclutadores, reparto]);
 
   const filasReclutadores = useMemo<FilaReclutador[]>(() => reclutadores
     .map((r) => ({ id: r.id, nombre: r.nombre, conteo: reparto?.porReclutador.get(r.id)?.conteo ?? conteoCero(), claves: reparto?.porReclutador.get(r.id)?.claves ?? [] }))
@@ -244,6 +250,13 @@ export function PorReclutador() {
         </label>
         <span className="ml-auto flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">{calculadoEn ? `Contado el ${fmtInstante(calculadoEn)}` : ''}</span>
+          <button
+            type="button"
+            onClick={() => setEvolucion(SUJETO_TODOS)}
+            disabled={!conEvolucion}
+            title={conEvolucion ? 'Ver mes por mes lo que han traído todos los reclutadores, o uno solo' : 'Pulsa «Actualizar» para ver la evolución mes por mes'}
+            className={CLASE_BOTON_SUAVE}
+          ><TrendingUp className="h-3.5 w-3.5" />Evolución</button>
           <button type="button" onClick={abrirSugerencias} disabled={sinAcciones} className={CLASE_BOTON_SUAVE}><Sparkles className="h-3.5 w-3.5" />Sugerir reclutadores</button>
           <button type="button" onClick={calcular} disabled={calculando} className={CLASE_BOTON_SUAVE}>
             {calculando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -264,6 +277,12 @@ export function PorReclutador() {
         </div>
       )}
 
+      {conElegibilidad && !conEvolucion && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-950">
+          Este conteo todavía no trae el mes por mes de la evolución. Pulsa «Actualizar» para verla.
+        </div>
+      )}
+
       {resumen && (
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Cifra titulo="Con reclutador" valor={pct(resumen.asignadas)} detalle={`${fmtNum(resumen.asignadas)} de ${fmtNum(resumen.total)} respuestas, con ${fmtNum(reclutadores.length)} ${reclutadores.length === 1 ? 'reclutador' : 'reclutadores'}`} color="#257E55" />
@@ -280,6 +299,8 @@ export function PorReclutador() {
           escrituras={escrituras}
           periodo={periodo}
           conElegibilidad={conElegibilidad}
+          conEvolucion={conEvolucion}
+          onEvolucion={setEvolucion}
           seleccion={seleccion}
           expandidos={expandidos}
           onSeleccionar={marcar}
@@ -362,6 +383,10 @@ export function PorReclutador() {
       )}
 
       <SugerenciasReclutadores abierto={grupos !== null} grupos={grupos ?? []} escrituras={escrituras} onCerrar={() => setGrupos(null)} onCrear={crearSugeridos} />
+
+      {evolucion !== null && conEvolucion && (
+        <EvolucionReclutador sujetoInicial={evolucion} periodoInicial={periodo} datos={datos} reclutadores={reclutadores} clavesPorReclutador={clavesPorReclutador} onCerrar={() => setEvolucion(null)} />
+      )}
     </div>
   );
 }
