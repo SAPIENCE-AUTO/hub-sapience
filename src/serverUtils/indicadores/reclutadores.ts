@@ -10,11 +10,12 @@ import {
   MAX_TRAMO, PERIODOS_RECLUTADOR, POSICION_TRAMO, conteoCero, esSinNombre, normalizarNombre, type Conteo, type DatosReclutadores, type Escritura, type Periodo,
 } from '../../lib/indicadores/reclutadores';
 import { restarMeses } from '../../lib/indicadores/reclutamiento';
+import { esContactoCompartido } from '../../lib/filtrosLlenados';
 import type { Consulta } from './almacen';
 
-/** Una «persona» con al menos tantas respuestas y tantos nombres distintos es, casi seguro, un correo o teléfono compartido. */
-export const MIN_RESPUESTAS_COMPARTIDO = 5;
-export const MIN_NOMBRES_COMPARTIDO = 3;
+// Qué es un contacto compartido (tantas respuestas y tantos nombres distintos) se define una sola vez, en src/lib/filtrosLlenados.ts, porque el tablero y el historial lo usan igual;
+// se reexporta aquí porque las pruebas y los scripts lo importan de este archivo.
+export { MIN_RESPUESTAS_COMPARTIDO, MIN_NOMBRES_COMPARTIDO } from '../../lib/filtrosLlenados';
 
 /** Cómo se llama la columna del reclutador en los tableros (sin mayúsculas ni acentos). */
 export const COLUMNAS_RECLUTADOR = ['nr', 'reclutador', 'nombre reclutador', 'quien lo invito'];
@@ -176,7 +177,7 @@ export function calcularReclutadores(
       if (n) nombresDeLaPersona.add(n);
     }
 
-    const compartido = respuestas.size >= MIN_RESPUESTAS_COMPARTIDO && nombresDeLaPersona.size >= MIN_NOMBRES_COMPARTIDO;
+    const compartido = esContactoCompartido(respuestas.size, nombresDeLaPersona.size);
     if (compartido) contactosCompartidos++;
     let primera: string | null = null;
     for (const r of respuestas.values()) if (r.fecha && (primera === null || r.fecha < primera)) primera = r.fecha;

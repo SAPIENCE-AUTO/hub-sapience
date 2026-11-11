@@ -6,6 +6,7 @@ import {
 } from '../lib/duplicateIdentity';
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
 import { respuestaDe, respuestasEnTablero } from '../lib/respuestaFillout';
+import { contarFiltrosLlenados, type ResumenFiltros } from '../lib/filtrosLlenados';
 
 const normClient = (s?: string) => (s ?? '').toLowerCase().trim();
 
@@ -22,6 +23,14 @@ const RowBadgeSchema = z.object({
   participatedSameClient:  z.boolean(),
   /** Participó en otro proyecto de cualquier cliente en los 6 meses anteriores (incluye a quien participó con el mismo cliente hace poco). */
   participatedLast6Months: z.boolean(),
+  // Cuántos filtros ha llenado la persona (nov 2026; ver src/lib/filtrosLlenados.ts). Opcionales: un servidor viejo no los manda y la pantalla los tolera.
+  /** Respuestas distintas de la persona en todos los tableros (la misma respuesta copiada a varios cuenta una). `null` si es un contacto compartido. */
+  filtrosLlenados: z.number().nullable().optional(),
+  /** Filas de la persona sin id de respuesta (a mano o de Excel): no cuentan como filtros llenados. */
+  filasSinFiltro: z.number().optional(),
+  compartido: z.boolean().optional(),
+  /** Qué tan seguro es el número por lo que varían los datos de la persona (teléfono, correo, nombre). */
+  confianza: z.enum(['segura', 'probable', 'revisar']).optional(),
 });
 
 export default createEndpoint({
@@ -75,6 +84,7 @@ export default createEndpoint({
 
     // ── 4. Compute signals (cachea por cluster local y global por separado) ─
     const localCountCache = new Map<string, number>();
+    const filtrosCache = new Map<string, ResumenFiltros>();
     const globalSignalCache = new Map<string, { signals: Set<Signal>; sameClient: boolean; recent: boolean }>();
 
     const badges: Record<string, z.infer<typeof RowBadgeSchema>> = {};
@@ -148,6 +158,16 @@ export default createEndpoint({
 
       if (sameBoardCount > 1) signalSet.add('same_board_duplicate');
 
+      // Cuántos filtros ha llenado: sobre todas las filas de la persona (grupo global, estricto), una vez por persona.
+      let filtros = globalId ? filtrosCache.get(globalId) : undefined;
+      if (!filtros) {
+        const filasDeLaPersona = globalId
+          ? globalClusters.get(globalId)!.rowIds.map(id => rowById.get(id)).filter((r): r is IdentityRow => !!r)
+          : [boardRow];
+        filtros = contarFiltrosLlenados(filasDeLaPersona);
+        if (globalId) filtrosCache.set(globalId, filtros);
+      }
+
       const { signals, primaryBadge, secondaryBadges } = resolveSignals(signalSet);
       badges[boardRow.id] = {
         signals, primaryBadge, secondaryBadges,
@@ -156,6 +176,10 @@ export default createEndpoint({
         hasInternalDuplicate: sameBoardCount > 1,
         participatedSameClient,
         participatedLast6Months,
+        filtrosLlenados: filtros.filtrosLlenados,
+        filasSinFiltro:  filtros.filasSinFiltro,
+        compartido:      filtros.compartido,
+        confianza:       filtros.confianza,
       };
     }
 

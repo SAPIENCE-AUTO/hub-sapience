@@ -32,7 +32,7 @@ import { InlineInput } from '../components/table/InlineInput';
 import { GroupPicker } from '../components/table/GroupPicker';
 import { GroupSectionHeader } from '../components/table/GroupSectionHeader';
 import { ExportRecruitmentGroupsDialog, NO_GROUP_KEY, type ExportGroupOption } from '../components/ExportRecruitmentGroupsDialog';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, FileText, X, AlertTriangle, CalendarClock, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList, MoreHorizontal, FileSpreadsheet, ListChecks } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, FileText, X, AlertTriangle, CalendarClock, SearchCheck, FolderPlus, GripVertical, Link2, CheckCircle2, Copy, Clock, RefreshCw, Mail, User, Phone, Layers, ExternalLink, Share2, Eye, EyeOff, Save, Upload, ArrowUpDown, ClipboardCopy, ChevronsDownUp, ChevronsUpDown, BarChart3, Search, Download, ClipboardList, MoreHorizontal, FileSpreadsheet, ListChecks, Hash, Users } from 'lucide-react';
 import RecruitmentStatusPanel from '../components/RecruitmentStatusPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
@@ -83,6 +83,39 @@ function dupBadgeValue(rowId: string, key: '_dupBoard' | '_dupHistory' | '_dupRi
 }
 
 
+
+/**
+ * Cuántos filtros ha llenado la persona de esta fila (src/lib/filtrosLlenados.ts), con su marca de confianza. Cada filtro cuenta una vez aunque su respuesta esté copiada en varios
+ * tableros. Un asterisco pide revisar que las filas sean la misma persona; sin número: «—» (sin filtros registrados) o el ícono de contacto compartido.
+ */
+function FiltrosLlenadosChip({ badge, onClick }: { badge?: RowBadgeInfo; onClick: () => void }) {
+  if (!badge || badge.filtrosLlenados === undefined) return null; // un servidor sin el dato
+  const sinFiltro = badge.filasSinFiltro ?? 0;
+  const notaSinFiltro = sinFiltro > 0 ? ` Además tiene ${sinFiltro} fila${sinFiltro === 1 ? '' : 's'} sin filtro (a mano o de Excel) que no cuenta${sinFiltro === 1 ? '' : 'n'}.` : '';
+  if (badge.compartido) {
+    return (
+      <button type="button" onClick={onClick} className="hover:opacity-70 transition-opacity inline-flex"
+        title="Contacto compartido: el mismo correo o teléfono se usó con varios nombres (quien recluta llena por los participantes), así que no hay un número confiable. Clic para ver su historial.">
+        <Users className="w-3.5 h-3.5 text-muted-foreground" />
+      </button>
+    );
+  }
+  const n = badge.filtrosLlenados ?? 0;
+  if (n === 0) {
+    return <span className="text-[11px] text-muted-foreground/60" title={`Sin filtros registrados: sus filas se capturaron a mano o se importaron.${notaSinFiltro}`}>—</span>;
+  }
+  const revisar = badge.confianza === 'revisar';
+  const probable = badge.confianza === 'probable';
+  const confianza = revisar
+    ? ' Revisar: sus datos cambian mucho (3 o más teléfonos, correos o nombres distintos), pudieron juntarse dos personas.'
+    : probable ? ' Probable: algún dato cambia entre filtros (otro teléfono, otro correo o el nombre escrito distinto).' : '';
+  return (
+    <button type="button" onClick={onClick} className={`inline-flex items-center rounded px-1 text-[11px] tabular-nums hover:opacity-70 transition-opacity ${n >= 5 ? 'bg-muted font-bold text-foreground' : n >= 2 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+      title={`Ha llenado ${n} filtro${n === 1 ? '' : 's'} (cada filtro cuenta una vez, aunque esté copiado en varios tableros).${confianza}${notaSinFiltro} Clic para ver la lista.`}>
+      {n}{revisar && <span className="ml-px text-amber-600">*</span>}
+    </button>
+  );
+}
 
 // ── CSV Export Helper ─────────────────────────────────────────────────────────
 function escapeCsvCell(value: string): string {
@@ -475,7 +508,7 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
   };
   const nameCol    = useResizableCol('recruit-name-col',    220, 120);
   const dupBoardColW   = useResizableCol('recruit-col-dupboard',   52, 40);
-  const dupHistoryColW = useResizableCol('recruit-col-duphistory', 52, 40);
+  const dupHistoryColW = useResizableCol('recruit-col-duphistory', 84, 52);
   const dupRiskColW    = useResizableCol('recruit-col-duprisk',    52, 40);
   const emailColW  = useResizableCol('recruit-col-email',   180, 80);
   const phoneColW  = useResizableCol('recruit-col-phone',   130, 80);
@@ -595,7 +628,11 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
       } else if (['email', 'phone', 'idNumber', 'status'].includes(sortColumn)) {
         aVal = ((a[sortColumn as keyof Row] as string) || '').toLowerCase();
         bVal = ((b[sortColumn as keyof Row] as string) || '').toLowerCase();
-      } else if (sortColumn === '_dupBoard' || sortColumn === '_dupHistory' || sortColumn === '_dupRisk') {
+      } else if (sortColumn === '_dupHistory') {
+        // Por cuántos filtros ha llenado la persona; sin número (contacto compartido, sin filtros o sin el dato) va al final.
+        aVal = badgeMap[a.id]?.filtrosLlenados ?? 0;
+        bVal = badgeMap[b.id]?.filtrosLlenados ?? 0;
+      } else if (sortColumn === '_dupBoard' || sortColumn === '_dupRisk') {
         aVal = dupBadgeValue(a.id, sortColumn, badgeMap);
         bVal = dupBadgeValue(b.id, sortColumn, badgeMap);
       } else {
@@ -1083,21 +1120,24 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
               className={`px-1 py-0 h-9 overflow-hidden text-center group-hover:bg-muted ${selectedIds.has(row.id) ? 'bg-primary/5' : 'bg-card'}`}
               style={{ position: 'sticky', left: dupHistoryLeft, zIndex: 10, borderBottom: cellBorder, borderLeft: '1px solid hsl(var(--border) / 0.4)' }}
             >
-              {badge?.signals.includes('old') ? (
-                <button
-                  title="Participó en estudios anteriores (hace más de 6 meses)"
-                  onClick={() => onDuplicateClick(row)}
-                  className="hover:opacity-70 transition-opacity inline-flex">
-                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
-              ) : badge?.signals.includes('registered_only') && (
-                <button
-                  title="Registrado en otro estudio (sin participar)"
-                  onClick={() => onDuplicateClick(row)}
-                  className="hover:opacity-70 transition-opacity inline-flex">
-                  <Copy className="w-3.5 h-3.5 text-blue-500" />
-                </button>
-              )}
+              <div className="flex items-center justify-center gap-1">
+                <FiltrosLlenadosChip badge={badge} onClick={() => onDuplicateClick(row)} />
+                {badge?.signals.includes('old') ? (
+                  <button
+                    title="Participó en estudios anteriores (hace más de 6 meses)"
+                    onClick={() => onDuplicateClick(row)}
+                    className="hover:opacity-70 transition-opacity inline-flex">
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                ) : badge?.signals.includes('registered_only') && (
+                  <button
+                    title="Registrado en otro estudio (sin participar)"
+                    onClick={() => onDuplicateClick(row)}
+                    className="hover:opacity-70 transition-opacity inline-flex">
+                    <Copy className="w-3.5 h-3.5 text-blue-500" />
+                  </button>
+                )}
+              </div>
             </td>
           )}
           {!hiddenColumns.has('_dupRisk') && (
@@ -1380,7 +1420,7 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
               {/* Duplicate/eligibility badge columns — doubly sticky, pinned next to name. Icon-only header (title = tooltip) since these columns are narrow. */}
               {([
                 { key: '_dupBoard'   as const, label: 'Este filtro',       icon: Layers,        colW: dupBoardColW,   left: dupBoardLeft },
-                { key: '_dupHistory' as const, label: 'Otros formularios', icon: Clock,         colW: dupHistoryColW, left: dupHistoryLeft },
+                { key: '_dupHistory' as const, label: 'Filtros llenados',  icon: Hash,          colW: dupHistoryColW, left: dupHistoryLeft, ayuda: 'Filtros llenados — el número es cuántas veces ha llenado un filtro esa persona (cada filtro cuenta una vez, aunque su respuesta esté copiada en varios tableros); un asterisco pide revisar que sean la misma persona · reloj: participó en un estudio hace más de 6 meses · copia azul: registrado en otro estudio sin participar. Clic para ver la lista.' },
                 { key: '_dupRisk'    as const, label: 'Elegibilidad',      icon: AlertTriangle, colW: dupRiskColW,    left: dupRiskLeft, ayuda: 'Elegibilidad — triángulo rojo: ya participó con el mismo cliente · reloj ámbar: participó en los últimos 6 meses (aparecen los dos si aplican)' },
               ] as { key: '_dupBoard' | '_dupHistory' | '_dupRisk'; label: string; icon: typeof Layers; colW: typeof dupBoardColW; left: number; ayuda?: string }[]).filter(col => !hiddenColumns.has(col.key)).map(col => (
                 <th key={col.key}
@@ -1894,6 +1934,9 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
                 </div>
               </div>
 
+              {/* ── Cuántos filtros ha llenado, con la lista y los datos que usó cada vez ── */}
+              {primaryResult && primaryResult.filtrosLlenados !== undefined && <FiltrosLlenadosResumen r={primaryResult as any} />}
+
               {/* ── La misma respuesta copiada a otros tableros (un formulario vinculado a varios): no es haber llenado otro filtro ── */}
               {copiasDeLaRespuesta.length > 0 && (
                 <div className="rounded-md bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">
@@ -1952,6 +1995,81 @@ function DuplicateHistoryModal({ row, onClose, currentClient }: { row: Row; onCl
         </ScrollArea>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type FiltroLlenadoFila = { respuestaId: string; filtro?: string; proyecto: string; fecha?: string; copiasEn: number; nombre?: string; correo?: string; telefono?: string };
+
+/** El valor más repetido de un dato entre los filtros llenados (ya normalizado): lo que se aparte de él se marca. */
+function valorMasComun(valores: (string | undefined)[], normalizar: (s: string) => string): string | undefined {
+  const cuenta = new Map<string, number>();
+  for (const v of valores) { const k = v ? normalizar(v) : ''; if (k) cuenta.set(k, (cuenta.get(k) ?? 0) + 1); }
+  return [...cuenta.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+}
+
+/**
+ * «Ha llenado N filtros»: cuenta cada respuesta una vez (aunque esté copiada en varios tableros) y dice qué tan seguro es el número. La lista trae los datos que usó la persona
+ * cada vez; los que se apartan del más común van en ámbar, para confirmar rápido si son la misma persona. Ver src/lib/filtrosLlenados.ts y docs/filtros-llenados.md.
+ */
+function FiltrosLlenadosResumen({ r }: { r: { filtrosLlenados: number | null; filasSinFiltro?: number; compartido?: boolean; confianza?: 'segura' | 'probable' | 'revisar'; llenados?: FiltroLlenadoFila[] } }) {
+  const llenados = r.llenados ?? [];
+  const n = r.filtrosLlenados ?? 0;
+  const sinFiltro = r.filasSinFiltro ?? 0;
+  const revisar = !r.compartido && n > 0 && r.confianza === 'revisar';
+  const probable = !r.compartido && n > 0 && r.confianza === 'probable';
+  const normTexto = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const comun = {
+    nombre: valorMasComun(llenados.map(l => l.nombre), normTexto),
+    correo: valorMasComun(llenados.map(l => l.correo), s => s.toLowerCase().trim()),
+    telefono: valorMasComun(llenados.map(l => l.telefono), s => s.replace(/\D/g, '')),
+  };
+  const dato = (valor: string | undefined, clave: 'nombre' | 'correo' | 'telefono') => {
+    if (!valor) return null;
+    const k = clave === 'nombre' ? normTexto(valor) : clave === 'correo' ? valor.toLowerCase().trim() : valor.replace(/\D/g, '');
+    const distinto = !!comun[clave] && k !== comun[clave];
+    return <span className={distinto ? 'font-medium text-amber-700' : ''} title={distinto ? 'Distinto al que más usó' : undefined}>{valor}</span>;
+  };
+  const titulo = r.compartido ? 'Contacto compartido: no hay un número confiable' : n === 0 ? 'Sin filtros registrados' : `Ha llenado ${n} filtro${n === 1 ? '' : 's'}`;
+  return (
+    <div className={`rounded-xl border px-3 py-2.5 ${revisar ? 'border-amber-400/60 bg-amber-50' : 'bg-card'}`}>
+      <div className="flex items-center gap-2 flex-wrap">
+        {r.compartido ? <Users className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <Hash className="w-4 h-4 text-primary flex-shrink-0" />}
+        <p className="text-sm font-semibold">{titulo}</p>
+        {!r.compartido && n > 0 && (
+          <Badge variant="outline" className={`text-[10px] h-4 px-1.5 font-normal ${revisar ? 'border-amber-500 text-amber-700' : probable ? 'border-blue-400 text-blue-700' : 'border-green-500 text-green-700'}`}>
+            {revisar ? 'Revisar' : probable ? 'Probable' : 'Seguro'}
+          </Badge>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground mt-0.5">
+        {r.compartido
+          ? 'El mismo correo o teléfono se usó con varios nombres (quien recluta llena por los participantes).'
+          : 'Cada filtro cuenta una vez, aunque su respuesta esté copiada en varios tableros.'}
+        {sinFiltro > 0 && ` Además tiene ${sinFiltro} fila${sinFiltro === 1 ? '' : 's'} sin filtro (a mano o de Excel) que no cuenta${sinFiltro === 1 ? '' : 'n'}.`}
+      </p>
+      {revisar && <p className="text-xs text-amber-800 mt-1">Sus datos cambian mucho (3 o más teléfonos, correos o nombres distintos): confirma que son la misma persona. Lo que se aparta del dato más usado va en ámbar.</p>}
+      {probable && <p className="text-xs text-muted-foreground mt-1">Algún dato cambia entre filtros (otro teléfono, otro correo o el nombre escrito distinto): el número es probable.</p>}
+      {llenados.length > 0 && (
+        <details className="mt-2" open={revisar}>
+          <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">Ver {llenados.length === 1 ? 'el filtro' : `los ${llenados.length} filtros`}</summary>
+          <ul className="mt-1.5 space-y-1.5">
+            {llenados.map(l => (
+              <li key={l.respuestaId} className="rounded-md bg-muted/50 px-2 py-1.5 text-[11px] leading-snug">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-semibold">{l.proyecto || 'Sin proyecto'}</span>
+                  {l.filtro && <span className="text-muted-foreground italic">{l.filtro}</span>}
+                  {l.fecha && <span className="text-muted-foreground">· {l.fecha}</span>}
+                  {l.copiasEn > 0 && <span className="text-muted-foreground" title="Esta misma respuesta está copiada en otros tableros: no cuenta más de una vez.">· copiada en {l.copiasEn} tablero{l.copiasEn === 1 ? '' : 's'} más</span>}
+                </div>
+                <div className="text-muted-foreground flex items-center gap-x-2 gap-y-0.5 flex-wrap">
+                  {dato(l.nombre, 'nombre')}{dato(l.correo, 'correo')}{dato(l.telefono, 'telefono')}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
   );
 }
 
@@ -3425,7 +3543,7 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
                   { key: 'status',   label: 'Estado' },
                   { key: 'nda',      label: 'NDA' },
                   { key: '_dupBoard',   label: 'Este filtro' },
-                  { key: '_dupHistory', label: 'Otros formularios' },
+                  { key: '_dupHistory', label: 'Filtros llenados' },
                   { key: '_dupRisk',    label: 'Elegibilidad' },
                 ].filter(col => !colSearchText.trim() || col.label.toLowerCase().includes(colSearchText.toLowerCase())).map(col => (
                   <label key={col.key} className="flex items-center gap-2.5 cursor-pointer group">

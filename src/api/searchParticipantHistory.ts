@@ -7,6 +7,7 @@ import {
 import { getGlobalIdentityData } from '../lib/globalIdentityCache';
 import { getInferredStartDates } from '../lib/projectStartFallback';
 import { respuestaDe, respuestasEnTablero } from '../lib/respuestaFillout';
+import { contarFiltrosLlenados, filtrosLlenadosDe } from '../lib/filtrosLlenados';
 
 const normalizeClient = (s?: string) => (s ?? '').toLowerCase().trim();
 
@@ -55,6 +56,22 @@ const ResultSchema = z.object({
   history:              z.array(HistoryEntrySchema),
   /** Tableros de OTROS proyectos donde está copiada una respuesta que la persona ya tiene en el tablero que se está viendo: no cuentan como apariciones. */
   mismaRespuestaEn:     z.array(LugarSchema).optional(),
+  // Cuántos filtros ha llenado (nov 2026; src/lib/filtrosLlenados.ts). Solo en el modo semilla, donde se tiene a la persona completa (grupo global, estricto).
+  filtrosLlenados:      z.number().nullable().optional(),
+  filasSinFiltro:       z.number().optional(),
+  compartido:           z.boolean().optional(),
+  confianza:            z.enum(['segura', 'probable', 'revisar']).optional(),
+  /** Cada filtro que llenó, del más reciente al más antiguo, con los datos que usó esa vez. */
+  llenados:             z.array(z.object({
+    respuestaId: z.string(),
+    filtro:      z.string().optional(),
+    proyecto:    z.string(),
+    fecha:       z.string().optional(),
+    copiasEn:    z.number(),
+    nombre:      z.string().optional(),
+    correo:      z.string().optional(),
+    telefono:    z.string().optional(),
+  })).optional(),
 });
 
 // ── Shared: build history + signals from a set of rows ──────────────────────
@@ -71,6 +88,8 @@ function buildPersonResult(
     clusterId: string;
     clusterReasons: ('email' | 'name' | 'phone')[];
     matchedBy: string[];
+    /** Agrega cuántos filtros ha llenado la persona (solo cuando `personRows` son todas sus filas). */
+    conFiltros?: boolean;
   },
 ) {
   const { projectCode, boardName, rowId, currentClientNorm, referenceDate, sixMonthsAgo, projectMap } = opts;
@@ -227,6 +246,7 @@ function buildPersonResult(
   if (sameBoardCount > 1) signalSet.add('same_board_duplicate');
 
   const { signals, primaryBadge, secondaryBadges } = resolveSignals(signalSet);
+  const filtros = opts.conFiltros ? contarFiltrosLlenados(personRows) : undefined;
 
   return {
     id:                   opts.clusterId,
@@ -244,6 +264,13 @@ function buildPersonResult(
     identityMatchReasons: opts.clusterReasons,
     history,
     mismaRespuestaEn:     mismaRespuestaEn.length > 0 ? mismaRespuestaEn : undefined,
+    ...(filtros ? {
+      filtrosLlenados: filtros.filtrosLlenados,
+      filasSinFiltro:  filtros.filasSinFiltro,
+      compartido:      filtros.compartido,
+      confianza:       filtros.confianza,
+      llenados:        filtrosLlenadosDe(personRows, (codigo) => projectMap.get(codigo)?.startDate),
+    } : {}),
   };
 }
 
@@ -323,6 +350,7 @@ export default createEndpoint({
         clusterId,
         clusterReasons,
         matchedBy: clusterReasons,
+        conFiltros: true,
       });
 
       return { results: [result] };
