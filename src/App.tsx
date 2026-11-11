@@ -11,6 +11,7 @@ import AdminPage from './pages/AdminPage';
 import SuppliersPage from './pages/SuppliersPage';
 import PaymentsPage from './pages/PaymentsPage';
 import IndicadoresPage from './pages/IndicadoresPage';
+import BuscarGentePage from './pages/BuscarGentePage';
 import PagosManagementPage from './pages/PagosManagementPage';
 import UserAdminPage from './pages/UserAdminPage';
 import PurchasesPage from './pages/PurchasesPage';
@@ -116,6 +117,7 @@ export default function App() {
 
                 <Route path="operacion/proyectos"              element={<ProjectsPage />} />
                 <Route path="operacion/proyectos/:projectId"   element={<ProjectHubPage />} />
+                <Route path="operacion/buscar-gente"           element={<BuscarGentePage />} />
                 <Route path="operacion/reclutamiento" element={<Navigate to="/operacion/proyectos" replace />} />
                 <Route path="operacion/participantes" element={<Navigate to="/operacion/proyectos" replace />} />
                 <Route path="operacion/tareas"        element={<Navigate to="/operacion/proyectos" replace />} />

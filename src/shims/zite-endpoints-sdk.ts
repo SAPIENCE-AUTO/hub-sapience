@@ -200,6 +200,7 @@ export const bulkDeletePayments = (input?: any): Promise<any> => call('bulkDelet
 export const bulkUpdatePayments = (input?: any): Promise<any> => call('bulkUpdatePayments', input);
 export const calcularIndicadoresReclutamiento = (input?: any): Promise<any> => call('calcularIndicadoresReclutamiento', input);
 export const calcularReclutadoresEstadistica = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('calcularReclutadoresEstadistica', input);
+export const actualizarCatalogoBusqueda = (input?: any): Promise<any> & AsyncIterable<any> & { cancelar: () => void } => callStreaming('actualizarCatalogoBusqueda', input);
 export const cancelPurchaseOrder = (input?: any): Promise<any> => call('cancelPurchaseOrder', input);
 export const chatDealsAnalysis = (input?: any): Promise<any> => call('chatDealsAnalysis', input);
 export const chatWithMeetingTranscript = (input?: any): Promise<any> & AsyncIterable<any> => callStreaming('chatWithMeetingTranscript', input);
@@ -390,6 +391,8 @@ export const getRecruitmentRows = (input?: any): Promise<any> => call('getRecrui
 export const getRecruitmentSummary = (input?: any): Promise<any> => call('getRecruitmentSummary', input);
 export const getReferenceOptions = (input?: any): Promise<any> => call('getReferenceOptions', input);
 export const getReclutadoresEstadistica = (input?: any): Promise<any> => call('getReclutadoresEstadistica', input);
+export const getCatalogoBusqueda = (input?: any): Promise<any> => call('getCatalogoBusqueda', input);
+export const buscarGente = (input?: any): Promise<any> => call('buscarGente', input);
 export const getRubroAssignments = (input?: any): Promise<any> => call('getRubroAssignments', input);
 export const getSharedArchivedFile = (input?: any): Promise<any> => call('getSharedArchivedFile', input);
 export const getSharedArchivedFileUrl = (input?: any): Promise<any> => call('getSharedArchivedFileUrl', input);

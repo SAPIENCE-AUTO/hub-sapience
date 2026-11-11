@@ -132,6 +132,8 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ALL_ROLES,
     items: [
       { to: '/operacion/proyectos', icon: FolderKanban, label: 'Proyectos' },
+      // Reservorio del equipo de reclutamiento: dónde se ha preguntado por una marca o tema y qué contestó la gente (toda la organización, como Filtros).
+      { to: '/operacion/buscar-gente', icon: Search, label: 'Buscar gente' },
       { to: '/notetaker', icon: Video, label: 'Notetaker' },
       { to: '/sharpli', icon: SharpliIcon, label: 'Sharpli' },
     ],
