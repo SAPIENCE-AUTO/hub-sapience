@@ -891,7 +891,13 @@ export default function ProjectsPage() {
                   <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-56 p-1" align="start">
+              {/* La lista de clientes puede ser larga: tope de altura = lo que cabe en la pantalla, con su propio scroll
+                  (overscroll-contain: al llegar al final no arrastra la página de atrás). */}
+              <PopoverContent
+                className="w-56 p-1 max-h-[min(24rem,var(--radix-popover-content-available-height))] overflow-y-auto overflow-x-hidden overscroll-contain"
+                align="start"
+                collisionPadding={16}
+              >
                 <button
                   onClick={() => setClientFilter('all')}
                   className={`w-full text-left px-3 py-1.5 text-sm rounded hover:bg-muted transition-colors ${clientFilter === 'all' ? 'font-semibold text-primary' : ''}`}
@@ -1016,7 +1022,11 @@ export default function ProjectsPage() {
                   <ChevronDown className="w-3 h-3 text-muted-foreground" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-52 p-2" align="start">
+              <PopoverContent
+                className="w-52 p-2 max-h-[min(24rem,var(--radix-popover-content-available-height))] overflow-y-auto overflow-x-hidden overscroll-contain"
+                align="start"
+                collisionPadding={16}
+              >
                 {calProjectCodes.length === 0 ? (
                   <p className="text-xs text-muted-foreground px-2 py-1">Sin proyectos en esta semana</p>
                 ) : calProjectCodes.map(code => (

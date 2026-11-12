@@ -50,15 +50,20 @@ export default function ComboboxCreatable({ value, onChange, options, placeholde
           <ChevronsUpDown className="w-4 h-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" collisionPadding={16}>
         <Command shouldFilter={false}>
           <CommandInput placeholder="Buscar o escribir..." value={search} onValueChange={setSearch} />
           {/* onWheel + stopPropagation: cuando este combobox vive dentro de un
               Dialog (como los de "Nuevo proyecto"/"Editar deal"), el bloqueo
               de scroll del Dialog intercepta la rueda del mouse antes de que
               llegue a esta lista — el scroll programático funciona pero la
-              rueda no. Es un choque conocido entre Popover y Dialog de Radix. */}
-          <CommandList onWheel={e => e.stopPropagation()}>
+              rueda no. Es un choque conocido entre Popover y Dialog de Radix.
+              Altura: tope de 300 px, pero nunca más de lo que cabe en la pantalla (menos la caja de búsqueda):
+              en una ventana baja la lista se achica y se desplaza por dentro en vez de salirse por abajo. */}
+          <CommandList
+            className="max-h-[min(300px,calc(var(--radix-popover-content-available-height)_-_3rem))] overscroll-contain"
+            onWheel={e => e.stopPropagation()}
+          >
             {filtered.length === 0 && !canCreate && <CommandEmpty>Sin resultados</CommandEmpty>}
             <CommandGroup>
               {filtered.map(o => (
