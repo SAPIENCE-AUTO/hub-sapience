@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
-import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
+import { exigirAccesoBuscador } from '../serverUtils/busqueda/acceso';
 import { buscarEnCatalogo } from '../serverUtils/busqueda/buscar';
 import { traducirFaltaTablasBusqueda } from '../serverUtils/busqueda/almacen';
 
@@ -38,7 +38,7 @@ export default createEndpoint({
   inputSchema: z.object({ termino: z.string().max(80) }),
   outputSchema: z.object({ termino: z.string(), recortado: z.boolean(), grupos: z.array(Grupo) }),
   execute: async ({ input, context }) => {
-    exigirAccesoFormularios(context);
+    exigirAccesoBuscador(context);
     try {
       return await buscarEnCatalogo(pool, input.termino);
     } catch (err) {

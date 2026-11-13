@@ -25,6 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isPageVisible, ROUTE_TO_PAGE_KEY } from '../lib/pageVisibility';
 import { TABLERO_EMAILS } from '../lib/tablero/acceso';
+import { BUSCADOR_SOLO_PARA } from '../lib/busqueda/acceso';
 import { useActivityTracker } from '../hooks/useActivityTracker';
 import PendingSavesBar from './PendingSavesBar';
 import AvatarCropEditor from './AvatarCropEditor';
@@ -132,8 +133,8 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ALL_ROLES,
     items: [
       { to: '/operacion/proyectos', icon: FolderKanban, label: 'Proyectos' },
-      // Reservorio del equipo de reclutamiento: dónde se ha preguntado por una marca o tema y qué contestó la gente (toda la organización, como Filtros).
-      { to: '/operacion/buscar-gente', icon: Search, label: 'Buscar gente' },
+      // Reservorio del equipo de reclutamiento: dónde se ha preguntado por una marca o tema y qué contestó la gente. Por ahora solo Sergio; se abre a todos con BUSCADOR_SOLO_PARA = null (lib/busqueda/acceso.ts).
+      { to: '/operacion/buscar-gente', icon: Search, label: 'Buscar gente', ...(BUSCADOR_SOLO_PARA ? { emails: BUSCADOR_SOLO_PARA } : {}) },
       { to: '/notetaker', icon: Video, label: 'Notetaker' },
       { to: '/sharpli', icon: SharpliIcon, label: 'Sharpli' },
     ],

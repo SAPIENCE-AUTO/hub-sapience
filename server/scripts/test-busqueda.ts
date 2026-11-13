@@ -14,10 +14,12 @@ import { agruparHallazgos, esPrimeraOpcion, filasQueCumplen, MAX_ITEMS_POR_GRUPO
 import { SQL_TABLAS_BUSQUEDA, traducirFaltaTablasBusqueda } from '../../src/serverUtils/busqueda/almacen';
 import { actualizarCatalogo } from '../../src/serverUtils/busqueda/catalogo';
 import { buscarEnCatalogo, escaparLike, estadoDelCatalogo } from '../../src/serverUtils/busqueda/buscar';
+import { BUSCADOR_SOLO_PARA, puedeVerBuscador } from '../../src/lib/busqueda/acceso';
 
 process.env.STRICT_OUTPUT = 'true';
 const buscarGente = (await import('../../src/api/buscarGente')).default;
 const getCatalogoBusqueda = (await import('../../src/api/getCatalogoBusqueda')).default;
+const actualizarCatalogoBusqueda = (await import('../../src/api/actualizarCatalogoBusqueda')).default;
 
 let n = 0;
 let fallas = 0;
@@ -172,6 +174,36 @@ await pg.exec(
     .replace(/create index on recruitment_rows using gin \(participant_name gin_trgm_ops\);/, ''),
 );
 
+// ── quién puede usar el buscador: hoy solo Sergio ───────────────────────────
+await prueba('puedeVerBuscador: solo Sergio por ahora (sin importar mayúsculas); nadie más, ni sin correo', () => {
+  assert.deepEqual(BUSCADOR_SOLO_PARA, ['sergio@sapience.com.mx'], 'si el buscador se abrió a más gente, actualiza esta prueba a propósito');
+  for (const ok of ['sergio@sapience.com.mx', 'Sergio@Sapience.com.mx', 'SERGIO@SAPIENCE.COM.MX']) assert.equal(puedeVerBuscador(ok), true, ok);
+  for (const no of ['socio@ejemplo.test', 'analista@ejemplo.test', 'sergio@otro.com', 'sergio@sapience.com.mx.otro.com', 'otro.sergio@sapience.com.mx', '', undefined, null]) {
+    assert.equal(puedeVerBuscador(no as any), false, String(no));
+  }
+});
+await prueba('abrirlo a todos es un solo cambio (la lista en null): entra cualquiera que haya iniciado sesión, y quien no tiene correo sigue sin entrar', () => {
+  assert.equal(puedeVerBuscador('analista@ejemplo.test', null), true);
+  assert.equal(puedeVerBuscador('Sergio@Sapience.com.mx', null), true);
+  assert.equal(puedeVerBuscador('', null), false);
+  assert.equal(puedeVerBuscador(undefined, null), false);
+  assert.equal(puedeVerBuscador('a@ejemplo.test', ['a@ejemplo.test']), true);
+  assert.equal(puedeVerBuscador('b@ejemplo.test', ['a@ejemplo.test']), false);
+});
+await prueba('los tres endpoints del buscador rechazan a quien no es Sergio ANTES de tocar la base (hoy sin tablas: no dicen «faltan tablas», dicen que no está habilitado), con FORBIDDEN', async () => {
+  const otra = ctxOtra();
+  const msg = /Buscar gente no está habilitado para tu usuario/;
+  const llamadas = [() => getCatalogoBusqueda.run({}, otra), () => buscarGente.run({ termino: 'corona' }, otra), () => actualizarCatalogoBusqueda.run({}, otra)];
+  for (const llamada of llamadas) {
+    const err: any = await llamada().then(() => null, (e) => e);
+    assert.match(String(err?.message), msg);
+    assert.equal(err.code, 'FORBIDDEN', 'no UNAUTHORIZED: parecería que se venció la sesión');
+  }
+  // Una sesión sin correo tampoco entra, y sin sesión se pide iniciarla.
+  await assert.rejects(buscarGente.run({ termino: 'corona' }, { user: { id: 'x' } } as any), msg);
+  await assert.rejects(buscarGente.run({ termino: 'corona' }, { user: null } as any), /Sesión requerida/);
+});
+
 await prueba('sin las tablas del buscador: el estado lo dice sin fallar y buscar explica qué falta', async () => {
   assert.deepEqual(await estadoDelCatalogo(pool as any), { existe: false, tableros: 0, preguntas: 0, respuestas: 0, actualizado: null });
   const e = (await getCatalogoBusqueda.run({}, ctx())) as any;
@@ -179,7 +211,9 @@ await prueba('sin las tablas del buscador: el estado lo dice sin fallar y buscar
   await assert.rejects(buscarGente.run({ termino: 'corona' }, ctx()), /Todavía no existen las tablas del buscador/);
   assert.throws(() => traducirFaltaTablasBusqueda(new Error('otra cosa')), /otra cosa/);
 });
-function ctx() { return { user: { id: '00000000-0000-0000-0000-000000000001', email: 'analista@ejemplo.test' } } as any; }
+// Quien usa el buscador (hoy solo Sergio, ver src/lib/busqueda/acceso.ts) y alguien más del equipo, que no entra.
+function ctx() { return { user: { id: '00000000-0000-0000-0000-000000000001', email: 'sergio@sapience.com.mx' } } as any; }
+function ctxOtra() { return { user: { id: '00000000-0000-0000-0000-000000000002', email: 'analista@ejemplo.test' } } as any; }
 await pg.exec(SQL_TABLAS_BUSQUEDA);
 
 const proyecto = async (codigo: string, cliente: string, inicio: string) => pg.query(`insert into projects (project_code, full_name, client, start_date) values ($1, $2, $3, $4::date)`, [codigo, `Proyecto ${codigo}`, cliente, inicio]);
@@ -392,6 +426,14 @@ await prueba('un tablero que se borra sale del catálogo; y uno que cambia de re
   const { rows } = await pg.query<{ n: number }>(`select count(*)::int n from busqueda_columnas c join busqueda_tableros t on t.tablero_id = c.tablero_id where t.tablero = 'Respuestas filtro uno'`);
   assert.equal(rows[0].n, 0);
   assert.equal((await pg.query<{ n: number }>(`select count(*)::int n from busqueda_piezas p where not exists (select 1 from busqueda_columnas c where c.id = p.columna)`)).rows[0].n, 0, 'no quedan respuestas sueltas');
+});
+
+await prueba('Sergio sí puede actualizar el catálogo desde el endpoint (y recibe el avance); quien no es Sergio no lo logra', async () => {
+  const avances: unknown[] = [];
+  const r: any = await actualizarCatalogoBusqueda.run({}, ctx(), (ch) => avances.push(ch));
+  assert.equal(typeof r.tableros, 'number');
+  assert.ok(avances.length > 0, 'el endpoint transmite el avance');
+  await assert.rejects(actualizarCatalogoBusqueda.run({ forzar: true }, ctxOtra(), () => {}), /no está habilitado/);
 });
 
 console.log(`\n${n - fallas}/${n} pruebas pasan`);

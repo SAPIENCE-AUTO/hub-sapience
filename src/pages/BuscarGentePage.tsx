@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { actualizarCatalogoBusqueda, buscarGente, getCatalogoBusqueda } from 'zite-endpoints-sdk';
+import { useAuth } from 'zite-auth-sdk';
+import { puedeVerBuscador } from '@/lib/busqueda/acceso';
 import { toast } from 'sonner';
 import { Loader2, RefreshCw, Search, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,6 +23,9 @@ const mensaje = (e: unknown, defecto: string) => (e instanceof Error && e.messag
  * reservorio: no depende de ningún proyecto. Busca en un catálogo que se arma leyendo los tableros (botón «Actualizar»), así que responde al instante.
  */
 export default function BuscarGentePage() {
+  const { user } = useAuth();
+  // Cosmético: el candado de verdad está en el servidor (serverUtils/busqueda/acceso.ts). Hoy solo Sergio (lib/busqueda/acceso.ts).
+  const permitido = puedeVerBuscador((user as { email?: string } | null | undefined)?.email);
   const [estado, setEstado] = useState<Estado | null>(null);
   const [cargando, setCargando] = useState(true);
   const [termino, setTermino] = useState('');
@@ -37,7 +42,7 @@ export default function BuscarGentePage() {
     }
     setCargando(false);
   }, []);
-  useEffect(() => { void cargarEstado(); }, [cargarEstado]);
+  useEffect(() => { if (permitido) void cargarEstado(); else setCargando(false); }, [permitido, cargarEstado]);
 
   const buscar = async (texto = termino) => {
     const t = texto.trim();
@@ -72,6 +77,10 @@ export default function BuscarGentePage() {
 
   const sinTablas = estado && !estado.existe;
   const vacio = estado?.existe && estado.tableros === 0;
+
+  if (!permitido) {
+    return <div className="p-6 text-sm text-muted-foreground">Esta sección no está habilitada para tu usuario.</div>;
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">

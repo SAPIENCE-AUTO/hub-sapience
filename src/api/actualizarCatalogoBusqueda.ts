@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint } from '../../server/compat';
-import { exigirAccesoFormularios } from '../serverUtils/formularios/acceso';
+import { exigirAccesoBuscador } from '../serverUtils/busqueda/acceso';
 import { traducirFaltaTablasBusqueda } from '../serverUtils/busqueda/almacen';
 import { actualizarCatalogo, type ResumenCatalogo } from '../serverUtils/busqueda/catalogo';
 
@@ -23,7 +23,7 @@ export default createEndpoint({
     milisegundos: z.number(),
   }),
   execute: async ({ input, context, stream }) => {
-    exigirAccesoFormularios(context);
+    exigirAccesoBuscador(context);
     if (!enCurso) {
       enCurso = (async () => {
         try {

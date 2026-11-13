@@ -52,14 +52,14 @@ Se leyó TODA la base con el código real (cada tablero en una transacción de s
 ## Dónde vive
 
 - Base (aditiva, `server/scripts/add-busqueda-tables.ts`, **no se ejecuta sola: pide el sí de Sergio antes de correrla en producción**): `busqueda_tableros`, `busqueda_columnas`, `busqueda_piezas`, `busquedas_guardadas` (SQL en `src/serverUtils/busqueda/almacen.ts`).
-- Endpoints: `getCatalogoBusqueda` (cuántos tableros, preguntas y respuestas hay y de cuándo), `buscarGente`, `actualizarCatalogoBusqueda` (streaming, una sola actualización a la vez). Acceso: toda la organización, igual que Filtros (`exigirAccesoFormularios`).
+- Endpoints: `getCatalogoBusqueda` (cuántos tableros, preguntas y respuestas hay y de cuándo), `buscarGente`, `actualizarCatalogoBusqueda` (streaming, una sola actualización a la vez). Acceso: **por ahora solo Sergio** (2026-11-13: «ahorita accesible sólo para sergio, después lo abrimos a todos»). Candado real en el servidor (`exigirAccesoBuscador`, `src/serverUtils/busqueda/acceso.ts`, en los tres endpoints); el del menú (`Layout.tsx`) y el de la pantalla (`BuscarGentePage.tsx`) son cosméticos. Quién entra se decide en UN solo lugar: `BUSCADOR_SOLO_PARA` en `src/lib/busqueda/acceso.ts` (hoy `['sergio@sapience.com.mx']`; **para abrirlo a toda la organización, ponerlo en `null`**: el menú, la pantalla y el servidor lo leen de ahí; y actualizar la primera prueba de «quién puede usar el buscador» en `test-busqueda.ts`, que a propósito fija la lista de hoy).
 - Pantalla: `src/pages/BuscarGentePage.tsx` y `src/components/buscador/GrupoResultado.tsx`, en `/operacion/buscar-gente` (menú Operación → «Buscar gente»).
 
 ## Pruebas
 
-`node server/node_modules/.bin/tsx server/scripts/test-busqueda.ts` (26): el texto (normalizar, partir listas, tapar el término, columnas y respuestas personales, modo de columna), el agrupado, y contra PGlite con el esquema real y tableros inventados: matriz de marcas, ranking
+`node server/node_modules/.bin/tsx server/scripts/test-busqueda.ts` (30): el texto (normalizar, partir listas, tapar el término, columnas y respuestas personales, modo de columna), el agrupado, y contra PGlite con el esquema real y tableros inventados: matriz de marcas, ranking
 en lista con el conteo exacto de «primera», opciones con coma que no se parten, columnas personales que no entran (nombre, teléfono, dirección, reclutadores), un correo repetido y un identificador de once dígitos que no se guardan aunque la columna tenga nombre inocente, filas y columnas borradas, respuestas con pocas filas, tableros que no son de reclutamiento o sin filas, un tablero con datos rotos que
-no detiene a los demás, búsqueda sin acentos, comodines, y actualizar solo lo que cambió.
+no detiene a los demás, búsqueda sin acentos, comodines, y actualizar solo lo que cambió. Y el acceso: solo Sergio por ahora (sin importar mayúsculas), que abrirlo a todos sea un solo cambio, y que los tres endpoints rechacen a los demás con FORBIDDEN antes de tocar la base.
 
 ## Pendiente (en este orden)
 
@@ -72,5 +72,7 @@ no detiene a los demás, búsqueda sin acentos, comodines, y actualizar solo lo 
 5. «Vincular»: llevar a las personas de los tableros elegidos a un proyecto (traer solo a quienes cumplen, con la elegibilidad por cliente y el consentimiento). Es un paso aparte: el buscador no depende de ningún proyecto.
 
 ## Bitácora
+
+- **2026-11-13:** «Buscar gente» pasa a ser solo para Sergio por ahora (estuvo abierto a toda la organización desde que se publicó, el 2026-11-11, como Filtros): candado en el servidor, en la pantalla y en el menú, con un único interruptor (`BUSCADOR_SOLO_PARA`, ver «Dónde vive»). Pruebas: 30 (4 nuevas); visto con la pantalla y la lista del menú reales: Sergio ve el ítem y la pantalla, un socio y una analista no ven el ítem, la pantalla dice que no está habilitada y no le habla al servidor.
 
 - **2026-11-11:** primera versión (catálogo, búsqueda, pantalla) construida con pruebas (26), ensayada contra la base real sin escribir nada (ver arriba) y probada en el navegador con resultados inventados. Con el sí de Sergio se crearon las tablas en producción y se leyeron los tableros por primera vez; la auditoría de privacidad encontró datos personales sueltos y se reforzaron las reglas (ver «Cómo funciona»).
