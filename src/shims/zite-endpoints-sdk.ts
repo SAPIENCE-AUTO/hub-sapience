@@ -219,6 +219,7 @@ export const createFormulario = (input?: any): Promise<any> => call('createFormu
 export const crearTableroParaFormulario = (input?: any): Promise<any> => call('crearTableroParaFormulario', input);
 export const createMuxUploadUrl = (input?: any): Promise<any> => call('createMuxUploadUrl', input);
 export const createObservationStream = (input?: any): Promise<any> => call('createObservationStream', input);
+export const createTalksSession = (input?: any): Promise<any> => call('createTalksSession', input);
 export const createPreworkEstudio = (input?: any): Promise<any> => call('createPreworkEstudio', input);
 export const createPreworkMision = (input?: any): Promise<any> => call('createPreworkMision', input);
 export const createPreworkSeguimiento = (input?: any): Promise<any> => call('createPreworkSeguimiento', input);
@@ -358,6 +359,7 @@ export const getObservationChatMessages = (input?: any): Promise<any> => call('g
 export const getObservationChatToken = (input?: any): Promise<any> => call('getObservationChatToken', input);
 export const getObservationRoomPublic = (input?: any): Promise<any> => call('getObservationRoomPublic', input);
 export const getObservationSessionDetail = (input?: any): Promise<any> => call('getObservationSessionDetail', input);
+export const getTalksSession = (input?: any): Promise<any> => call('getTalksSession', input);
 export const getParticipants = (input?: any): Promise<any> => call('getParticipants', input);
 export const getPagosManagement = (input?: any): Promise<any> => call('getPagosManagement', input);
 export const getPayments = (input?: any): Promise<any> => call('getPayments', input);

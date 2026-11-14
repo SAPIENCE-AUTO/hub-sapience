@@ -171,6 +171,7 @@ Configuradas en `zite.config.json`:
 | **Ably** | Realtime: chat, presencia, typing, eventos de tablero y documentos |
 | **Fillout** | Formularios de screening/reclutamiento + webhooks de respuestas |
 | **Google Maps** | Street View en popover de direcciones |
+| **Talks** | App aparte de sesiones en vivo con participantes (`~/estudio-sapience`, `talks.mx`). El Hub le crea la sesión de cada evento del calendario (ver «Talks» abajo) |
 
 ### n8n como capa de automatización
 
@@ -197,6 +198,18 @@ hay que exportarlos aparte o reimplementar esa lógica.
 
 `ZITE_FILLOUT_API_KEY`, `ZITE_ABLY_API_KEY`, `ZITE_GOOGLE_MAPS_API_KEY`,
 `ZITE_OUTLOOK_SEND_AS_EMAIL`, y los 5 `ZITE_N8N_*` de arriba.
+
+Para Talks: `TALKS_URL` y `TALKS_API_KEY` (ver la sección siguiente).
+
+### Talks (sesiones en vivo)
+
+Talks es una app aparte (`~/estudio-sapience`, `talks.mx`, servicio propio en Render) que corre sesiones en vivo con participantes sobre LiveKit. **Se desarrolla en su propia sesión y no se edita desde el Hub.** El contrato completo vive en su `docs/integracion-hub.md`.
+
+- **Variables:** `TALKS_URL` (hoy `https://talks-y08o.onrender.com`, luego `https://talks.mx`) y `TALKS_API_KEY` (la misma `HUB_API_KEY` que Talks tiene en Render). Van en las variables del servicio del Hub en Render. La llave real nunca va en un archivo versionado ni en el chat. Solo se acepta `http://` si la dirección es localhost (pruebas). No hay `.env.example` en el repo.
+- **Qué hace el Hub:** en cada evento del calendario ya guardado, el bloque «Talks» de la Sala de observación (`components/pm/TalksSessionPanel.tsx`). La primera vez dice «Crear links de sesión»: `createTalksSession` arma o recupera la transmisión de Mux (`provisionObservationSession`) y le pide a Talks la sesión (`POST /api/v1/sesiones`, con el id del evento como `externoId`, así que apretar dos veces no crea nada doble). Después dice «Abrir en Talks» y muestra los links con botón de copiar. `getTalksSession` consulta sin crear. El cliente de Talks está en `server/talks/client.ts`.
+- **Qué guarda:** en `observation_sessions`, las columnas `talks_session_id`, `talks_link_equipo` y `talks_link_participantes`. Esa tabla no sale de `generate.py` (la crea `add-observation-room-tables.ts`), así que las columnas las agrega `server/scripts/add-observation-talks-columns.ts`. **No se ejecuta solo y hay que correrlo antes de subir el código que lo usa.** Si falta, el botón avisa en claro y no rompe el resto de la Sala.
+- **Seguridad:** `mux_stream_key` es la única credencial que permite transmitir a la sala de un evento. Solo viaja en el cuerpo del POST a Talks: ni en URLs, ni en registros (todo texto que viene de Talks se limpia de ella), ni en la respuesta de los endpoints. Un error de Talks nunca sale como 401 hacia el navegador, porque parecería que se venció la sesión de quien aprieta el botón.
+- **Pruebas:** `server/scripts/test-talks.ts` (un Talks y un Mux de mentira más una base en memoria; cualquier llamada a otra dirección hace fallar la prueba).
 
 ---
 

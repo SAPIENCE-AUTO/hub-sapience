@@ -8,6 +8,7 @@ import {
   postProducerChatMessage, deleteObservationChatMessage, exportObservationAttendance,
 } from 'zite-endpoints-sdk';
 import { useObservationChat, type ObservationChatMessage } from '@/hooks/useObservationChat';
+import { TalksSessionPanel } from './TalksSessionPanel';
 
 interface ObservationSession {
   id: string;
@@ -191,6 +192,9 @@ export function ObservationRoomPanel({ calendarEventId }: { calendarEventId: str
           </span>
         )}
       </div>
+
+      {/* Talks: «Crear links de sesión» / «Abrir en Talks». Al crear arma la transmisión de Mux, así que recarga la sala. */}
+      <TalksSessionPanel calendarEventId={calendarEventId} onCreada={load} />
 
       {session === undefined ? (
         <div className="text-xs text-muted-foreground/60 italic">Cargando...</div>
