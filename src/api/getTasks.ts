@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, Tasks, CalendarEvents, Boards, pool } from '../../server/compat';
+import { camposTalksDeEvento, leerTalksDeEventos } from '../serverUtils/talksSession';
 
 const dedup = <T extends { id: string }>(a: T[], b: T[]): T[] => {
   const seen = new Map<string, T>();
@@ -48,6 +49,12 @@ const eventSchema = z.object({
   rowOrder: z.number().optional(),
   hasZoom: z.boolean().optional(),
   zoomNeedsUpdate: z.boolean().optional(),
+  // Talks: solo vienen en los eventos que ya tienen sus links (la fila del calendario los muestra sin preguntar evento por evento).
+  // Nunca llevan la llave de transmisión de Mux.
+  talksSessionId: z.string().optional(),
+  talksLinkEquipo: z.string().optional(),
+  talksLinkParticipantes: z.string().optional(),
+  observationUrl: z.string().optional(),
 });
 
 /** Zoom status por evento, para la pastilla en la vista de lista (EventsTable.tsx)
@@ -138,7 +145,8 @@ export default createEndpoint({
         fields: [...EVENT_FIELDS],
         sorts: [{ field: 'createdAt', direction: 'asc' }],
       });
-      const zoomByEventId = await fetchZoomStatusByEventIds(eventsResult.records.map(ev => ev.id));
+      const eventIds = eventsResult.records.map(ev => ev.id);
+      const [zoomByEventId, talksByEventId] = await Promise.all([fetchZoomStatusByEventIds(eventIds), leerTalksDeEventos(eventIds)]);
       return {
         tasks: [],
         calendarEvents: eventsResult.records.map(ev => ({
@@ -163,6 +171,7 @@ export default createEndpoint({
           rowOrder: ev.rowOrder ?? undefined,
           hasZoom: zoomByEventId.get(ev.id)?.hasZoom ?? false,
           zoomNeedsUpdate: zoomByEventId.get(ev.id)?.zoomNeedsUpdate ?? false,
+          ...camposTalksDeEvento(talksByEventId.get(ev.id)),
         })),
         boards: [],
         calendarBoards: [],
@@ -231,7 +240,8 @@ export default createEndpoint({
       .sort((a, b) => (a.boardOrder ?? 0) - (b.boardOrder ?? 0))
       .map(b => ({ id: b.id, name: b.boardName ?? '', boardType: b.boardType ?? 'calendar', boardOrder: b.boardOrder ?? 0 }));
 
-    const zoomByEventId = await fetchZoomStatusByEventIds(eventsResult.records.map(ev => ev.id));
+    const eventIds = eventsResult.records.map(ev => ev.id);
+    const [zoomByEventId, talksByEventId] = await Promise.all([fetchZoomStatusByEventIds(eventIds), leerTalksDeEventos(eventIds)]);
 
     return {
       tasks,
@@ -257,6 +267,7 @@ export default createEndpoint({
         rowOrder: ev.rowOrder ?? undefined,
         hasZoom: zoomByEventId.get(ev.id)?.hasZoom ?? false,
         zoomNeedsUpdate: zoomByEventId.get(ev.id)?.zoomNeedsUpdate ?? false,
+        ...camposTalksDeEvento(talksByEventId.get(ev.id)),
       })),
       boards,
       calendarBoards,

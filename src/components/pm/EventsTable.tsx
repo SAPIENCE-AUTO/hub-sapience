@@ -16,7 +16,11 @@ import { ChildSubTable } from '../table/ChildSubTable';
 import { getLocationColor } from '../WeeklyCalendar';
 import { ColumnFilterPopover } from '../ColumnFilterPopover';
 import type { CalEvent } from './pmTypes';
+import { TalksFilaCell } from './TalksFilaCell';
 import { ordenarFilas, ordenTrasSoltar, quedaDondeEstaba, type DondeSoltar } from '@/lib/ordenFilas';
+
+// Columna «Talks» (TalksFilaCell.tsx): «Abrir en Talks» y los tres links con botón de copiar caben en una sola línea con este ancho.
+const TALKS_COL_WIDTH = 450;
 
 // Emails "asistentes" llegan pegados de Outlook/Excel con formatos mixtos:
 // "correo@x.com", "Nombre Apellido <correo@x.com>", separados por coma, punto
@@ -338,7 +342,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
   const groups       = groupDynCols.columns;
   const topLevel     = events.filter(e => !e.parentEventId);
   const getChildEvts = (id: string) => events.filter(e => e.parentEventId === id);
-  const totalCols    = 8 + dynCols.columns.filter(c => visibleColIds.has(c.id)).length + 1;
+  const totalCols    = 9 + dynCols.columns.filter(c => visibleColIds.has(c.id)).length + 1; // 7 fijas + Zoom + Talks + el relleno final
 
   const getEvtGroupId = (evId: string) =>
     groups.find(g => groupDynCols.getCellVal(evId, g.id)?.textValue === '1')?.id ?? null;
@@ -680,6 +684,11 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
               )
             ) : null}
           </td>
+          {/* Talks — «Crear links de sesión» / «Abrir en Talks» y los links (TalksFilaCell.tsx). Va pegada a la pastilla de Zoom, entre «Crear stream» y
+              las dos columnas de link. Sus datos llegan en la misma carga de la lista (getTasks), no se piden por fila. */}
+          <td style={{ width: TALKS_COL_WIDTH, maxWidth: TALKS_COL_WIDTH, padding: '2px 6px', borderBottom: '1px solid hsl(var(--border) / 0.3)', borderRight: '1px solid hsl(var(--border) / 0.3)' }}>
+            <TalksFilaCell ev={ev} />
+          </td>
           <DynamicColumnCells rowId={ev.id} dynCols={dynCols} recentColors={recentColors}
             recentTextColors={recentTextColors} recentBgColors={recentBgColors}
             colUniqueValues={colUniqueValues}
@@ -888,7 +897,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
           <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', width: 10, height: 10, borderRadius: '50%', background: 'hsl(var(--primary))', border: '2px solid hsl(var(--card))' }} />
           <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', width: 10, height: 10, borderRadius: '50%', background: 'hsl(var(--primary))', border: '2px solid hsl(var(--card))' }} />
         </div>
-        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + 128 + 128 + 96 + 90 + 96 + 44 + dynCols.columns.filter(c => visibleColIds.has(c.id)).reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}>
+        <table style={{ tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, width: 32 + nameCol.width + 128 + 128 + 96 + 90 + 96 + TALKS_COL_WIDTH + 44 + dynCols.columns.filter(c => visibleColIds.has(c.id)).reduce((sum, c) => sum + dynCols.getColWidth(c.id), 0) + 60, minWidth: '100%' }}>
           <colgroup>
             <col style={{ width: 32 }} />
             <col style={{ width: nameCol.width }} />
@@ -913,6 +922,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
                 arriba) — no tiene sentido que compita por atención con
                 Invite/Outlook al inicio de la fila. */}
             <col style={{ width: 96 }} />
+            <col style={{ width: TALKS_COL_WIDTH }} />
             {dynColsAfterZoom.map(c => { const w = visibleColIds.has(c.id) ? dynCols.getColWidth(c.id) : 0; return <col key={c.id} data-col-id={c.id} style={{ width: w, minWidth: w, maxWidth: w }} />; })}
             <col />
           </colgroup>
@@ -939,6 +949,7 @@ export function EventsTable({ events, onEdit, onOpenInvite, onDelete, onBulkDele
               </th>
               <DynamicColumnHeaders dynCols={dynCols} columnFilters={columnFilters} setColFilter={setColFilter} colUniqueValues={colUniqueValues} visibleColIds={visibleColIds} hiddenColumns={afterZoomIds} hideAddButton />
               <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: 96 }} title="Estatus del meeting de Zoom">Zoom</th>
+              <th className="text-left px-2 py-1 text-xs font-semibold whitespace-nowrap bg-muted border-r border-border/40" style={{ width: TALKS_COL_WIDTH }} title="Sesión del evento en Talks: crear los links y copiar los de participantes, moderador y observación">Talks</th>
               <DynamicColumnHeaders dynCols={dynCols} columnFilters={columnFilters} setColFilter={setColFilter} colUniqueValues={colUniqueValues} visibleColIds={visibleColIds} hiddenColumns={beforeZoomIds} />
             </tr>
           </thead>

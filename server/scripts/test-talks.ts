@@ -4,7 +4,8 @@
 // Revisa: que la primera llamada cree y la segunda devuelva la misma sin crear nada doble (ni en Mux, ni en Talks, ni en la base, tampoco con dos clics a la vez),
 // que se guarden el id y los dos links junto a la sala, que la llave de transmisión solo viaje en el cuerpo del POST (ni en la URL, ni en la respuesta, ni en los
 // registros), que los errores de Talks (400, 401, no disponible...) salgan en español llano y sin 401 hacia el navegador, que sin Talks conectado o sin la migración
-// no se cree nada a medias, y las dos reglas de la pantalla (el botón solo en eventos guardados; «Crear» la primera vez y «Abrir» después).
+// no se cree nada a medias, que «Crear links de sesión» nunca cree la reunión de Zoom (aunque Zoom esté configurado), y las dos reglas de la pantalla (el botón solo
+// en eventos guardados; «Crear» la primera vez y «Abrir» después).
 // uso: node server/node_modules/.bin/tsx server/scripts/test-talks.ts
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,6 +17,7 @@ import { pool } from '../compat';
 import { DATE_OID, NUMERIC_OID, TIMESTAMPTZ_OID, parseDate, parseNumeric, parseTimestamptz } from '../compat/datetimeParsers';
 import createTalksSession from '../../src/api/createTalksSession';
 import getTalksSession from '../../src/api/getTalksSession';
+import { provisionObservationSession } from '../../src/serverUtils/provisionObservationSession';
 import { esEventoGuardado, etiquetaBotonTalks } from '../../src/lib/talksSesion';
 
 // ─── Registros: todo lo que los endpoints escriben en consola se guarda aparte, para revisar al final que no se filtró ninguna llave ───
@@ -94,6 +96,7 @@ const llavesMux: string[] = [];
 let muxCreados = 0;
 let muxProximaLlave: string | null = null;
 let muxCaido = false;
+const llamadasZoom: string[] = []; // cada vez que algo le habla a Zoom (nunca debe pasar al crear links de sesión)
 process.env.ZITE_MUX_TOKEN_ID = 'token-de-mentira';
 process.env.ZITE_MUX_TOKEN_SECRET = 'secreto-de-mentira';
 delete process.env.ZITE_ZOOM_HOST_EMAILS; // sin cuentas de Zoom: la sala se arma solo con Mux
@@ -182,6 +185,11 @@ globalThis.fetch = (async (input: any, init?: any) => {
     );
   }
   if (url.startsWith('http://127.0.0.1:')) return fetchReal(input, init);
+  if (url.startsWith('https://zoom.us/') || url.startsWith('https://api.zoom.us/')) {
+    llamadasZoom.push(url);
+    // Zoom de mentira que no deja pasar: la función de siempre lo toma como «Zoom falló» y arma la sala sin Zoom, que es lo que se quiere ver aquí.
+    return new Response('{"reason":"Zoom de mentira: sin acceso"}', { status: 401 });
+  }
   throw new Error(`La prueba intentó salir a la red: ${url}`);
 }) as typeof fetch;
 
@@ -342,6 +350,37 @@ await prueba('en desarrollo (el Hub en http://localhost) no manda observacionUrl
   configurar();
 });
 
+await prueba('«Crear links de sesión» no crea la reunión de Zoom aunque Zoom esté configurado y el evento tenga fecha; la función de siempre («Crear stream») sí la intenta', async () => {
+  const antesEnv = { ...process.env };
+  process.env.ZITE_ZOOM_ACCOUNT_ID = 'cuenta-de-mentira';
+  process.env.ZITE_ZOOM_CLIENT_ID = 'cliente-de-mentira';
+  process.env.ZITE_ZOOM_CLIENT_SECRET = 'secreto-de-mentira';
+  process.env.ZITE_ZOOM_HOST_EMAILS = 'anfitrion@ejemplo.test';
+  try {
+    const conFecha = async (nombre: string) =>
+      (await pg.query<{ id: string }>(
+        `insert into calendar_events (event_name, project_code, calendar_name, event_date, duration_hours) values ($1, 'P-UNO', 'Cal', now() + interval '2 days', 2) returning id`,
+        [nombre],
+      )).rows[0].id;
+    const e = await conFecha('Con fecha y con Zoom configurado');
+    const antes = llamadasZoom.length;
+    const r = await crear(e); // «Crear links de sesión»
+    assert.equal(llamadasZoom.length, antes, 'Crear links de sesión le habló a Zoom');
+    const fila = (await salas(e))[0];
+    for (const campo of ['zoom_meeting_id', 'zoom_join_url', 'zoom_start_url', 'zoom_host_email']) assert.equal(fila[campo], null, `${campo} debía quedar vacío`);
+    assert.equal(fila.talks_session_id, r.talksSessionId, 'los links de Talks sí se guardaron');
+    assert.equal(fila.mux_stream_key, llavesMux.at(-1), 'la transmisión de Mux sí se creó');
+    // Control: la función de siempre, con el mismo Zoom y un evento con fecha, sí lo intenta. Sin este control la prueba podría pasar sin probar nada.
+    const control = await conFecha('Control: «Crear stream» de siempre');
+    await conBitacora(() => provisionObservationSession(control));
+    assert.ok(llamadasZoom.length > antes, 'la función de siempre debía intentar Zoom');
+  } finally {
+    for (const k of ['ZITE_ZOOM_ACCOUNT_ID', 'ZITE_ZOOM_CLIENT_ID', 'ZITE_ZOOM_CLIENT_SECRET', 'ZITE_ZOOM_HOST_EMAILS']) {
+      if (antesEnv[k] === undefined) delete process.env[k]; else process.env[k] = antesEnv[k];
+    }
+  }
+});
+
 await prueba('un evento que no existe, un id que no es de evento guardado, o sin sesión iniciada: se rechaza sin crear nada', async () => {
   const muxAntes = muxCreados;
   const postsAntes = llamadasTalks.length;
@@ -489,7 +528,9 @@ await prueba('consultar un evento sin sala no crea nada y ni siquiera le pregunt
 await prueba('consultar un evento con sesión guardada devuelve lo guardado, sin preguntarle a Talks', async () => {
   const llamadas = llamadasTalks.length;
   const r = await consultar(e1);
-  assert.deepEqual(r, { existe: true, talksSessionId: r1.talksSessionId, linkEquipo: r1.linkEquipo, linkParticipantes: r1.linkParticipantes });
+  // También trae el link de observación del cliente (el mismo que devolvió crear): la fila de la lista del calendario lo muestra junto a los de Talks.
+  assert.deepEqual(r, { existe: true, talksSessionId: r1.talksSessionId, linkEquipo: r1.linkEquipo, linkParticipantes: r1.linkParticipantes, observationUrl: r1.observationUrl });
+  assert.ok(r.observationUrl.endsWith(`/s/${(await salas(e1))[0].slug}`));
   assert.equal(llamadasTalks.length, llamadas);
 });
 

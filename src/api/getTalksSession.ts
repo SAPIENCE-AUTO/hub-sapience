@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createEndpoint } from '../../server/compat';
 import { consultarSesionTalks, TalksError } from '../../server/talks/client';
 import { esEventoGuardado } from '../lib/talksSesion';
-import { guardarTalks, leerTalksGuardado } from '../serverUtils/talksSession';
+import { guardarTalks, leerTalksGuardado, urlDeObservacion } from '../serverUtils/talksSession';
 
 export default createEndpoint({
   authenticated: true,
@@ -13,6 +13,8 @@ export default createEndpoint({
     talksSessionId: z.string().optional(),
     linkEquipo: z.string().optional(),
     linkParticipantes: z.string().optional(),
+    /** Link de observación del cliente (`/s/<slug>`), cuando hay sesión de Talks. */
+    observationUrl: z.string().optional(),
     /** Solo cuando se le preguntó a Talks en esta llamada. «sin-llave»: Talks no tiene la llave de Mux de la sesión. */
     transmision: z.enum(['lista', 'sin-llave']).optional(),
     /** No se pudo preguntar a Talks (no está conectado, no respondió...): frase en español llano, no es un error de la pantalla. */
@@ -26,7 +28,13 @@ export default createEndpoint({
 
     // Lo normal: ya está guardado. Se responde con lo guardado, sin red.
     if (guardado.talksSessionId && guardado.linkEquipo && guardado.linkParticipantes) {
-      return { existe: true, talksSessionId: guardado.talksSessionId, linkEquipo: guardado.linkEquipo, linkParticipantes: guardado.linkParticipantes };
+      return {
+        existe: true,
+        talksSessionId: guardado.talksSessionId,
+        linkEquipo: guardado.linkEquipo,
+        linkParticipantes: guardado.linkParticipantes,
+        observationUrl: urlDeObservacion(guardado.slug),
+      };
     }
 
     // Hay sala pero nada guardado: ¿Talks ya tiene la sesión de este evento (por ejemplo se creó y se perdió la copia)?
@@ -39,6 +47,7 @@ export default createEndpoint({
         talksSessionId: sesion.id,
         linkEquipo: sesion.linkEquipo,
         linkParticipantes: sesion.linkParticipantes,
+        observationUrl: urlDeObservacion(guardado.slug),
         transmision: sesion.transmision,
       };
     } catch (err) {

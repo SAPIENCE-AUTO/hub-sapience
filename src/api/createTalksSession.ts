@@ -3,7 +3,7 @@ import { createEndpoint, pool, ZiteError } from '../../server/compat';
 import { crearSesionTalks, exigirTalksConfigurado, type TalksSesion } from '../../server/talks/client';
 import { esEventoGuardado } from '../lib/talksSesion';
 import { provisionObservationSession, type ProvisionedObservationSession } from '../serverUtils/provisionObservationSession';
-import { aZiteError, guardarTalks, leerTalksGuardado } from '../serverUtils/talksSession';
+import { aZiteError, guardarTalks, leerTalksGuardado, urlDeObservacion } from '../serverUtils/talksSession';
 
 // La llave de transmisión de Mux NO sale en esta respuesta: solo viaja a Talks en el POST (ver server/talks/client.ts).
 // Quien la necesite para mostrarla ya la tiene en getObservationSessionDetail (la Sala de observación).
@@ -11,6 +11,8 @@ const outputSchema = z.object({
   talksSessionId: z.string(),
   linkEquipo: z.string(),
   linkParticipantes: z.string(),
+  /** Link de observación del cliente (`/s/<slug>`): la fila de la lista del calendario lo muestra junto a los dos de Talks. */
+  observationUrl: z.string(),
   /** Talks ya tenía la sesión de este evento (no se creó otra). */
   yaExistia: z.boolean(),
   /** «sin-llave»: Talks no tiene la llave de Mux de la sesión, así que EN VIVO no podría transmitir. */
@@ -32,10 +34,11 @@ async function crear(calendarEventId: string): Promise<Salida> {
   // 2. La base tiene que estar lista (columnas nuevas) antes de crear nada fuera.
   await leerTalksGuardado(calendarEventId);
 
-  // 3. La transmisión de Mux: la crea o, si el evento ya tiene sala, devuelve la misma.
+  // 3. La transmisión de Mux: la crea o, si el evento ya tiene sala, devuelve la misma. Sin reunión de Zoom: Talks reemplaza a Zoom
+  //    como fuente del video (Sergio, 2026-11-14), así que esta sala no pide Zoom aunque esté configurado.
   let sala: ProvisionedObservationSession;
   try {
-    sala = await provisionObservationSession(calendarEventId);
+    sala = await provisionObservationSession(calendarEventId, { conZoom: false });
   } catch (err) {
     console.error('[createTalksSession] no se pudo crear la transmisión de Mux:', err);
     throw new ZiteError({
@@ -49,8 +52,7 @@ async function crear(calendarEventId: string): Promise<Salida> {
 
   // 4. La sesión en Talks. Con el mismo evento devuelve la misma (y actualiza nombre o llave si cambiaron).
   const nombre = ((evento.event_name as string | null)?.trim() || 'Sesión de observación').slice(0, 120);
-  const appUrl = (process.env.ZITE_APP_URL ?? '').split(',')[0]?.trim() || 'http://localhost:5173';
-  const observacionUrl = `${appUrl}/s/${sala.slug}`;
+  const observacionUrl = urlDeObservacion(sala.slug);
   let sesion: TalksSesion;
   try {
     sesion = await crearSesionTalks({
@@ -71,6 +73,7 @@ async function crear(calendarEventId: string): Promise<Salida> {
     talksSessionId: sesion.id,
     linkEquipo: sesion.linkEquipo,
     linkParticipantes: sesion.linkParticipantes,
+    observationUrl: observacionUrl,
     yaExistia: sesion.yaExistia,
     transmision: sesion.transmision,
   };

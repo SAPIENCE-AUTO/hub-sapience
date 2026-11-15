@@ -89,8 +89,16 @@ export interface ProvisionedObservationSession {
  * Si Zoom no está configurado, no hay cuenta libre a esa hora, o su API
  * falla, el stream de Mux se crea igual — el link de Zoom queda vacío en
  * vez de reventar el botón completo.
+ *
+ * Con `{ conZoom: false }` no se crea la reunión de Zoom, solo la transmisión de Mux: así lo pide «Crear links de
+ * sesión» de Talks (Sergio, 2026-11-14), porque Talks reemplaza a Zoom como fuente del video y dos fuentes para la
+ * misma llave de Mux se estorban. «Crear stream» y la columna «Botón» siguen igual (con Zoom).
  */
-export async function provisionObservationSession(calendarEventId: string): Promise<ProvisionedObservationSession> {
+export async function provisionObservationSession(
+  calendarEventId: string,
+  opciones: { conZoom?: boolean } = {},
+): Promise<ProvisionedObservationSession> {
+  const conZoom = opciones.conZoom ?? true;
   const eventResult = await pool.query(
     `select id, event_name, project_code, event_date, duration_hours from calendar_events where id = $1`,
     [calendarEventId],
@@ -143,7 +151,9 @@ export async function provisionObservationSession(calendarEventId: string): Prom
   let zoomHostEmail: string | null = null;
   let zoomSkippedReason: string | undefined;
 
-  if (!event.event_date) {
+  if (!conZoom) {
+    zoomSkippedReason = 'esta sala no lleva reunión de Zoom';
+  } else if (!event.event_date) {
     zoomSkippedReason = 'el evento no tiene fecha/hora todavía';
   } else {
     const startTime = new Date(event.event_date);

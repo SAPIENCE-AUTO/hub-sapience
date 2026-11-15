@@ -3,30 +3,19 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Copy, ExternalLink, Loader2, Video } from 'lucide-react';
 import { toast } from 'sonner';
-import { ApiError, createTalksSession, getTalksSession } from 'zite-endpoints-sdk';
-import { esEventoGuardado, etiquetaBotonTalks, type TalksSesionVista } from '@/lib/talksSesion';
+import { createTalksSession, getTalksSession } from 'zite-endpoints-sdk';
+import { esEventoGuardado, etiquetaBotonTalks, motivoDeError, type TalksSesionVista } from '@/lib/talksSesion';
+import { publicarTalks } from '@/lib/talksCompartido';
+import { copiar } from './copiarLink';
 
 /**
  * Bloque «Talks» del evento del calendario (dentro de la Sala de observación): la primera vez «Crear links de sesión»
  * (arma la transmisión de Mux y la sesión en Talks); después «Abrir en Talks» y los links con botón de copiar.
  * Los otros dos datos que se comparten (link de observación del cliente y datos de la transmisión de Mux) ya los
  * muestra la Sala justo debajo. Servidor: createTalksSession.ts / getTalksSession.ts.
+ * Lo que crea o consulta aquí también lo publica en talksCompartido.ts, para que la fila del mismo evento en la lista del calendario
+ * (TalksFilaCell.tsx) lo muestre sin esperar a que se recargue la lista.
  */
-
-async function copiar(valor: string, etiqueta: string) {
-  try {
-    await navigator.clipboard.writeText(valor);
-    toast.success(`${etiqueta} copiado`);
-  } catch {
-    toast.error('No se pudo copiar. Selecciona el link y cópialo a mano.');
-  }
-}
-
-/** La frase del servidor si viene en español llano; si no (sin conexión, «Error interno»...), una genérica. */
-function motivo(err: unknown, generico: string): string {
-  if (err instanceof ApiError && err.message && err.message !== 'Error interno' && !/ falló \(\d+\)$/.test(err.message)) return err.message;
-  return generico;
-}
 
 function FilaLink({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
@@ -71,15 +60,22 @@ export function TalksSessionPanel({ calendarEventId, onCreada }: { calendarEvent
     getTalksSession({ calendarEventId })
       .then((res) => {
         if (!vivo) return;
-        setTalks(res.existe
-          ? { talksSessionId: res.talksSessionId, linkEquipo: res.linkEquipo, linkParticipantes: res.linkParticipantes, transmision: res.transmision }
-          : null);
+        if (res.existe) {
+          const vista: TalksSesionVista = {
+            talksSessionId: res.talksSessionId, linkEquipo: res.linkEquipo, linkParticipantes: res.linkParticipantes,
+            observationUrl: res.observationUrl, transmision: res.transmision,
+          };
+          setTalks(vista);
+          publicarTalks(calendarEventId, vista); // la fila de este evento en la lista del calendario se entera
+        } else {
+          setTalks(null);
+        }
         setAviso(res.aviso ?? null);
       })
       .catch((err) => {
         if (!vivo) return;
         setTalks(null);
-        setAviso(motivo(err, 'No se pudo comprobar si este evento ya tiene links de Talks.'));
+        setAviso(motivoDeError(err, 'No se pudo comprobar si este evento ya tiene links de Talks.'));
       });
     return () => { vivo = false; };
   }, [calendarEventId]);
@@ -93,12 +89,17 @@ export function TalksSessionPanel({ calendarEventId, onCreada }: { calendarEvent
     setError(null);
     try {
       const res = await createTalksSession({ calendarEventId });
-      setTalks({ talksSessionId: res.talksSessionId, linkEquipo: res.linkEquipo, linkParticipantes: res.linkParticipantes, transmision: res.transmision });
+      const vista: TalksSesionVista = {
+        talksSessionId: res.talksSessionId, linkEquipo: res.linkEquipo, linkParticipantes: res.linkParticipantes,
+        observationUrl: res.observationUrl, transmision: res.transmision,
+      };
+      setTalks(vista);
+      publicarTalks(calendarEventId, vista); // la fila de este evento en la lista del calendario se entera
       setAviso(null);
       onCreada?.(); // la Sala recarga y muestra los datos de la transmisión de Mux
       toast.success(res.yaExistia ? 'Talks ya tenía esta sesión: links recuperados' : 'Links de sesión creados');
     } catch (err) {
-      setError(motivo(err, 'No se pudieron crear los links. Revisa tu conexión e inténtalo de nuevo.'));
+      setError(motivoDeError(err, 'No se pudieron crear los links. Revisa tu conexión e inténtalo de nuevo.'));
     }
     setCreando(false);
   };
