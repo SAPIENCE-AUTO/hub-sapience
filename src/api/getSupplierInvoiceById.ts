@@ -42,11 +42,11 @@ export default createEndpoint({
     const inv = await SupplierInvoices.findOne({ id: input.invoiceId });
     if (!inv) return { invoice: null };
 
-    let po: { poNumber?: string; totalAmount?: number; serviceDescription?: string; paymentTerms?: string } | undefined;
+    let po: { poNumber?: string; projectCode?: string; totalAmount?: number; serviceDescription?: string; paymentTerms?: string } | undefined;
     if (inv.poId) {
       const poRecord = await PurchaseOrders.findOne({
         id: inv.poId,
-        fields: ['poNumber', 'totalAmount', 'serviceDescription', 'paymentTerms'],
+        fields: ['poNumber', 'projectCode', 'totalAmount', 'serviceDescription', 'paymentTerms'],
       });
       if (poRecord) po = poRecord;
     }
@@ -58,7 +58,7 @@ export default createEndpoint({
         supplierId: inv.supplierId,
         supplierName: inv.supplierName,
         poId: inv.poId,
-        poNumber: po?.poNumber ?? inv.poNumber,
+        poNumber: po?.poNumber || inv.poNumber,
         poTotalAmount: po?.totalAmount,
         poServiceDescription: po?.serviceDescription,
         poPaymentTerms: po?.paymentTerms,
@@ -75,7 +75,8 @@ export default createEndpoint({
         reviewNotes: inv.reviewNotes,
         reviewedBy: inv.reviewedBy,
         reviewedAt: inv.reviewedAt,
-        projectCode: inv.projectCode,
+        // Las facturas subidas del 16-ago-2026 en adelante se guardaron sin proyecto: se toma el de su OC.
+        projectCode: inv.projectCode || po?.projectCode || undefined,
         supplierComment: inv.supplierComment,
         pdfFile: inv.pdfFile,
         xmlFile: inv.xmlFile,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createEndpoint, SupplierInvoices, Payments, Suppliers } from '../../server/compat';
+import { createEndpoint, SupplierInvoices, Payments, Suppliers, PurchaseOrders } from '../../server/compat';
 import { graphFetch, graphMailboxBase } from '../../server/microsoft/graph';
 
 export default createEndpoint({
@@ -50,6 +50,13 @@ export default createEndpoint({
       if (invoice) {
         // Use the validated total if provided, fall back to stored amount
         const paymentAmount = input.validatedTotal ?? invoice.amount;
+        // Las facturas subidas del 16-ago-2026 en adelante se guardaron sin proyecto (ver uploadSupplierInvoice.ts): si la factura no lo trae, el pago toma el de su OC
+        // (si no, el pago quedaba sin proyecto y no entraba a los costos de ninguno).
+        let projectCode: string | undefined = invoice.projectCode ?? undefined;
+        if (!projectCode && invoice.poId) {
+          const po = await PurchaseOrders.findOne({ id: invoice.poId, fields: ['projectCode'] });
+          projectCode = po?.projectCode ?? undefined;
+        }
         const payment = await Payments.create({
           record: {
             type: 'Pago a proveedor',
@@ -58,7 +65,7 @@ export default createEndpoint({
             supplierInvoiceNumber: invoice.invoiceNumber,
             amount: paymentAmount,
             currency: invoice.currency ?? 'MXN',
-            projectCode: invoice.projectCode,
+            projectCode,
             dueDate: input.scheduledPaymentDate,
             status: 'Programado',
             notes: `Pago programado automáticamente al validar factura ${invoice.invoiceNumber ?? ''}`,

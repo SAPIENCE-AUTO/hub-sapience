@@ -60,18 +60,22 @@ export default createEndpoint({
 
     const uniquePoIds = [...new Set(invResult.records.map(inv => inv.poId).filter(Boolean))] as string[];
 
+    // Sin tope de 500 y con orden: las facturas ya apuntan a más de 800 OCs distintas, y con `limit: 500` (sin `sorts`) se perdían OCs al azar: a las facturas
+    // de esas OCs les faltaba el número de ODC (y el proyecto) en la lista, y por eso no salían al buscar por ODC o filtrar por proyecto.
     const posResult = uniquePoIds.length > 0
       ? await PurchaseOrders.findAll({
           filters: { id: { in: uniquePoIds } },
-          limit: 500,
-          fields: ['poNumber', 'totalAmount', 'serviceDescription', 'paymentTerms'],
+          limit: 10_000,
+          sorts: [{ field: 'id' }],
+          fields: ['poNumber', 'projectCode', 'totalAmount', 'serviceDescription', 'paymentTerms'],
         })
-      : { records: [] as { id: string; poNumber?: string; totalAmount?: number; serviceDescription?: string; paymentTerms?: string }[] };
+      : { records: [] as { id: string; poNumber?: string; projectCode?: string; totalAmount?: number; serviceDescription?: string; paymentTerms?: string }[] };
 
-    const poMap: Record<string, { poNumber: string; totalAmount: number; serviceDescription: string; paymentTerms: string }> = {};
+    const poMap: Record<string, { poNumber: string; projectCode: string; totalAmount: number; serviceDescription: string; paymentTerms: string }> = {};
     posResult.records.forEach(po => {
       poMap[po.id] = {
         poNumber: String(po.poNumber ?? ''),
+        projectCode: String(po.projectCode ?? ''),
         totalAmount: po.totalAmount ?? 0,
         serviceDescription: po.serviceDescription ?? '',
         paymentTerms: po.paymentTerms ?? '',
@@ -86,7 +90,7 @@ export default createEndpoint({
         supplierId: inv.supplierId,
         supplierName: inv.supplierName,
         poId: inv.poId,
-        poNumber: po?.poNumber ?? inv.poNumber,
+        poNumber: po?.poNumber || inv.poNumber,
         poTotalAmount: po?.totalAmount,
         poServiceDescription: po?.serviceDescription,
         poPaymentTerms: po?.paymentTerms,
@@ -95,7 +99,8 @@ export default createEndpoint({
         status: inv.status,
         uploadDate: inv.uploadDate,
         uploadedBy: inv.uploadedBy,
-        projectCode: inv.projectCode,
+        // Las facturas subidas del 16-ago-2026 en adelante se guardaron sin proyecto: se toma el de su OC mientras no se rellenen.
+        projectCode: inv.projectCode || po?.projectCode || undefined,
       };
     });
 

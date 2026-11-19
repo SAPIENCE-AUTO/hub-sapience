@@ -29,7 +29,9 @@ export default createEndpoint({
     if (!supplier) throw new Error('Token de acceso inválido.');
     if (supplier.portalPassword !== input.password) throw new Error('Clave de acceso incorrecta.');
 
-    const po = await PurchaseOrders.findOne({ id: input.poId, fields: ['supplierName'] });
+    // Se piden también el número y el proyecto de la OC: más abajo se guardan en la factura. Con solo `supplierName` (así quedó el 11-ago-2026 al acotar los
+    // campos para no traer el PDF en base64) todas las facturas desde el 16 de agosto se guardaron SIN número de ODC y SIN proyecto, y en la lista no salían.
+    const po = await PurchaseOrders.findOne({ id: input.poId, fields: ['supplierName', 'poNumber', 'projectCode'] });
     if (!po || po.supplierName !== supplier.supplierName) {
       throw new Error('La orden de compra no corresponde a este proveedor.');
     }
