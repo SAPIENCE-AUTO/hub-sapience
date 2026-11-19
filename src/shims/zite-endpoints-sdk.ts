@@ -360,6 +360,7 @@ export const getObservationChatToken = (input?: any): Promise<any> => call('getO
 export const getObservationRoomPublic = (input?: any): Promise<any> => call('getObservationRoomPublic', input);
 export const getObservationSessionDetail = (input?: any): Promise<any> => call('getObservationSessionDetail', input);
 export const getTalksSession = (input?: any): Promise<any> => call('getTalksSession', input);
+export const getTalksAccessLink = (input?: any): Promise<any> => call('getTalksAccessLink', input);
 export const getParticipants = (input?: any): Promise<any> => call('getParticipants', input);
 export const getPagosManagement = (input?: any): Promise<any> => call('getPagosManagement', input);
 export const getPayments = (input?: any): Promise<any> => call('getPayments', input);

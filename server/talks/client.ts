@@ -17,6 +17,10 @@
  *
  * Los mensajes de error están en español llano porque llegan tal cual a la pantalla de quien aprieta
  * el botón (ver aZiteError en src/serverUtils/talksSession.ts).
+ *
+ * Acceso directo (`pedirAccesoEquipoTalks`): el pase que Talks da para entrar sin volver a pedir el correo vale
+ * 60 segundos y sirve una sola vez. No se guarda, no se cachea y no se escribe en registros (ni la dirección ni
+ * la respuesta de Talks); el correo que se manda es siempre el de la sesión del Hub.
  */
 
 import { z } from 'zod';
@@ -46,8 +50,11 @@ export interface TalksSesion {
 // consultar corre de fondo y no debe colgar la pantalla.
 const ESPERA_CREAR_MS = 40_000;
 const ESPERA_CONSULTAR_MS = 15_000;
+// El pase de acceso directo lo espera una ventana en blanco: pasado este tiempo la pantalla abre el link de siempre (ver pedirAccesoEquipoTalks).
+export const ESPERA_ACCESO_MS = 8_000;
 
 const soloHttp = (u: string) => /^https?:\/\//i.test(u);
+const esHostLocal = (host: string) => ['localhost', '127.0.0.1', '::1', '[::1]'].includes(host);
 
 const RespuestaTalks = z.object({
   id: z.string().min(1),
@@ -70,7 +77,7 @@ function leerConfig(): { base: string; llave: string } {
   } catch {
     throw new TalksError('sin-configurar', 'La dirección de Talks (TALKS_URL) no es válida.');
   }
-  const local = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
+  const local = esHostLocal(url.hostname);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) {
     throw new TalksError('sin-configurar', 'La dirección de Talks (TALKS_URL) debe empezar con https://.');
   }
@@ -215,4 +222,75 @@ export async function consultarSesionTalks(externoId: string): Promise<TalksSesi
   // se nota en el POST de crear, que sí distingue un 404 como dirección equivocada (ver errorDe).
   if (r.status === 404) return null;
   throw errorDe(r, []);
+}
+
+/**
+ * Por qué no se pudo conseguir el pase de acceso directo. La pantalla abre el link normal del equipo en todos los casos, con el mismo aviso:
+ *   «no-encontrada»: Talks no conoce la sesión (404); «no-disponible»: cualquier otra cosa (llave mala, datos mal formados, un 403 inesperado, Talks caído
+ *   o sin responder, una respuesta que no sirve). Talks ya NO tiene una lista aparte de quién puede entrar con el pase (no revisa EQUIPO_PERMITIDO para
+ *   quien llega así): quién entra lo decide el Hub, en getTalksAccessLink.
+ */
+export type AccesoMotivo = 'no-encontrada' | 'no-disponible';
+/** `estado` es solo para el registro del servidor (un código HTTP o una palabra): nunca incluye la dirección del pase, el correo ni el cuerpo de la respuesta. */
+export type AccesoTalks = { ok: true; url: string } | { ok: false; motivo: AccesoMotivo; estado: number | string };
+
+export interface PedirAccesoEquipo {
+  /** El correo de quien aprieta el botón, tomado SIEMPRE de la sesión ya verificada del Hub (context.user.email), nunca de lo que mande el navegador. */
+  email: string;
+  /** Opcional (hasta 60 caracteres): si falta, Talks lo arma con el correo. */
+  nombre?: string;
+  /** El id de la sesión de Talks (`talks_session_id`): si falta, la persona llega al inicio de Talks. */
+  sesionId?: string;
+  /** Otras direcciones donde puede vivir el pase además de TALKS_URL: las de los links que Talks ya dio para esa sesión. */
+  direccionesDeTalks?: string[];
+  esperaMs?: number;
+}
+
+/**
+ * La dirección del pase solo se entrega si es de Talks (TALKS_URL o la de los links que Talks dio para esa sesión) y viaja cifrada (https; http solo en localhost).
+ * La pantalla la pone tal cual en una ventana: nada de «javascript:» ni de otro sitio, aunque Talks se equivocara.
+ */
+function direccionDelPase(texto: string, direcciones: string[]): string | null {
+  let u: URL;
+  try { u = new URL(texto); } catch { return null; }
+  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && esHostLocal(u.hostname))) return null;
+  const esDeTalks = direcciones.some((d) => { try { return new URL(d).origin === u.origin; } catch { return false; } });
+  return esDeTalks ? u.href : null;
+}
+
+/**
+ * POST /api/v1/acceso-equipo. Cambia el correo de quien ya inició sesión en el Hub por un pase de UN solo uso (vale 60 segundos) que lo deja entrar directo
+ * a la consola de la sesión de Talks, sin volver a pedirle su correo. Nunca lanza por un problema de Talks: devuelve el motivo para que la pantalla abra
+ * el link normal. El pase va en la parte `#` de la dirección a propósito (no llega a ningún servidor ni a los registros): NO se guarda, NO se escribe en
+ * registros (ni la dirección ni el cuerpo de la respuesta) y se pide uno nuevo en cada clic.
+ */
+export async function pedirAccesoEquipoTalks(datos: PedirAccesoEquipo): Promise<AccesoTalks> {
+  let config: { base: string; llave: string };
+  try { config = leerConfig(); } catch { return { ok: false, motivo: 'no-disponible', estado: 'sin-configurar' }; }
+
+  const email = datos.email.trim().toLowerCase();
+  if (!email.includes('@')) return { ok: false, motivo: 'no-disponible', estado: 'sin-correo' };
+  const nombre = datos.nombre?.trim().slice(0, 60);
+
+  let r: Respuesta;
+  try {
+    r = await llamar('/api/v1/acceso-equipo', {
+      method: 'POST',
+      cuerpo: { email, ...(nombre ? { nombre } : {}), ...(datos.sesionId ? { sesionId: datos.sesionId } : {}) },
+      esperaMs: datos.esperaMs ?? ESPERA_ACCESO_MS,
+      secretos: [],
+    });
+  } catch {
+    // Sin conexión, demasiado lento (más de ESPERA_ACCESO_MS) o una redirección: la pantalla abre el link normal.
+    return { ok: false, motivo: 'no-disponible', estado: 'sin-respuesta' };
+  }
+
+  if (r.status === 200 || r.status === 201) {
+    const ok = z.object({ url: z.string().min(1).max(2000) }).safeParse(r.json);
+    const url = ok.success ? direccionDelPase(ok.data.url, [config.base, ...(datos.direccionesDeTalks ?? [])]) : null;
+    return url ? { ok: true, url } : { ok: false, motivo: 'no-disponible', estado: 'respuesta-rara' };
+  }
+  if (r.status === 404) return { ok: false, motivo: 'no-encontrada', estado: r.status };
+  // 401 (llave mala), 400 (datos mal formados), 403 u otro código inesperado, 5xx: el link normal y el aviso general. El código queda en el registro del servidor.
+  return { ok: false, motivo: 'no-disponible', estado: r.status };
 }

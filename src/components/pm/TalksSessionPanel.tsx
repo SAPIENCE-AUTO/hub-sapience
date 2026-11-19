@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Copy, ExternalLink, Loader2, Video } from 'lucide-react';
@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { createTalksSession, getTalksSession } from 'zite-endpoints-sdk';
 import { esEventoGuardado, etiquetaBotonTalks, motivoDeError, type TalksSesionVista } from '@/lib/talksSesion';
 import { publicarTalks } from '@/lib/talksCompartido';
+import { abrirEnTalksDesdeHub } from './abrirEnTalksReal';
 import { copiar } from './copiarLink';
 
 /**
@@ -50,6 +51,8 @@ export function TalksSessionPanel({ calendarEventId, onCreada }: { calendarEvent
   const [aviso, setAviso] = useState<string | null>(null); // no se pudo comprobar con Talks (no es un error de la pantalla)
   const [error, setError] = useState<string | null>(null); // falló al crear
   const [creando, setCreando] = useState(false);
+  const [abriendo, setAbriendo] = useState(false);
+  const abriendoEnCurso = useRef(false); // cada clic pide un pase de un solo uso: dos clics seguidos abrirían dos ventanas
 
   useEffect(() => {
     if (!esEventoGuardado(calendarEventId)) return;
@@ -82,6 +85,18 @@ export function TalksSessionPanel({ calendarEventId, onCreada }: { calendarEvent
 
   // El botón solo existe en un evento ya guardado (con su id real).
   if (!esEventoGuardado(calendarEventId)) return null;
+
+  // «Abrir en Talks»: entra directo (sin volver a pedir el correo) con un pase de un solo uso; si no se puede, abre el link normal del equipo y avisa.
+  // Se llama directo desde el clic, sin ningún `await` antes: el navegador solo deja abrir la ventana en ese instante.
+  const abrir = () => {
+    if (abriendoEnCurso.current || !talks) return;
+    abriendoEnCurso.current = true;
+    setAbriendo(true);
+    abrirEnTalksDesdeHub(calendarEventId, talks.linkEquipo).finally(() => {
+      abriendoEnCurso.current = false;
+      setAbriendo(false);
+    });
+  };
 
   const crear = async () => {
     if (creando) return;
@@ -125,11 +140,10 @@ export function TalksSessionPanel({ calendarEventId, onCreada }: { calendarEvent
         </>
       ) : (
         <>
-          <Button asChild size="sm" variant="outline" className="h-7 text-xs gap-1.5">
-            <a href={talks.linkEquipo} target="_blank" rel="noopener noreferrer">
-              <Video className="w-3 h-3" />
-              {etiquetaBotonTalks(talks)}
-            </a>
+          <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={abrir} disabled={abriendo}
+            title="Abrir la sesión en Talks (entras directo, sin volver a escribir tu correo)">
+            {abriendo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Video className="w-3 h-3" />}
+            {etiquetaBotonTalks(talks)}
           </Button>
           <div className="space-y-1.5">
             <FilaLink etiqueta="Link del equipo" valor={talks.linkEquipo} />

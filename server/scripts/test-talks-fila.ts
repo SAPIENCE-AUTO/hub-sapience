@@ -443,8 +443,8 @@ await prueba('el motivo de un fallo: la frase del servidor si viene en español 
 });
 
 // ═══ Cómo se dibuja la celda en cada caso (TalksFilaVista: solo dibuja; la lógica de crear está en TalksFilaCell) ═══
-const celda = (talks: Parameters<typeof talksParaFila>[1], creando = false) =>
-  renderToStaticMarkup(createElement(TalksFilaVista, { talks, creando, onCrear: () => {} }));
+const celda = (talks: Parameters<typeof talksParaFila>[1], creando = false, abriendo = false) =>
+  renderToStaticMarkup(createElement(TalksFilaVista, { talks, creando, onCrear: () => {}, abriendo, onAbrir: () => {} }));
 const evFilaConTalks = { id: eConTalks, talksSessionId: 's1', talksLinkEquipo: 'https://talks.ejemplo.test/equipo/s1', talksLinkParticipantes: 'https://talks.ejemplo.test/p/000000000001', observationUrl: 'https://hub.ejemplo.test/s/evento-x' };
 
 await prueba('celda: sin links muestra «Crear links de sesión» (y nada más)', () => {
@@ -466,10 +466,11 @@ await prueba('celda: mientras se crea, el botón dice «Creando...» y está apa
 await prueba('celda: con links muestra «Abrir en Talks» (link del moderador) y los tres links con botón de copiar, y ya no ofrece crear', () => {
   const html = celda(talksDeEvento(evFilaConTalks));
   assert.ok(!html.includes('Crear links de sesión'));
-  assert.match(html, /<a [^>]*href="https:\/\/talks\.ejemplo\.test\/equipo\/s1"[^>]*>/);
-  assert.match(html, /target="_blank"/);
-  assert.match(html, /rel="noopener noreferrer"/);
-  assert.match(html, /Abrir en Talks/);
+  // «Abrir en Talks» es un botón, no un link: al apretarlo se pide un pase de un solo uso para entrar directo (abrirEnTalksReal.ts); el link normal del moderador
+  // solo se abre si el pase no se puede, y se copia con el botón «Moderador».
+  assert.match(html, /<button[^>]*type="button"[^>]*>(?:(?!<\/button>).)*Abrir en Talks/s);
+  assert.ok(!/<a [^>]*>/.test(html), 'ya no debía haber ningún link: el botón pide el pase al apretarse');
+  assert.ok(!/target="_blank"/.test(html));
   for (const [etiqueta, aria, url] of [
     ['Participantes', 'Copiar link de participantes', 'https://talks.ejemplo.test/p/000000000001'],
     ['Moderador', 'Copiar link del moderador', 'https://talks.ejemplo.test/equipo/s1'],
@@ -480,6 +481,20 @@ await prueba('celda: con links muestra «Abrir en Talks» (link del moderador) y
     assert.ok(html.includes(url), `falta el link ${url} en el título del botón`);
   }
   assert.equal((html.match(/aria-label="Copiar /g) ?? []).length, 3, 'deben ser exactamente tres botones de copiar');
+});
+
+await prueba('celda: mientras se pide el pase de acceso a Talks, «Abrir en Talks» queda apagado y con indicador (no se aprieta dos veces); fuera de eso está encendido', () => {
+  const talks = talksDeEvento(evFilaConTalks);
+  const abierto = celda(talks, false, false);
+  const ocupado = celda(talks, false, true);
+  const botonAbrir = (html: string) => (html.match(/<button[^>]*>(?:(?!<\/button>).)*Abrir en Talks(?:(?!<\/button>).)*<\/button>/s) ?? [''])[0];
+  assert.ok(botonAbrir(abierto) && !/\sdisabled=""/.test(botonAbrir(abierto)), 'encendido cuando no se está pidiendo nada');
+  assert.match(botonAbrir(ocupado), /\sdisabled=""/);
+  assert.match(botonAbrir(ocupado), /animate-spin/);
+  assert.ok(!/animate-spin/.test(botonAbrir(abierto)));
+  // los botones de copiar no se apagan: siguen copiando los links normales (sin pase)
+  assert.equal((ocupado.match(/aria-label="Copiar /g) ?? []).length, 3);
+  assert.ok(!/entrar-hub|#c=/.test(ocupado + abierto), 'ningún pase puede estar en lo que se dibuja');
 });
 
 await prueba('celda: sin link de observación (no vino) muestra solo los dos de Talks', () => {

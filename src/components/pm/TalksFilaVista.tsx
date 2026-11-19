@@ -11,6 +11,7 @@ import { copiar } from './copiarLink';
  */
 
 const AYUDA_CREAR = 'Crea la transmisión de Mux y la sesión en Talks. Si ya existen, no se duplican.';
+const AYUDA_ABRIR = 'Abrir la sesión en Talks (entras directo, sin volver a escribir tu correo)';
 const FALLO_AL_COPIAR = 'No se pudo copiar. Abre el evento (el lápiz) y copia el link desde ahí.';
 
 /** Uno de los links: todo el botón copia y la palomita avisa un momento que ya se copió. */
@@ -37,7 +38,11 @@ function LinkCopiable({ etiqueta, nombre, valor }: { etiqueta: string; nombre: s
   );
 }
 
-export function TalksFilaVista({ talks, creando, onCrear }: { talks: TalksSesionVista | undefined; creando: boolean; onCrear: () => void }) {
+export function TalksFilaVista({ talks, creando, onCrear, abriendo, onAbrir }: {
+  talks: TalksSesionVista | undefined; creando: boolean; onCrear: () => void;
+  /** Mientras se pide el pase de acceso a Talks el botón «Abrir en Talks» queda apagado (no se aprieta dos veces). */
+  abriendo: boolean; onAbrir: () => void;
+}) {
   if (!talks) {
     return (
       <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1" onClick={onCrear} disabled={creando} title={AYUDA_CREAR}>
@@ -49,11 +54,10 @@ export function TalksFilaVista({ talks, creando, onCrear }: { talks: TalksSesion
 
   return (
     <div className="flex items-center gap-1 min-w-0">
-      <Button asChild size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1 flex-shrink-0">
-        <a href={talks.linkEquipo} target="_blank" rel="noopener noreferrer" title="Abrir la sesión en Talks (link del moderador)">
-          <Video className="w-3 h-3" />
-          Abrir en Talks
-        </a>
+      {/* Un botón, no un link: el clic pide un pase de un solo uso para entrar directo (TalksFilaCell.tsx); si no se puede, abre el link normal del moderador. */}
+      <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1 flex-shrink-0" onClick={onAbrir} disabled={abriendo} title={AYUDA_ABRIR}>
+        {abriendo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Video className="w-3 h-3" />}
+        Abrir en Talks
       </Button>
       {linksDeTalks(talks).map((l) => <LinkCopiable key={l.etiqueta} etiqueta={l.etiqueta} nombre={l.nombre} valor={l.valor} />)}
     </div>
