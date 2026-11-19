@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Video } from 'lucide-react';
 import MeetingSummaryPanel from './MeetingSummaryPanel';
 import MeetingSyncedTranscript, { type Utterance, type WordTimestamp } from './MeetingSyncedTranscript';
+import MeetingTranscriptTexto from './MeetingTranscriptTexto';
 import MeetingSpeakerTimeline from './MeetingSpeakerTimeline';
 import MeetingTranscriptChat from './MeetingTranscriptChat';
 
@@ -31,8 +32,9 @@ type Tab = 'resumen' | 'transcripcion';
 // de contenido a la derecha en una card con el mismo tratamiento visual
 // (bg-card, border, rounded-xl, p-6). La transcripción sincroniza con el
 // video igual que SyncedTranscript, incluyendo resaltado de la palabra
-// activa y seek exacto por palabra — no hay creación de clips ni búsqueda en
-// Minutas, así que esos dos detalles de Sharpli no aplican aquí.
+// activa y seek exacto por palabra, y buscar texto dentro de la transcripción
+// (barra arriba de ella). No hay creación de clips en Minutas: ese detalle de
+// Sharpli no aplica aquí.
 export default function MeetingRecordingDetailDialog({ recording, open, onClose }: {
   recording: MeetingRecording | null;
   open: boolean;
@@ -86,7 +88,15 @@ export default function MeetingRecordingDetailDialog({ recording, open, onClose 
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-6xl max-h-[92vh] flex flex-col" aria-describedby={undefined}>
+      <DialogContent
+        className="sm:max-w-6xl max-h-[92vh] flex flex-col"
+        aria-describedby={undefined}
+        // Con texto en el buscador de la transcripción, Esc solo lo limpia: no cierra la minuta.
+        onEscapeKeyDown={e => {
+          const el = e.target as HTMLElement | null;
+          if (el?.hasAttribute?.('data-buscador-transcripcion') && (el as HTMLInputElement).value) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{recording.subject || 'Minuta'}</DialogTitle>
         </DialogHeader>
@@ -158,7 +168,7 @@ export default function MeetingRecordingDetailDialog({ recording, open, onClose 
                   utterances.length > 0 ? (
                     <MeetingSyncedTranscript utterances={utterances} words={recording.transcriptData?.words} currentTime={currentTime} onSeek={handleSeek} />
                   ) : recording.transcript?.trim() ? (
-                    <div className="text-sm whitespace-pre-wrap leading-relaxed">{recording.transcript}</div>
+                    <MeetingTranscriptTexto texto={recording.transcript} />
                   ) : (
                     <p className="text-muted-foreground text-sm">Todavía no hay transcripción disponible.</p>
                   )

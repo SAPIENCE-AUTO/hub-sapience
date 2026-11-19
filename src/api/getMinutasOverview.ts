@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { createEndpoint, MeetingRecordings, Users, Projects } from '../../server/compat';
-import { fetchCalendarMeetings } from '../serverUtils/graphMeetings';
+import { createEndpoint, MeetingRecordings, Users, Projects, ZiteError } from '../../server/compat';
+import { fetchCalendarMeetings, type CalendarMeeting } from '../serverUtils/graphMeetings';
+import { rangoDeConsulta } from '../lib/minutas/rangoCalendario';
 import { guardarTranscripcionDeAssembly } from '../serverUtils/guardarTranscripcion';
 import { accionDeRescate, attemptTranscriptionRecovery, reservaIntento } from '../serverUtils/transcriptionRecovery';
 
@@ -48,9 +49,6 @@ const sessionSchema = z.object({
   recording: recordingSummarySchema.optional(),
 });
 
-const DAYS_PAST = 7;
-const DAYS_FUTURE = 14;
-
 // Minutas / notetaker (sep 2026): "apartado de minutas donde vengan todas
 // las sesiones (pasadas, ongoing y futuras)... si ya está vinculada... o
 // vincular ahí mismo" (Sergio) — fusiona el calendario real (Graph) con las
@@ -60,19 +58,41 @@ const DAYS_FUTURE = 14;
 // mano, sin ese campo, se muestran como sesiones propias sin intentar
 // adivinar a qué evento de calendario pertenecen — es mejor mostrarlas de
 // más que perderlas.
+//
+// Qué parte del calendario se pide (lib/minutas/rangoCalendario.ts): sin `desde`/`hasta`, la ventana de siempre (últimos 7 días y próximas 2
+// semanas: la lista y la primera carga del calendario); con ellos, ese rango (el calendario pide la semana que se esté viendo, porque con las flechas se
+// puede ir a cualquier semana y fuera de la ventana salía vacío aunque hubiera juntas). Las grabaciones no dependen del rango: siempre vienen todas
+// las propias y las de los proyectos del usuario.
 export default createEndpoint({
   authenticated: true,
   description: 'Vista unificada de minutas: calendario (pasado/hoy/futuro) + grabaciones propias, con su estado de vínculo',
-  inputSchema: z.object({}),
-  outputSchema: z.object({ sessions: z.array(sessionSchema) }),
-  execute: async ({ context }) => {
+  inputSchema: z.object({
+    /** Inicio del rango de calendario (fecha ISO con zona). Sin él ni `hasta`: la ventana de siempre. */
+    desde: z.string().optional(),
+    /** Fin del rango de calendario (fecha ISO con zona). */
+    hasta: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    sessions: z.array(sessionSchema),
+    /** `false`: no se pudo leer el calendario de Outlook (por ejemplo, una falla de Microsoft); solo vienen las juntas con grabación. */
+    calendarioDisponible: z.boolean(),
+  }),
+  execute: async ({ input, context }) => {
     const email = context.user!.email;
     const now = new Date();
-    const rangeStart = new Date(now.getTime() - DAYS_PAST * 24 * 60 * 60 * 1000);
-    const rangeEnd = new Date(now.getTime() + DAYS_FUTURE * 24 * 60 * 60 * 1000);
+    const rango = rangoDeConsulta(input, now);
+    if (rango.ok === false) throw new ZiteError({ code: 'BAD_REQUEST', message: rango.motivo }); // (=== false: sin el modo estricto, `!rango.ok` no estrecha el tipo)
+    const rangeStart = rango.desde;
+    const rangeEnd = rango.hasta;
 
+    // Antes un fallo de Microsoft se tragaba en silencio y el calendario salía vacío sin explicación; ahora se avisa en la pantalla.
+    let calendarioDisponible = true;
     const [calendarMeetings, { records: ownRecordings }, myProjectIds] = await Promise.all([
-      fetchCalendarMeetings(email, rangeStart, rangeEnd).catch(() => []),
+      fetchCalendarMeetings(email, rangeStart, rangeEnd).catch((err) => {
+        calendarioDisponible = false;
+        console.error('[getMinutasOverview] no se pudo leer el calendario de Outlook:', String((err as Error)?.message ?? err).slice(0, 80));
+        return [] as CalendarMeeting[];
+      }),
       MeetingRecordings.findAll({
         filters: { ownerEmail: email },
         sorts: [{ field: 'createdAt', direction: 'desc' }],
@@ -167,6 +187,6 @@ export default createEndpoint({
 
     const all = [...sessions, ...standalone].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
 
-    return { sessions: all };
+    return { sessions: all, calendarioDisponible };
   },
 });

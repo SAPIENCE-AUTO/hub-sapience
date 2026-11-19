@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { buildSpeakerColorMap } from './speakerColors';
+import BuscadorTranscripcion from './BuscadorTranscripcion';
+import { useBusquedaTranscripcion } from './useBusquedaTranscripcion';
+import { marcarPalabras, posicionesDePalabras } from '@/lib/minutas/busquedaTranscripcion';
 
 export interface Utterance { speaker: string; text: string; start: number; end: number }
 export interface WordTimestamp { text: string; start: number; end: number }
@@ -36,8 +39,9 @@ function interpolateWords(u: Utterance): WordToken[] {
 // Puerto de SyncedTranscript.tsx de Sharpli: resaltado de la palabra activa
 // durante el playback (basado en currentTime, no en un timer aparte) y seek
 // exacto al dar clic en una palabra — mismos nombres de campo (start/end en
-// ms) y misma lógica de traslape. Sin búsqueda ni creación de clips: ninguna
-// de las dos aplica a una minuta de junta.
+// ms) y misma lógica de traslape. Con búsqueda de texto (barra arriba, igual
+// que en Sharpli: coincidencias resaltadas, «2 / 7» y flechas). Sin creación
+// de clips: no aplica a una minuta de junta.
 export default function MeetingSyncedTranscript({ utterances, words, currentTime, onSeek }: {
   utterances: Utterance[];
   words?: WordTimestamp[];
@@ -63,15 +67,35 @@ export default function MeetingSyncedTranscript({ utterances, words, currentTime
     return utterances.map(u => interpolateWords(u));
   }, [utterances, words]);
 
+  // Lo que se busca es el texto tal como se ve: las palabras de cada turno unidas por un espacio.
+  const textos = useMemo(() => wordMap.map(ws => ws.map(w => w.text).join(' ')), [wordMap]);
+  const posiciones = useMemo(() => wordMap.map(ws => posicionesDePalabras(ws.map(w => w.text))), [wordMap]);
+  const busqueda = useBusquedaTranscripcion(textos);
+
+  // Con una búsqueda en curso la pantalla va a las coincidencias, no al turno que suena.
   useEffect(() => {
+    if (busqueda.buscando) return;
     if (activeIndex >= 0) activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [activeIndex]);
+  }, [activeIndex, busqueda.buscando]);
 
   return (
-    <div className="space-y-0.5 max-h-[calc(90vh-16rem)] overflow-y-auto pr-1">
+    <>
+    <div className="mb-3">
+      <BuscadorTranscripcion
+        value={busqueda.consulta}
+        onChange={busqueda.setConsulta}
+        total={busqueda.total}
+        actual={busqueda.actual}
+        onAnterior={busqueda.anterior}
+        onSiguiente={busqueda.siguiente}
+        onLimpiar={busqueda.limpiar}
+      />
+    </div>
+    <div ref={busqueda.contenedorRef} className="space-y-0.5 max-h-[calc(90vh-16rem)] overflow-y-auto pr-1">
       {utterances.map((u, i) => {
         const isActive = i === activeIndex;
         const ws = wordMap[i];
+        const marcas = busqueda.total > 0 ? marcarPalabras(posiciones[i], busqueda.resultado.porTexto[i], busqueda.resultado.desde[i]) : null;
         return (
           <div
             key={i}
@@ -93,11 +117,15 @@ export default function MeetingSyncedTranscript({ utterances, words, currentTime
               <span className={`text-sm leading-relaxed ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>
                 {ws.map((word, wi) => {
                   const isActiveWord = isActive && currentTimeMs >= word.start && currentTimeMs < word.end;
+                  const marca = marcas?.[wi];
+                  const esActual = !!marca?.coincide && marca.indice === busqueda.actual;
                   return (
                     <span
                       key={wi}
+                      data-coincidencia={marca?.ancla ? marca.indice : undefined}
                       onClick={(e) => { e.stopPropagation(); onSeek?.(word.start / 1000); }}
-                      className={`cursor-pointer ${isActiveWord ? 'text-primary font-semibold' : ''}`}
+                      className={`cursor-pointer ${isActiveWord && !marca?.coincide ? 'text-primary font-semibold' : ''}`}
+                      style={marca?.coincide ? { backgroundColor: esActual ? 'rgba(234,179,8,1)' : 'rgba(234,179,8,0.55)', color: '#000', borderRadius: 2 } : undefined}
                     >
                       {word.text}{' '}
                     </span>
@@ -109,5 +137,6 @@ export default function MeetingSyncedTranscript({ utterances, words, currentTime
         );
       })}
     </div>
+    </>
   );
 }

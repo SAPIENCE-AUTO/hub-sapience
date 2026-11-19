@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { getMeetingPipeline } from './meetingPipeline';
@@ -183,14 +183,23 @@ function EventCard({ session, color, ink, label, canAddNotetaker, allowDeals, on
   );
 }
 
-export default function MinutasDayView({ sessions, now, allowDeals, onOpenDetail, onChanged }: {
+export default function MinutasDayView({ sessions, now, allowDeals, onOpenDetail, onChanged, onSemanaChange, cargando }: {
   sessions: Session[];
   now: number;
   allowDeals: boolean;
   onOpenDetail: (recordingId: string) => void;
   onChanged: () => void;
+  /** Se llama al cambiar de semana con las flechas o «Hoy», con el rango de esa semana (lunes 00:00 al lunes siguiente 00:00, hora local), para que la página
+   *  pida a Outlook las juntas de esa semana. No se llama al abrir: la primera semana ya viene en la ventana de siempre. */
+  onSemanaChange?: (desde: Date, hasta: Date) => void;
+  /** Está trayendo las juntas de la semana que se acaba de abrir. */
+  cargando?: boolean;
 }) {
   const [windowStart, setWindowStart] = useState(() => startOfWeek(new Date()));
+  const irASemana = (inicio: Date) => {
+    setWindowStart(inicio);
+    onSemanaChange?.(inicio, addDays(inicio, DAYS_TO_SHOW));
+  };
   const days = useMemo(() => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(windowStart, i)), [windowStart]);
 
   const perDay = useMemo(() => {
@@ -224,14 +233,15 @@ export default function MinutasDayView({ sessions, now, allowDeals, onOpenDetail
     <div className="flex flex-col bg-card border rounded-xl relative">
       {/* Toolbar — mismo patrón que WeeklyCalendar.tsx */}
       <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-card">
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setWindowStart(d => addDays(d, -DAYS_TO_SHOW))}>
+        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => irASemana(addDays(windowStart, -DAYS_TO_SHOW))} aria-label="Semana anterior">
           <ChevronLeft className="w-3.5 h-3.5" />
         </Button>
         <span className="text-sm font-semibold w-40 text-center select-none">{fmtRangeLabel(days[0], days[DAYS_TO_SHOW - 1])}</span>
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setWindowStart(d => addDays(d, DAYS_TO_SHOW))}>
+        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => irASemana(addDays(windowStart, DAYS_TO_SHOW))} aria-label="Semana siguiente">
           <ChevronRight className="w-3.5 h-3.5" />
         </Button>
-        <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => setWindowStart(startOfWeek(new Date()))}>Hoy</Button>
+        <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => irASemana(startOfWeek(new Date()))}>Hoy</Button>
+        {cargando && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground ml-1" aria-label="Cargando las juntas de esta semana" />}
       </div>
 
       <div className="flex rounded-b-xl">
