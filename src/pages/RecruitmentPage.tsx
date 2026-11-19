@@ -41,6 +41,7 @@ import { NdaPill } from '@/components/nda/NdaPill';
 import { NdaDetailDialog } from '@/components/nda/NdaDetailDialog';
 import { NdaLoteDialog, type PersonaDeLote } from '@/components/nda/NdaLoteDialog';
 import { ayudaDe, estadoVisible, fechaDelEstado, fechaMx, sesionInicial, type NdaDeFila } from '@/lib/nda';
+import { OPCIONES_ELEGIBILIDAD, iconosElegibilidad, migrarFiltroElegibilidad, valoresElegibilidad } from '@/lib/elegibilidad';
 import { puedeVerFormularios } from '../lib/formularios/acceso';
 import { SharedViewDialog } from '../components/SharedViewDialog';
 import { ExcelImportDialog } from '../components/ExcelImportDialog';
@@ -71,7 +72,9 @@ const RECRUIT_COLS = [
 const DUP_BADGE_COLS = [
   { key: '_dupBoard'   as const, label: 'Este filtro',       type: 'select' as const, options: ['Sí', 'No'] },
   { key: '_dupHistory' as const, label: 'Otros formularios', type: 'select' as const, options: ['Sí', 'No'] },
-  { key: '_dupRisk'    as const, label: 'Elegibilidad',      type: 'select' as const, options: ['Sí', 'No'] },
+  // Elegibilidad se filtra por ícono (triángulo, calendario o sin ícono), no por Sí/No: una persona puede mostrar los dos íconos y entonces coincide con las dos
+  // opciones (ver src/lib/elegibilidad.ts). Las vistas guardadas con Sí/No se traducen al abrirse (handleViewSelected).
+  { key: '_dupRisk'    as const, label: 'Elegibilidad',      type: 'select' as const, options: OPCIONES_ELEGIBILIDAD },
 ];
 
 function dupBadgeValue(rowId: string, key: '_dupBoard' | '_dupHistory' | '_dupRisk', badgeMap: Record<string, RowBadgeInfo>): 'Sí' | 'No' {
@@ -1146,9 +1149,8 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
               style={{ position: 'sticky', left: dupRiskLeft, zIndex: 10, borderBottom: cellBorder, borderLeft: '1px solid hsl(var(--border) / 0.4)' }}
             >
               {badge?.hasHighRisk && (() => {
-                // Un ícono por motivo (los dos si aplican); si la respuesta viene de un servidor sin las banderas nuevas, se deducen de las señales de siempre.
-                const mismoCliente = badge.participatedSameClient ?? badge.signals.includes('same_client');
-                const ultimos6Meses = badge.participatedLast6Months ?? badge.signals.includes('recent');
+                // Un ícono por motivo (los dos si aplican). La misma regla decide con qué opciones coincide la fila en el filtro (src/lib/elegibilidad.ts).
+                const { mismoCliente, ultimos6Meses } = iconosElegibilidad(badge);
                 return (
                   <button onClick={() => onDuplicateClick(row)} className="hover:opacity-70 transition-opacity inline-flex items-center gap-1">
                     {mismoCliente && <span title="⚠️ Mismo cliente — restricción siempre aplica" className="inline-flex"><AlertTriangle className="w-3.5 h-3.5 text-destructive" /></span>}
@@ -1421,7 +1423,7 @@ const RecruitmentTable = memo(function RecruitmentTable({ rows, onSaveName, onSa
               {([
                 { key: '_dupBoard'   as const, label: 'Este filtro',       icon: Layers,        colW: dupBoardColW,   left: dupBoardLeft },
                 { key: '_dupHistory' as const, label: 'Filtros llenados',  icon: Hash,          colW: dupHistoryColW, left: dupHistoryLeft, ayuda: 'Filtros llenados — el número es cuántas veces ha llenado un filtro esa persona (cada filtro cuenta una vez, aunque su respuesta esté copiada en varios tableros); un asterisco pide revisar que sean la misma persona · reloj: participó en un estudio hace más de 6 meses · copia azul: registrado en otro estudio sin participar. Clic para ver la lista.' },
-                { key: '_dupRisk'    as const, label: 'Elegibilidad',      icon: AlertTriangle, colW: dupRiskColW,    left: dupRiskLeft, ayuda: 'Elegibilidad — triángulo rojo: ya participó con el mismo cliente · reloj ámbar: participó en los últimos 6 meses (aparecen los dos si aplican)' },
+                { key: '_dupRisk'    as const, label: 'Elegibilidad',      icon: AlertTriangle, colW: dupRiskColW,    left: dupRiskLeft, ayuda: 'Elegibilidad — triángulo rojo: ya participó con el mismo cliente; calendario ámbar: participó en los últimos 6 meses (aparecen los dos si aplican). El filtro deja escoger triángulo, calendario o sin ícono.' },
               ] as { key: '_dupBoard' | '_dupHistory' | '_dupRisk'; label: string; icon: typeof Layers; colW: typeof dupBoardColW; left: number; ayuda?: string }[]).filter(col => !hiddenColumns.has(col.key)).map(col => (
                 <th key={col.key}
                     className="text-center px-1 text-xs font-semibold whitespace-nowrap bg-muted border-b border-border/50 border-l border-border/40 relative group/th select-none"
@@ -2915,7 +2917,8 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
       _group: groupCol?.columnName ?? 'Sin grupo',
       _dupBoard: dupBadgeValue(row.id, '_dupBoard', badgeMap),
       _dupHistory: dupBadgeValue(row.id, '_dupHistory', badgeMap),
-      _dupRisk: dupBadgeValue(row.id, '_dupRisk', badgeMap),
+      // Una lista, no un Sí/No: con los dos íconos la fila coincide con «Triángulo» y con «Calendario». El orden por esta columna sigue usando dupBadgeValue.
+      _dupRisk: valoresElegibilidad(badgeMap[row.id]),
       ...dynValues,
     };
   // getCellVal is stable (useCallback[cellMap]) — changes when cells load/update
@@ -3045,7 +3048,11 @@ export default function RecruitmentPage({ partes }: { partes?: PartesReclutamien
     }
   };
 
-  const handleViewSelected = useCallback((view: InternalView | null) => {
+  const handleViewSelected = useCallback((original: InternalView | null) => {
+    // Una vista guardada cuando «Elegibilidad» filtraba por Sí/No se abre con las opciones nuevas (mismo significado); al guardarla queda ya traducida.
+    // Casi todas las vistas no filtran por esa columna: en ese caso es el mismo objeto de siempre.
+    const json = original ? migrarFiltroElegibilidad(original.filtersJson) : null;
+    const view = original && json !== null && json !== original.filtersJson ? { ...original, filtersJson: json } : original;
     setActiveView(view);
     setFilterSearch('');
     if (view) {

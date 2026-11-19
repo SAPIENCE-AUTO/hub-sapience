@@ -4,6 +4,58 @@ import { FilterColumn, FilterRule } from '../components/AdvancedFilterSheet';
 
 export type { FilterColumn, FilterRule };
 
+// ── Celdas con varios valores a la vez ────────────────────────────────────────
+// Casi siempre una celda es un solo texto. Una celda puede traer una LISTA de valores cuando una fila cumple varias cosas a la vez, por ejemplo la
+// «Elegibilidad» de Reclutamiento, que puede mostrar un triángulo y un calendario al mismo tiempo (src/lib/elegibilidad.ts). Para una celda con un solo
+// texto todo funciona exactamente igual que antes. Estas funciones son puras (sin React) para poder probarlas.
+
+/** Los valores de una celda: uno solo si es un texto, varios si es una lista. Una lista vacía cuenta como una celda vacía. */
+export function valoresDeCelda(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.length > 0 ? raw.map((v) => String(v ?? '')) : [''];
+  return [String(raw ?? '')];
+}
+
+/** La celda como texto (para buscar, ordenar o preguntar si está vacía): los valores de una lista van separados por coma. */
+export function textoDeCelda(raw: unknown): string {
+  return valoresDeCelda(raw).join(', ');
+}
+
+/** Filtro de columna (valores marcados): la fila entra si ALGUNO de los valores de su celda está marcado. */
+export function celdaEnFiltro(raw: unknown, marcados: Set<string>): boolean {
+  return valoresDeCelda(raw).some((v) => marcados.has(v));
+}
+
+/** Regla de una columna de selección (es, no es, es alguno de, no es ninguno de) contra TODOS los valores de la celda. */
+export function coincideSeleccion(raw: unknown, rule: Pick<FilterRule, 'operator' | 'value' | 'selectedValues'>): boolean {
+  const celda = valoresDeCelda(raw);
+  const selVals = rule.selectedValues?.length ? rule.selectedValues : [rule.value];
+  switch (rule.operator) {
+    case 'es':            return celda.includes(rule.value);
+    case 'no_es':         return !celda.includes(rule.value);
+    case 'es_alguno':     return celda.some((v) => selVals.includes(v));
+    case 'no_es_ninguno': return !celda.some((v) => selVals.includes(v));
+    default:              return true;
+  }
+}
+
+/**
+ * Los valores distintos de una columna, para listarlos en su filtro: en orden alfabético y, si hay celdas vacías, «» al final. Si las celdas son
+ * listas, se listan los valores sueltos y, cuando la columna trae su orden de opciones (`orden`), en ese orden en vez del alfabético.
+ */
+export function valoresUnicosDeColumna(celdas: unknown[], orden?: readonly string[]): string[] {
+  const todos = celdas.flatMap(valoresDeCelda);
+  const hayVacio = todos.some((v) => !v.trim());
+  const unicos = [...new Set(todos.filter(Boolean))];
+  if (orden?.length && celdas.some(Array.isArray)) {
+    const lugar = (v: string) => { const i = orden.indexOf(v); return i === -1 ? orden.length : i; };
+    unicos.sort((a, b) => lugar(a) - lugar(b) || (a < b ? -1 : a > b ? 1 : 0));
+  } else {
+    unicos.sort();
+  }
+  if (hayVacio) unicos.push('');
+  return unicos;
+}
+
 export function useTableFilters<T extends object>(
   data: T[],
   columns: FilterColumn[]
@@ -16,7 +68,7 @@ export function useTableFilters<T extends object>(
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const getField = (row: T, key: string): string =>
-    String((row as Record<string, unknown>)[key] ?? '');
+    textoDeCelda((row as Record<string, unknown>)[key]);
 
   /** Column type lookup map */
   const colTypeMap = useMemo(
@@ -27,13 +79,10 @@ export function useTableFilters<T extends object>(
   /** Unique sorted values for a column — always from the raw (unfiltered) data */
   const colUniqueValues = useCallback(
     (columnKey: string): string[] =>
-      (() => {
-        const all = data.map(row => getField(row, columnKey));
-        const hasEmpty = all.some(v => !v.trim());
-        const unique = [...new Set(all.filter(Boolean))].sort();
-        if (hasEmpty) unique.push('');
-        return unique;
-      })(),
+      valoresUnicosDeColumna(
+        data.map(row => (row as Record<string, unknown>)[columnKey]),
+        columns.find(c => c.key === columnKey)?.options,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [data]
   );
@@ -202,16 +251,8 @@ export function useTableFilters<T extends object>(
       }
     }
 
-    if (colType === 'select') {
-      const selVals = rule.selectedValues?.length ? rule.selectedValues : [rule.value];
-      switch (rule.operator) {
-        case 'es':            return rawVal === rule.value;
-        case 'no_es':         return rawVal !== rule.value;
-        case 'es_alguno':     return selVals.includes(rawVal);
-        case 'no_es_ninguno': return !selVals.includes(rawVal);
-        default:              return true;
-      }
-    }
+    // Una celda con varios valores (ver arriba) coincide según TODOS sus valores, no solo el primero.
+    if (colType === 'select') return coincideSeleccion((row as Record<string, unknown>)[rule.column], rule);
 
     // text
     const val = rawVal.toLowerCase();
@@ -251,7 +292,7 @@ export function useTableFilters<T extends object>(
 
     for (const [col, values] of Object.entries(columnFilters)) {
       if (values.size === 0) continue;
-      result = result.filter(r => values.has(getField(r, col)));
+      result = result.filter(r => celdaEnFiltro((r as Record<string, unknown>)[col], values));
     }
 
     if (readyRules.length > 0) {
