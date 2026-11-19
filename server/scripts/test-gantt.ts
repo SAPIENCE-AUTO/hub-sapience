@@ -1,5 +1,5 @@
 // Pruebas del endpoint del Timeline General (getTasksForGantt) contra una base en memoria (PGlite) con el esquema real: de dónde salen el color y el grupo
-// de cada tarea, que gane el color más reciente, que lo borrado y lo de otros tableros no cuente, y que las consultas pesadas pidan solo lo necesario
+// de cada tarea, que gane el color más reciente, que lo borrado y lo de otros tableros no cuente (tampoco las tareas de un proyecto que ya no existe), y que las consultas pesadas pidan solo lo necesario
 // (las columnas de los tableros que se usan y las celdas de color y de grupo): sin eso Postgres lee la tabla de celdas completa. Datos inventados.
 // uso: node server/node_modules/.bin/tsx server/scripts/test-gantt.ts
 import assert from 'node:assert/strict';
@@ -129,6 +129,36 @@ await prueba('las consultas pesadas piden solo lo necesario: columnas de los tab
   assert.match(celdas[0], /"column_id" = any\(\$2\)/);
   // Y solo pide los campos que usa, no las trece columnas de cada celda.
   assert.ok(!/number_value|file_url|boolean_value/.test(celdas[0]), celdas[0]);
+});
+
+// ── Proyectos borrados y proyectos sin estatus ───────────────────────────────────────────────────────────────────────────────────────────────────
+// deleteProject solo borra la fila del proyecto: sus tableros y tareas se quedan. Esas tareas no deben dibujarse (se veían «activas» porque el filtro
+// «Activos» de la pantalla cuenta el estatus vacío como activo: un proyecto de prueba ya borrado salía con «Activos» elegido). Un proyecto real sin estatus, en cambio, sí
+// tiene que salir. Esto va al final: agrega proyectos y tareas, y las pruebas de arriba miden la primera corrida.
+const tareaDe = async (nombre: string, codigo: string) => {
+  const boardId = await id(`insert into boards (board_name, project_code, board_type) values ('Timeline', $1, 'pm')`, [codigo]);
+  await pg.query(
+    `insert into tasks (task_name, project_code, board_name, board_id, status, start_date, end_date) values ($1, $2, 'Timeline', $3, 'En progreso', '2026-10-20', '2026-10-24')`,
+    [nombre, codigo, boardId],
+  );
+};
+await pg.query(`insert into projects (project_code, status) values ('P-SIN-ESTATUS', null), ('P-Espacio', 'En curso')`);
+await tareaDe('De un proyecto borrado', 'P-BORRADO'); // no hay fila en projects con ese código
+await tareaDe('De un proyecto sin estatus', 'P-SIN-ESTATUS');
+await tareaDe('De un proyecto escrito distinto', ' p-espacio'); // el mismo proyecto que «P-Espacio»: otra mayúscula y un espacio de más
+const r2: any = await sinBitacora(() => getTasksForGantt.run({}, ctx));
+const nombres2: string[] = r2.tasks.map((t: any) => t.taskName);
+
+await prueba('las tareas de un proyecto que ya no existe no salen (si no, el filtro «Activos» las dibuja como si fueran de un proyecto vivo)', () => {
+  assert.ok(!nombres2.includes('De un proyecto borrado'), nombres2.join(', '));
+  for (const nombre of ['Primera', 'Segunda', 'Tercera']) assert.ok(nombres2.includes(nombre), `falta ${nombre}`);
+});
+await prueba('un proyecto real sin estatus sí sale: el estatus vacío no es «borrado» (la pantalla lo cuenta como activo)', () => {
+  assert.ok(nombres2.includes('De un proyecto sin estatus'));
+  assert.equal(r2.projectStatuses['P-SIN-ESTATUS'], undefined); // sin estatus no entra al mapa de estatus
+});
+await prueba('el código escrito con otra mayúscula o con un espacio de más sigue siendo ese proyecto', () => {
+  assert.ok(nombres2.includes('De un proyecto escrito distinto'));
 });
 
 console.log(fallas ? `\n${fallas} de ${n} pruebas fallaron` : `\nlas ${n} pruebas pasaron`);

@@ -83,6 +83,17 @@ export default createEndpoint({
         if (p.projectCode && p.status) projectStatuses[p.projectCode] = p.status;
       }
 
+      // ── Proyectos que todavía existen ───────────────────────────────────────
+      // Borrar un proyecto (deleteProject) solo borra su fila: sus tableros y tareas se quedan. Sin este filtro esas tareas «fantasma» salían en el
+      // timeline y, como el filtro «Activos» cuenta el estatus vacío como activo (hay proyectos reales sin estatus), un proyecto que ya
+      // no existe se veía como activo (le pasó a un proyecto de prueba que ya se había borrado). El código se compara sin importar mayúsculas ni espacios de más: escrito distinto
+      // sigue siendo ese proyecto, y a ese sí se le dibujan sus tareas.
+      const codigoNormalizado = (c?: string | null) => (c ?? '').trim().toLowerCase();
+      const proyectosVivos = new Set<string>();
+      for (const p of projects) {
+        if (p.projectCode) proyectosVivos.add(codigoNormalizado(p.projectCode));
+      }
+
       // ── Active pm-type board keys ───────────────────────────────────────────
       const NON_PM_TYPES = new Set(['calendar']);
       const pmBoardKeys      = new Set<string>();
@@ -107,6 +118,8 @@ export default createEndpoint({
       // ── Filter tasks to active pm boards ───────────────────────────────────
       const validTasks = tasks.filter(t => {
         if (t.deletedAt) return false;
+        // Su proyecto ya no existe (ver arriba): no se dibuja. Una tarea sin código de proyecto se deja como estaba.
+        if (t.projectCode && !proyectosVivos.has(codigoNormalizado(t.projectCode))) return false;
         // UUID-first: if task has a boardId UUID, validate it directly
         if (t.boardId && activeBoardUUIDs.has(t.boardId)) return true;
         // Legacy fallback: validate via composite key
