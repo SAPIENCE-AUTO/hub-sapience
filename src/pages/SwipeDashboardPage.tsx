@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getSwipeSesiones, createSwipeSesion, deleteSwipeSesion, getSwipeSesionDetail, createSwipeCapitulo,
-  setSwipeCapituloEstado, getSwipeResultados, getSwipeResultadosSesion,
+  setSwipeCapituloEstado, getSwipeResultados, getSwipeResultadosSesion, getSwipeVotosSesion,
   deleteSwipeCapitulo, duplicateSwipeCapitulo,
 } from 'zite-endpoints-sdk';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,9 +14,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Copy, Plus, Star, Trash2, Maximize2, Check, Play, Pause } from 'lucide-react';
+import { Copy, Plus, Star, Trash2, Maximize2, Check, Play, Pause, FileSpreadsheet } from 'lucide-react';
 import SwipeResultsProjection, { QUADRANTE_META, type SwipeQuadrante } from '@/components/swipe/SwipeResultsProjection';
 import SwipeChapterEditor from '@/components/swipe/SwipeChapterEditor';
+import { exportSwipeResultadosExcel } from '@/lib/swipe/excelResultados';
 import { TEAL, EstadoPill } from '@/lib/toolColors';
 
 interface SesionRow { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulosCount: number }
@@ -50,6 +51,7 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
 
   const [projectionCapitulos, setProjectionCapitulos] = useState<ResultadoCapitulo[] | null>(null);
   const [loadingResultadosSesion, setLoadingResultadosSesion] = useState(false);
+  const [exportandoExcel, setExportandoExcel] = useState(false);
 
   const [newCapOpen, setNewCapOpen] = useState(false);
   const [newCapNombre, setNewCapNombre] = useState('');
@@ -205,6 +207,23 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
     setLoadingResultadosSesion(false);
   };
 
+  // Excel con los resultados de toda la sesión: el resumen por idea (los mismos números de «Resultados totales») y cada voto, uno por renglón.
+  const handleExportarExcel = async () => {
+    if (!detalle) return;
+    setExportandoExcel(true);
+    try {
+      const [res, votos] = await Promise.all([getSwipeResultadosSesion({ sesionId: detalle.id }), getSwipeVotosSesion({ sesionId: detalle.id })]);
+      const salio = await exportSwipeResultadosExcel({
+        sesionNombre: detalle.nombre, cliente: detalle.cliente, codigo: detalle.codigo, participantes: detalle.participantesCount,
+        capitulos: res.capitulos ?? [], votos: votos.votos ?? [],
+      });
+      toast.success(`Excel descargado: ${salio.ideas} idea${salio.ideas !== 1 ? 's' : ''} y ${salio.votos} voto${salio.votos !== 1 ? 's' : ''}`);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo exportar el Excel.');
+    }
+    setExportandoExcel(false);
+  };
+
   const ideasTotales = detalle?.capitulos.reduce((sum, c) => sum + c.ideasCount, 0) ?? 0;
 
   return (
@@ -283,10 +302,15 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                       {detalle.cliente && <p className="truncate text-[13px]" style={{ color: '#4d6a72' }}>{detalle.cliente}</p>}
                     </div>
                   </div>
-                  <div className="flex flex-shrink-0 gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => copyLink(detalle.codigo)}>
                       <Copy className="h-3.5 w-3.5" /> Copiar link
                     </Button>
+                    {detalle.capitulos.length > 0 && (
+                      <Button variant="outline" size="sm" onClick={handleExportarExcel} disabled={exportandoExcel}>
+                        <FileSpreadsheet className="h-3.5 w-3.5" /> {exportandoExcel ? 'Exportando…' : 'Excel'}
+                      </Button>
+                    )}
                     {detalle.capitulos.length > 0 && (
                       <Button size="sm" style={{ backgroundColor: TEAL, color: '#fff' }} className="hover:opacity-90" onClick={handleVerResultadosTotales} disabled={loadingResultadosSesion}>
                         <Maximize2 className="h-3.5 w-3.5" /> {loadingResultadosSesion ? 'Cargando…' : 'Resultados totales'}
