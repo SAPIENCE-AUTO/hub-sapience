@@ -62,6 +62,9 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   // Rondas de «elegir entre las imágenes»: el número de ronda con que arranca la proyección (null = cerrada) y el alta en un clic.
   const [proyectandoRonda, setProyectandoRonda] = useState<number | null>(null);
   const [creandoRonda, setCreandoRonda] = useState(false);
+  // La pregunta de la ronda se queda escrita para la siguiente: casi siempre es la misma para todo el set.
+  const [newRondaOpen, setNewRondaOpen] = useState(false);
+  const [newRondaPregunta, setNewRondaPregunta] = useState('');
 
   const [capituloToDelete, setCapituloToDelete] = useState<CapituloRow | null>(null);
   const [deletingCapitulo, setDeletingCapitulo] = useState(false);
@@ -164,7 +167,8 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
     setCreandoRonda(true);
     try {
       const numero = detalle.capitulos.filter((c) => c.modo === 'duelo').length + 1;
-      const res = await createSwipeCapitulo({ sesionId: selectedSesionId, nombre: `Ronda ${numero}`, modo: 'duelo' });
+      const res = await createSwipeCapitulo({ sesionId: selectedSesionId, nombre: `Ronda ${numero}`, descripcion: newRondaPregunta.trim() || undefined, modo: 'duelo' });
+      setNewRondaOpen(false);
       await loadDetalle(selectedSesionId);
       setSelectedCapituloId(res.id);
     } catch (err) {
@@ -370,9 +374,32 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <h2 className="font-semibold text-foreground">Capítulos</h2>
-                  <Button size="sm" variant="outline" onClick={handleCreateRonda} disabled={creandoRonda} title="Una ronda proyectada: la gente elige una imagen entre varias y el conteo se ve en pantalla en vivo">
-                    <Vote className="h-3.5 w-3.5" /> {creandoRonda ? 'Creando…' : 'Ronda de elegir'}
-                  </Button>
+                  <Dialog open={newRondaOpen} onOpenChange={setNewRondaOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" variant="outline" title="Una ronda proyectada: la gente elige una imagen entre varias y el conteo se ve en pantalla en vivo">
+                        <Vote className="h-3.5 w-3.5" /> Ronda de elegir
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle>Nueva ronda de elegir entre imágenes</DialogTitle></DialogHeader>
+                      <div className="space-y-2">
+                        <Input
+                          autoFocus
+                          placeholder="Pregunta que verá la gente (opcional)"
+                          value={newRondaPregunta}
+                          onChange={(e) => setNewRondaPregunta(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !creandoRonda) void handleCreateRonda(); }}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Sale arriba de las imágenes, en la pantalla proyectada y en el celular. Por ejemplo: ¿Cuál responde más a «Mental Clarity»?
+                          Se queda escrita para la siguiente ronda.
+                        </p>
+                      </div>
+                      <DialogFooter>
+                        <Button onClick={handleCreateRonda} disabled={creandoRonda}>{creandoRonda ? 'Creando…' : 'Crear ronda'}</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
                 <Dialog open={newCapOpen} onOpenChange={setNewCapOpen}>
                   <DialogTrigger asChild><Button size="sm" variant="outline"><Plus className="h-3.5 w-3.5" /> Capítulo</Button></DialogTrigger>
