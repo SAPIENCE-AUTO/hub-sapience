@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Trash2, CheckCircle2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import ComboboxCreatable from '@/components/ComboboxCreatable';
+import DealPilares from '@/components/pilares/DealPilares';
 
 type Deal = GetDealsOutputType['deals'][0];
 type UserItem = GetUsersOutputType['users'][0];
@@ -165,12 +166,27 @@ export default function DealGeneralTab({ deal, onSaved, onDeleted, existingClien
           />
         </div>
         <div className="space-y-1">
-          <div className="flex items-center gap-2"><Label>Tipo de proyecto</Label><SavedTick show={savedField === 'projectType'} /></div>
-          <Input value={form.projectType} onChange={sf('projectType')} onBlur={() => commitField('projectType', form.projectType)} placeholder="Cualitativo, Cuantitativo..." />
-        </div>
-        <div className="space-y-1">
           <div className="flex items-center gap-2"><Label>Temática</Label><SavedTick show={savedField === 'tematica'} /></div>
           <Input value={form.tematica} onChange={sf('tematica')} onBlur={() => commitField('tematica', form.tematica)} placeholder="Ej: Banca digital" />
+        </div>
+        {/* Pilares (unidades de negocio): reemplazan al «Tipo de proyecto» de texto libre. Cada pilar lleva su parte del precio (y, para Owner o Socio, de su costo) en la moneda del
+            deal; el «Tipo de proyecto» de texto se reescribe solo con los nombres («Cualitativo + Digital»), así lo que lo lee (dashboard, tablero, Excel) sigue funcionando. */}
+        <div className="col-span-2 space-y-1.5">
+          <Label>Pilares</Label>
+          {isNew ? (
+            <p className="text-xs text-muted-foreground">Guarda el deal para repartirlo entre pilares (Cualitativo, Cuantitativo, Digital…).</p>
+          ) : (
+            <DealPilares
+              dealId={deal.id}
+              precioDeal={deal.clientPrice ?? null}
+              moneda={deal.currency}
+              onGuardado={({ tipoProyecto }) => {
+                savedValues.current = { ...savedValues.current, projectType: tipoProyecto };
+                setForm(f => ({ ...f, projectType: tipoProyecto }));
+                onSaved({ ...deal, projectType: tipoProyecto });
+              }}
+            />
+          )}
         </div>
         {/* Responsable: se pide en edición, no en creación — nace asignado a
             quien lo crea (arriba, owner default = user actual) y se puede

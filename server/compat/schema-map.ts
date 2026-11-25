@@ -1000,6 +1000,30 @@ export const SCHEMA: Record<string, TableDef> = {
       createdAt: { col: 'created_at', kind: 'datetime' }
     },
   },
+  Pilares: {
+    table: 'pilares',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      name: { col: 'name', kind: 'text' },
+      color: { col: 'color', kind: 'text' },
+      sortOrder: { col: 'sort_order', kind: 'number' },
+      deactivatedAt: { col: 'deactivated_at', kind: 'datetime' },
+      createdAt: { col: 'created_at', kind: 'datetime' },
+      updatedAt: { col: 'updated_at', kind: 'datetime' }
+    },
+  },
+  DealPilares: {
+    table: 'deal_pilares',
+    fields: {
+      id: { col: 'id', kind: 'text' },
+      deal: { col: 'deal_id', kind: 'link', target: 'deals' },
+      pilar: { col: 'pilar_id', kind: 'link', target: 'pilares' },
+      price: { col: 'price', kind: 'number' },
+      cost: { col: 'cost', kind: 'number' },
+      createdAt: { col: 'created_at', kind: 'datetime' },
+      updatedAt: { col: 'updated_at', kind: 'datetime' }
+    },
+  },
 };
 
 export const MODEL_NAMES = Object.keys(SCHEMA) as (keyof typeof SCHEMA)[];

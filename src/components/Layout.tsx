@@ -8,7 +8,7 @@ import {
   FolderKanban, ChevronDown, ChevronRight, Search,
   Plus, X, TrendingUp, Building2, DollarSign, LayoutGrid,
   FileText, ShoppingCart, Truck, FileSpreadsheet,
-  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles, Video, Target, HandCoins, Users,
+  CreditCard, BarChart3, PieChart, LogOut, MessageSquare, PanelLeftClose, PanelLeftOpen, Settings, Upload, Menu, ListTodo, Sparkles, Video, Target, HandCoins, Users, Layers,
 } from 'lucide-react';
 import { SharpliIcon } from './SharpliIcon';
 import hubMark from '../assets/hub-mark.svg';
@@ -123,6 +123,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/comercial/cotizaciones', icon: FileSpreadsheet, label: 'Cotizaciones' },
       // Razones sociales, condiciones de cobro y contactos de cada cliente; Cobranza lee de aquí. Mismo criterio de acceso que Cobranza (el candado real está en el servidor).
       { to: '/comercial/clientes',     icon: Users,           label: 'Clientes', roles: ['Owner'], purchaseLevels: ['Finanzas'] },
+      // Pilares (unidades de negocio): cada deal repartido entre Cualitativo, Cuantitativo, Digital… para ver la rentabilidad de cada uno. Solo Owner o Socio (el candado real está en el servidor).
+      { to: '/comercial/pilares',      icon: Layers,          label: 'Pilares', roles: ['Owner', 'Socio'] },
       { to: '/comercial/analisis-ia',  icon: Sparkles,        label: 'Análisis IA', roles: ['Owner'] },
     ],
   },

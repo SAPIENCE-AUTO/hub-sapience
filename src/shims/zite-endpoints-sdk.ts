@@ -184,6 +184,7 @@ export const saveFormularioGenerador = (input?: any): Promise<any> => call('save
 export const saveFormularioInsumos = (input?: any): Promise<any> => call('saveFormularioInsumos', input);
 export const getMe = (input?: any): Promise<any> => call('getMe', input);
 
+export const acceptPilarSuggestions = (input?: any): Promise<any> => call('acceptPilarSuggestions', input);
 export const addExpenseComment = (input?: any): Promise<any> => call('addExpenseComment', input);
 export const addNotetakerToMeeting = (input?: any): Promise<any> => call('addNotetakerToMeeting', input);
 export const analizarConceptoSwipe = (input?: any): Promise<any> => call('analizarConceptoSwipe', input);
@@ -195,6 +196,7 @@ export const approveExpense = (input?: any): Promise<any> => call('approveExpens
 export const approvePurchaseOrder = (input?: any): Promise<any> => call('approvePurchaseOrder', input);
 export const approveSelectedCotizaciones = (input?: any): Promise<any> => call('approveSelectedCotizaciones', input);
 export const assignArchivedFolderProject = (input?: any): Promise<any> => call('assignArchivedFolderProject', input);
+export const assignPilarToDeals = (input?: any): Promise<any> => call('assignPilarToDeals', input);
 export const backfillExchangeRates = (input?: any): Promise<any> => call('backfillExchangeRates', input);
 export const bulkDeletePayments = (input?: any): Promise<any> => call('bulkDeletePayments', input);
 export const bulkUpdatePayments = (input?: any): Promise<any> => call('bulkUpdatePayments', input);
@@ -317,6 +319,7 @@ export const getCotizaciones = (input?: any): Promise<any> => call('getCotizacio
 export const getCotizacionesAdmin = (input?: any): Promise<any> => call('getCotizacionesAdmin', input);
 export const getDashboardData = (input?: any): Promise<any> => call('getDashboardData', input);
 export const getDealDocuments = (input?: any): Promise<any> => call('getDealDocuments', input);
+export const getDealPilares = (input?: any): Promise<any> => call('getDealPilares', input);
 export const getDeals = (input?: any): Promise<any> => call('getDeals', input);
 export const getDocBlock = (input?: any): Promise<any> => call('getDocBlock', input);
 export const getDocBlocks = (input?: any): Promise<any> => call('getDocBlocks', input);
@@ -366,6 +369,8 @@ export const getPagosManagement = (input?: any): Promise<any> => call('getPagosM
 export const getPayments = (input?: any): Promise<any> => call('getPayments', input);
 export const getPendienteCorreoBody = (input?: any): Promise<any> => call('getPendienteCorreoBody', input);
 export const getPettyCashFunds = (input?: any): Promise<any> => call('getPettyCashFunds', input);
+export const getPilares = (input?: any): Promise<any> => call('getPilares', input);
+export const getPilaresClasificacion = (input?: any): Promise<any> => call('getPilaresClasificacion', input);
 export const getPoAttachments = (input?: any): Promise<any> => call('getPoAttachments', input);
 export const getPoAuditLog = (input?: any): Promise<any> => call('getPoAuditLog', input);
 export const getPoLineItems = (input?: any): Promise<any> => call('getPoLineItems', input);
@@ -524,6 +529,7 @@ export const saveCommercialView = (input?: any): Promise<any> => call('saveComme
 export const saveCotizacion = (input?: any): Promise<any> => call('saveCotizacion', input);
 export const saveDeal = (input?: any): Promise<any> => call('saveDeal', input);
 export const saveDealDocument = (input?: any): Promise<any> => call('saveDealDocument', input);
+export const saveDealPilares = (input?: any): Promise<any> => call('saveDealPilares', input);
 export const saveDocBlock = (input?: any): Promise<any> => call('saveDocBlock', input);
 export const saveExpense = (input?: any): Promise<any> => call('saveExpense', input);
 export const saveIndicadorMeta = (input?: any): Promise<any> => call('saveIndicadorMeta', input);
@@ -535,6 +541,7 @@ export const saveParticipant = (input?: any): Promise<any> => call('saveParticip
 export const savePagosManagementReparto = (input?: any): Promise<any> => call('savePagosManagementReparto', input);
 export const savePayment = (input?: any): Promise<any> => call('savePayment', input);
 export const savePettyCashFund = (input?: any): Promise<any> => call('savePettyCashFund', input);
+export const savePilar = (input?: any): Promise<any> => call('savePilar', input);
 export const savePoAttachment = (input?: any): Promise<any> => call('savePoAttachment', input);
 export const saveProject = (input?: any): Promise<any> => call('saveProject', input);
 export const savePurchaseOrder = (input?: any): Promise<any> => call('savePurchaseOrder', input);

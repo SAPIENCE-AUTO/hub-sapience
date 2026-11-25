@@ -589,6 +589,20 @@ create table nda_eventos (
   constraint nda_eventos_tipo_chk check ("tipo" in ('enviado', 'reenviado', 'abierto', 'firmado', 'rechazado', 'copia_enviada', 'copia_fallida', 'pdf_creado', 'pdf_fallido', 'rebotado', 'copia_rebotada'))
 );
 
+-- ─── Pilares ───────────────────────────────────────────────────
+create table pilares (
+  id                            uuid primary key default gen_random_uuid(),
+  name                          text,
+  color                         text,
+  sort_order                    integer,
+  deactivated_at                timestamptz,
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now(),
+  constraint pilares_name_chk check ("name" is not null and trim("name") <> ''),
+  constraint pilares_color_chk check ("color" is null or "color" ~ '^#[0-9A-Fa-f]{6}$')
+);
+create trigger pilares_set_updated before update on pilares for each row execute function set_updated_at();
+
 -- ─── CRM Items ─────────────────────────────────────────────────
 create table crm_items (
   id                            uuid primary key default gen_random_uuid(),
@@ -1021,6 +1035,20 @@ create table propuestas (
 );
 create trigger propuestas_set_updated before update on propuestas for each row execute function set_updated_at();
 
+-- ─── DealPilares ───────────────────────────────────────────────
+create table deal_pilares (
+  id                            uuid primary key default gen_random_uuid(),
+  deal_id                       uuid not null references deals(id) on delete cascade,
+  pilar_id                      uuid not null references pilares(id) on delete restrict,
+  price                         numeric(14,2),
+  cost                          numeric(14,2),
+  created_at                    timestamptz not null default now(),
+  updated_at                    timestamptz not null default now(),
+  constraint deal_pilares_price_chk check ("price" is null or "price" >= 0),
+  constraint deal_pilares_cost_chk check ("cost" is null or "cost" >= 0)
+);
+create trigger deal_pilares_set_updated before update on deal_pilares for each row execute function set_updated_at();
+
 -- ─── Cotizacion Line Items ─────────────────────────────────────
 create table cotizacion_line_items (
   id                            uuid primary key default gen_random_uuid(),
@@ -1198,6 +1226,10 @@ create unique index clients_name_uniq on clients (lower(trim(name)));
 create unique index client_entities_client_rfc_uniq on client_entities (client_id, upper(rfc)) where rfc is not null and rfc <> '';
 create index on client_entities (client_id);
 create index on client_contacts (client_id);
+-- pilares: un nombre no se repite (sin importar mayúsculas ni espacios de los lados) y un pilar aparece una sola vez por deal.
+create unique index pilares_name_uniq on pilares (lower(trim(name)));
+create unique index deal_pilares_deal_pilar_uniq on deal_pilares (deal_id, pilar_id);
+create index on deal_pilares (pilar_id);
 create index on collection_processes (client_entity_id);
 -- meeting_recordings tampoco viene de Zite — único por bot de Recall para
 -- poder hacer upsert (crear la fila al mandar el bot, actualizarla según

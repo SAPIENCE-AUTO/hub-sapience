@@ -887,3 +887,23 @@ export interface NdaEventosRecordType {
   actor?: string;
   createdAt?: string;
 }
+
+export interface PilaresRecordType {
+  id: string;
+  name?: string;
+  color?: string;
+  sortOrder?: number;
+  deactivatedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DealPilaresRecordType {
+  id: string;
+  deal?: string[];
+  pilar?: string[];
+  price?: number;
+  cost?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}

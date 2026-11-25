@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, linkProjectDeal, getCotizaciones, approveDeal, getProjects, GetDealsOutputType } from 'zite-endpoints-sdk';
+import { saveDeal, approveSelectedCotizaciones, getProjectForDeal, linkProjectDeal, getCotizaciones, approveDeal, getProjects, getDealPilares, GetDealsOutputType } from 'zite-endpoints-sdk';
 import { useProject } from '@/context/ProjectContext';
 import { toast } from 'sonner';
 import { CheckCircle2, Link2 } from 'lucide-react';
@@ -121,6 +121,17 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
     onDealUpdated(updated);
   };
 
+  // Al ganar un deal, si todavía no está repartido entre pilares (Cualitativo, Digital…) se avisa con un botón que lleva a la pestaña General. No bloquea nada: si la consulta falla, no se
+  // interrumpe nada (el aviso es una ayuda para que no se acumulen deals ganados sin pilar).
+  const avisarSiFaltaPilar = async (dealId: string) => {
+    try {
+      const r = await getDealPilares({ dealId });
+      if (!r.items?.length) {
+        toast.info('Este deal ya está ganado, pero falta repartirlo entre pilares.', { duration: 10000, action: { label: 'Repartir', onClick: () => setTab('general') } });
+      }
+    } catch { /* sin aviso */ }
+  };
+
   const handleDealFieldUpdated = (fields: { clientPrice?: number; quotedCost?: number; taxesPct?: number; retencionesPct?: number; currency?: string }) => {
     setLocalDeal(prev => ({ ...prev, ...fields }));
     onDealUpdated({ ...localDeal, ...fields });
@@ -152,6 +163,7 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
         // posible duplicado — si ya se había visto la sugerencia y se
         // descartó, no se vuelve a interrumpir con lo mismo.
         if (matchType === 'candidate' && !candidateDismissed) setCandidateDialogOpen(true);
+        void avisarSiFaltaPilar(localDeal.id);
       }
     } catch {
       toast.error('Error al actualizar la fase');
@@ -169,6 +181,7 @@ export default function DealDetailSheet({ deal, isOpen, onClose, onDealUpdated, 
     setLinkedProject({ id: res.projectId, projectCode: res.projectCode });
     setMatchType('linked');
     setApprovalReviewOpen(false);
+    if (localDeal.id) void avisarSiFaltaPilar(localDeal.id);
   };
 
   const handleCreateProjectDirect = async () => {
