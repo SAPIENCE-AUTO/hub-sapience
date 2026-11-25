@@ -5,7 +5,8 @@ import {
   getObservationChatToken, postObserverChatMessage, postObserverHeartbeat,
 } from 'zite-endpoints-sdk';
 import { useObservationChat, type ObservationChatMessage } from '@/hooks/useObservationChat';
-import { Eye, MessageSquare, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Pointer, LogOut, Smile, Send } from 'lucide-react';
+import { alternarVentanaFlotante, crearControlEnVivo, puedeVentanaFlotante, videoDe, type ControlEnVivo } from '@/lib/observacion/envivo';
+import { Eye, MessageSquare, Play, Pause, Volume2, VolumeX, Maximize, Minimize, PictureInPicture2, Pointer, LogOut, Smile, Send } from 'lucide-react';
 
 // Carga perezosa — la mayoría de los observadores nunca abre el picker, y
 // esta página pública debe cargar rápido en el primer vistazo (viene de un
@@ -485,6 +486,11 @@ function VideoStage({ session }: { session: PublicSession }) {
   const [paused, setPaused] = useState(true);
   const [muted, setMuted] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [ventanaFlotante, setVentanaFlotante] = useState(false);
+  // El botón de ventana flotante solo aparece cuando el video interno existe y el navegador permite la ventana (Chrome, Edge, Safari; en Firefox no): un botón que no hace nada es peor que no tenerlo.
+  const [permiteVentanaFlotante, setPermiteVentanaFlotante] = useState(false);
+  // Mantiene el video al día (volver a la pestaña, atraso, pausa a propósito): ver src/lib/observacion/envivo.ts.
+  const controlRef = useRef<ControlEnVivo | null>(null);
   // En touch no hay hover real que revele los controles — se quedan siempre
   // visibles en vez de depender de un gesto que nunca llega.
   const [hovering, setHovering] = useState(
@@ -528,6 +534,41 @@ function VideoStage({ session }: { session: PublicSession }) {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
+  // Una pestaña escondida se frena: el reproductor se queda sin video, se detiene y, al volver, seguía donde se quedó (minutos atrás). Aquí se vuelve al borde en vivo al
+  // regresar a la pestaña, se vigila el atraso cada 5 segundos y se respeta una pausa a propósito (todo en src/lib/observacion/envivo.ts).
+  useEffect(() => {
+    const el = playerRef.current;
+    if (!el || !isLive) return;
+    const control = crearControlEnVivo({ obtenerReproductor: () => playerRef.current, documento: document });
+    controlRef.current = control;
+    control.iniciar();
+    const onPause = () => control.alPausarseElVideo();
+    const onPlay = () => control.alReproducirseElVideo();
+    // La ventana flotante también se abre o se cierra desde fuera del botón (la X de la ventanita, el menú del navegador): el botón sigue lo que de verdad pasa.
+    // Los avisos salen del video interno, que existe poco después de crear el reproductor: se engancha al arrancar y otra vez al primer cuadro.
+    let videoEscuchado: unknown = null;
+    const escucharVentana = () => {
+      const video = videoDe(el);
+      if (!video) return;
+      setPermiteVentanaFlotante(puedeVentanaFlotante(document, video));
+      if (video === videoEscuchado) return;
+      videoEscuchado = video;
+      video.addEventListener('enterpictureinpicture', () => setVentanaFlotante(true));
+      video.addEventListener('leavepictureinpicture', () => setVentanaFlotante(false));
+    };
+    el.addEventListener('pause', onPause);
+    el.addEventListener('play', onPlay);
+    el.addEventListener('playing', escucharVentana);
+    escucharVentana();
+    return () => {
+      el.removeEventListener('pause', onPause);
+      el.removeEventListener('play', onPlay);
+      el.removeEventListener('playing', escucharVentana);
+      control.detener();
+      controlRef.current = null;
+    };
+  }, [isLive, session.muxPlaybackId]);
+
   if (!isLive) {
     if (session.estado === 'terminada') {
       // El asset grabado tarda unos minutos en procesarse después de que el
@@ -565,7 +606,20 @@ function VideoStage({ session }: { session: PublicSession }) {
   const togglePlay = () => {
     const el = playerRef.current;
     if (!el) return;
-    if (el.paused) el.play(); else el.pause();
+    const control = controlRef.current;
+    // `paused` es lo que la persona ve (también es verdadero cuando el video se quedó sin cuadros): si ve «Reproducir» y lo aprieta, quiere ver. Es una transmisión en vivo
+    // con grabación aparte, así que se va a lo que pasa AHORA en vez de seguir donde se quedó; una pausa a propósito se respeta hasta este mismo botón.
+    if (paused) {
+      if (control) control.reproducirAlVivo(); else el.play();
+    } else {
+      control?.pausarAProposito();
+      el.pause();
+    }
+  };
+  const toggleVentanaFlotante = async () => {
+    const video = videoDe(playerRef.current);
+    if (!video) return;
+    setVentanaFlotante(await alternarVentanaFlotante(document, video));
   };
   const toggleMute = () => {
     const el = playerRef.current;
@@ -588,16 +642,19 @@ function VideoStage({ session }: { session: PublicSession }) {
       onMouseLeave={() => setHovering(window.matchMedia && !window.matchMedia('(hover: hover)').matches)}
     >
       {/*
-        @ts-expect-error -- web component de @mux/mux-player, sin tipos de React/JSX
         `--controls: none` apaga TODA la barra propia de mux-player (no solo
         el atributo `controls` nativo, que no la cubre) — sin esto, sus
         botones de play/volumen se veían encimados con los nuestros.
+        `nohotkeys`: los atajos de teclado del reproductor (espacio, K) pausan
+        por fuera del botón propio y no se distinguirían de una pausa del
+        navegador (ver src/lib/observacion/envivo.ts).
       */}
+      {/* @ts-expect-error -- web component de @mux/mux-player, sin tipos de React/JSX */}
       <mux-player
         ref={playerRef}
         playback-id={session.muxPlaybackId}
         stream-type="live"
-        autoplay muted
+        autoplay muted nohotkeys
         style={{ width: '100%', height: '100%', '--media-object-fit': 'contain', '--controls': 'none' }}
       />
 
@@ -634,6 +691,17 @@ function VideoStage({ session }: { session: PublicSession }) {
           <span className="h-1.5 w-1.5 rounded-full bg-[#E0453C]" /> En vivo
         </span>
         <div className="flex-1" />
+        {permiteVentanaFlotante && (
+          <button
+            onClick={toggleVentanaFlotante}
+            className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-[#027495] ${ventanaFlotante ? 'bg-[#027495]' : 'bg-white/15'}`}
+            aria-label="Ventana flotante"
+            aria-pressed={ventanaFlotante}
+            title="Ventana flotante"
+          >
+            <PictureInPicture2 className="h-4 w-4" />
+          </button>
+        )}
         <button
           onClick={toggleFullscreen}
           className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white/15 text-white transition-colors hover:bg-[#027495]"
