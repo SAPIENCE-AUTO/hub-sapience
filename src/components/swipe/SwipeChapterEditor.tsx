@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   getSwipeIdeas, createSwipeIdea, createSwipeIdeasBulk, updateSwipeIdea, moveSwipeIdea, getSwipeVotosDeIdea,
-  deleteSwipeIdea, duplicateSwipeIdea, updateSwipeVoto, setSwipeCapituloAleatorio,
+  deleteSwipeIdea, duplicateSwipeIdea, updateSwipeVoto, setSwipeCapituloAleatorio, setSwipeCapituloModo,
 } from 'zite-endpoints-sdk';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ChevronUp, ChevronDown, Pencil, Users, Plus, Lock, Play, Copy, Trash2, ImagePlus, Loader2, Shuffle } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Users, Plus, Lock, Play, Copy, Trash2, ImagePlus, Loader2, Shuffle, Vote } from 'lucide-react';
 import SwipePreviewModal from './SwipePreviewModal';
 import { CardBody } from './SwipeCardStack';
 import ZonaImagenes from './ZonaImagenes';
@@ -65,6 +65,8 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
   const shownFirstLoad = useRef(false);
   const [subiendoImagen, setSubiendoImagen] = useState(false);
   const [aleatorio, setAleatorio] = useState(false);
+  // «Elegir entre las imágenes»: una ronda proyectada donde cada persona elige UNA imagen (ver DueloProyeccion).
+  const [modoDuelo, setModoDuelo] = useState(false);
   const [leyendo, setLeyendo] = useState<{ hechas: number; total: number } | null>(null);
   const leyendoRef = useRef(false);
   const raizRef = useRef<HTMLDivElement>(null);
@@ -80,6 +82,7 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
       const lista: IdeaRow[] = res.ideas ?? [];
       setIdeas(lista);
       setAleatorio(!!res.aleatorio);
+      setModoDuelo(res.modo === 'duelo');
       if (!shownFirstLoad.current && lista.length > 0) {
         shownFirstLoad.current = true;
         selectIdea(lista[0]);
@@ -158,6 +161,19 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
     }
   };
 
+  // Igual que el orden: se guarda al momento y, si falla, la casilla vuelve a como estaba. Avisa al tablero para que
+  // muestre (o quite) el botón «Proyectar» de este capítulo.
+  const handleModoDuelo = async (valor: boolean) => {
+    setModoDuelo(valor);
+    try {
+      await setSwipeCapituloModo({ capituloId, modo: valor ? 'duelo' : 'swipe' });
+      onIdeasChanged?.();
+    } catch (err) {
+      setModoDuelo(!valor);
+      toast.error((err as Error)?.message || 'No se pudo cambiar el tipo de capítulo.');
+    }
+  };
+
   // Vía manual: la imagen es la ilustración de la idea que se está editando. No se guarda hasta pulsar «Guardar».
   const ponerIlustracion = async (archivos: File[]) => {
     if (selected?.tieneVotos) { toast.error('Esta idea ya tiene votos — no se puede editar.'); return; }
@@ -181,7 +197,8 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
     try {
       const resultados = await Promise.all(enCola(lote.map((archivo) => async () => {
         try {
-          return { ok: true as const, concepto: await prepararConcepto(archivo, true) };
+          // En una ronda de «elegir entre las imágenes» la imagen ES la opción: no se lee con IA (es más rápido y gratis).
+          return { ok: true as const, concepto: await prepararConcepto(archivo, !modoDuelo) };
         } catch (err) {
           return { ok: false as const, error: (err as Error)?.message || `No se pudo procesar «${archivo.name}».` };
         } finally {
@@ -320,27 +337,42 @@ export default function SwipeChapterEditor({ capituloId, onIdeasChanged }: { cap
       <div className="min-w-0 space-y-3">
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
           <span className="flex min-w-0 items-center gap-2.5">
-            <Shuffle className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            <Vote className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
             <span className="min-w-0">
-              <span className="block text-xs font-semibold text-foreground">Orden aleatorio</span>
-              <span className="block text-[11px] text-muted-foreground">Cada participante ve las ideas en un orden distinto</span>
+              <span className="block text-xs font-semibold text-foreground">Elegir entre las imágenes</span>
+              <span className="block text-[11px] text-muted-foreground">Ronda proyectada: cada persona elige UNA imagen y el conteo se ve en pantalla en vivo</span>
             </span>
           </span>
-          <Switch checked={aleatorio} onCheckedChange={handleAleatorio} aria-label="Orden aleatorio" />
+          <Switch checked={modoDuelo} onCheckedChange={handleModoDuelo} aria-label="Elegir entre las imágenes" />
         </label>
+
+        {!modoDuelo && (
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+            <span className="flex min-w-0 items-center gap-2.5">
+              <Shuffle className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+              <span className="min-w-0">
+                <span className="block text-xs font-semibold text-foreground">Orden aleatorio</span>
+                <span className="block text-[11px] text-muted-foreground">Cada participante ve las ideas en un orden distinto</span>
+              </span>
+            </span>
+            <Switch checked={aleatorio} onCheckedChange={handleAleatorio} aria-label="Orden aleatorio" />
+          </label>
+        )}
 
         <ZonaImagenes multiple onImagenes={crearDesdeImagenes} disabled={!!leyendo}>
           {leyendo ? (
             <>
               <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-muted-foreground" />
-              <p className="text-xs font-semibold text-foreground">Leyendo {Math.min(leyendo.hechas + 1, leyendo.total)} de {leyendo.total}…</p>
+              <p className="text-xs font-semibold text-foreground">{modoDuelo ? 'Subiendo' : 'Leyendo'} {Math.min(leyendo.hechas + 1, leyendo.total)} de {leyendo.total}…</p>
             </>
           ) : (
             <>
               <ImagePlus className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-foreground">Arrastra o pega conceptos en imagen</p>
-                <p className="text-[11px] text-muted-foreground">La IA pone nombre y descripción y recorta la ilustración</p>
+                <p className="text-xs font-semibold text-foreground">{modoDuelo ? 'Arrastra o pega las imágenes de esta ronda' : 'Arrastra o pega conceptos en imagen'}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {modoDuelo ? 'Cada imagen es una opción (A, B, C…), en el orden en que las pegues' : 'La IA pone nombre y descripción y recorta la ilustración'}
+                </p>
               </div>
             </>
           )}

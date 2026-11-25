@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { getSwipeEstado, getSwipeCapitulo, joinSwipeSesion, submitSwipeVotos } from 'zite-endpoints-sdk';
+import { getSwipeEstado, getSwipeCapitulo, joinSwipeSesion, submitSwipeVotos, submitSwipeEleccion } from 'zite-endpoints-sdk';
 import SwipeCardStack, { type SwipeIdea } from '@/components/swipe/SwipeCardStack';
+import EleccionRonda from '@/components/swipe/EleccionRonda';
 
 // Mismo logo que ObservationRoomPage.tsx / LoginPage.tsx — identidad real de
 // Sapience, esta también es una página pública sin login.
@@ -14,7 +15,7 @@ interface EstadoSesion {
   estadoSesion?: string;
   nombre?: string;
   cliente?: string;
-  capituloActivo?: { id: string; nombre: string; descripcion?: string; totalIdeas: number } | null;
+  capituloActivo?: { id: string; nombre: string; descripcion?: string; totalIdeas: number; modo?: 'swipe' | 'duelo' } | null;
 }
 
 interface CapituloCargado {
@@ -23,9 +24,12 @@ interface CapituloCargado {
   descripcion?: string;
   ideas: SwipeIdea[];
   superLikesRestantes: number;
+  /** 'duelo' = ronda de «elegir entre las imágenes»: sin cartas, se toca UNA imagen. */
+  modo?: 'swipe' | 'duelo';
+  eleccionIdeaId?: string;
 }
 
-type Phase = 'loading' | 'notfound' | 'join' | 'waiting' | 'intro' | 'cards' | 'done';
+type Phase = 'loading' | 'notfound' | 'join' | 'waiting' | 'intro' | 'cards' | 'eleccion' | 'done';
 
 function storageKey(codigo: string) {
   return `swipe_participante_${codigo}`;
@@ -72,13 +76,15 @@ export default function SwipePage() {
   // Poll ligero mientras la pestaña esté visible — mismo patrón que
   // ObservationRoomPage.tsx, con intervalo más corto porque el ritmo de un
   // workshop es más rápido que el de una transmisión.
+  // En una ronda de «elegir entre las imágenes» el facilitador pasa de ronda en vivo, así que se pregunta más seguido.
+  const intervaloMs = estado?.capituloActivo?.modo === 'duelo' ? 2000 : 4000;
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') loadEstado();
-    }, 4000);
+    }, intervaloMs);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codigo]);
+  }, [codigo, intervaloMs]);
 
   // Carga las ideas del capítulo activo en cuanto cambia (y precarga sus
   // imágenes) — spec §5: sin esto el primer swipe tiene medio segundo de
@@ -100,6 +106,8 @@ export default function SwipePage() {
         descripcion: res.descripcion,
         ideas: res.ideas ?? [],
         superLikesRestantes: res.superLikesRestantes ?? 0,
+        modo: res.modo,
+        eleccionIdeaId: res.eleccionIdeaId,
       });
     });
     return () => { cancelled = true; };
@@ -117,6 +125,8 @@ export default function SwipePage() {
     }
     if (completedRef.current.has(estado.capituloActivo.id)) { setPhase('waiting'); return; }
     if (capitulo?.id !== estado.capituloActivo.id) { setPhase('loading'); return; }
+    // Una ronda de «elegir entre las imágenes» no tiene pantalla de inicio ni cartas: se muestran las imágenes y listo.
+    if (capitulo.modo === 'duelo') { setPhase('eleccion'); return; }
     setPhase((prev) => (prev === 'cards' ? 'cards' : 'intro'));
   }, [estado, participante, capitulo]);
 
@@ -155,6 +165,12 @@ export default function SwipePage() {
     setPhase('waiting');
   };
 
+  // Ronda de «elegir entre las imágenes»: una sola elección por persona, que se puede cambiar mientras la ronda esté abierta.
+  const handleElegir = (ideaId: string, msDecision: number): Promise<{ ok: boolean; motivo?: string }> => {
+    if (!participante || !capitulo) return Promise.resolve({ ok: false });
+    return submitSwipeEleccion({ participanteId: participante.participanteId, capituloId: capitulo.id, ideaId, msDecision });
+  };
+
   if (phase === 'loading') return <CenterMessage>Cargando…</CenterMessage>;
   if (phase === 'notfound') return <CenterMessage>Este código no corresponde a ninguna sesión.</CenterMessage>;
 
@@ -185,6 +201,19 @@ export default function SwipePage() {
 
   if (phase === 'waiting') {
     return <CenterMessage>Listo. Esperando al siguiente capítulo…</CenterMessage>;
+  }
+
+  if (phase === 'eleccion' && capitulo) {
+    return (
+      <EleccionRonda
+        key={capitulo.id}
+        nombre={capitulo.nombre}
+        pregunta={capitulo.descripcion}
+        opciones={capitulo.ideas}
+        eleccionInicial={capitulo.eleccionIdeaId}
+        onElegir={handleElegir}
+      />
+    );
   }
 
   if (phase === 'intro' && capitulo) {

@@ -94,6 +94,12 @@ async function main() {
     -- Agregada después del alta inicial: orden aleatorio por capítulo (cada participante ve las ideas en un orden
     -- distinto). Apagada por omisión, así los capítulos que ya existen se comportan igual que antes.
     alter table swipe_capitulos add column if not exists aleatorio boolean not null default false;
+
+    -- Agregada después: modo del capítulo. 'swipe' = las cartas de siempre; 'duelo' = «elegir entre las imágenes»
+    -- (una ronda proyectada: cada persona elige UNA imagen y el conteo se ve en vivo). Los capítulos que ya existen
+    -- quedan en 'swipe'.
+    alter table swipe_capitulos add column if not exists modo text not null default 'swipe'
+      constraint swipe_capitulos_modo_chk check (modo in ('swipe', 'duelo'));
   `);
   console.log('✅ Tablas del módulo Swipe creadas (o ya existían).');
   await pool.end();

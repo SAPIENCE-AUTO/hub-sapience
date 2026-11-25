@@ -14,14 +14,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Copy, Plus, Star, Trash2, Maximize2, Check, Play, Pause, FileSpreadsheet } from 'lucide-react';
+import { Copy, Plus, Star, Trash2, Maximize2, Check, Play, Pause, FileSpreadsheet, Vote, MonitorPlay } from 'lucide-react';
 import SwipeResultsProjection, { QUADRANTE_META, type SwipeQuadrante } from '@/components/swipe/SwipeResultsProjection';
+import DueloProyeccion from '@/components/swipe/DueloProyeccion';
 import SwipeChapterEditor from '@/components/swipe/SwipeChapterEditor';
 import { exportSwipeResultadosExcel } from '@/lib/swipe/excelResultados';
 import { TEAL, EstadoPill } from '@/lib/toolColors';
 
 interface SesionRow { id: string; codigo: string; nombre: string; cliente?: string; estado: string; capitulosCount: number }
-interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number; ideaThumbnails: string[]; pctAprobacion?: number }
+interface CapituloRow { id: string; nombre: string; descripcion?: string; orden: number; estado: string; ideasCount: number; ideaThumbnails: string[]; pctAprobacion?: number; modo?: 'swipe' | 'duelo' }
 interface ResultadoIdea { id: string; titulo: string; imagenUrl?: string; totalVotos: number; potencial: number; descarte: number; superLikes: number; pctPotencial: number; score: number; avgMsDecision?: number; quadrante?: SwipeQuadrante }
 interface ResultadoCapitulo { capituloId: string; capituloNombre: string; totalParticipantesVotaron: number; ideas: ResultadoIdea[] }
 interface Detalle { id: string; codigo: string; nombre: string; cliente?: string; estado: string; participantesCount: number; capitulos: CapituloRow[] }
@@ -57,6 +58,10 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   const [newCapNombre, setNewCapNombre] = useState('');
   const [newCapDescripcion, setNewCapDescripcion] = useState('');
   const [creatingCap, setCreatingCap] = useState(false);
+
+  // Rondas de «elegir entre las imágenes»: el número de ronda con que arranca la proyección (null = cerrada) y el alta en un clic.
+  const [proyectandoRonda, setProyectandoRonda] = useState<number | null>(null);
+  const [creandoRonda, setCreandoRonda] = useState(false);
 
   const [capituloToDelete, setCapituloToDelete] = useState<CapituloRow | null>(null);
   const [deletingCapitulo, setDeletingCapitulo] = useState(false);
@@ -153,6 +158,21 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
     setCreatingCap(false);
   };
 
+  // Una ronda nueva en un clic: queda lista para pegarle las imágenes (se abre su editor).
+  const handleCreateRonda = async () => {
+    if (!selectedSesionId || !detalle) return;
+    setCreandoRonda(true);
+    try {
+      const numero = detalle.capitulos.filter((c) => c.modo === 'duelo').length + 1;
+      const res = await createSwipeCapitulo({ sesionId: selectedSesionId, nombre: `Ronda ${numero}`, modo: 'duelo' });
+      await loadDetalle(selectedSesionId);
+      setSelectedCapituloId(res.id);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'No se pudo crear la ronda.');
+    }
+    setCreandoRonda(false);
+  };
+
   const handleToggleCapituloEstado = async (cap: CapituloRow) => {
     const nuevoEstado = cap.estado === 'abierto' ? 'cerrado' : 'abierto';
     try {
@@ -225,6 +245,7 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
   };
 
   const ideasTotales = detalle?.capitulos.reduce((sum, c) => sum + c.ideasCount, 0) ?? 0;
+  const rondas = detalle?.capitulos.filter((c) => c.modo === 'duelo') ?? [];
 
   return (
     <div className="p-6">
@@ -306,6 +327,11 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                     <Button variant="outline" size="sm" onClick={() => copyLink(detalle.codigo)}>
                       <Copy className="h-3.5 w-3.5" /> Copiar link
                     </Button>
+                    {rondas.length > 0 && (
+                      <Button variant="outline" size="sm" onClick={() => setProyectandoRonda(0)}>
+                        <MonitorPlay className="h-3.5 w-3.5" /> Proyectar rondas
+                      </Button>
+                    )}
                     {detalle.capitulos.length > 0 && (
                       <Button variant="outline" size="sm" onClick={handleExportarExcel} disabled={exportandoExcel}>
                         <FileSpreadsheet className="h-3.5 w-3.5" /> {exportandoExcel ? 'Exportando…' : 'Excel'}
@@ -342,7 +368,12 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
               </div>
 
               <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-foreground">Capítulos</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="font-semibold text-foreground">Capítulos</h2>
+                  <Button size="sm" variant="outline" onClick={handleCreateRonda} disabled={creandoRonda} title="Una ronda proyectada: la gente elige una imagen entre varias y el conteo se ve en pantalla en vivo">
+                    <Vote className="h-3.5 w-3.5" /> {creandoRonda ? 'Creando…' : 'Ronda de elegir'}
+                  </Button>
+                </div>
                 <Dialog open={newCapOpen} onOpenChange={setNewCapOpen}>
                   <DialogTrigger asChild><Button size="sm" variant="outline"><Plus className="h-3.5 w-3.5" /> Capítulo</Button></DialogTrigger>
                   <DialogContent>
@@ -381,13 +412,16 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                         )}
                       </div>
                       <button className="min-w-0 flex-1 text-left" onClick={() => setSelectedCapituloId(selectedCapituloId === cap.id ? null : cap.id)}>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-foreground">{cap.nombre}</span>
                           <EstadoPill estado={cap.estado} />
+                          {cap.modo === 'duelo' && (
+                            <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: TEAL, backgroundColor: 'rgba(15,61,76,0.1)' }}>Elegir entre imágenes</span>
+                          )}
                         </div>
                         <div className="mt-1 flex items-center gap-2.5">
                           <span className="text-xs text-muted-foreground">{cap.ideasCount} idea{cap.ideasCount !== 1 ? 's' : ''}</span>
-                          {cap.pctAprobacion !== undefined && (
+                          {cap.pctAprobacion !== undefined && cap.modo !== 'duelo' && (
                             <>
                               <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
                                 <div className="h-full rounded-full" style={{ width: `${cap.pctAprobacion}%`, backgroundColor: TEAL }} />
@@ -414,6 +448,14 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
+                      {cap.modo === 'duelo' && (
+                        <Button
+                          size="sm" variant="outline" className="flex-shrink-0"
+                          onClick={() => setProyectandoRonda(Math.max(0, rondas.findIndex((r) => r.id === cap.id)))}
+                        >
+                          <MonitorPlay className="h-3.5 w-3.5" /> Proyectar
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         className="flex-shrink-0 hover:opacity-90"
@@ -528,6 +570,20 @@ export default function SwipeDashboardPage({ proyectoId }: { proyectoId?: string
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {proyectandoRonda !== null && detalle && rondas.length > 0 && (
+        <DueloProyeccion
+          sesionNombre={detalle.nombre}
+          cliente={detalle.cliente}
+          codigo={detalle.codigo}
+          rondas={rondas}
+          indiceInicial={proyectandoRonda}
+          onClose={() => {
+            setProyectandoRonda(null);
+            if (selectedSesionId) void loadDetalle(selectedSesionId);
+          }}
+        />
+      )}
 
       {projectionCapitulos && detalle && (
         <SwipeResultsProjection

@@ -564,12 +564,14 @@ export const setEjesTableroEstado = (input?: any): Promise<any> => call('setEjes
 export const setFormularioEstado = (input?: any): Promise<any> => call('setFormularioEstado', input);
 export const setSwipeCapituloAleatorio = (input?: any): Promise<any> => call('setSwipeCapituloAleatorio', input);
 export const setSwipeCapituloEstado = (input?: any): Promise<any> => call('setSwipeCapituloEstado', input);
+export const setSwipeCapituloModo = (input?: any): Promise<any> => call('setSwipeCapituloModo', input);
 export const startCollectionProcess = (input?: any): Promise<any> => call('startCollectionProcess', input);
 export const startMeetingTranscription = (input?: any): Promise<any> => call('startMeetingTranscription', input);
 export const submitExpense = (input?: any): Promise<any> => call('submitExpense', input);
 export const submitPurchaseOrder = (input?: any): Promise<any> => call('submitPurchaseOrder', input);
 export const submitEjesEvaluacion = (input?: any): Promise<any> => call('submitEjesEvaluacion', input);
 export const submitFormularioRespuesta = (input?: any): Promise<any> => call('submitFormularioRespuesta', input);
+export const submitSwipeEleccion = (input?: any): Promise<any> => call('submitSwipeEleccion', input);
 export const submitSwipeVotos = (input?: any): Promise<any> => call('submitSwipeVotos', input);
 export const syncCalendarCellValues = (input?: any): Promise<any> => call('syncCalendarCellValues', input);
 export const syncExternalView = (input?: any): Promise<any> => call('syncExternalView', input);

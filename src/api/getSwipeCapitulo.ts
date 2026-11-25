@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
 import { barajar } from '../lib/swipe/orden';
 import { capituloEsAleatorio } from '../serverUtils/swipe/aleatorio';
+import { modoDeCapitulo } from '../serverUtils/swipe/modo';
 
 const ideaSchema = z.object({
   id: z.string(),
@@ -21,6 +22,10 @@ export default createEndpoint({
     descripcion: z.string().optional(),
     ideas: z.array(ideaSchema).optional(),
     superLikesRestantes: z.number().optional(),
+    /** 'duelo' = ronda de «elegir entre las imágenes»: las ideas van siempre en su orden y se elige UNA. */
+    modo: z.enum(['swipe', 'duelo']).optional(),
+    /** En una ronda, la imagen que esta persona ya eligió (para que el celular la muestre marcada al volver). */
+    eleccionIdeaId: z.string().optional(),
   }),
   execute: async ({ input }) => {
     const capResult = await pool.query(
@@ -51,6 +56,17 @@ export default createEndpoint({
       superLikesRestantes = Math.max(0, cap.max_super_likes - Number(usadosResult.rows[0].n));
     }
 
+    const modo = await modoDeCapitulo(input.capituloId);
+    let eleccionIdeaId: string | undefined;
+    if (modo === 'duelo' && input.participanteId) {
+      const eleccion = await pool.query(
+        `select v.idea_id from swipe_votos v join swipe_ideas i on i.id = v.idea_id
+         where i.capitulo_id = $1 and v.participante_id = $2 and v.valor in ('potencial', 'super') limit 1`,
+        [input.capituloId, input.participanteId],
+      );
+      eleccionIdeaId = (eleccion.rows[0]?.idea_id ?? undefined) as string | undefined;
+    }
+
     const ideas = ideasResult.rows.map((row) => ({
       id: row.id as string,
       titulo: row.titulo as string,
@@ -63,9 +79,12 @@ export default createEndpoint({
       found: true,
       nombre: cap.nombre as string,
       descripcion: (cap.descripcion ?? undefined) as string | undefined,
-      // Con orden aleatorio cada participante recibe su propio orden (cada llamada baraja de nuevo).
-      ideas: (await capituloEsAleatorio(input.capituloId)) ? barajar(ideas) : ideas,
+      // Con orden aleatorio cada participante recibe su propio orden (cada llamada baraja de nuevo). En una ronda de
+      // «elegir entre las imágenes» no: lo que se proyecta y lo que ve cada celular va en el mismo orden (A, B, C…).
+      ideas: modo === 'swipe' && (await capituloEsAleatorio(input.capituloId)) ? barajar(ideas) : ideas,
       superLikesRestantes,
+      modo,
+      eleccionIdeaId,
     };
   },
 });

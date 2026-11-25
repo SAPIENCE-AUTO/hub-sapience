@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
+import { capitulosDuelo } from '../serverUtils/swipe/modo';
 
 const capituloSchema = z.object({
   id: z.string(),
@@ -10,6 +11,8 @@ const capituloSchema = z.object({
   ideasCount: z.number(),
   ideaThumbnails: z.array(z.string()),
   pctAprobacion: z.number().optional(),
+  /** 'duelo' = ronda de «elegir entre las imágenes»; 'swipe' (o ausente) = las cartas de siempre. */
+  modo: z.enum(['swipe', 'duelo']).optional(),
 });
 
 export default createEndpoint({
@@ -87,6 +90,8 @@ export default createEndpoint({
       [input.sesionId],
     );
 
+    const duelos = await capitulosDuelo(input.sesionId);
+
     return {
       found: true,
       id: sesion.id as string,
@@ -104,6 +109,7 @@ export default createEndpoint({
         ideasCount: Number(row.ideas_count ?? 0),
         ideaThumbnails: thumbsPorCapitulo.get(row.id) ?? [],
         pctAprobacion: aprobacionPorCapitulo.get(row.id),
+        modo: duelos.has(row.id as string) ? ('duelo' as const) : ('swipe' as const),
       })),
     };
   },

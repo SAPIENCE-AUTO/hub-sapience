@@ -1,11 +1,14 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
+import { modoDeCapitulo } from '../serverUtils/swipe/modo';
 
 const capituloActivoSchema = z.object({
   id: z.string(),
   nombre: z.string(),
   descripcion: z.string().optional(),
   totalIdeas: z.number(),
+  /** 'duelo' = ronda de «elegir entre las imágenes» (el celular muestra las imágenes para elegir UNA). */
+  modo: z.enum(['swipe', 'duelo']).optional(),
 });
 
 export default createEndpoint({
@@ -44,6 +47,7 @@ export default createEndpoint({
           nombre: cap.nombre as string,
           descripcion: (cap.descripcion ?? undefined) as string | undefined,
           totalIdeas: Number(cap.total_ideas ?? 0),
+          modo: await modoDeCapitulo(cap.id as string),
         };
       }
     }

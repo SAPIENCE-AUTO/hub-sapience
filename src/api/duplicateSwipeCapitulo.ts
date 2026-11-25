@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createEndpoint, pool } from '../../server/compat';
 import { capituloEsAleatorio } from '../serverUtils/swipe/aleatorio';
+import { modoDeCapitulo } from '../serverUtils/swipe/modo';
 
 /**
  * Duplica un capítulo dentro de la misma sesión: copia nombre/descripción,
@@ -36,6 +37,10 @@ export default createEndpoint({
     // Una copia que olvida el orden aleatorio sesgaría el siguiente workshop sin avisar.
     if (await capituloEsAleatorio(input.capituloId)) {
       await pool.query(`update swipe_capitulos set aleatorio = true where id = $1`, [nuevoId]);
+    }
+    // Lo mismo con una ronda de «elegir entre las imágenes»: la copia sigue siendo una ronda, no se vuelve cartas.
+    if ((await modoDeCapitulo(input.capituloId)) === 'duelo') {
+      await pool.query(`update swipe_capitulos set modo = 'duelo' where id = $1`, [nuevoId]);
     }
 
     await pool.query(
