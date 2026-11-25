@@ -46,11 +46,12 @@ const ALL_TABS: { id: TabId; label: string; icon: React.ComponentType<{ classNam
 // Acceso limitado mientras Tools solo tiene el módulo Swipe recién lanzado —
 // "de momento" (Sergio, 2026-08-20): se espera abrir a más gente conforme se
 // sumen más herramientas. Swipe ya se abrió a cinco personas más (Sergio,
-// 2026-10-14); Ejes y Prework siguen solo para quienes tienen todo Tools.
+// 2026-10-14) y a Berenice Cruz, que sube los estímulos y arranca las sesiones
+// (Sergio, 2026-11-25); Ejes y Prework siguen solo para quienes tienen todo Tools.
 const TOOLS_ALLOWED_EMAILS = ['sergio@sapience.com.mx', 'luis@sapience.com.mx'];
 const SWIPE_ALLOWED_EMAILS = [
   'cue@sapience.com.mx', 'pamela.escarela@sapience.com.mx', 'vero.garcia@sapience.com.mx',
-  'claudia@sapience.com.mx', 'pamela@sapience.com.mx',
+  'claudia@sapience.com.mx', 'pamela@sapience.com.mx', 'berenice.cruz@sapience.com.mx',
 ];
 
 // `?tab=` en la URL viene de 3 lugares con vocabularios distintos: los links
