@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { createEndpoint, MeetingRecordings, Users, Projects, ZiteError } from '../../server/compat';
+import { createEndpoint, pool, MeetingRecordings, Users, Projects, ZiteError } from '../../server/compat';
 import { fetchCalendarMeetings, type CalendarMeeting } from '../serverUtils/graphMeetings';
 import { rangoDeConsulta } from '../lib/minutas/rangoCalendario';
+import { empatarGrabacionesAjenas, type GrabacionAjena } from '../lib/minutas/juntasCompartidas';
 import { guardarTranscripcionDeAssembly } from '../serverUtils/guardarTranscripcion';
 import { accionDeRescate, attemptTranscriptionRecovery, reservaIntento } from '../serverUtils/transcriptionRecovery';
 
@@ -26,6 +27,43 @@ async function resolveMyProjectIds(email: string): Promise<string[]> {
   return projects
     .filter(p => p.lider === userId || (p.analistas ?? []).includes(userId))
     .map(p => p.id);
+}
+
+// Grabaciones de OTRAS personas de juntas cercanas al rango del calendario (Sergio, 2026-11-26: «de calls previos no veo las transcripciones»). Sirven SOLO para
+// empatarlas con las juntas del calendario de este usuario (lib/minutas/juntasCompartidas.ts: mismo asunto y horario): las que no calzan con ninguna junta suya no
+// salen en ningún lado, salvo las que ya se veían por ser de sus proyectos (esas siguen saliendo como sesión suelta). Se piden en liviano: sin el texto de la
+// transcripción, solo si lo hay.
+interface GrabacionAjenaFila extends GrabacionAjena {
+  muxPlaybackId?: string;
+  assemblyTranscriptId?: string;
+  project?: string[];
+  deal?: string[];
+}
+async function grabacionesAjenasEnRango(email: string, desde: Date, hasta: Date): Promise<GrabacionAjenaFila[]> {
+  const MARGEN_MS = 12 * 60 * 60 * 1000; // el calendario y la grabación pueden diferir unos minutos; el margen cubre cualquier cruce de día
+  const { rows } = await pool.query(
+    `select id::text as id, subject, meeting_start, meeting_end, status, mux_playback_id, assembly_transcript_id,
+            project_id::text as project_id, deal_id::text as deal_id,
+            (transcript is not null and btrim(transcript) <> '') as has_transcript
+       from meeting_recordings
+      where meeting_start >= $1 and meeting_start <= $2 and lower(coalesce(owner_email, '')) <> lower($3)
+      order by meeting_start
+      limit 500`,
+    [new Date(desde.getTime() - MARGEN_MS), new Date(hasta.getTime() + MARGEN_MS), email],
+  );
+  return rows
+    .map((r: any): GrabacionAjenaFila => ({
+      id: r.id,
+      subject: r.subject,
+      meetingStart: r.meeting_start,
+      meetingEnd: r.meeting_end,
+      status: r.status ?? undefined,
+      muxPlaybackId: r.mux_playback_id ?? undefined,
+      assemblyTranscriptId: r.assembly_transcript_id ?? undefined,
+      hasTranscript: !!r.has_transcript,
+      project: r.project_id ? [r.project_id] : undefined,
+      deal: r.deal_id ? [r.deal_id] : undefined,
+    }));
 }
 
 const recordingSummarySchema = z.object({
@@ -63,6 +101,10 @@ const sessionSchema = z.object({
 // semanas: la lista y la primera carga del calendario); con ellos, ese rango (el calendario pide la semana que se esté viendo, porque con las flechas se
 // puede ir a cualquier semana y fuera de la ventana salía vacío aunque hubiera juntas). Las grabaciones no dependen del rango: siempre vienen todas
 // las propias y las de los proyectos del usuario.
+//
+// Además (2026-11-26), una junta de SU calendario que sigue «Sin grabar» se muestra con la grabación que haya hecho otra persona de esa misma junta (mismo asunto y
+// horario): estaba invitado, así que es suya aunque no haya apretado «Agregar Notetaker» (ver lib/minutas/juntasCompartidas.ts). Una grabación ajena de una junta
+// a la que no fue invitado no sale.
 export default createEndpoint({
   authenticated: true,
   description: 'Vista unificada de minutas: calendario (pasado/hoy/futuro) + grabaciones propias, con su estado de vínculo',
@@ -172,6 +214,37 @@ export default createEndpoint({
       };
     });
 
+    // Juntas del calendario que siguen «Sin grabar»: si otra persona (a quien le tocó agregar el Notetaker) las grabó, también son del usuario, porque estaba
+    // invitado: la grabación se guarda a nombre de quien aprieta el botón y el id del evento de Outlook es distinto en el calendario de cada invitado, así que no
+    // se pueden empatar por id, sino por asunto y horario (lib/minutas/juntasCompartidas.ts). Una grabación ajena que no calza con ninguna junta del usuario no sale
+    // (salvo que ya se viera por ser de uno de sus proyectos: entonces sigue saliendo como sesión suelta, igual que antes). Si la grabación ajena SÍ calza y ya se
+    // veía por su proyecto, se pega a la junta en vez de salir aparte, para no verla dos veces.
+    const compartidas = new Map<string, z.infer<typeof recordingSummarySchema>>(); // clave de la sesión → grabación de otra persona que le toca
+    const sinGrabar = sessions.filter(s => !s.recording);
+    if (sinGrabar.length > 0) {
+      const ajenas = await grabacionesAjenasEnRango(email, rangeStart, rangeEnd)
+        .catch((err) => {
+          console.error('[getMinutasOverview] no se pudieron buscar grabaciones de otras personas:', String((err as Error)?.message ?? err).slice(0, 80));
+          return [] as GrabacionAjenaFila[];
+        });
+      const empates = empatarGrabacionesAjenas(sinGrabar.map(s => ({ id: s.key, subject: s.subject, start: s.start, end: s.end })), ajenas);
+      for (const s of sinGrabar) {
+        const g = empates.get(s.key) as GrabacionAjenaFila | undefined;
+        if (g) {
+          usedRecordingIds.add(g.id);
+          compartidas.set(s.key, {
+            id: g.id,
+            status: g.status ?? undefined,
+            muxPlaybackId: g.muxPlaybackId,
+            assemblyTranscriptId: g.assemblyTranscriptId,
+            hasTranscript: !!g.hasTranscript,
+            project: g.project,
+            deal: g.deal,
+          });
+        }
+      }
+    }
+
     // Grabaciones que no calzaron con ningún evento del rango del calendario
     // (subidas a mano, o notetaker agregado a algo fuera de este rango) —
     // se muestran igual, como su propia sesión.
@@ -185,7 +258,7 @@ export default createEndpoint({
         recording: r,
       }));
 
-    const all = [...sessions, ...standalone].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+    const all = [...sessions.map(s => (compartidas.has(s.key) ? { ...s, recording: compartidas.get(s.key) } : s)), ...standalone].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
 
     return { sessions: all, calendarioDisponible };
   },
