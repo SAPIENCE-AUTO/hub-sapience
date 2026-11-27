@@ -15,6 +15,10 @@ export type UserNotificationPayload = {
   sentAt?: string;
   contentPreview?: string;
   isActiveChannel?: boolean;
+  /** Los tres de abajo los manda sendMessage.ts; un servidor viejo no los manda (la notificación se arregla sin ellos). */
+  isConversation?: boolean;
+  conversationType?: string | null;
+  conversationName?: string | null;
 };
 
 export type ConversationCreatedPayload = {

@@ -47,6 +47,7 @@ import { PollCard, parsePoll, type PollData } from '@/components/PollCard';
 import { TimelinePreviewDialog } from '@/components/TimelinePreviewDialog';
 import { toast } from 'sonner';
 import { parseReactions, parseAttachments, serializeReactions, serializeAttachments, type Reactions, type Attachment } from '../lib/chatJson';
+import { resolverPedidoDeApertura, type PedidoAbrirChat } from '../lib/chatAvisos';
 
 type Message = GetMessagesOutputType['messages'][0];
 type TeamMember = GetTeamMembersOutputType['members'][0];
@@ -3026,6 +3027,37 @@ export default function ChatPage({ projectOnly, projectChannel, mode, onClose }:
   // los canales sin actividad simplemente se hunden, nunca se ocultan.
   // Unread/mention state es solo visual (negritas, badge) y no afecta la posición.
   const projectChannels = useMemo(() => projectChannelCodes, [projectChannelCodes]);
+
+  // ── Abrir una conversación o un canal pedido desde fuera (clic en una notificación del escritorio, ver Layout.abrirConversacionDelChat) ──
+  // El pedido llega por sessionStorage (si la persona estaba en otra página y el chat se acaba de montar) y por el evento (si el chat ya estaba abierto). Una
+  // conversación que todavía no está en las listas se espera: el efecto corre otra vez cuando llegan. Un pedido de hace más de 2 minutos se ignora. El chat de
+  // un proyecto (el cajón) no cambia de conversación y deja el pedido para el chat de la página.
+  const abrirPedidoRef = useRef<() => void>(() => {});
+  abrirPedidoRef.current = () => {
+    if (isDrawer || projectOnly) return;
+    let pedido: PedidoAbrirChat | null = null;
+    try { pedido = JSON.parse(sessionStorage.getItem('chat-open-request') ?? 'null'); } catch { pedido = null; }
+    const accion = resolverPedidoDeApertura(pedido, { ahora: Date.now(), canalAbierto: effectiveChannelRef.current, miCorreo: myEmail, dms, grupos: groups });
+    if (accion.tipo === 'nada' || accion.tipo === 'esperar') return; // sin pedido, o la conversación todavía no está en las listas: se espera
+    if (accion.tipo === 'dm' && teamMembers.length === 0) return; // todavía no se sabe el nombre de la persona: se espera a que carguen los miembros
+    try { sessionStorage.removeItem('chat-open-request'); } catch { /* ignore */ }
+    if (accion.tipo === 'dm') {
+      const member = teamMembers.find(m => m.email === accion.otro);
+      const label = member ? `${member.firstName ?? ''} ${member.lastName ?? ''}`.trim() || accion.otro : accion.otro;
+      switchToConv(accion.id, label);
+    } else if (accion.tipo === 'grupo') {
+      switchToConv(accion.id, accion.nombre);
+    } else if (accion.tipo === 'canal') {
+      switchToChannel(accion.canal); // general o un proyecto
+    }
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { abrirPedidoRef.current(); }, [dms, groups, teamMembers]);
+  useEffect(() => {
+    const alPedir = () => abrirPedidoRef.current();
+    window.addEventListener('chat-open-request', alPedir);
+    return () => window.removeEventListener('chat-open-request', alPedir);
+  }, []);
 
   useEffect(() => {
     if (!searchQuery.trim()) {

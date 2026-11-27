@@ -30,7 +30,11 @@ import { useActivityTracker } from '../hooks/useActivityTracker';
 import PendingSavesBar from './PendingSavesBar';
 import AvatarCropEditor from './AvatarCropEditor';
 import { useRealtimeUserNotifications, ConversationCreatedPayload, ConversationDeletedPayload, ConversationRenamedPayload, ConversationMembersUpdatedPayload } from '../hooks/useRealtimeUserNotifications';
-import { playChatDing, showChatBrowserNotification, shouldPlayDing, unlockAudio } from '../lib/chatNotifications';
+import {
+  playChatDing, showChatBrowserNotification, shouldPlayDing, unlockAudio, ventanaALaVista,
+  registrarMensajeMientrasFuera, mensajesMientrasFuera, limpiarMensajesMientrasFuera,
+} from '../lib/chatNotifications';
+import { esCanalDeConversacion, procesarAvisoDeChat } from '../lib/chatAvisos';
 import ChatPage from '../pages/ChatPage';
 
 // ── Avatar gradient helpers ───────────────────────────────────────────────────
@@ -179,8 +183,7 @@ export const NAV_SECTIONS: NavSection[] = [
 
 // ── Chat badge helpers ────────────────────────────────────────────────────────
 // DM conversations have UUID-format IDs (not project codes like "BRIDGE")
-const isDmChannel = (ch: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ch);
+const isDmChannel = esCanalDeConversacion;
 
 // Returns true if any channel with unread messages is a mention or DM
 const computeHasMentionOrDM = (): boolean => {
@@ -592,6 +595,14 @@ export default function Layout() {
 
   const knownConvIdsRef = useRef<Set<string>>(new Set());
 
+  // Clic en una notificación del escritorio: abre esa conversación o ese canal en el chat. ChatPage recoge el pedido de sessionStorage al montarse (si la persona
+  // estaba en otra página) o del evento (si ya estaba en el chat).
+  const abrirConversacionDelChat = (channel: string) => {
+    try { sessionStorage.setItem('chat-open-request', JSON.stringify({ channel, at: Date.now() })); } catch { /* ignore */ }
+    navigate('/chat');
+    window.dispatchEvent(new CustomEvent('chat-open-request'));
+  };
+
   // ── Global chat notifications: sound + browser notification + sidebar badge ──
   const { status: userNotifyStatus } = useRealtimeUserNotifications({
     userEmail: user?.email ?? '',
@@ -614,50 +625,60 @@ export default function Layout() {
       window.dispatchEvent(new CustomEvent('chat-conversation-members-updated', { detail: payload }));
     },
     onNewMessage: (payload) => {
-      if (!payload.isActiveChannel) {
-        // ── Canal silenciado: no badge, no mención, no sonido, no notificación ──
-        // (mismo criterio que Slack: el mensaje sigue llegando al abrir el canal,
-        // el preview de abajo sí se actualiza — solo no interrumpe)
-        const mutedChannels = new Set<string>(JSON.parse(localStorage.getItem('chat-muted-channels') ?? '[]'));
-        if (!mutedChannels.has(payload.channel)) {
-          // ── Normal case: user is NOT viewing this channel ──
-          // Update unread counts in localStorage
-          const stored: Record<string, number> = JSON.parse(localStorage.getItem('chat-unread-counts') ?? '{}');
-          stored[payload.channel] = (stored[payload.channel] ?? 0) + 1;
-          localStorage.setItem('chat-unread-counts', JSON.stringify(stored));
-          // Update sidebar Chat badge immediately
-          setUnreadTotal(Object.values(stored).reduce((s, c) => s + c, 0));
-          // Update mention channels
-          if (payload.hasMention) {
-            const mentions = new Set<string>(JSON.parse(localStorage.getItem('chat-mention-channels') ?? '[]'));
-            mentions.add(payload.channel);
-            localStorage.setItem('chat-mention-channels', JSON.stringify([...mentions]));
-          }
-          // Urgent if mention or DM
-          if (payload.hasMention || isDmChannel(payload.channel)) {
-            setHasMentionOrDM(true);
-          }
-          // Notify ChatPage (if mounted) to update its internal sidebar badges
-          window.dispatchEvent(new CustomEvent('chat-unread-updated', {
-            detail: { channel: payload.channel, hasMention: payload.hasMention },
-          }));
-          // Sound — plays for mentions and DMs, respects user's sound toggle
-          const isUrgent = payload.hasMention || isDmChannel(payload.channel);
-          const soundEnabled = localStorage.getItem('chat-sound-enabled') !== 'false';
-          if (soundEnabled && isUrgent && payload.messageId && shouldPlayDing(payload.messageId)) {
-            playChatDing();
-          }
-          // Browser notification — fires for mentions and DMs, independent of sound toggle
-          if (isUrgent && payload.messageId && shouldPlayDing(`notif-${payload.messageId}`)) {
-            showChatBrowserNotification(payload, chatActiveChannel);
-          }
-        }
-      } else {
-        // ── Active channel case: user IS viewing this channel ──
-        // Signal ChatPage to fetch new messages immediately (don't play sound / increment badge)
-        window.dispatchEvent(new CustomEvent('chat-new-message-signal', {
-          detail: { channel: payload.channel, sentAt: payload.sentAt },
-        }));
+      // Qué hacer con el mensaje (sonar, notificar, sumar a no leídos, contar en el título de la pestaña) lo decide lib/chatAvisos.ts; aquí solo se conecta con
+      // la pantalla. Un fallo aquí no debe impedir que abajo se actualice el preview del mensaje.
+      try {
+        procesarAvisoDeChat(payload, {
+          // ── Canal silenciado: no badge, no mención, no sonido, no notificación ──
+          // (mismo criterio que Slack: el mensaje sigue llegando al abrir el canal,
+          // el preview de abajo sí se actualiza — solo no interrumpe)
+          silenciados: () => {
+            try { return new Set<string>(JSON.parse(localStorage.getItem('chat-muted-channels') ?? '[]')); } catch { return new Set<string>(); }
+          },
+          sonidoActivo: () => localStorage.getItem('chat-sound-enabled') !== 'false',
+          mirando: ventanaALaVista,
+          primeraVez: shouldPlayDing,
+          // ── Canal abierto: avisar a ChatPage para que traiga el mensaje ya (sin esperar al sondeo) ──
+          avisarAChatPage: (p) => {
+            window.dispatchEvent(new CustomEvent('chat-new-message-signal', {
+              detail: { channel: p.channel, sentAt: p.sentAt },
+            }));
+          },
+          // ── Canal que no está abierto: contador de no leídos, globito y menciones ──
+          sumarNoLeido: (p) => {
+            // Update unread counts in localStorage
+            const stored: Record<string, number> = JSON.parse(localStorage.getItem('chat-unread-counts') ?? '{}');
+            stored[p.channel] = (stored[p.channel] ?? 0) + 1;
+            localStorage.setItem('chat-unread-counts', JSON.stringify(stored));
+            // Update sidebar Chat badge immediately
+            setUnreadTotal(Object.values(stored).reduce((s, c) => s + c, 0));
+            // Update mention channels
+            if (p.hasMention) {
+              const mentions = new Set<string>(JSON.parse(localStorage.getItem('chat-mention-channels') ?? '[]'));
+              mentions.add(p.channel);
+              localStorage.setItem('chat-mention-channels', JSON.stringify([...mentions]));
+            }
+            // Urgent if mention or DM
+            if (p.hasMention || isDmChannel(p.channel)) {
+              setHasMentionOrDM(true);
+            }
+            // Notify ChatPage (if mounted) to update its internal sidebar badges
+            window.dispatchEvent(new CustomEvent('chat-unread-updated', {
+              detail: { channel: p.channel, hasMention: p.hasMention },
+            }));
+          },
+          // Llegó en el canal abierto mientras la persona no miraba: cuenta solo para el título de la pestaña
+          contarMientrasFuera: registrarMensajeMientrasFuera,
+          // Sonido: para menciones y conversaciones, respetando la campana del chat
+          sonar: playChatDing,
+          // Notificación del escritorio: para menciones y conversaciones, aunque la campana esté apagada (entonces sale sin sonido); el clic abre esa conversación
+          notificar: (p, opciones) => showChatBrowserNotification(p, {
+            sonidoActivo: opciones.sonidoActivo,
+            alAbrir: () => abrirConversacionDelChat(p.channel),
+          }),
+        });
+      } catch (err) {
+        console.warn('[layout][chat-aviso] no se pudo avisar del mensaje', (err as Error)?.message);
       }
 
       // Always update last message preview + timestamp (both cases need sidebar ordering)
@@ -748,9 +769,10 @@ export default function Layout() {
     const updateTitle = () => {
       try {
         const counts: Record<string, number> = JSON.parse(localStorage.getItem('chat-unread-counts') ?? '{}');
-        const total = Object.values(counts).reduce((s, c) => s + c, 0);
+        const fuera = mensajesMientrasFuera(); // llegaron en el canal abierto mientras la ventana no estaba a la vista
+        const total = Object.values(counts).reduce((s, c) => s + c, 0) + fuera.total;
         const mentions: string[] = JSON.parse(localStorage.getItem('chat-mention-channels') ?? '[]');
-        const hasMentions = Array.isArray(mentions) && mentions.length > 0;
+        const hasMentions = (Array.isArray(mentions) && mentions.length > 0) || fuera.conMencion;
         if (total > 0 && hasMentions) {
           document.title = `💬 (${total}) ${BASE_TITLE}`;
         } else if (total > 0) {
@@ -769,10 +791,19 @@ export default function Layout() {
     const handleMentions = () => updateTitle();
     window.addEventListener('chat-unread-counts-updated', handleCounts);
     window.addEventListener('chat-mention-channels-updated', handleMentions);
+    // Lo que llegó mientras la persona no miraba se borra del título en cuanto regresa a la ventana
+    const handleAway = () => updateTitle();
+    const alVolver = () => { if (ventanaALaVista()) limpiarMensajesMientrasFuera(); };
+    window.addEventListener('chat-away-updated', handleAway);
+    window.addEventListener('focus', alVolver);
+    document.addEventListener('visibilitychange', alVolver);
 
     return () => {
       window.removeEventListener('chat-unread-counts-updated', handleCounts);
       window.removeEventListener('chat-mention-channels-updated', handleMentions);
+      window.removeEventListener('chat-away-updated', handleAway);
+      window.removeEventListener('focus', alVolver);
+      document.removeEventListener('visibilitychange', alVolver);
       document.title = BASE_TITLE;
     };
   }, []);

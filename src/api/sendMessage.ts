@@ -201,6 +201,7 @@ export default createEndpoint({
       let recipientEmails: string[];
       let resolvedAsConv = false;
       let resolvedConvType: string | null = null;
+      let resolvedConvName: string | null = null;
 
       if (input.channel === 'general') {
         // General channel: everyone who is not hidden
@@ -214,6 +215,7 @@ export default createEndpoint({
           if (convRecord) {
             resolvedAsConv = true;
             resolvedConvType = convRecord.type ?? null;
+            resolvedConvName = convRecord.conversationName ?? null;
             recipientEmails = parseMembers(convRecord.members);
           } else {
             recipientEmails = [];
@@ -263,6 +265,8 @@ export default createEndpoint({
             contentPreview,
             isConversation: resolvedAsConv,
             conversationType: resolvedConvType,
+            // Para que la notificación del escritorio de un grupo diga «persona en Nombre del grupo» (la de un chat directo solo lleva el nombre de la persona).
+            conversationName: resolvedConvName ?? undefined,
           });
         }),
       );
