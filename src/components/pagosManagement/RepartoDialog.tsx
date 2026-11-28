@@ -20,6 +20,7 @@ import {
   rubrosAGuardar, rubrosDe, rubrosFaltantes, totalDe, type FilaReparto, type FilaRubro,
 } from '@/lib/pagosManagement/filas';
 import { COLOR_ESTADO_REPARTO, fmtMonto, fmtPct, fmtUnidades } from './formato';
+import { BuscadorSelect, type GrupoOpciones } from './BuscadorSelect';
 
 const CLASE_SELECT = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
@@ -100,9 +101,23 @@ export function RepartoDialog({ proyecto, deals, asignados, dealInicial, usuario
   const vinculado = proyecto.dealVinculadoId ?? '';
   // El deal vinculado puede no estar en la lista (si no tiene Management cotizado): se deja para poder volver a él.
   const opcionesDeal = [
-    ...(vinculado && !deals.some((g) => g.dealId === vinculado) ? [{ id: vinculado, etiqueta: `${proyecto.dealVinculadoNombre ?? 'Deal vinculado'} (vinculado)` }] : []),
-    ...deals.map((g) => ({ id: g.dealId, etiqueta: `${g.nombre}${g.cliente ? ` · ${g.cliente}` : ''}${g.dealId === vinculado ? ' (vinculado)' : ''}` })),
+    ...(vinculado && !deals.some((g) => g.dealId === vinculado)
+      ? [{ id: vinculado, etiqueta: `${proyecto.dealVinculadoNombre ?? 'Deal vinculado'} (vinculado)`, nombre: `${proyecto.dealVinculadoNombre ?? 'Deal vinculado'} (vinculado)`, cliente: undefined as string | undefined }]
+      : []),
+    ...deals.map((g) => ({
+      id: g.dealId,
+      etiqueta: `${g.nombre}${g.cliente ? ` · ${g.cliente}` : ''}${g.dealId === vinculado ? ' (vinculado)' : ''}`,
+      nombre: `${g.nombre}${g.dealId === vinculado ? ' (vinculado)' : ''}`,
+      cliente: g.cliente,
+    })),
   ];
+  // Los deals son cientos: se elige escribiendo parte del nombre o del cliente (sin importar acentos ni mayúsculas).
+  const gruposDeal: GrupoOpciones[] = [{
+    opciones: [
+      ...(!vinculado ? [{ valor: '', texto: 'Sin deal' }] : []),
+      ...opcionesDeal.map((o) => ({ valor: o.id, texto: o.nombre, extra: o.cliente })),
+    ],
+  }];
 
   const elegirDeal = (id: string) => {
     setDealId(id);
@@ -133,6 +148,23 @@ export function RepartoDialog({ proyecto, deals, asignados, dealInicial, usuario
     cambiarRubros(conTextoDeRubro(rubroFilas, rubro, costo > 0 ? String(costo) : ''));
   };
   const cambiarFila = (i: number, cambio: Partial<FilaReparto>) => setFilas((fs) => fs.map((f, j) => (j === i ? { ...f, ...cambio } : f)));
+  /** Lo que dice el botón de un renglón con persona elegida (lo mismo que decía la opción de la lista). */
+  const textoDePersona = (f: FilaReparto): string | undefined => {
+    if (f.tipo === 'interno' && f.userId) {
+      const u = usuarios.find((x) => x.id === f.userId);
+      return u ? `${u.nombre}${u.departamento ? ` · ${u.departamento}` : ''}` : f.nombre;
+    }
+    if (f.tipo === 'externo') return f.nuevoExterno ? 'Otra persona externa…' : f.nombre;
+    return undefined;
+  };
+  /** Las personas que se pueden elegir en el renglón `f`: las que ya están en otro renglón se ven pero no se pueden repetir. Se busca escribiendo. */
+  const gruposPersona = (f: FilaReparto): GrupoOpciones[] => [
+    { titulo: 'Equipo', opciones: usuarios.map((u) => ({ valor: `u:${u.id}`, texto: u.nombre, extra: u.departamento, deshabilitada: usuariosUsados.has(u.id) && f.userId !== u.id })) },
+    ...(externos.length > 0 ? [{
+      titulo: 'Externas (ya usadas)',
+      opciones: externos.map((nombre) => ({ valor: `e:${nombre}`, texto: nombre, deshabilitada: externasUsadas.has(normalizarNombre(nombre)) && normalizarNombre(f.nombre) !== normalizarNombre(nombre) })),
+    }] : []),
+  ];
   const elegirPersona = (i: number, valor: string) => {
     if (valor.startsWith('u:')) {
       const usuario = usuarios.find((u) => u.id === valor.slice(2));
@@ -211,10 +243,11 @@ export function RepartoDialog({ proyecto, deals, asignados, dealInicial, usuario
             <section className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="deal-proyecto" className="text-sm font-semibold">Deal</Label>
-                <select id="deal-proyecto" value={dealId} onChange={(e) => elegirDeal(e.target.value)} className={`${CLASE_SELECT} !h-8 max-w-[19rem]`}>
-                  {!vinculado && <option value="">Sin deal</option>}
-                  {opcionesDeal.map((o) => <option key={o.id} value={o.id}>{o.etiqueta}</option>)}
-                </select>
+                <BuscadorSelect
+                  id="deal-proyecto" etiqueta="Deal del proyecto" valor={dealId} textoElegido={opcionesDeal.find((o) => o.id === dealId)?.etiqueta}
+                  placeholder="Sin deal" placeholderBusqueda="Nombre del deal o cliente" sinResultados="Ningún deal coincide."
+                  grupos={gruposDeal} onElegir={elegirDeal} className="!h-8 max-w-[19rem]" anchoLista="w-[26rem]"
+                />
               </div>
               {cambiaDeDeal && deal && vinculado && <p className="text-xs text-muted-foreground">No cambia el deal vinculado del proyecto (presupuesto, costos y cobranza).</p>}
               {mostrarSaldo && deal && (quedaria < -0.004 ? (
@@ -329,22 +362,13 @@ export function RepartoDialog({ proyecto, deals, asignados, dealInicial, usuario
                 {filas.map((f, i) => (
                   <div key={f.clave} className="flex flex-wrap items-start gap-2 rounded-lg border p-2 sm:border-0 sm:p-0">
                     <div className="min-w-[11rem] flex-1 space-y-1.5">
-                      <select aria-label={`Persona ${i + 1}`} value={valorDeSelect(f)} onChange={(e) => elegirPersona(i, e.target.value)} className={CLASE_SELECT}>
-                        <option value="">Elegir persona…</option>
-                        <optgroup label="Equipo">
-                          {usuarios.map((u) => (
-                            <option key={u.id} value={`u:${u.id}`} disabled={usuariosUsados.has(u.id) && f.userId !== u.id}>{u.nombre}{u.departamento ? ` · ${u.departamento}` : ''}</option>
-                          ))}
-                        </optgroup>
-                        {externos.length > 0 && (
-                          <optgroup label="Externas (ya usadas)">
-                            {externos.map((nombre) => (
-                              <option key={nombre} value={`e:${nombre}`} disabled={externasUsadas.has(normalizarNombre(nombre)) && normalizarNombre(f.nombre) !== normalizarNombre(nombre)}>{nombre}</option>
-                            ))}
-                          </optgroup>
-                        )}
-                        <option value="__nueva__">Otra persona externa…</option>
-                      </select>
+                      <BuscadorSelect
+                        etiqueta={`Persona ${i + 1}`} valor={valorDeSelect(f)} textoElegido={textoDePersona(f)}
+                        placeholder="Elegir persona…" placeholderBusqueda="Buscar persona…" sinResultados="Nadie coincide."
+                        grupos={gruposPersona(f)} acciones={[{ valor: '__nueva__', texto: 'Otra persona externa…' }]}
+                        alAgregarEscrito={{ texto: (escrito) => `Agregar «${escrito}» como persona externa`, alElegir: (escrito) => cambiarFila(i, { tipo: 'externo', userId: null, nombre: escrito.slice(0, 120), nuevoExterno: true }) }}
+                        onElegir={(valor) => elegirPersona(i, valor)}
+                      />
                       {f.tipo === 'externo' && f.nuevoExterno && (
                         <Input aria-label={`Nombre de la persona externa ${i + 1}`} value={f.nombre} placeholder="Nombre de la persona externa" maxLength={120} onChange={(e) => cambiarFila(i, { nombre: e.target.value })} />
                       )}
